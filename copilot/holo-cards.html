@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SVG 全息闪光小卡</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-dark: #0e0e1a;
+      --bg-mid: #1a1030;
+      --text-soft: #e8d5ff;
+      --gold: #ffd700;
+      --gold-light: #fff8c0;
+      --gold-dark: #c8a400;
+      --pink: #ffb7d5;
+      --pink-deep: #ff8fab;
+      --cyan: #7eeeff;
+      --cyan-light: #a0e8ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(180deg, var(--bg-dark) 0%, var(--bg-mid) 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Noise texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      opacity: 0.035;
+      pointer-events: none;
+    }
+
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      color: var(--text-soft);
+      font-size: 1.6rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      margin-top: 3rem;
+      margin-bottom: 2.5rem;
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .cards-wrap {
+      display: flex;
+      gap: 2.5rem;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 2;
+      padding: 0 1rem;
+    }
+
+    .holo-card {
+      width: 180px;
+      height: 280px;
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      transition: transform 0.45s cubic-bezier(.25,.8,.25,1),
+                  box-shadow 0.45s cubic-bezier(.25,.8,.25,1);
+      flex-shrink: 0;
+    }
+
+    /* Entrance animation */
+    .holo-card { opacity: 0; animation: fadeInUp 0.8s ease forwards; }
+    .holo-card:nth-child(1) { animation-delay: 0.1s; }
+    .holo-card:nth-child(2) { animation-delay: 0.25s; }
+    .holo-card:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hover glow per card */
+    .holo-card.card-luna:hover    { box-shadow: 0 12px 60px rgba(255,215,0,0.35), 0 0 30px rgba(255,215,0,0.15); }
+    .holo-card.card-sakura:hover  { box-shadow: 0 12px 60px rgba(255,183,213,0.35), 0 0 30px rgba(255,143,171,0.15); }
+    .holo-card.card-crystal:hover { box-shadow: 0 12px 60px rgba(126,232,255,0.35), 0 0 30px rgba(126,232,255,0.15); }
+
+    .card-bg {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      z-index: 1;
+    }
+    .card-bg svg { width: 100%; height: 100%; }
+
+    /* Holographic overlay */
+    .holo-overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      z-index: 3;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      background: conic-gradient(
+        from 0deg,
+        #ff6eb4, #ffb347, #ffe066, #74f7a0, #7ec8ff, #c77dff, #ff6eb4
+      );
+      mix-blend-mode: color-dodge;
+      animation: holoSpin 3s linear infinite paused;
+      pointer-events: none;
+    }
+    .holo-card:hover .holo-overlay {
+      opacity: 0.5;
+      animation-play-state: running;
+    }
+
+    @keyframes holoSpin {
+      from { filter: hue-rotate(0deg); }
+      to   { filter: hue-rotate(360deg); }
+    }
+
+    /* Scan-line light sweep */
+    .holo-sweep {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      z-index: 4;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .holo-sweep::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgba(255,255,255,0.25) 45%,
+        rgba(255,255,255,0.45) 50%,
+        rgba(255,255,255,0.25) 55%,
+        transparent 70%
+      );
+      transform: skewX(-15deg);
+    }
+    .holo-card:hover .holo-sweep { opacity: 1; }
+    .holo-card:hover .holo-sweep::before {
+      animation: sweepLight 1.2s ease-in-out infinite;
+    }
+
+    @keyframes sweepLight {
+      0%   { left: -100%; }
+      100% { left: 160%; }
+    }
+
+    /* Card name area */
+    .card-name {
+      position: absolute;
+      bottom: 14px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .card-name .name {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      letter-spacing: 0.3em;
+      font-weight: 600;
+    }
+    .card-name .subtitle {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      margin-top: 2px;
+      letter-spacing: 0.15em;
+    }
+
+    /* Footer hint */
+    .hint-text {
+      color: rgba(232, 213, 255, 0.45);
+      font-size: 12px;
+      letter-spacing: 0.15em;
+      margin-top: 2.5rem;
+      margin-bottom: 1rem;
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    footer {
+      margin-top: auto;
+      padding: 2rem 0 1.5rem;
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+    footer p { font-size: 11px; color: rgba(232, 213, 255, 0.3); }
+
+    @media (max-width: 600px) {
+      .cards-wrap { flex-direction: column; gap: 2rem; }
+      .page-title { font-size: 1.2rem; margin-top: 2rem; margin-bottom: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SVG Noise Filter -->
+  <svg style="position:absolute;width:0;height:0;overflow:hidden;">
+    <defs>
+      <filter id="noiseFilter">
+        <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
+        <feColorMatrix type="saturate" values="0"/>
+      </filter>
+    </defs>
+  </svg>
+  <div style="position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.04;">
+    <svg width="100%" height="100%"><rect width="100%" height="100%" filter="url(#noiseFilter)"/></svg>
+  </div>
+
+  <h1 class="page-title">✦ 小卡图鉴 ✦</h1>
+
+  <div class="cards-wrap">
+
+    <!-- ==================== CARD 1: LUNA 星月 ==================== -->
+    <div class="holo-card card-luna">
+      <div class="card-bg">
+        <svg viewBox="0 0 180 280" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="lunaBg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="#0a0a2e"/>
+              <stop offset="50%"  stop-color="#1a0a4e"/>
+              <stop offset="100%" stop-color="#2d1b69"/>
+            </linearGradient>
+            <linearGradient id="lunaGoldBorder" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+              <stop offset="0%"   stop-color="#ffd700"/>
+              <stop offset="30%"  stop-color="#fff8c0"/>
+              <stop offset="60%"  stop-color="#c8a400"/>
+              <stop offset="100%" stop-color="#ffd700"/>
+            </linearGradient>
+            <filter id="starGlow">
+              <feGaussianBlur stdDeviation="1.5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- Background & border -->
+          <rect width="180" height="280" rx="16" fill="url(#lunaBg)"/>
+          <rect x="1" y="1" width="178" height="278" rx="15" fill="none" stroke="url(#lunaGoldBorder)" stroke-width="2"/>
+
+          <!-- Corner stars -->
+          <polygon points="12,12 14,8 16,12 14,16"   fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.7"/>
+          <polygon points="168,12 170,8 172,12 170,16" fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.7"/>
+          <polygon points="12,268 14,264 16,268 14,272" fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.7"/>
+          <polygon points="168,268 170,264 172,268 170,272" fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.7"/>
+
+          <!-- Background tiny stars -->
+          <circle cx="25"  cy="30"  r="1"  fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="155" cy="25"  r="1.2" fill="#fff" opacity="0.4"><animate attributeName="opacity" values="0.3;0.9;0.3" dur="3s"   repeatCount="indefinite"/></circle>
+          <circle cx="40"  cy="55"  r="0.8" fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.2;0.7;0.2" dur="2s"   repeatCount="indefinite"/></circle>
+          <circle cx="145" cy="60"  r="1"  fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.3;0.8;0.3" dur="2.8s" repeatCount="indefinite"/></circle>
+          <circle cx="30"  cy="90"  r="1.3" fill="#fff" opacity="0.2"><animate attributeName="opacity" values="0.15;0.6;0.15" dur="3.2s" repeatCount="indefinite"/></circle>
+          <circle cx="160" cy="100" r="0.8" fill="#fff" opacity="0.35"><animate attributeName="opacity" values="0.2;0.7;0.2" dur="1.8s" repeatCount="indefinite"/></circle>
+          <circle cx="20"  cy="130" r="1"  fill="#fff" opacity="0.25"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="2.4s" repeatCount="indefinite"/></circle>
+          <circle cx="50"  cy="150" r="0.7" fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.1;0.6;0.1" dur="3.5s" repeatCount="indefinite"/></circle>
+          <circle cx="130" cy="140" r="1.1" fill="#fff" opacity="0.2"><animate attributeName="opacity" values="0.15;0.65;0.15" dur="2.2s" repeatCount="indefinite"/></circle>
+          <circle cx="165" cy="160" r="0.9" fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.2;0.7;0.2" dur="2.6s" repeatCount="indefinite"/></circle>
+          <circle cx="15"  cy="180" r="1.2" fill="#fff" opacity="0.2"><animate attributeName="opacity" values="0.1;0.5;0.1" dur="3.1s" repeatCount="indefinite"/></circle>
+          <circle cx="55"  cy="200" r="0.8" fill="#fff" opacity="0.35"><animate attributeName="opacity" values="0.3;0.9;0.3" dur="1.9s" repeatCount="indefinite"/></circle>
+          <circle cx="120" cy="190" r="1"  fill="#fff" opacity="0.25"><animate attributeName="opacity" values="0.2;0.7;0.2" dur="2.7s" repeatCount="indefinite"/></circle>
+          <circle cx="100" cy="170" r="0.6" fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.15;0.6;0.15" dur="3.3s" repeatCount="indefinite"/></circle>
+          <circle cx="75"  cy="120" r="1.1" fill="#fff" opacity="0.2"><animate attributeName="opacity" values="0.1;0.55;0.1" dur="2.9s" repeatCount="indefinite"/></circle>
+          <circle cx="35"  cy="210" r="0.9" fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="2.1s" repeatCount="indefinite"/></circle>
+          <circle cx="150" cy="200" r="1.3" fill="#fff" opacity="0.2"><animate attributeName="opacity" values="0.15;0.7;0.15" dur="3.4s" repeatCount="indefinite"/></circle>
+          <circle cx="70"  cy="40"  r="0.7" fill="#fff" opacity="0.35"><animate attributeName="opacity" values="0.25;0.85;0.25" dur="1.7s" repeatCount="indefinite"/></circle>
+          <circle cx="110" cy="45"  r="1"  fill="#fff" opacity="0.25"><animate attributeName="opacity" values="0.2;0.6;0.2" dur="2.3s" repeatCount="indefinite"/></circle>
+          <circle cx="90"  cy="160" r="0.8" fill="#fff" opacity="0.3"><animate attributeName="opacity" values="0.15;0.65;0.15" dur="3s" repeatCount="indefinite"/></circle>
+
+          <!-- Crescent Moon -->
+          <g filter="url(#starGlow)">
+            <circle cx="90" cy="72" r="26" fill="rgba(10,10,46,0.6)" stroke="#ffd700" stroke-width="1.5"/>
+            <circle cx="100" cy="65" r="22" fill="url(#lunaBg)"/>
+          </g>
+
+          <!-- 12 stars around the moon -->
+          <g filter="url(#starGlow)">
+            <polygon points="55,48 57,43 59,48 54,45 60,45" fill="#ffd700" opacity="0.7"><animate attributeName="opacity" values="0.4;1;0.4" dur="2s"   repeatCount="indefinite"/></polygon>
+            <polygon points="130,50 131.5,46 133,50 129,48 134,48" fill="#c0c0c0" opacity="0.6"><animate attributeName="opacity" values="0.4;1;0.4" dur="2.5s" repeatCount="indefinite"/></polygon>
+            <polygon points="65,30 66.5,26 68,30 64,28 69,28" fill="#ffd700" opacity="0.8"><animate attributeName="opacity" values="0.5;1;0.5" dur="1.8s" repeatCount="indefinite"/></polygon>
+            <polygon points="115,32 116.5,28 118,32 114,30 119,30" fill="#c0c0c0" opacity="0.65"><animate attributeName="opacity" values="0.4;0.9;0.4" dur="2.2s" repeatCount="indefinite"/></polygon>
+            <polygon points="45,75 46.5,71 48,75 44,73 49,73" fill="#ffd700" opacity="0.6"><animate attributeName="opacity" values="0.3;0.9;0.3" dur="2.8s" repeatCount="indefinite"/></polygon>
+            <polygon points="140,78 141.5,74 143,78 139,76 144,76" fill="#ffd700" opacity="0.7"><animate attributeName="opacity" values="0.5;1;0.5" dur="1.6s" repeatCount="indefinite"/></polygon>
+            <polygon points="50,100 51.5,96 53,100 49,98 54,98" fill="#c0c0c0" opacity="0.55"><animate attributeName="opacity" values="0.4;1;0.4" dur="3s"   repeatCount="indefinite"/></polygon>
+            <polygon points="135,95 136.5,91 138,95 134,93 139,93" fill="#ffd700" opacity="0.75"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="2.1s" repeatCount="indefinite"/></polygon>
+            <polygon points="75,108 76.5,104 78,108 74,106 79,106" fill="#ffd700" opacity="0.6"><animate attributeName="opacity" values="0.3;0.85;0.3" dur="2.6s" repeatCount="indefinite"/></polygon>
+            <polygon points="110,110 111.5,106 113,110 109,108 114,108" fill="#c0c0c0" opacity="0.5"><animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite"/></polygon>
+            <polygon points="90,120 91.5,116 93,120 89,118 94,118" fill="#ffd700" opacity="0.7"><animate attributeName="opacity" values="0.5;1;0.5" dur="2.4s" repeatCount="indefinite"/></polygon>
+            <polygon points="60,118 61.5,114 63,118 59,116 64,116" fill="#c0c0c0" opacity="0.65"><animate attributeName="opacity" values="0.35;0.9;0.35" dur="2.9s" repeatCount="indefinite"/></polygon>
+          </g>
+
+          <!-- Decorative line with diamonds -->
+          <line x1="20" y1="195" x2="160" y2="195" stroke="#ffd700" stroke-width="0.8" opacity="0.5"/>
+          <polygon points="50,195 53,192 56,195 53,198"   fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.6"/>
+          <polygon points="90,195 93,192 96,195 93,198"   fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.6"/>
+          <polygon points="130,195 133,192 136,195 133,198" fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.6"/>
+        </svg>
+      </div>
+      <div class="card-name">
+        <div class="name" style="color:#ffd700;">LUNA</div>
+        <div class="subtitle" style="color:#fff8c0;">星月 No.01</div>
+      </div>
+      <div class="holo-overlay"></div>
+      <div class="holo-sweep"></div>
+    </div>
+
+    <!-- ==================== CARD 2: SAKURA 樱花 ==================== -->
+    <div class="holo-card card-sakura">
+      <div class="card-bg">
+        <svg viewBox="0 0 180 280" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="sakuraBg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="#2a0a1e"/>
+              <stop offset="50%"  stop-color="#4a1a30"/>
+              <stop offset="100%" stop-color="#3a1028"/>
+            </linearGradient>
+            <linearGradient id="sakuraBorder" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"   stop-color="#ffb7d5"/>
+              <stop offset="50%"  stop-color="#ffd6e8"/>
+              <stop offset="100%" stop-color="#ff8fab"/>
+            </linearGradient>
+            <linearGradient id="petalGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="#ffd6e8"/>
+              <stop offset="100%" stop-color="#ff8fab"/>
+            </linearGradient>
+            <filter id="petalGlow">
+              <feGaussianBlur stdDeviation="1.2" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <rect width="180" height="280" rx="16" fill="url(#sakuraBg)"/>
+          <rect x="1" y="1" width="178" height="278" rx="15" fill="none" stroke="url(#sakuraBorder)" stroke-width="2"/>
+
+          <!-- Corner flowers -->
+          <g transform="translate(14,14) scale(0.4)" opacity="0.6">
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(0)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(288)"/>
+            <circle cx="0" cy="0" r="3" fill="#ffe066"/>
+          </g>
+          <g transform="translate(166,14) scale(0.4)" opacity="0.6">
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(0)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-10" rx="6" ry="10" fill="#ffb7d5" transform="rotate(288)"/>
+            <circle cx="0" cy="0" r="3" fill="#ffe066"/>
+          </g>
+
+          <!-- Main sakura flower -->
+          <g transform="translate(90,100)" filter="url(#petalGlow)">
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="0.8" opacity="0.9"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="0.8" opacity="0.9" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="0.8" opacity="0.9" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="0.8" opacity="0.9" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="0.8" opacity="0.9" transform="rotate(288)"/>
+            <circle cx="0" cy="0" r="5"   fill="#ffe066" opacity="0.8"/>
+            <circle cx="-2" cy="-1" r="1.2" fill="#ffcc00" opacity="0.6"/>
+            <circle cx="2"  cy="1"  r="1"   fill="#ffcc00" opacity="0.6"/>
+            <circle cx="0"  cy="-3" r="0.8" fill="#ffcc00" opacity="0.5"/>
+          </g>
+
+          <!-- Small sakura flowers -->
+          <g transform="translate(40,60) scale(0.35)" filter="url(#petalGlow)">
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.7"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.7" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.7" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.7" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.7" transform="rotate(288)"/>
+            <circle cx="0" cy="0" r="5" fill="#ffe066" opacity="0.6"/>
+          </g>
+          <g transform="translate(145,55) scale(0.3)" filter="url(#petalGlow)">
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.65"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.65" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.65" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.65" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.65" transform="rotate(288)"/>
+            <circle cx="0" cy="0" r="5" fill="#ffe066" opacity="0.5"/>
+          </g>
+          <g transform="translate(35,155) scale(0.28)" filter="url(#petalGlow)">
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.6"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.6" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.6" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.6" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.6" transform="rotate(288)"/>
+            <circle cx="0" cy="0" r="5" fill="#ffe066" opacity="0.5"/>
+          </g>
+          <g transform="translate(150,150) scale(0.25)" filter="url(#petalGlow)">
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.55"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.55" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.55" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.55" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-22" rx="10" ry="18" fill="url(#petalGrad)" stroke="#ffd6e8" stroke-width="1" opacity="0.55" transform="rotate(288)"/>
+            <circle cx="0" cy="0" r="5" fill="#ffe066" opacity="0.5"/>
+          </g>
+
+          <!-- Floating petals -->
+          <ellipse cx="25"  cy="40"  rx="6"   ry="3"   fill="#ffb7d5" opacity="0.4"  transform="rotate(30,25,40)">
+            <animateTransform attributeName="transform" type="translate" values="0,-6;0,6;0,-6" dur="3.5s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+          <ellipse cx="155" cy="85"  rx="5"   ry="2.5" fill="#ff8fab" opacity="0.35" transform="rotate(-20,155,85)">
+            <animateTransform attributeName="transform" type="translate" values="0,5;0,-7;0,5" dur="4s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+          <ellipse cx="70"  cy="170" rx="4.5" ry="2"   fill="#ffb7d5" opacity="0.3"  transform="rotate(50,70,170)">
+            <animateTransform attributeName="transform" type="translate" values="0,-5;0,7;0,-5" dur="3s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+          <ellipse cx="120" cy="180" rx="5.5" ry="2.5" fill="#ffd6e8" opacity="0.35" transform="rotate(-35,120,180)">
+            <animateTransform attributeName="transform" type="translate" values="0,4;0,-8;0,4" dur="3.8s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+          <ellipse cx="50"  cy="130" rx="4"   ry="2"   fill="#ff8fab" opacity="0.3"  transform="rotate(15,50,130)">
+            <animateTransform attributeName="transform" type="translate" values="0,-7;0,5;0,-7" dur="4.2s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+          <ellipse cx="140" cy="120" rx="5"   ry="2.2" fill="#ffb7d5" opacity="0.25" transform="rotate(-50,140,120)">
+            <animateTransform attributeName="transform" type="translate" values="0,6;0,-4;0,6" dur="3.2s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+          <ellipse cx="85"  cy="45"  rx="4"   ry="1.8" fill="#ffd6e8" opacity="0.3"  transform="rotate(40,85,45)">
+            <animateTransform attributeName="transform" type="translate" values="0,-4;0,8;0,-4" dur="4.5s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+          <ellipse cx="30"  cy="195" rx="5"   ry="2.3" fill="#ff8fab" opacity="0.3"  transform="rotate(-25,30,195)">
+            <animateTransform attributeName="transform" type="translate" values="0,3;0,-6;0,3" dur="3.6s" repeatCount="indefinite" additive="sum"/>
+          </ellipse>
+        </svg>
+      </div>
+      <div class="card-name">
+        <div class="name" style="color:#ffb7d5;">SAKURA</div>
+        <div class="subtitle" style="color:#ffc0d0;">樱花 No.02</div>
+      </div>
+      <div class="holo-overlay"></div>
+      <div class="holo-sweep"></div>
+    </div>
+
+    <!-- ==================== CARD 3: CRYSTAL 晶钻 ==================== -->
+    <div class="holo-card card-crystal">
+      <div class="card-bg">
+        <svg viewBox="0 0 180 280" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="crystalBg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="#001a2e"/>
+              <stop offset="50%"  stop-color="#003348"/>
+              <stop offset="100%" stop-color="#001a3e"/>
+            </linearGradient>
+            <linearGradient id="crystalBorder" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"   stop-color="#00c8ff"/>
+              <stop offset="50%"  stop-color="#7eeeff"/>
+              <stop offset="100%" stop-color="#00a8d0"/>
+            </linearGradient>
+            <pattern id="hexPattern" x="0" y="0" width="30" height="26" patternUnits="userSpaceOnUse">
+              <polygon points="15,0 30,7.5 30,22.5 15,26 0,22.5 0,7.5" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+            </pattern>
+            <linearGradient id="facetLight" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="#a8f0ff"/>
+              <stop offset="100%" stop-color="#0099cc"/>
+            </linearGradient>
+            <linearGradient id="facetMid" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"   stop-color="#0077aa"/>
+              <stop offset="100%" stop-color="#005580"/>
+            </linearGradient>
+            <linearGradient id="facetDark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="#003355"/>
+              <stop offset="100%" stop-color="#001a2e"/>
+            </linearGradient>
+            <filter id="gemGlowFilter">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="rayGlow">
+              <feGaussianBlur stdDeviation="1.5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <rect width="180" height="280" rx="16" fill="url(#crystalBg)"/>
+          <rect width="180" height="280" rx="16" fill="url(#hexPattern)"/>
+          <rect x="1" y="1" width="178" height="278" rx="15" fill="none" stroke="url(#crystalBorder)" stroke-width="2"/>
+
+          <!-- Corner diamonds -->
+          <polygon points="14,10 17,7 20,10 17,13"   fill="none" stroke="#7eeeff" stroke-width="0.6" opacity="0.6"/>
+          <polygon points="160,10 163,7 166,10 163,13" fill="none" stroke="#7eeeff" stroke-width="0.6" opacity="0.6"/>
+          <polygon points="14,270 17,267 20,270 17,273" fill="none" stroke="#7eeeff" stroke-width="0.6" opacity="0.6"/>
+          <polygon points="160,270 163,267 166,270 163,273" fill="none" stroke="#7eeeff" stroke-width="0.6" opacity="0.6"/>
+
+          <!-- Rotating light rays -->
+          <g transform="translate(90,100)" filter="url(#rayGlow)" opacity="0.5">
+            <line x1="0"   y1="-50" x2="0"   y2="-35" stroke="#7eeeff" stroke-width="1.2" opacity="0.6"><animate attributeName="opacity" values="0.3;0.8;0.3" dur="2s"   repeatCount="indefinite"/></line>
+            <line x1="35"  y1="-35" x2="25"  y2="-25" stroke="#7eeeff" stroke-width="1"   opacity="0.5"><animate attributeName="opacity" values="0.4;0.9;0.4" dur="2.3s" repeatCount="indefinite"/></line>
+            <line x1="50"  y1="0"   x2="35"  y2="0"   stroke="#7eeeff" stroke-width="1.2" opacity="0.6"><animate attributeName="opacity" values="0.3;0.7;0.3" dur="2.6s" repeatCount="indefinite"/></line>
+            <line x1="35"  y1="35"  x2="25"  y2="25"  stroke="#7eeeff" stroke-width="1"   opacity="0.5"><animate attributeName="opacity" values="0.5;1;0.5" dur="1.8s"   repeatCount="indefinite"/></line>
+            <line x1="0"   y1="50"  x2="0"   y2="35"  stroke="#7eeeff" stroke-width="1.2" opacity="0.6"><animate attributeName="opacity" values="0.3;0.8;0.3" dur="2.4s" repeatCount="indefinite"/></line>
+            <line x1="-35" y1="35"  x2="-25" y2="25"  stroke="#7eeeff" stroke-width="1"   opacity="0.5"><animate attributeName="opacity" values="0.4;0.9;0.4" dur="2.1s" repeatCount="indefinite"/></line>
+            <line x1="-50" y1="0"   x2="-35" y2="0"   stroke="#7eeeff" stroke-width="1.2" opacity="0.6"><animate attributeName="opacity" values="0.3;0.7;0.3" dur="2.7s" repeatCount="indefinite"/></line>
+            <line x1="-35" y1="-35" x2="-25" y2="-25" stroke="#7eeeff" stroke-width="1"   opacity="0.5"><animate attributeName="opacity" values="0.5;1;0.5" dur="1.9s"   repeatCount="indefinite"/></line>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="20s" repeatCount="indefinite" additive="sum"/>
+          </g>
+
+          <!-- Central gem (multi-facet cut) -->
+          <g transform="translate(90,100)" filter="url(#gemGlowFilter)">
+            <polygon points="0,-32 -18,-8 0,-14"   fill="url(#facetLight)" opacity="0.9"/>
+            <polygon points="0,-32 18,-8 0,-14"    fill="#0099cc"          opacity="0.85"/>
+            <polygon points="-18,-8 -28,2 0,-14"   fill="url(#facetMid)"   opacity="0.8"/>
+            <polygon points="18,-8 28,2 0,-14"     fill="#006699"          opacity="0.8"/>
+            <polygon points="-12,-14 12,-14 18,-8 0,-4 -18,-8" fill="#a8f0ff" opacity="0.6"/>
+            <polygon points="-28,2 0,40 0,-4"      fill="url(#facetDark)"  opacity="0.85"/>
+            <polygon points="28,2 0,40 0,-4"       fill="#003355"          opacity="0.9"/>
+            <polygon points="-28,2 -18,-8 0,-4"    fill="#005580"          opacity="0.7"/>
+            <polygon points="28,2 18,-8 0,-4"      fill="#004466"          opacity="0.75"/>
+            <polygon points="-5,-20 5,-20 0,-14"   fill="rgba(255,255,255,0.35)"/>
+            <polygon points="-15,-8 -8,-10 -10,-2" fill="rgba(255,255,255,0.15)"/>
+            <polygon points="8,-10 15,-8 10,-2"    fill="rgba(255,255,255,0.10)"/>
+          </g>
+
+          <!-- Small scattered gems -->
+          <g opacity="0.5">
+            <polygon points="35,55 30,62 35,70 40,62"     fill="#7eeeff" opacity="0.4"><animate attributeName="opacity" values="0.3;0.7;0.3" dur="3s"   repeatCount="indefinite"/></polygon>
+            <polygon points="145,60 141,66 145,72 149,66"  fill="#a8f0ff" opacity="0.35"><animate attributeName="opacity" values="0.2;0.6;0.2" dur="2.5s" repeatCount="indefinite"/></polygon>
+            <polygon points="30,150 27,155 30,160 33,155"  fill="#7eeeff" opacity="0.3"><animate attributeName="opacity" values="0.25;0.65;0.25" dur="3.2s" repeatCount="indefinite"/></polygon>
+            <polygon points="155,145 152,150 155,155 158,150" fill="#a8f0ff" opacity="0.3"><animate attributeName="opacity" values="0.2;0.55;0.2" dur="2.8s" repeatCount="indefinite"/></polygon>
+            <polygon points="70,170 67,175 70,180 73,175"  fill="#7eeeff" opacity="0.35"><animate attributeName="opacity" values="0.3;0.7;0.3" dur="3.5s" repeatCount="indefinite"/></polygon>
+          </g>
+        </svg>
+      </div>
+      <div class="card-name">
+        <div class="name" style="color:#7eeeff;">CRYSTAL</div>
+        <div class="subtitle" style="color:#a0e8ff;">晶钻 No.03</div>
+      </div>
+      <div class="holo-overlay"></div>
+      <div class="holo-sweep"></div>
+    </div>
+
+  </div>
+
+  <p class="hint-text">✦ hover 卡片查看全息效果 ✦</p>
+
+  <footer><p>Made with ♥ by Copilot</p></footer>
+
+  <script>
+    // Mouse-follow 3D tilt on hover
+    document.querySelectorAll('.holo-card').forEach(function(card) {
+      card.addEventListener('mousemove', function(e) {
+        var rect = card.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        var rotateX = ((y - rect.height / 2) / rect.height * 2) * -8;
+        var rotateY = ((x - rect.width  / 2) / rect.width  * 2) *  8;
+        card.style.transform =
+          'perspective(600px) rotateX(' + rotateX + 'deg) rotateY(' + rotateY + 'deg) translateY(-10px)';
+      });
+      card.addEventListener('mouseleave', function() {
+        card.style.transform = '';
+      });
+    });
+  </script>
+</body>
+</html>
