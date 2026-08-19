@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>英语打卡小页面</title>
+<style>
+  :root{
+    --paper:#FBFAF7;
+    --ink:#3D3A35;
+    --ink-deep:#2B2825;
+    --ink-faint:#A9A29A;
+  }
+
+  *{box-sizing:border-box;}
+
+  html{
+    background:var(--paper);
+    -webkit-text-size-adjust:100%;
+  }
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size:15px;
+    line-height:1.85;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  main{
+    max-width:32rem;
+    margin:0 auto;
+    padding:76px 30px calc(64px + env(safe-area-inset-bottom));
+  }
+
+  /* ── 页眉：与文件夹标签同级的小字，不抢视线 ── */
+  .masthead{
+    margin:0 0 64px;
+    font-size:13px;
+    font-weight:400;
+    line-height:1.85;
+    letter-spacing:0.2em;
+    color:var(--ink-faint);
+  }
+
+  /* ── 分组：靠留白分隔，没有任何框线 ── */
+  .group{margin:0 0 52px;}
+  .group:last-of-type{margin-bottom:0;}
+
+  .tag{
+    margin:0 0 12px;
+    font-size:13px;
+    font-weight:400;
+    line-height:1.85;
+    letter-spacing:0.16em;
+    color:var(--ink-faint);
+  }
+
+  .list{margin:0;padding:0;list-style:none;}
+
+  .item{
+    opacity:0;
+    animation:rise .5s cubic-bezier(.22,.61,.36,1) forwards;
+    animation-delay:var(--delay,0ms);
+  }
+
+  @keyframes rise{
+    from{opacity:0;transform:translateY(5px);}
+    to{opacity:1;transform:none;}
+  }
+
+  .item a{
+    position:relative;
+    display:block;
+    padding:7px 10px 7px 18px;
+    margin-left:-18px;
+    margin-right:-10px;
+    border-radius:4px;
+    color:var(--ink);
+    text-decoration:none;
+    background-color:transparent;
+    transition:transform .25s cubic-bezier(.22,.61,.36,1),
+               color .25s cubic-bezier(.22,.61,.36,1),
+               background-color .25s cubic-bezier(.22,.61,.36,1);
+  }
+
+  .item a::before{
+    content:"";
+    position:absolute;
+    left:6px;
+    top:50%;
+    width:3px;
+    height:3px;
+    margin-top:-1.5px;
+    border-radius:50%;
+    background:var(--dot,#BAB3A8);
+    opacity:0;
+    transform:translateX(-2px);
+    transition:opacity .25s cubic-bezier(.22,.61,.36,1),
+               transform .25s cubic-bezier(.22,.61,.36,1);
+  }
+
+  @media (hover:hover) and (pointer:fine){
+    .item a:hover{
+      transform:translateX(2px);
+      color:var(--ink-deep);
+      background-color:var(--tint,rgba(186,179,168,.10));
+    }
+    .item a:hover::before{opacity:1;transform:none;}
+  }
+
+  .item a:active,
+  .item a:focus-visible{
+    transform:translateX(2px);
+    color:var(--ink-deep);
+    background-color:var(--tint,rgba(186,179,168,.10));
+    outline:none;
+  }
+  .item a:active::before,
+  .item a:focus-visible::before{opacity:1;transform:none;}
+
+  /* ── 载入提示：慢半拍才出现，快的时候完全看不见 ── */
+  .hint{
+    margin:0;
+    font-size:13px;
+    letter-spacing:0.16em;
+    color:var(--ink-faint);
+    opacity:0;
+    animation:hintIn .5s ease .5s forwards;
+  }
+  @keyframes hintIn{to{opacity:1;}}
+
+  footer{
+    margin-top:72px;
+    font-size:12px;
+    line-height:1.85;
+    letter-spacing:0.04em;
+    color:var(--ink-faint);
+  }
+
+  @media (max-width:400px){
+    main{padding:60px 24px calc(56px + env(safe-area-inset-bottom));}
+    .masthead{margin-bottom:52px;}
+    .group{margin-bottom:46px;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .item{opacity:1;animation:none;}
+    .hint{opacity:1;animation:none;}
+    .item a,.item a::before{transition:none;}
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="masthead">宝的英语打卡小页面</p>
+
+  <div id="list">
+    <p class="hint">正在载入</p>
+  </div>
+
+  <footer>慢慢来，一天一张就够了</footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var OWNER = "momoyu-bot";
+  var REPO  = "English-card";
+  var PAGES = "https://momoyu-bot.github.io/English-card/";
+  var RAW   = "https://raw.githubusercontent.com/" + OWNER + "/" + REPO + "/HEAD/";
+  var TREE  = "https://api.github.com/repos/" + OWNER + "/" + REPO + "/git/trees/HEAD?recursive=1";
+
+  /* 每个文件夹一种低饱和度的色，只用在悬停背景和小圆点上 */
+  var PALETTE = {
+    claude:  { dot: "#C3AD90", tint: "rgba(195,173,144,.11)" },
+    gemini:  { dot: "#9CB8B3", tint: "rgba(156,184,179,.12)" },
+    grok:    { dot: "#ABA2B6", tint: "rgba(171,162,182,.12)" },
+    copilot: { dot: "#A1B0BE", tint: "rgba(161,176,190,.12)" },
+    gpt:     { dot: "#AAB08E", tint: "rgba(170,176,142,.12)" }
+  };
+  var PALETTE_DEFAULT = { dot: "#BAB3A8", tint: "rgba(186,179,168,.10)" };
+  var ORDER = ["claude", "gemini", "grok", "copilot", "gpt"];
+
+  /* API 取不到时的兜底清单 */
+  var FALLBACK = [
+    { folder: "claude",  file: "friends-listening-plan.html",   name: "30 秒计划 · Friends" },
+    { folder: "claude",  file: "shop-scene-reading-card.html",  name: "跟读卡 · 商店结账" },
+    { folder: "claude",  file: "月亮值夜班.html",                name: "月亮值夜班" },
+    { folder: "gemini",  file: "friends-listening-sop.html",    name: "mo.exe 的英语复健 SOP" },
+    { folder: "grok",    file: "friends-english-plan.html",     name: "Friends 口语听力练习清单" },
+    { folder: "grok",    file: "小字符.html",                    name: "小字符 · 空心树" },
+    { folder: "grok",    file: "空心树.html",                    name: "空心树" },
+    { folder: "grok",    file: "空心树值班.html",                 name: "空心树值班" },
+    { folder: "grok",    file: "销售预测.html",                   name: "FY26-Q3-销售预测.xlsx" },
+    { folder: "copilot", file: "holo-cards.html",               name: "SVG 全息闪光小卡" },
+    { folder: "gpt",     file: "bao-sleepy-nest.html",          name: "给宝的困困小窝" }
+  ];
+
+  var listBox = document.getElementById("list");
+
+  /* ---------- 小工具 ---------- */
+
+  var EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2900}-\u{297F}]/gu;
+
+  function clean(text) {
+    return String(text)
+      .replace(EMOJI, "")
+      .replace(/\s+/g, " ")
+      .replace(/^[\s·、|\-–—]+|[\s·、|\-–—]+$/g, "")
+      .trim();
+  }
+
+  function prettify(fileName) {
+    return clean(fileName.replace(/\.html?$/i, "").replace(/[-_]+/g, " "));
+  }
+
+  function encodePath(path) {
+    return path.split("/").map(encodeURIComponent).join("/");
+  }
+
+  function pickTitle(text) {
+    var m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(text);
+    if (!m) return "";
+    var raw = m[1]
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&/gi, "&")
+      .replace(/</gi, "<")
+      .replace(/>/gi, ">")
+      .replace(/"/gi, '"')
+      .replace(/&#39;/g, "'");
+    return clean(raw);
+  }
+
+  function timeout(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  /* ---------- 读取仓库结构 ---------- */
+
+  function loadEntries() {
+    return fetch(TREE, { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (res) {
+        if (!res.ok) throw new Error("tree " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.tree)) throw new Error("tree shape");
+
+        var entries = data.tree
+          .filter(function (node) {
+            if (node.type !== "blob") return false;
+            var parts = String(node.path).split("/");
+            if (parts.length !== 2) return false;              // 只要「子文件夹/文件」
+            if (parts[0].charAt(0) === ".") return false;       // 跳过隐藏目录
+            return /\.html?$/i.test(parts[1]);
+          })
+          .map(function (node) {
+            var parts = node.path.split("/");
+            return { folder: parts[0], file: parts[1], name: prettify(parts[1]) };
+          });
+
+        if (!entries.length) throw new Error("tree empty");
+        return entries;
+      });
+  }
+
+  /* 只读到 <title> 就掐断连接，不整份文件拖下来 */
+  function loadTitle(entry) {
+    var url = RAW + encodePath(entry.folder + "/" + entry.file);
+
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error("raw " + res.status);
+      if (!res.body || !res.body.getReader) {
+        return res.text().then(function (text) { return pickTitle(text.slice(0, 12000)); });
+      }
+
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder("utf-8");
+      var buffer = "";
+
+      function step() {
+        if (buffer.length > 12000) return "";
+        return reader.read().then(function (chunk) {
+          if (chunk.done) return pickTitle(buffer);
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var found = pickTitle(buffer);
+          return found ? found : step();
+        });
+      }
+
+      return step().then(
+        function (title) { try { reader.cancel(); } catch (e) {} return title; },
+        function (err)   { try { reader.cancel(); } catch (e) {} throw err; }
+      );
+    });
+  }
+
+  /* 并发上限，别让手机一口气开十几条连接 */
+  function loadTitles(entries) {
+    var index = 0;
+    var lanes = [];
+    var laneCount = Math.min(4, entries.length);
+
+    function next() {
+      if (index >= entries.length) return Promise.resolve();
+      var entry = entries[index++];
+      return loadTitle(entry)
+        .then(function (title) { if (title) entry.name = title; })
+        .catch(function () {})
+        .then(next);
+    }
+
+    for (var i = 0; i < laneCount; i++) lanes.push(next());
+    return Promise.all(lanes);
+  }
+
+  /* ---------- 渲染 ---------- */
+
+  function group(entries) {
+    var buckets = {};
+    var names = [];
+
+    entries.forEach(function (entry) {
+      if (!buckets[entry.folder]) { buckets[entry.folder] = []; names.push(entry.folder); }
+      buckets[entry.folder].push(entry);
+    });
+
+    names.sort(function (a, b) {
+      var ia = ORDER.indexOf(a), ib = ORDER.indexOf(b);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.localeCompare(b, "zh-Hans-CN");
+    });
+
+    return names.map(function (name) {
+      var items = buckets[name].slice().sort(function (a, b) {
+        return a.name.localeCompare(b.name, "zh-Hans-CN");
+      });
+      return { folder: name, items: items };
+    });
+  }
+
+  function render(entries) {
+    var groups = group(entries);
+    var frag = document.createDocumentFragment();
+    var step = 0;
+
+    groups.forEach(function (block) {
+      var color = PALETTE[block.folder.toLowerCase()] || PALETTE_DEFAULT;
+
+      var section = document.createElement("section");
+      section.className = "group";
+      section.style.setProperty("--dot", color.dot);
+      section.style.setProperty("--tint", color.tint);
+
+      var tag = document.createElement("h2");
+      tag.className = "tag";
+      tag.textContent = block.folder;
+      section.appendChild(tag);
+
+      var list = document.createElement("ul");
+      list.className = "list";
+
+      block.items.forEach(function (entry) {
+        var li = document.createElement("li");
+        li.className = "item";
+        li.style.setProperty("--delay", Math.min(step * 40, 560) + "ms");
+        step++;
+
+        var link = document.createElement("a");
+        link.href = PAGES + encodePath(entry.folder + "/" + entry.file);
+        link.textContent = entry.name || prettify(entry.file);
+
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+
+      section.appendChild(list);
+      frag.appendChild(section);
+    });
+
+    listBox.textContent = "";
+    listBox.appendChild(frag);
+  }
+
+  /* ---------- 走起 ---------- */
+
+  loadEntries()
+    .then(function (entries) {
+      // 标题最多等这么久，超时就先用文件名把页面画出来
+      return Promise.race([loadTitles(entries), timeout(2200)]).then(function () {
+        return entries;
+      });
+    })
+    .catch(function () {
+      return FALLBACK.slice();
+    })
+    .then(render)
+    .catch(function () {
+      try { render(FALLBACK.slice()); } catch (e) {}
+    });
+})();
+</script>
+</body>
+</html>
