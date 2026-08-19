@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f12">
+<title>数羊 🐑</title>
+<style>
+  :root{
+    --sky-top:#0b0f12;
+    --sky-mid:#121719;
+    --sky-low:#161a16;
+    --hill-far:#141a17;
+    --hill-near:#0c100e;
+    --wool:#e8e2d3;
+    --wool-dim:#c9c2b1;
+    --hide:#4a443c;
+    --ink:#9ba396;
+    --ink-soft:#767d71;
+    --ink-dim:rgba(155,163,150,.38);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  html{overflow:hidden}
+  body{
+    background:linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 44%,var(--sky-low) 76%,#0d100e 100%);
+    overflow:hidden;
+    font-family:"Songti SC","Noto Serif SC","STSong",serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    user-select:none;
+    -webkit-user-select:none;
+    position:relative;
+  }
+
+  /* 熄灯：整个牧场一起暗下来，只留一点轮廓 */
+  #stage{position:absolute;inset:0;transition:opacity 2.4s ease}
+  body.lightsout #stage{opacity:.38}
+
+  /* ---------- 萤火虫 ---------- */
+  #flies{position:absolute;inset:0;z-index:2;pointer-events:none}
+  .fly{
+    position:absolute;width:4px;height:4px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,226,158,.95),rgba(255,205,120,0) 70%);
+    animation:drift var(--d) ease-in-out infinite alternate,
+              blink var(--b) ease-in-out infinite;
+  }
+  @keyframes drift{from{transform:translate(0,0)}to{transform:translate(var(--dx),var(--dy))}}
+  @keyframes blink{0%,100%{opacity:.12}50%{opacity:.8}}
+
+  /* ---------- 纸灯笼 ---------- */
+  #lamp{position:absolute;top:0;left:13%;width:64px;z-index:6}
+  #glow{
+    position:absolute;left:50%;top:80px;width:240px;height:240px;
+    transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,
+      rgba(242,207,142,.20) 0%,
+      rgba(242,207,142,.07) 38%,
+      rgba(242,207,142,0) 70%);
+    transition:opacity 2.4s ease;
+  }
+  #lantern{
+    position:relative;display:block;width:64px;
+    transform-origin:50% 0;
+    animation:sway 9s ease-in-out infinite alternate;
+    cursor:pointer;
+  }
+  @keyframes sway{from{transform:rotate(-2.2deg)}to{transform:rotate(2.2deg)}}
+  #lantern .wick{transition:opacity 2.4s ease}
+  #lantern .paper{transition:fill 2.4s ease}
+  body.lightsout #glow{opacity:0}
+  body.lightsout #lantern .wick{opacity:0}
+  body.lightsout #lantern .paper{fill:#3b352b}
+
+  /* ---------- 山丘 ---------- */
+  #hills{position:absolute;left:0;right:0;bottom:0;height:32vh;z-index:3;display:block}
+
+  /* ---------- 栅栏 ---------- */
+  #fence{
+    position:absolute;left:50%;bottom:11%;transform:translateX(-50%);
+    width:96px;z-index:5;opacity:.85;
+  }
+
+  /* ---------- 羊道 ---------- */
+  #lane{position:absolute;left:0;right:0;bottom:11%;height:0;z-index:6}
+  .sheep{
+    position:absolute;left:100%;bottom:0;width:92px;
+    animation:walk var(--dur) linear forwards;
+  }
+  @keyframes walk{to{transform:translateX(calc(-100vw - 140px))}}
+  .bob{animation:bob 1.7s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+  .jumper.jump{animation:jump 1s cubic-bezier(.32,0,.34,1)}
+  @keyframes jump{
+    0%{transform:translateY(0)}
+    45%{transform:translateY(-48px)}
+    100%{transform:translateY(0)}
+  }
+  body.paused .sheep,
+  body.paused .bob,
+  body.paused .jumper{animation-play-state:paused}
+
+  /* ---------- 计数 ---------- */
+  #counter{
+    position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);
+    text-align:center;z-index:7;
+  }
+  #num{
+    font-size:64px;line-height:1;letter-spacing:.06em;
+    color:var(--wool);opacity:.34;
+    text-shadow:0 0 30px rgba(232,226,211,.18);
+    transition:opacity 1.4s ease;
+  }
+  #num.tick{opacity:.72}
+  #word{
+    margin-top:16px;font-size:14px;letter-spacing:.34em;
+    color:var(--ink-soft);padding-left:.34em;
+    font-family:Georgia,"Times New Roman",serif;
+    opacity:0;transition:opacity 1.6s ease;
+  }
+  #word.on{opacity:.9}
+
+  /* ---------- 夜里的絮语 ---------- */
+  #phrase{
+    position:absolute;left:50%;top:53%;transform:translateX(-50%);
+    width:min(80vw,460px);text-align:center;
+    font-size:16.5px;line-height:2.1;letter-spacing:.12em;
+    color:var(--ink);opacity:0;transition:opacity 3.4s ease;
+    z-index:7;text-shadow:0 0 22px rgba(11,15,18,.9);
+  }
+
+  /* ---------- 睡着以后 ---------- */
+  #dim{
+    position:fixed;inset:0;background:#000;opacity:0;
+    transition:opacity 2.6s ease;pointer-events:none;z-index:40;
+  }
+
+  /* ---------- 控件 ---------- */
+  #controls{
+    position:absolute;bottom:calc(18px + env(safe-area-inset-bottom));
+    left:50%;transform:translateX(-50%);
+    display:flex;gap:11px;z-index:60;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .ctl{
+    padding:8px 15px;border:1px solid rgba(180,190,175,.18);
+    border-radius:999px;background:rgba(20,26,24,.44);
+    color:var(--ink-soft);font-size:12.5px;letter-spacing:.06em;
+    cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    transition:color .8s,border-color .8s,background .8s;
+    white-space:nowrap;
+  }
+  .ctl.on{
+    color:#e6e1d2;border-color:rgba(214,206,186,.44);
+    background:rgba(38,44,38,.52);
+  }
+
+  #sig{
+    position:absolute;top:calc(16px + env(safe-area-inset-top));left:18px;
+    font-size:11px;letter-spacing:.16em;color:var(--ink-dim);
+    font-family:-apple-system,"PingFang SC",sans-serif;z-index:7;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .fly{animation:none;opacity:.5}
+    #lantern{animation:none}
+    .bob,.jumper.jump{animation:none !important}
+    #num{transition:none}
+  }
+  @media (max-height:620px){
+    #counter{top:27%}
+    #num{font-size:52px}
+    #phrase{top:50%;font-size:15px}
+    .sheep{width:78px}
+  }
+  @media (max-width:380px){
+    #controls{gap:8px}
+    .ctl{padding:7px 12px;font-size:12px}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="flies"></div>
+
+  <div id="lamp">
+    <div id="glow"></div>
+    <svg id="lantern" viewBox="0 0 64 132" xmlns="http://www.w3.org/2000/svg" aria-label="纸灯笼">
+      <line x1="32" y1="0" x2="32" y2="46" stroke="rgba(160,150,130,.35)" stroke-width="1.2"/>
+      <rect x="24" y="44" width="16" height="5" rx="2" fill="#5c5344"/>
+      <ellipse class="paper" cx="32" cy="80" rx="21" ry="27" fill="#e9c78a"/>
+      <path d="M12 74 h40 M12 86 h40" stroke="rgba(120,95,55,.28)" stroke-width="1"/>
+      <rect x="26" y="105" width="12" height="5" rx="2" fill="#5c5344"/>
+      <line class="wick" x1="32" y1="110" x2="32" y2="126" stroke="rgba(233,199,138,.5)" stroke-width="1.2"/>
+    </svg>
+  </div>
+
+  <svg id="hills" viewBox="0 0 1200 300" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M0,150 C200,112 380,176 600,142 C820,108 1000,166 1200,132 L1200,300 L0,300 Z" fill="var(--hill-far)"/>
+    <path d="M0,214 C240,186 420,236 640,210 C880,184 1020,226 1200,202 L1200,300 L0,300 Z" fill="var(--hill-near)"/>
+  </svg>
+
+  <svg id="fence" viewBox="0 0 96 44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g fill="#3a352d">
+      <rect x="10" y="4" width="7" height="40" rx="2"/>
+      <rect x="79" y="4" width="7" height="40" rx="2"/>
+      <rect x="6" y="14" width="84" height="5" rx="2"/>
+      <rect x="6" y="28" width="84" height="5" rx="2"/>
+    </g>
+  </svg>
+
+  <div id="lane"></div>
+
+  <div id="counter">
+    <div id="num">0</div>
+    <div id="word"></div>
+  </div>
+
+  <div id="phrase"></div>
+  <div id="sig">🐑 数羊中 · 轻点灯笼可以熄灯</div>
+</div>
+
+<div id="dim"></div>
+
+<div id="controls">
+  <button class="ctl" id="btn-music">🎵 摇篮曲</button>
+  <button class="ctl" id="btn-timer">⏳ 定时</button>
+  <button class="ctl on" id="btn-pause">🐑 数着</button>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- 萤火虫 ---------- */
+  const flies = document.getElementById("flies");
+  for(let i=0;i<9;i++){
+    const f = document.createElement("div");
+    f.className = "fly";
+    f.style.left = (Math.random()*88+6).toFixed(2)+"%";
+    f.style.top  = (Math.random()*36+52).toFixed(2)+"%";
+    f.style.setProperty("--dx",(Math.random()*70-35).toFixed(0)+"px");
+    f.style.setProperty("--dy",(Math.random()*46-23).toFixed(0)+"px");
+    f.style.setProperty("--d",(Math.random()*10+12).toFixed(1)+"s");
+    f.style.setProperty("--b",(Math.random()*5+4).toFixed(1)+"s");
+    f.style.animationDelay = "0s, -"+(Math.random()*6).toFixed(1)+"s";
+    flies.appendChild(f);
+  }
+
+  /* ---------- 英文数字：睡前顺手认几个 ---------- */
+  const ONES = ["","one","two","three","four","five","six","seven","eight","nine",
+                "ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen",
+                "seventeen","eighteen","nineteen"];
+  const TENS = ["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+
+  function spell(n){
+    if(n < 20) return ONES[n];
+    if(n < 100){
+      const t = TENS[Math.floor(n/10)];
+      const o = n % 10;
+      return o ? t + "-" + ONES[o] : t;
+    }
+    return String(n);       // 数到一百还没睡着的话，就不念了
+  }
+
+  /* ---------- 羊 ---------- */
+  const lane = document.getElementById("lane");
+  const numEl = document.getElementById("num");
+  const wordEl = document.getElementById("word");
+
+  const SHEEP_SVG =
+    '<svg viewBox="0 0 120 84" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<rect x="50" y="54" width="6" height="22" rx="3" fill="#56514a"/>' +
+      '<rect x="78" y="54" width="6" height="22" rx="3" fill="#56514a"/>' +
+      '<g fill="var(--wool)">' +
+        '<circle cx="48" cy="44" r="19"/>' +
+        '<circle cx="66" cy="36" r="18"/>' +
+        '<circle cx="84" cy="42" r="18"/>' +
+        '<circle cx="66" cy="52" r="18"/>' +
+        '<circle cx="98" cy="46" r="11"/>' +
+      '</g>' +
+      '<ellipse cx="36" cy="34" rx="6.5" ry="4" transform="rotate(-28 36 34)" fill="#3e3931"/>' +
+      '<ellipse cx="30" cy="46" rx="13" ry="11" fill="var(--hide)"/>' +
+      '<circle cx="30" cy="36" r="7" fill="var(--wool)"/>' +
+      '<path d="M22 46 q3.5 3 7 0" stroke="var(--wool-dim)" stroke-width="1.6"' +
+        ' fill="none" stroke-linecap="round"/>' +
+    '</svg>';
+
+  let count = 0;
+  let spawnTimer = null;
+  let paused = false;
+  let stopped = false;      // 定时到点后不再放羊出来
+
+  /* 越数越慢：羊走得慢一点，间隔也拉长一点 */
+  function walkDur(){ return Math.min(13 + count * 0.45, 23); }
+  function gap(){     return Math.min(4200 + count * 190, 8000); }
+
+  function bumpCount(){
+    count++;
+    numEl.textContent = count;
+    wordEl.textContent = count > 99 ? "" : spell(count) + " sheep";
+    numEl.classList.add("tick");
+    wordEl.classList.add("on");
+    setTimeout(()=>numEl.classList.remove("tick"), 2600);
+  }
+
+  function releaseSheep(){
+    const dur = walkDur();
+
+    const sheep = document.createElement("div");
+    sheep.className = "sheep";
+    sheep.style.setProperty("--dur", dur + "s");
+
+    const jumper = document.createElement("div");
+    jumper.className = "jumper";
+    const bob = document.createElement("div");
+    bob.className = "bob";
+    bob.innerHTML = SHEEP_SVG;
+    jumper.appendChild(bob);
+    sheep.appendChild(jumper);
+    lane.appendChild(sheep);
+
+    // 走到画面正中的栅栏前起跳：最高点（跳跃动画的 45%）正好压在栅栏上
+    const travel = window.innerWidth + 140;                 // 与 walk 关键帧一致
+    const frac = (window.innerWidth / 2 + sheep.offsetWidth / 2) / travel;
+    const toFence = Math.max(0, frac * dur * 1000 - 450);
+    setTimeout(()=>{
+      if(!sheep.isConnected) return;
+      if(!reduceMotion) jumper.classList.add("jump");
+      bumpCount();
+      setTimeout(()=>jumper.classList.remove("jump"), 1000);
+    }, toFence);
+
+    setTimeout(()=>sheep.remove(), dur * 1000 + 600);
+  }
+
+  function schedule(first){
+    clearTimeout(spawnTimer);
+    if(paused || stopped) return;
+    spawnTimer = setTimeout(()=>{
+      if(!paused && !stopped && !document.hidden) releaseSheep();
+      schedule(false);
+    }, first ? 900 : gap());
+  }
+  schedule(true);
+
+  // 切到后台时别攒羊，回来再接着放
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.hidden) clearTimeout(spawnTimer);
+    else schedule(false);
+  });
+
+  const btnPause = document.getElementById("btn-pause");
+  btnPause.addEventListener("click", ()=>{
+    paused = !paused;
+    document.body.classList.toggle("paused", paused);
+    btnPause.classList.toggle("on", !paused);
+    btnPause.textContent = paused ? "🐑 歇会儿" : "🐑 数着";
+    if(!paused) schedule(false);
+  });
+
+  /* ---------- 熄灯 ---------- */
+  document.getElementById("lantern").addEventListener("click", ()=>{
+    document.body.classList.toggle("lightsout");
+  });
+
+  /* ---------- 夜里的絮语 ---------- */
+  const phrases = [
+    "第一只羊翻过栅栏，回头看了你一眼",
+    "羊毛很软，像刚晒过的被子",
+    "草原上没有闹钟，只有风",
+    "数不清也没关系，它们会自己走完",
+    "远处的羊铃响了一下，就没再响",
+    "今天那些事，羊都替你驮走了",
+    "眼睛闭上，羊反而走得更快",
+    "夜风把灯笼吹得轻轻晃了一下",
+    "睡吧，我替你数着",
+    "晚安，宝 🐑"
+  ];
+  const phraseEl = document.getElementById("phrase");
+  let pi = 0;
+  const FADE_MS = 3400, HOLD_MS = 10000;
+
+  function cyclePhrase(){
+    phraseEl.style.opacity = 0;
+    setTimeout(()=>{
+      phraseEl.textContent = phrases[pi];
+      pi = (pi + 1) % phrases.length;
+      phraseEl.style.opacity = 1;
+      setTimeout(cyclePhrase, HOLD_MS);
+    }, phraseEl.textContent === "" ? 300 : FADE_MS);
+  }
+  setTimeout(cyclePhrase, 2400);
+
+  /* ---------- 摇篮曲：八音盒 + 夜风（默认关闭） ---------- */
+  let ctx = null, master = null, musicOn = false, noteTimer = null;
+  const PENTA = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50]; // C 大调五声
+  let deg = 2;
+  const startedAt = Date.now();
+  const btnMusic = document.getElementById("btn-music");
+
+  function initAudio(){
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = 0.00001;
+    master.connect(ctx.destination);
+
+    // 夜风：棕噪音压到很低，只留一层底
+    const len = ctx.sampleRate * 2;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for(let i=0;i<len;i++){
+      const white = Math.random()*2-1;
+      d[i] = (last + 0.02*white) / 1.02;
+      last = d[i];
+      d[i] *= 3.2;
+    }
+    const wind = ctx.createBufferSource();
+    wind.buffer = buf; wind.loop = true;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 340; lp.Q.value = 0.6;
+    const wg = ctx.createGain(); wg.gain.value = 0.5;
+    wind.connect(lp); lp.connect(wg); wg.connect(master);
+    wind.start();
+
+    const gust = ctx.createOscillator(), gustGain = ctx.createGain();
+    gust.frequency.value = 0.045; gustGain.gain.value = 0.18;
+    gust.connect(gustGain); gustGain.connect(wg.gain);
+    gust.start();
+
+    // 远处的低音垫，像屋子在呼吸
+    [130.81, 196.00].forEach((f, i)=>{
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = f;
+      o.detune.value = i ? 4 : -4;
+      const g = ctx.createGain();
+      g.gain.value = i ? 0.030 : 0.045;
+      const breath = ctx.createOscillator(), bg = ctx.createGain();
+      breath.frequency.value = 0.07 + i*0.013;
+      bg.gain.value = 0.012;
+      breath.connect(bg); bg.connect(g.gain);
+      o.connect(g); g.connect(master);
+      o.start(); breath.start();
+    });
+  }
+
+  function pluck(freq, when){
+    const filt = ctx.createBiquadFilter();
+    filt.type = "lowpass"; filt.frequency.value = 2400;
+    filt.connect(master);
+
+    const o = ctx.createOscillator();
+    o.type = "triangle"; o.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(0.16, when + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 3.4);
+    o.connect(g); g.connect(filt);
+    o.start(when); o.stop(when + 3.5);
+
+    // 一点点泛音，八音盒的「叮」
+    const o2 = ctx.createOscillator();
+    o2.type = "sine"; o2.frequency.value = freq * 2.004;
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, when);
+    g2.gain.linearRampToValueAtTime(0.045, when + 0.01);
+    g2.gain.exponentialRampToValueAtTime(0.0001, when + 1.4);
+    o2.connect(g2); g2.connect(filt);
+    o2.start(when); o2.stop(when + 1.5);
+  }
+
+  function nextNote(){
+    if(!musicOn) return;
+    // 在五声音阶上小步游走，偶尔停一拍
+    deg = Math.max(0, Math.min(PENTA.length - 1, deg + (Math.floor(Math.random()*3) - 1)));
+    if(Math.random() > 0.18){
+      pluck(PENTA[deg] * (Math.random() < 0.22 ? 0.5 : 1), ctx.currentTime + 0.05);
+    }
+    // 夜越深，音符之间的空隙越长
+    const slow = Math.min(1 + (Date.now() - startedAt) / 900000, 1.6);
+    noteTimer = setTimeout(nextNote, (2400 + Math.random()*2400) * slow);
+  }
+
+  btnMusic.addEventListener("click", async ()=>{
+    if(!ctx) initAudio();
+    if(ctx.state === "suspended") await ctx.resume();
+    musicOn = !musicOn;
+    btnMusic.classList.toggle("on", musicOn);
+    const t = ctx.currentTime;
+    if(musicOn){
+      master.gain.setTargetAtTime(0.09, t, 1.6);
+      btnMusic.textContent = "🎵 摇篮曲 · 开";
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(nextNote, 1200);
+    }else{
+      master.gain.setTargetAtTime(0.00001, t, 1.0);
+      btnMusic.textContent = "🎵 摇篮曲";
+      clearTimeout(noteTimer);
+    }
+  });
+
+  /* ---------- 睡眠定时：到点之前慢慢暗下去、静下来 ---------- */
+  const dim = document.getElementById("dim");
+  const btnTimer = document.getElementById("btn-timer");
+  const OPTIONS = [0, 15, 30, 60];   // 分钟
+  const FADE_LEAD = 90;              // 提前 90 秒开始收尾
+  let optIdx = 0, endAt = 0, fading = false, tick = null;
+
+  function paintTimer(){
+    if(!endAt){
+      btnTimer.textContent = "⏳ 定时";
+      btnTimer.classList.remove("on");
+      return;
+    }
+    const left = Math.max(0, Math.ceil((endAt - Date.now()) / 60000));
+    btnTimer.textContent = left > 0 ? "⏳ " + left + " 分" : "⏳ 晚安";
+    btnTimer.classList.add("on");
+  }
+
+  function clearTimer(){
+    clearInterval(tick); tick = null;
+    endAt = 0; fading = false; stopped = false;
+    dim.style.transitionDuration = "2.6s";
+    dim.style.opacity = 0;
+    if(musicOn && ctx) master.gain.setTargetAtTime(0.09, ctx.currentTime, 1.6);
+    schedule(false);
+    paintTimer();
+  }
+
+  function startFade(){
+    fading = true;
+    stopped = true;                       // 不再放新的羊，画面上的走完就好
+    clearTimeout(spawnTimer);
+    dim.style.transitionDuration = FADE_LEAD + "s";
+    dim.style.opacity = 1;
+    if(ctx && musicOn) master.gain.setTargetAtTime(0.00001, ctx.currentTime, FADE_LEAD / 3);
+  }
+
+  btnTimer.addEventListener("click", ()=>{
+    optIdx = (optIdx + 1) % OPTIONS.length;
+    const mins = OPTIONS[optIdx];
+    clearTimer();
+    if(!mins) return;
+
+    endAt = Date.now() + mins * 60000;
+    paintTimer();
+    tick = setInterval(()=>{
+      const leftMs = endAt - Date.now();
+      if(!fading && leftMs <= FADE_LEAD * 1000) startFade();
+      if(leftMs <= 0){
+        clearInterval(tick); tick = null;
+        clearTimeout(noteTimer);
+        musicOn = false;
+        btnMusic.classList.remove("on");
+        btnMusic.textContent = "🎵 摇篮曲";
+      }
+      paintTimer();
+    }, 5000);
+  });
+})();
+</script>
+</body>
+</html>
