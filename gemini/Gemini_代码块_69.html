@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>宝的周末解压馆</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* 阻止移动端下拉刷新和双击缩放 */
+            overscroll-behavior-y: contain;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .bg-gradient {
+            /* 傍晚到夜晚的温柔渐变色 */
+            background: linear-gradient(to bottom, #2b1055, #7597de);
+        }
+
+        .bubble {
+            position: absolute;
+            bottom: -100px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+            animation: floatUp linear forwards;
+        }
+
+        .bubble:active {
+            transform: scale(0.9);
+        }
+
+        .bubble.popped {
+            transform: scale(1.5);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) rotate(0deg);
+            }
+            100% {
+                transform: translateY(-120vh) rotate(360deg);
+            }
+        }
+
+        .floating-text {
+            position: absolute;
+            color: #ffd700;
+            font-weight: bold;
+            font-size: 1.2rem;
+            pointer-events: none;
+            animation: floatText 1s ease-out forwards;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        @keyframes floatText {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-50px) scale(1.2); opacity: 0; }
+        }
+
+        /* 呼吸动画按钮 */
+        .btn-breathe {
+            animation: breathe 2s infinite ease-in-out;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 15px rgba(255,255,255,0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 25px rgba(255,255,255,0.7); }
+        }
+    </style>
+</head>
+<body class="bg-gradient w-screen h-screen overflow-hidden font-sans text-white">
+
+    <!-- 游戏主界面 -->
+    <div id="game-container" class="relative w-full h-full hidden">
+        <!-- 顶部信息栏 -->
+        <div class="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-10 bg-gradient-to-b from-black/30 to-transparent">
+            <div>
+                <p class="text-sm opacity-80 mb-1">周末快乐，宝！</p>
+                <div class="text-2xl font-bold tracking-wider">
+                    快乐值: <span id="score" class="text-yellow-300 drop-shadow-md">0</span>
+                </div>
+            </div>
+            <div id="combo-display" class="text-xl font-bold text-pink-300 opacity-0 transition-opacity duration-200">
+                连击!
+            </div>
+        </div>
+
+        <!-- 泡泡生成区域 -->
+        <div id="bubble-board" class="absolute inset-0 w-full h-full overflow-hidden"></div>
+    </div>
+
+    <!-- 开始界面 -->
+    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/40 backdrop-blur-sm">
+        <h1 class="text-4xl font-extrabold mb-4 tracking-wider text-center drop-shadow-lg">
+            ✨ 周末降临 ✨
+        </h1>
+        <p class="text-lg opacity-90 mb-8 text-center px-6 max-w-sm">
+            下班啦！把屏幕上飘上来的工作烦恼全部戳破，换取属于你的周末快乐吧！
+        </p>
+        <button id="start-btn" class="btn-breathe bg-white/20 hover:bg-white/30 text-white border-2 border-white/50 backdrop-blur-md px-10 py-4 rounded-full text-xl font-bold transition-all">
+            开始解压 🫧
+        </button>
+    </div>
+
+    <script>
+        const startScreen = document.getElementById('start-screen');
+        const gameContainer = document.getElementById('game-container');
+        const startBtn = document.getElementById('start-btn');
+        const bubbleBoard = document.getElementById('bubble-board');
+        const scoreDisplay = document.getElementById('score');
+        const comboDisplay = document.getElementById('combo-display');
+
+        let score = 0;
+        let gameInterval;
+        let combo = 0;
+        let comboTimeout;
+
+        // 烦恼图标（工作相关）
+        const worries = ['💼', '📊', '💻', '🤯', '⏰', '📑', '📉', '👔', '📞'];
+        // 快乐图标（周末相关）
+        const joys = ['🌸', '🍔', '🎮', '🛌', '🍿', '🍹', '🐈', '✨', '🍕', '🎉', '🎵'];
+        // 鼓励话语
+        const cheers = ['好耶!', '解压!', '拜拜打工!', '贴贴~', '周末好棒!', '舒服了~'];
+
+        startBtn.addEventListener('click', startGame);
+
+        function startGame() {
+            startScreen.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+            score = 0;
+            updateScore();
+            
+            // 开始生成泡泡
+            gameInterval = setInterval(createBubble, 600); // 每0.6秒生成一个
+        }
+
+        function createBubble() {
+            const bubble = document.createElement('div');
+            bubble.classList.add('bubble');
+            
+            // 随机大小 60px 到 100px
+            const size = Math.random() * 40 + 60;
+            bubble.style.width = `${size}px`;
+            bubble.style.height = `${size}px`;
+            
+            // 随机水平位置 (10% 到 90%)
+            const leftPos = Math.random() * 80 + 10;
+            bubble.style.left = `${leftPos}%`;
+            
+            // 随机飘升速度 (4秒 到 8秒)
+            const duration = Math.random() * 4 + 4;
+            bubble.style.animationDuration = `${duration}s`;
+            
+            // 随机烦恼图标
+            bubble.innerText = worries[Math.floor(Math.random() * worries.length)];
+            
+            // 绑定点击/触摸事件 (使用 pointerdown 兼容移动端和PC端)
+            bubble.addEventListener('pointerdown', (e) => popBubble(e, bubble));
+            
+            // 动画结束后自动移除，防止DOM元素过多
+            bubble.addEventListener('animationend', () => {
+                if (bubbleBoard.contains(bubble)) {
+                    bubble.remove();
+                    // 如果错过了一个，连击中断
+                    resetCombo();
+                }
+            });
+
+            bubbleBoard.appendChild(bubble);
+        }
+
+        function popBubble(e, bubble) {
+            // 防止默认的鼠标事件导致双重触发
+            e.preventDefault(); 
+            e.stopPropagation();
+
+            if (bubble.classList.contains('popped')) return;
+
+            // 标记为已戳破
+            bubble.classList.add('popped');
+            
+            // 变成快乐图标
+            bubble.innerText = joys[Math.floor(Math.random() * joys.length)];
+            
+            // 增加分数
+            score += 10;
+            updateScore();
+            
+            // 处理连击
+            handleCombo();
+
+            // 在点击位置显示加分特效或鼓励的话
+            showFloatingText(e.clientX, e.clientY);
+
+            // 延迟一点点时间移除元素，让动画播完
+            setTimeout(() => {
+                if (bubbleBoard.contains(bubble)) {
+                    bubble.remove();
+                }
+            }, 300);
+        }
+
+        function updateScore() {
+            scoreDisplay.innerText = score;
+            // 简单的动画效果
+            scoreDisplay.style.transform = 'scale(1.3)';
+            setTimeout(() => scoreDisplay.style.transform = 'scale(1)', 150);
+        }
+
+        function handleCombo() {
+            combo++;
+            if (combo > 2) {
+                comboDisplay.innerText = `${combo} 连击! 🔥`;
+                comboDisplay.style.opacity = '1';
+                comboDisplay.style.transform = 'scale(1.2)';
+                
+                // 连击额外加分
+                score += 5; 
+                updateScore();
+            }
+
+            clearTimeout(comboTimeout);
+            comboTimeout = setTimeout(resetCombo, 1000); // 1秒不点中断连击
+        }
+
+        function resetCombo() {
+            combo = 0;
+            comboDisplay.style.opacity = '0';
+            comboDisplay.style.transform = 'scale(1)';
+        }
+
+        function showFloatingText(x, y) {
+            const text = document.createElement('div');
+            text.classList.add('floating-text');
+            text.style.left = `${x - 20}px`;
+            text.style.top = `${y - 20}px`;
+            
+            // 随机显示 "+10" 或者是鼓励的话
+            if (Math.random() > 0.7) {
+                text.innerText = cheers[Math.floor(Math.random() * cheers.length)];
+                text.style.color = '#ff9ed2'; // 粉色文字
+            } else {
+                text.innerText = '+10';
+            }
+
+            gameContainer.appendChild(text);
+
+            // 动画结束后移除
+            setTimeout(() => {
+                if (gameContainer.contains(text)) {
+                    text.remove();
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>喵星人咖啡馆 - 泊松过程体验</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+        
+        body {
+            font-family: 'ZCOOL KuaiLe', 'Comic Sans MS', cursive, sans-serif;
+            background-color: #fff0f5; /* 浅粉色背景 */
+            overflow-x: hidden;
+        }
+
+        .cat-drop {
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            transform: scale(0);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0) translateY(-20px) rotate(-15deg); opacity: 0; }
+            100% { transform: scale(1) translateY(0) rotate(0deg); opacity: 1; }
+        }
+
+        .progress-bar-fill {
+            transition: width 0.1s linear;
+        }
+
+        .floating-element {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        /* 自定义滑块样式 */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #ff6b81;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #ffd3da;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-6 px-4">
+
+    <!-- 标题区 -->
+    <div class="text-center mb-6 floating-element">
+        <h1 class="text-4xl text-pink-500 font-bold mb-2">🐾 魔法喵星人咖啡馆 🐾</h1>
+        <p class="text-gray-600 text-lg">用最可爱的方式，陪宝搞懂「泊松过程」</p>
+    </div>
+
+    <!-- 主面板 -->
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-2xl p-6 md:p-8 border-4 border-pink-100">
+        
+        <!-- 步骤1：设置猫薄荷浓度 (Lambda) -->
+        <div class="mb-8 bg-pink-50 rounded-2xl p-4">
+            <label class="block text-xl text-pink-600 font-bold mb-2">
+                第一步：撒猫薄荷 (设定期望值 <i>&lambda;</i>)
+            </label>
+            <p class="text-gray-600 text-sm mb-4">
+                这就是泊松过程里的 <b>平均发生率(&lambda;)</b>。你希望在接下来的 10秒 营业时间里，<b>平均</b>来几只猫？
+            </p>
+            <div class="flex items-center gap-4">
+                <span class="text-2xl">🐢</span>
+                <input type="range" id="lambdaSlider" min="1" max="15" value="5" class="flex-grow">
+                <span class="text-2xl">🚀</span>
+            </div>
+            <div class="text-center mt-2 text-lg text-pink-600 font-bold">
+                平均每10秒吸引：<span id="lambdaValue" class="text-3xl text-pink-500 mx-2">5</span>只猫咪
+            </div>
+        </div>
+
+        <!-- 步骤2：营业大厅 -->
+        <div class="mb-6 relative">
+            <button id="startBtn" onclick="startSimulation()" class="w-full bg-pink-400 hover:bg-pink-500 text-white text-2xl font-bold py-4 px-6 rounded-2xl shadow-lg transform transition hover:scale-105 active:scale-95">
+                🎉 开门营业 (测试 10 秒)
+            </button>
+        </div>
+
+        <!-- 进度条 -->
+        <div class="w-full bg-gray-200 rounded-full h-4 mb-4 overflow-hidden">
+            <div id="progressBar" class="bg-gradient-to-r from-pink-300 to-pink-500 h-4 rounded-full progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <div class="text-right text-gray-500 text-sm font-bold" id="timeDisplay">0.0 / 10.0 秒</div>
+
+        <!-- 猫咪展示区 -->
+        <div class="mt-6">
+            <div class="flex justify-between items-end mb-2">
+                <h2 class="text-2xl font-bold text-gray-700">咖啡馆大厅：</h2>
+                <div class="text-xl font-bold text-pink-500">
+                    实际来了：<span id="actualCount" class="text-3xl">0</span> 只
+                </div>
+            </div>
+            <div id="catStage" class="w-full h-48 bg-pink-50 rounded-2xl border-2 border-dashed border-pink-300 p-4 flex flex-wrap content-start gap-2 overflow-y-auto">
+                <span class="text-gray-400 m-auto" id="stageHint">店里现在空空如也，快点击开门营业吧！</span>
+            </div>
+        </div>
+
+        <!-- 结论解说区 -->
+        <div id="conclusionBox" class="mt-6 bg-yellow-50 rounded-2xl p-4 border-2 border-yellow-200 hidden opacity-0 transition-opacity duration-500">
+            <h3 class="text-xl font-bold text-yellow-600 mb-2">💡 宝，你看懂了吗？</h3>
+            <p id="conclusionText" class="text-gray-700 leading-relaxed"></p>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM 元素
+        const lambdaSlider = document.getElementById('lambdaSlider');
+        const lambdaValueDisplay = document.getElementById('lambdaValue');
+        const startBtn = document.getElementById('startBtn');
+        const progressBar = document.getElementById('progressBar');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const catStage = document.getElementById('catStage');
+        const actualCountDisplay = document.getElementById('actualCount');
+        const stageHint = document.getElementById('stageHint');
+        const conclusionBox = document.getElementById('conclusionBox');
+        const conclusionText = document.getElementById('conclusionText');
+
+        // 可爱的猫咪表情库
+        const cats = ['🐱', '😸', '😻', '😼', '😽', '🙀', '😿', '😾', '🐈', '🐈‍⬛'];
+        
+        let isRunning = false;
+        let catCount = 0;
+        let animationFrameId;
+        let startTime;
+        const DURATION = 10000; // 营业时间 10秒 (10000毫秒)
+        let scheduledCats = []; // 预先计算好在这10秒内来猫的时间点
+
+        // 滑块交互
+        lambdaSlider.addEventListener('input', (e) => {
+            lambdaValueDisplay.textContent = e.target.value;
+        });
+
+        // 核心数学：泊松过程的事件生成
+        // 泊松过程中，相邻两次事件的时间间隔服从【指数分布】
+        function generateCatArrivalTimes(lambda) {
+            let times = [];
+            let currentTime = 0;
+            
+            // lambda 是 10秒内的期望值
+            // 所以平均每次来猫的间隔时间是 10000ms / lambda
+            const meanInterval = DURATION / lambda; 
+
+            while (true) {
+                // 生成指数分布的随机时间间隔: -ln(U) * 平均间隔
+                let u = Math.random();
+                let interval = -Math.log(u) * meanInterval;
+                
+                currentTime += interval;
+                
+                // 如果时间超过了营业时间(10秒)，就不再生成了
+                if (currentTime > DURATION) {
+                    break;
+                }
+                times.push(currentTime);
+            }
+            return times;
+        }
+
+        // 刷新大厅
+        function resetStage() {
+            catStage.innerHTML = '';
+            catCount = 0;
+            actualCountDisplay.textContent = '0';
+            conclusionBox.classList.add('hidden');
+            conclusionBox.classList.remove('opacity-100');
+            progressBar.style.width = '0%';
+            timeDisplay.textContent = '0.0 / 10.0 秒';
+        }
+
+        // 添加一只猫到大厅
+        function spawnCat() {
+            const randomCat = cats[Math.floor(Math.random() * cats.length)];
+            const catEl = document.createElement('div');
+            catEl.className = 'text-4xl cat-drop';
+            catEl.textContent = randomCat;
+            catStage.appendChild(catEl);
+            
+            catCount++;
+            actualCountDisplay.textContent = catCount;
+            actualCountDisplay.classList.add('scale-150', 'text-pink-600');
+            setTimeout(() => {
+                actualCountDisplay.classList.remove('scale-150', 'text-pink-600');
+                actualCountDisplay.classList.add('transition', 'duration-300');
+            }, 150);
+        }
+
+        // 动画主循环
+        function updateTimeline(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+
+            // 更新进度条
+            const progressPercent = Math.min((elapsed / DURATION) * 100, 100);
+            progressBar.style.width = progressPercent + '%';
+            timeDisplay.textContent = (elapsed / 1000).toFixed(1) + ' / 10.0 秒';
+
+            // 检查是否有猫咪该登场了
+            while (scheduledCats.length > 0 && scheduledCats[0] <= elapsed) {
+                scheduledCats.shift(); // 移除已登场的猫咪时间点
+                spawnCat();
+            }
+
+            if (elapsed < DURATION) {
+                animationFrameId = requestAnimationFrame(updateTimeline);
+            } else {
+                endSimulation();
+            }
+        }
+
+        // 开始营业
+        function startSimulation() {
+            if (isRunning) return;
+            isRunning = true;
+            startBtn.disabled = true;
+            startBtn.classList.replace('bg-pink-400', 'bg-gray-400');
+            startBtn.innerHTML = '营业中... 🐱';
+            lambdaSlider.disabled = true;
+            
+            resetStage();
+            
+            const lambda = parseFloat(lambdaSlider.value);
+            // 魔法在这里：通过数学公式预先算好这10秒内，猫咪分别在第几毫秒出现
+            scheduledCats = generateCatArrivalTimes(lambda);
+            
+            startTime = null;
+            animationFrameId = requestAnimationFrame(updateTimeline);
+        }
+
+        // 结束营业，生成给宝的解说
+        function endSimulation() {
+            isRunning = false;
+            startBtn.disabled = false;
+            startBtn.classList.replace('bg-gray-400', 'bg-pink-400');
+            startBtn.innerHTML = '🎉 再玩一次';
+            lambdaSlider.disabled = false;
+
+            const lambda = parseFloat(lambdaSlider.value);
+            
+            // 准备解说词
+            let msg = `你设定了平均吸引 <b>${lambda}</b> 只猫，结果这次实际来了 <b>${catCount}</b> 只！
+
+`;
+            
+            if (catCount === lambda) {
+                msg += `哇！运气真好，实际来的数量刚好等于平均值！但这在泊松过程里其实属于“小概率事件”哦，因为随机的世界里，偏离平均值才是常态。`;
+            } else if (catCount > lambda + 2) {
+                msg += `哎呀，这次大爆满！这就是泊松过程的特性：<b>不均匀的随机</b>。有时候猫咪会“扎堆”出现（聚团现象），上一秒没猫，下一秒可能呼啦啦来一群！`;
+            } else if (catCount < lambda - 2) {
+                msg += `这次生意有点冷清哦~ 虽然你撒了足够吸引 ${lambda} 只猫的薄荷，但这10秒内它们刚好都在睡觉。泊松过程告诉我们：<b>过去不影响未来</b>，下一次说不定就爆满了！`;
+            } else {
+                msg += `实际数量在期望值附近波动！在泊松过程里，每只猫都是“独立”决定要不要进店的，它们互相没商量过，所以每次营业的最终数量都会随机波动~`;
+            }
+
+            conclusionText.innerHTML = msg;
+            conclusionBox.classList.remove('hidden');
+            // 触发淡入动画
+            setTimeout(() => {
+                conclusionBox.classList.add('opacity-100');
+            }, 50);
+        }
+    </script>
+</body>
+</html>

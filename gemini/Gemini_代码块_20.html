@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>极限摸鱼 - 离下班还有5分钟</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent scrolling */
+            background-color: #f3f4f6;
+            touch-action: none; /* Prevent default touch actions like scrolling on mobile */
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Excel Table Styles */
+        .excel-cell {
+            border: 1px solid #e2e8f0;
+            padding: 4px 8px;
+            white-space: nowrap;
+        }
+        .excel-header {
+            background-color: #f8fafc;
+            font-weight: 600;
+            text-align: center;
+        }
+        .excel-row-num {
+            background-color: #f1f5f9;
+            text-align: center;
+            color: #64748b;
+            width: 40px;
+        }
+        
+        /* Floating animation for start screen */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="relative w-full h-full select-none">
+
+    <!-- Game UI Overlay -->
+    <div id="game-ui" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10 transition-opacity duration-300">
+        <div class="flex justify-between items-start">
+            <div class="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-lg shadow-sm border border-gray-100 pointer-events-auto">
+                <p class="text-sm text-gray-500 font-semibold">摸鱼指数 (Moyu Score)</p>
+                <p id="score-display" class="text-2xl font-bold text-blue-600">0</p>
+            </div>
+            
+            <div class="flex flex-col items-end gap-2 pointer-events-auto">
+                <div class="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-lg shadow-sm border border-gray-100 flex items-center gap-2">
+                    <span class="text-xl">⏱️</span>
+                    <span id="time-display" class="text-xl font-bold text-gray-700">17:55</span>
+                </div>
+                <!-- Boss Key Button -->
+                <button id="boss-key-btn" class="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-4 py-2 rounded-lg shadow-md font-bold text-sm transition-colors flex items-center gap-1 cursor-pointer">
+                    <span>⚠️</span> 紧急切屏 (Space)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fake Work Screen (Hidden by default) -->
+    <div id="fake-work-screen" class="absolute inset-0 bg-white z-50 hidden flex-col">
+        <!-- Fake Excel Ribbon -->
+        <div class="bg-[#217346] text-white px-4 py-2 flex items-center gap-4 text-sm font-medium">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path></svg>
+                Q3_Performance_Report_Final_v3.xlsx
+            </div>
+            <div class="space-x-4 text-gray-200 text-xs hidden md:block">
+                <span>File</span> <span>Home</span> <span>Insert</span> <span>Page Layout</span> <span>Formulas</span> <span>Data</span>
+            </div>
+        </div>
+        <div class="bg-gray-100 px-2 py-1 border-b border-gray-300 flex items-center gap-2 text-sm text-gray-600">
+            <span class="font-mono bg-white px-2 border border-gray-300">fx</span>
+            <input type="text" class="flex-1 bg-white border border-gray-300 px-2 outline-none" value="=VLOOKUP(A2, 'Raw Data'!A:Z, 5, FALSE) * 1.15" readonly>
+        </div>
+        
+        <!-- Fake Data Table -->
+        <div class="flex-1 overflow-auto bg-gray-50 p-2">
+            <table class="w-full bg-white text-sm text-gray-700 border-collapse cursor-default">
+                <thead>
+                    <tr>
+                        <th class="excel-cell excel-header excel-row-num"></th>
+                        <th class="excel-cell excel-header">A (Project ID)</th>
+                        <th class="excel-cell excel-header">B (Client Name)</th>
+                        <th class="excel-cell excel-header">C (Q3 Target)</th>
+                        <th class="excel-cell excel-header">D (Actual Rev)</th>
+                        <th class="excel-cell excel-header">E (Variance)</th>
+                        <th class="excel-cell excel-header">F (Status)</th>
+                    </tr>
+                </thead>
+                <tbody id="fake-table-body">
+                    <!-- Rows injected by JS -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Quick return hint -->
+        <div class="absolute bottom-4 right-4 bg-gray-800/80 text-white text-xs px-3 py-1 rounded shadow-lg pointer-events-none">
+            按 Space 键返回游戏
+        </div>
+    </div>
+
+    <!-- Start/Game Over Screen -->
+    <div id="modal-screen" class="absolute inset-0 bg-gray-900/40 backdrop-blur-sm z-40 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center transform transition-all">
+            <div class="text-6xl mb-4 floating">🐟</div>
+            <h1 id="modal-title" class="text-2xl font-bold text-gray-800 mb-2">极限摸鱼</h1>
+            <p id="modal-desc" class="text-gray-600 mb-6 text-sm">
+                离下班还有5分钟！
+
+                拖动鼠标/手指控制小鱼。
+
+                🟢 接住：☕ 💰 🎮 (加分)
+
+                🔴 躲避：📁 🐛 📉 (扣分)
+
+                ⚠️ 老板来了？<b>按空格键切屏！</b>
+            </p>
+            <button id="start-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+                开始摸鱼！
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Elements
+        const scoreDisplay = document.getElementById('score-display');
+        const timeDisplay = document.getElementById('time-display');
+        const fakeWorkScreen = document.getElementById('fake-work-screen');
+        const bossKeyBtn = document.getElementById('boss-key-btn');
+        const modalScreen = document.getElementById('modal-screen');
+        const modalTitle = document.getElementById('modal-title');
+        const modalDesc = document.getElementById('modal-desc');
+        const startBtn = document.getElementById('start-btn');
+        
+        // Game State
+        let isPlaying = false;
+        let isFakeScreenActive = false;
+        let animationId;
+        let lastTime = 0;
+        
+        let score = 0;
+        let gameTime = 0; // in seconds
+        const MAX_GAME_TIME = 60; // 60 seconds represents 5 minutes (17:55 - 18:00)
+        
+        // Resize Canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Player Object
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            radius: 20,
+            targetX: canvas.width / 2,
+            targetY: canvas.height - 100,
+            emoji: '🐟',
+            size: 40
+        };
+
+        // Items Array
+        let items = [];
+        let particles = [];
+        
+        const ITEM_TYPES = {
+            GOOD: [
+                { emoji: '☕', points: 10, speed: 150 },
+                { emoji: '💰', points: 30, speed: 200 },
+                { emoji: '🎮', points: 20, speed: 180 },
+                { emoji: '🍩', points: 10, speed: 130 }
+            ],
+            BAD: [
+                { emoji: '📁', points: -15, speed: 220 },
+                { emoji: '🐛', points: -20, speed: 250 },
+                { emoji: '📉', points: -10, speed: 190 },
+                { emoji: '老板', points: -50, speed: 300, isText: true }
+            ]
+        };
+
+        // Input Handling
+        function updatePlayerTarget(x, y) {
+            // Keep within bounds
+            player.targetX = Math.max(player.radius, Math.min(canvas.width - player.radius, x));
+            player.targetY = Math.max(player.radius, Math.min(canvas.height - player.radius, y));
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPlaying && !isFakeScreenActive) updatePlayerTarget(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isPlaying && !isFakeScreenActive) {
+                e.preventDefault(); // Prevent scrolling
+                updatePlayerTarget(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        // Boss Key Logic
+        function toggleFakeScreen() {
+            isFakeScreenActive = !isFakeScreenActive;
+            
+            if (isFakeScreenActive) {
+                fakeWorkScreen.classList.remove('hidden');
+                fakeWorkScreen.classList.add('flex');
+                document.title = "Q3_Performance_Report.xlsx - Excel"; // Change tab title
+            } else {
+                fakeWorkScreen.classList.add('hidden');
+                fakeWorkScreen.classList.remove('flex');
+                document.title = "极限摸鱼 - 离下班还有5分钟";
+                // Resume game loop timing to avoid huge delta jumps
+                lastTime = performance.now();
+                if(isPlaying && !animationId) {
+                    animationId = requestAnimationFrame(gameLoop);
+                }
+            }
+        }
+
+        bossKeyBtn.addEventListener('click', toggleFakeScreen);
+        
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault(); // Prevent page scroll
+                // Only allow toggle if game is running or if fake screen is currently active
+                if (isPlaying || isFakeScreenActive) {
+                    toggleFakeScreen();
+                }
+            }
+        });
+
+        // Generate Fake Excel Data
+        function generateFakeExcel() {
+            const tbody = document.getElementById('fake-table-body');
+            const statuses = ['Complete', 'Pending', 'In Progress', 'Delayed'];
+            let html = '';
+            for (let i = 2; i <= 30; i++) {
+                const target = Math.floor(Math.random() * 50000) + 10000;
+                const actual = target * (0.8 + Math.random() * 0.4);
+                const variance = actual - target;
+                const status = statuses[Math.floor(Math.random() * statuses.length)];
+                const varColor = variance >= 0 ? 'text-green-600' : 'text-red-600';
+                
+                html += `
+                    <tr class="hover:bg-blue-50 border-b border-gray-200">
+                        <td class="excel-cell excel-row-num">${i}</td>
+                        <td class="excel-cell text-gray-500">PRJ-2026-${String(i).padStart(3, '0')}</td>
+                        <td class="excel-cell">TechCorp ${String.fromCharCode(65 + (i%26))}</td>
+                        <td class="excel-cell">$${target.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+                        <td class="excel-cell">$${actual.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+                        <td class="excel-cell font-medium ${varColor}">${variance > 0 ? '+' : ''}$${variance.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+                        <td class="excel-cell">${status}</td>
+                    </tr>
+                `;
+            }
+            tbody.innerHTML = html;
+        }
+        generateFakeExcel();
+
+        // Particle System for visual feedback
+        function createParticles(x, y, color, count=5) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 200,
+                    vy: (Math.random() - 0.5) * 200,
+                    life: 1, // 1 second
+                    color: color
+                });
+            }
+        }
+
+        // Spawning Items
+        let spawnTimer = 0;
+        function spawnItem(deltaTime) {
+            spawnTimer -= deltaTime;
+            if (spawnTimer <= 0) {
+                // Determine item type (60% bad, 40% good as time goes on)
+                const isBad = Math.random() > 0.4;
+                const typeList = isBad ? ITEM_TYPES.BAD : ITEM_TYPES.GOOD;
+                const config = typeList[Math.floor(Math.random() * typeList.length)];
+                
+                // Increase speed slightly as game progresses
+                const speedMult = 1 + (gameTime / MAX_GAME_TIME) * 0.5;
+
+                items.push({
+                    x: Math.random() * (canvas.width - 40) + 20,
+                    y: -30,
+                    radius: 15,
+                    ...config,
+                    speed: config.speed * speedMult,
+                    isBad: isBad
+                });
+                
+                // Spawn interval decreases over time (harder)
+                spawnTimer = Math.max(0.2, 0.8 - (gameTime / MAX_GAME_TIME) * 0.5);
+            }
+        }
+
+        // Format time 17:55 -> 18:00
+        function updateTimeDisplay() {
+            // Map 0->60 seconds to 17:55:00 -> 18:00:00
+            const progress = gameTime / MAX_GAME_TIME;
+            const totalSecondsInGame = 5 * 60; // 5 minutes
+            const currentSimulatedSeconds = progress * totalSecondsInGame;
+            
+            let minutes = 55 + Math.floor(currentSimulatedSeconds / 60);
+            let hours = 17;
+            if (minutes >= 60) {
+                hours = 18;
+                minutes -= 60;
+            }
+            
+            const displayStr = `${hours}:${minutes.toString().padStart(2, '0')}`;
+            timeDisplay.innerText = displayStr;
+            
+            // Turn red if near end
+            if (progress > 0.8) {
+                timeDisplay.classList.add('text-red-500');
+                timeDisplay.classList.remove('text-gray-700');
+            }
+        }
+
+        function update(deltaTime) {
+            if (isFakeScreenActive) return; // Pause logic if boss key is active
+
+            // Update Game Time
+            gameTime += deltaTime;
+            updateTimeDisplay();
+            
+            // Check Win Condition (Survive until 18:00)
+            if (gameTime >= MAX_GAME_TIME) {
+                endGame(true);
+                return;
+            }
+
+            // Smooth Player Movement (Lerp)
+            player.x += (player.targetX - player.x) * 10 * deltaTime;
+            player.y += (player.targetY - player.y) * 10 * deltaTime;
+
+            // Spawn Items
+            spawnItem(deltaTime);
+
+            // Update Items & Collision
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                item.y += item.speed * deltaTime;
+
+                // Collision Check (Circle based)
+                const dx = player.x - item.x;
+                const dy = player.y - item.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                
+                if (distance < player.radius + item.radius) {
+                    // Collect item
+                    score += item.points;
+                    scoreDisplay.innerText = score;
+                    
+                    // Visual feedback
+                    const color = item.isBad ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)';
+                    createParticles(item.x, item.y, color, 8);
+                    
+                    // Score text animation class toggle
+                    scoreDisplay.classList.remove('scale-125', 'text-green-500', 'text-red-500');
+                    void scoreDisplay.offsetWidth; // trigger reflow
+                    scoreDisplay.classList.add('scale-125', 'transition-transform');
+                    scoreDisplay.classList.add(item.isBad ? 'text-red-500' : 'text-green-500');
+                    
+                    setTimeout(() => {
+                        scoreDisplay.classList.remove('scale-125', 'text-green-500', 'text-red-500');
+                    }, 200);
+
+                    items.splice(i, 1);
+                } else if (item.y > canvas.height + 30) {
+                    // Remove if off screen
+                    items.splice(i, 1);
+                }
+            }
+
+            // Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx * deltaTime;
+                p.y += p.vy * deltaTime;
+                p.life -= deltaTime * 2; // Fade out speed
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            if (isFakeScreenActive) return; // Don't draw if hidden
+
+            // Clear Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Background Grids (Subtle office pattern)
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+            for(let x=0; x<canvas.width; x+=gridSize) {
+                ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
+            }
+            for(let y=0; y<canvas.height; y+=gridSize) {
+                ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+            }
+
+            // Draw Items
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for (let item of items) {
+                if (item.isText) {
+                    // Draw "老板" text
+                    ctx.font = 'bold 20px Inter';
+                    ctx.fillStyle = '#ef4444';
+                    ctx.fillText(item.emoji, item.x, item.y);
+                } else {
+                    // Draw emoji
+                    ctx.font = '28px Arial';
+                    ctx.fillText(item.emoji, item.x, item.y);
+                }
+            }
+
+            // Draw Particles
+            for (let p of particles) {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+
+            // Draw Player
+            ctx.font = `${player.size}px Arial`;
+            
+            // Add a little wobble to player when moving fast
+            const moveDelta = Math.abs(player.targetX - player.x);
+            const rotation = Math.min(Math.max((player.targetX - player.x) * 0.01, -0.5), 0.5);
+            
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(rotation);
+            ctx.fillText(player.emoji, 0, 0);
+            ctx.restore();
+            
+            // Progress Bar (Time)
+            const progress = gameTime / MAX_GAME_TIME;
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(0, 0, canvas.width, 6);
+            ctx.fillStyle = progress > 0.8 ? '#ef4444' : '#3b82f6';
+            ctx.fillRect(0, 0, canvas.width * progress, 6);
+        }
+
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = (timestamp - lastTime) / 1000; // in seconds
+            lastTime = timestamp;
+
+            // Cap delta time to prevent physics glitches if tab is inactive
+            const safeDelta = Math.min(deltaTime, 0.1); 
+
+            if (isPlaying && !isFakeScreenActive) {
+                update(safeDelta);
+                draw();
+            }
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            isPlaying = true;
+            isFakeScreenActive = false;
+            score = 0;
+            gameTime = 0;
+            items = [];
+            particles = [];
+            scoreDisplay.innerText = '0';
+            timeDisplay.classList.remove('text-red-500');
+            timeDisplay.classList.add('text-gray-700');
+            
+            // Reset player pos
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 100;
+            player.targetX = player.x;
+            player.targetY = player.y;
+
+            modalScreen.classList.add('hidden');
+            fakeWorkScreen.classList.add('hidden');
+            
+            lastTime = performance.now();
+            if (!animationId) {
+                animationId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function endGame(isWin) {
+            isPlaying = false;
+            modalScreen.classList.remove('hidden');
+            modalTitle.innerText = isWin ? "🎉 18:00 下班啦！" : "游戏结束";
+            
+            let evaluation = "";
+            if (score > 300) evaluation = "你是当之无愧的【摸鱼宗师】！";
+            else if (score > 100) evaluation = "优秀的【划水达人】！";
+            else if (score > 0) evaluation = "勉强算个【带薪拉屎专家】。";
+            else evaluation = "你是个【超级打工人】，老板很爱你。";
+
+            modalDesc.innerHTML = `
+                <div class="text-xl mb-2">你的摸鱼值: <span class="font-bold ${score > 0 ? 'text-green-600' : 'text-red-600'}">${score}</span></div>
+                <div class="text-sm text-gray-600">${evaluation}</div>
+            `;
+            startBtn.innerText = "再摸一次";
+            
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+
+        // Event Listeners for UI
+        startBtn.addEventListener('click', startGame);
+
+        // Initial render
+        draw();
+    </script>
+</body>
+</html>

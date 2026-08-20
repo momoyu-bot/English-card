@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>戳破多巴胺 - 收集冷静值</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            overflow: hidden; /* 防止滚动 */
+            touch-action: manipulation; /* 优化触摸体验 */
+        }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .bubble {
+            position: absolute;
+            bottom: -80px;
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            transition: transform 0.1s ease-out;
+            animation: floatUp linear forwards;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .bubble:active {
+            transform: scale(0.9);
+        }
+
+        .bubble.popped {
+            animation: popAction 0.2s ease-out forwards;
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) scale(1) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(calc(-100vh - 100px)) scale(1.2) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes popAction {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 text-gray-800">
+
+    <div class="game-area" id="gameArea">
+        
+        <!-- 顶部状态栏 -->
+        <div class="absolute top-0 left-0 w-full p-6 z-10 flex flex-col items-center pointer-events-none">
+            <h1 class="text-2xl md:text-3xl font-bold mb-4 text-indigo-800 drop-shadow-sm">✨ 戳破多巴胺 ✨</h1>
+            <p class="text-sm md:text-base text-gray-600 mb-2 font-medium">戳破掉落的期待，收集100%冷静值去工作！</p>
+            
+            <!-- 进度条 -->
+            <div class="w-full max-w-md h-6 bg-white/50 rounded-full overflow-hidden border border-white shadow-inner relative">
+                <div id="progressBar" class="h-full bg-gradient-to-r from-blue-400 to-indigo-500 w-0 transition-all duration-300 ease-out"></div>
+                <div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-700 mix-blend-overlay">
+                    <span id="progressText">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 开始/结算面板 -->
+        <div id="modalOverlay" class="absolute inset-0 z-20 flex items-center justify-center p-4 transition-opacity duration-300">
+            <div class="glass-panel rounded-3xl p-8 max-w-sm w-full text-center transform transition-transform duration-300 scale-100 flex flex-col items-center">
+                <div id="modalEmoji" class="text-6xl mb-4">🛒</div>
+                <h2 id="modalTitle" class="text-2xl font-bold text-gray-800 mb-2">准备好冷静一下了吗？</h2>
+                <p id="modalDesc" class="text-gray-600 mb-6">明晚8点前，先把手头的工作美滋滋地完成吧！</p>
+                <button id="actionBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 w-full">
+                    开始收集冷静值
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const gameArea = document.getElementById('gameArea');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const modalEmoji = document.getElementById('modalEmoji');
+        const actionBtn = document.getElementById('actionBtn');
+
+        // 掉落物数组（全是你脑子里的东西哈哈）
+        const emojis = ['🍟', '💧', '🛒', '⏰', '💰', '✨'];
+        
+        let score = 0;
+        const targetScore = 30; // 需要戳破30个泡泡
+        let isPlaying = false;
+        let spawnInterval;
+
+        function createBubble() {
+            if (!isPlaying) return;
+
+            const bubble = document.createElement('div');
+            bubble.classList.add('bubble');
+            
+            // 随机选择emoji
+            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+            bubble.innerText = emoji;
+
+            // 随机水平位置 (留出边缘边距)
+            const randomX = Math.random() * (window.innerWidth - 80) + 10;
+            bubble.style.left = `${randomX}px`;
+
+            // 随机大小
+            const scale = 0.8 + Math.random() * 0.5;
+            bubble.style.width = `${60 * scale}px`;
+            bubble.style.height = `${60 * scale}px`;
+            bubble.style.fontSize = `${28 * scale}px`;
+
+            // 随机上升速度 (4秒到8秒)
+            const duration = 4 + Math.random() * 4;
+            bubble.style.animationDuration = `${duration}s`;
+
+            // 随机水平摇摆
+            const sway = (Math.random() - 0.5) * 50;
+            bubble.style.transform = `translateX(${sway}px)`;
+
+            // 点击/触摸事件
+            bubble.addEventListener('mousedown', (e) => popBubble(e, bubble));
+            bubble.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // 防止双击缩放
+                popBubble(e, bubble);
+            }, { passive: false });
+
+            gameArea.appendChild(bubble);
+
+            // 动画结束后自动移除，防止DOM节点过多
+            setTimeout(() => {
+                if (bubble.parentElement) {
+                    bubble.remove();
+                }
+            }, duration * 1000);
+        }
+
+        function popBubble(e, bubble) {
+            if (!isPlaying || bubble.classList.contains('popped')) return;
+            
+            bubble.classList.add('popped');
+            
+            // 增加分数
+            score++;
+            updateProgress();
+
+            // 延迟移除节点
+            setTimeout(() => {
+                if (bubble.parentElement) {
+                    bubble.remove();
+                }
+            }, 200);
+
+            // 检查胜利
+            if (score >= targetScore) {
+                winGame();
+            }
+        }
+
+        function updateProgress() {
+            const percentage = Math.min(100, Math.floor((score / targetScore) * 100));
+            progressBar.style.width = `${percentage}%`;
+            progressText.innerText = `${percentage}%`;
+        }
+
+        function startGame() {
+            score = 0;
+            updateProgress();
+            isPlaying = true;
+            modalOverlay.style.opacity = '0';
+            setTimeout(() => {
+                modalOverlay.style.pointerEvents = 'none';
+                modalOverlay.style.display = 'none';
+            }, 300);
+
+            // 每400毫秒生成一个泡泡
+            spawnInterval = setInterval(createBubble, 400);
+        }
+
+        function winGame() {
+            isPlaying = false;
+            clearInterval(spawnInterval);
+            
+            // 清除屏幕上剩余的泡泡
+            const remainingBubbles = document.querySelectorAll('.bubble');
+            remainingBubbles.forEach(b => {
+                b.classList.add('popped');
+                setTimeout(() => b.remove(), 200);
+            });
+
+            // 显示胜利结算面板
+            setTimeout(() => {
+                modalEmoji.innerText = '👩‍💻';
+                modalTitle.innerText = '冷静完毕，状态拉满！';
+                modalDesc.innerText = '购物雷达已关闭，工作引擎已启动！去美滋滋地开启下午的工作吧，明晚8点好物等你！';
+                actionBtn.innerText = '去工作咯！';
+                
+                // 更改按钮行为，点击后只是重新开始或关闭
+                actionBtn.onclick = () => {
+                    alert('加油！工作顺利！');
+                    startGame(); // 可以选择重新开始
+                };
+
+                modalOverlay.style.display = 'flex';
+                // 强制重绘以确保动画生效
+                modalOverlay.offsetHeight; 
+                modalOverlay.style.pointerEvents = 'auto';
+                modalOverlay.style.opacity = '1';
+            }, 500);
+        }
+
+        // 初始化按钮事件
+        actionBtn.onclick = startGame;
+
+    </script>
+</body>
+</html>

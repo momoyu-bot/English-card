@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>办公室抗寒大作战</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* Prevent scrolling on touch devices while swiping */
+            touch-action: none;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(to bottom, #1a202c, #2d3748);
+        }
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .heat-bar-container {
+            box-shadow: 0 0 10px rgba(255, 100, 100, 0.5);
+        }
+        .heat-bar-fill {
+            transition: width 0.2s ease-out, background-color 0.3s;
+        }
+        /* Floating animation for menu */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col items-center justify-center relative">
+
+    <!-- HUD (Heads Up Display) -->
+    <div id="hud" class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-10 hidden">
+        <div class="flex flex-col gap-1 w-1/2 max-w-xs">
+            <span class="text-white text-sm font-bold drop-shadow-md">体温 (Heat)</span>
+            <div class="w-full bg-gray-700 h-4 rounded-full overflow-hidden heat-bar-container border border-gray-600">
+                <div id="heatBar" class="h-full bg-gradient-to-r from-red-500 to-orange-400 heat-bar-fill w-[50%]"></div>
+            </div>
+        </div>
+        <div class="text-white text-xl font-black drop-shadow-md bg-black/30 px-4 py-1 rounded-full border border-white/20">
+            得分: <span id="scoreDisplay">0</span>
+        </div>
+    </div>
+
+    <!-- Main Menu -->
+    <div id="mainMenu" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm z-20">
+        <div class="text-6xl mb-4 floating">🐱🧣</div>
+        <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500 mb-2 drop-shadow-lg text-center">办公室抗寒大作战</h1>
+        <p class="text-gray-300 mb-8 text-center px-6 max-w-md leading-relaxed">
+            薛定谔的空调又发癫了！
+
+            左右滑动/移动鼠标/使用方向键，控制哈基米。
+
+            <span class="text-orange-400 font-bold">接住温暖 ☕🔥☀️</span>，
+
+            <span class="text-blue-300 font-bold">躲避寒冷 ❄️🧊💨</span>。
+
+            体温降到0就会被冻成冰块哦！
+        </p>
+        <button id="startBtn" class="px-8 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-full text-xl hover:scale-105 active:scale-95 transition-transform shadow-[0_0_15px_rgba(249,115,22,0.6)]">
+            立刻产热！
+        </button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverMenu" class="absolute inset-0 flex flex-col items-center justify-center bg-blue-900/90 backdrop-blur-md z-20 hidden">
+        <div class="text-7xl mb-4">🧊🥶🧊</div>
+        <h2 class="text-4xl font-black text-blue-200 mb-2 drop-shadow-lg">被空调打败了...</h2>
+        <p class="text-xl text-white mb-8">坚持了 <span id="finalScore" class="text-orange-400 font-bold text-2xl">0</span> 分</p>
+        <button id="restartBtn" class="px-8 py-3 bg-white text-blue-900 font-black rounded-full text-xl hover:scale-105 active:scale-95 transition-transform shadow-[0_0_15px_rgba(255,255,255,0.6)]">
+            裹紧小被子重来！
+        </button>
+    </div>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const hud = document.getElementById('hud');
+        const mainMenu = document.getElementById('mainMenu');
+        const gameOverMenu = document.getElementById('gameOverMenu');
+        const heatBar = document.getElementById('heatBar');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const finalScore = document.getElementById('finalScore');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Game Configuration
+        let animationId;
+        let isPlaying = false;
+        let score = 0;
+        let heat = 50; // Starts at 50, max 100
+        const maxHeat = 100;
+        let frames = 0;
+        let spawnRate = 60; // Spawn item every 60 frames
+
+        // Resize Canvas to fit screen
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Player Object
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 80,
+            size: 60,
+            emoji: '🐱',
+            targetX: canvas.width / 2, // Smooth movement
+            draw: function() {
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                // Add a little glowing blanket effect if heat is high
+                if (heat > 70) {
+                    ctx.shadowColor = "orange";
+                    ctx.shadowBlur = 20;
+                } else if (heat < 30) {
+                    ctx.shadowColor = "blue";
+                    ctx.shadowBlur = 20;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
+                // Change emoji based on heat
+                let currentEmoji = '🐱';
+                if (heat > 80) currentEmoji = '🥵';
+                if (heat < 20) currentEmoji = '🥶';
+
+                ctx.fillText(currentEmoji, this.x, this.y);
+                ctx.shadowBlur = 0; // reset
+            },
+            update: function() {
+                // Smooth follow mouse/touch
+                this.x += (this.targetX - this.x) * 0.2;
+                
+                // Keep within bounds
+                if (this.x < this.size/2) this.x = this.size/2;
+                if (this.x > canvas.width - this.size/2) this.x = canvas.width - this.size/2;
+
+                // Adjust Y based on screen size (keep near bottom)
+                this.y = canvas.height - Math.min(100, canvas.height * 0.15);
+            }
+        };
+
+        // Input Handling
+        function setPlayerTarget(clientX) {
+            if(!isPlaying) return;
+            player.targetX = clientX;
+        }
+
+        canvas.addEventListener('mousemove', (e) => setPlayerTarget(e.clientX));
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling
+            setPlayerTarget(e.touches[0].clientX);
+        }, { passive: false });
+
+        // Keyboard support
+        let keys = { left: false, right: false };
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'ArrowRight') keys.right = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+        });
+
+        // Falling Items
+        const items = [];
+        const warmEmojis = ['☕', '🔥', '☀️', '🧣'];
+        const coldEmojis = ['❄️', '🧊', '🌬️', '⛄'];
+
+        class Item {
+            constructor() {
+                this.x = Math.random() * (canvas.width - 40) + 20;
+                this.y = -50;
+                this.size = Math.random() * 20 + 30; // 30 to 50
+                this.isWarm = Math.random() > 0.4; // 60% chance to be warm, we need heat!
+                this.emoji = this.isWarm 
+                    ? warmEmojis[Math.floor(Math.random() * warmEmojis.length)]
+                    : coldEmojis[Math.floor(Math.random() * coldEmojis.length)];
+                
+                // Speed increases slightly as score goes up
+                const baseSpeed = Math.random() * 2 + 2;
+                this.speed = baseSpeed + (score * 0.02);
+                
+                this.markedForDeletion = false;
+            }
+
+            draw() {
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.emoji, this.x, this.y);
+            }
+
+            update() {
+                this.y += this.speed;
+                // Delete if it goes off screen
+                if (this.y > canvas.height + 50) {
+                    this.markedForDeletion = true;
+                }
+            }
+        }
+
+        function checkCollision(item) {
+            // Simple circular distance collision
+            const dx = player.x - item.x;
+            const dy = player.y - item.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < (player.size/2 + item.size/2 - 10)) { // -10 for more forgiving hitbox
+                item.markedForDeletion = true;
+                
+                if (item.isWarm) {
+                    heat = Math.min(maxHeat, heat + 10);
+                    score += 10;
+                    createParticles(item.x, item.y, ['#ef4444', '#f97316', '#eab308']);
+                } else {
+                    heat -= 15;
+                    createParticles(item.x, item.y, ['#3b82f6', '#93c5fd', '#ffffff']);
+                }
+                updateHUD();
+            }
+        }
+
+        // Particle System for visual feedback
+        const particles = [];
+        class Particle {
+            constructor(x, y, colors) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 5 + 2;
+                this.speedX = Math.random() * 6 - 3;
+                this.speedY = Math.random() * 6 - 3;
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.life = 1;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life -= 0.05;
+            }
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function createParticles(x, y, colors) {
+            for(let i = 0; i < 10; i++) {
+                particles.push(new Particle(x, y, colors));
+            }
+        }
+
+        function updateHUD() {
+            scoreDisplay.innerText = score;
+            heatBar.style.width = `${Math.max(0, heat)}%`;
+            
+            // Change bar color based on heat level
+            if (heat > 60) {
+                heatBar.className = "h-full heat-bar-fill bg-gradient-to-r from-red-500 to-orange-400";
+            } else if (heat > 30) {
+                heatBar.className = "h-full heat-bar-fill bg-gradient-to-r from-yellow-400 to-orange-300";
+            } else {
+                heatBar.className = "h-full heat-bar-fill bg-gradient-to-r from-blue-400 to-cyan-300";
+            }
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            hud.classList.add('hidden');
+            gameOverMenu.classList.remove('hidden');
+            finalScore.innerText = score;
+        }
+
+        function resetGame() {
+            score = 0;
+            heat = 50; // Initial heat
+            frames = 0;
+            items.length = 0;
+            particles.length = 0;
+            player.x = canvas.width / 2;
+            player.targetX = canvas.width / 2;
+            updateHUD();
+        }
+
+        function startGame() {
+            mainMenu.classList.add('hidden');
+            gameOverMenu.classList.add('hidden');
+            hud.classList.remove('hidden');
+            resetGame();
+            isPlaying = true;
+            animate();
+        }
+
+        function animate() {
+            if (!isPlaying) return;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Handle keyboard movement
+            const moveSpeed = 8;
+            if (keys.left) player.targetX -= moveSpeed;
+            if (keys.right) player.targetX += moveSpeed;
+
+            // Natural heat loss (Air Conditioner effect)
+            if (frames % 60 === 0) { // Every ~1 second
+                heat -= 1; // Base cooling
+                // AC gets stronger over time!
+                if (score > 100) heat -= 0.5;
+                if (score > 300) heat -= 0.5;
+                updateHUD();
+            }
+
+            // Spawn items
+            // Increase difficulty (spawn faster) as score goes up
+            let currentSpawnRate = Math.max(15, spawnRate - Math.floor(score / 50));
+            if (frames % currentSpawnRate === 0) {
+                items.push(new Item());
+            }
+
+            // Update and draw player
+            player.update();
+            player.draw();
+
+            // Update and draw items
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].update();
+                items[i].draw();
+                checkCollision(items[i]);
+                
+                if (items[i].markedForDeletion) {
+                    items.splice(i, 1);
+                }
+            }
+
+            // Update and draw particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            // Check game over
+            if (heat <= 0) {
+                gameOver();
+                return;
+            }
+
+            frames++;
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Button Listeners
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+
+    </script>
+</body>
+</html>

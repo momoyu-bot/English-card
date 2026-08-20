@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>深夜隔音魔法阵</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #050505; /* 极暗的背景，保护眼睛 */
+            color: #d1d5db;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* 呼吸光环动画 */
+        @keyframes pulseRing {
+            0% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+            70% { transform: scale(1.1); opacity: 0.8; box-shadow: 0 0 0 20px rgba(79, 70, 229, 0); }
+            100% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+        }
+
+        .shield-active {
+            animation: pulseRing 4s infinite ease-in-out;
+            background: radial-gradient(circle, #3730a3 0%, #1e1b4b 100%);
+        }
+
+        .shield-inactive {
+            background: #1f2937;
+            transition: all 0.5s;
+        }
+
+        /* 自定义滑块样式 */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #818cf8;
+            cursor: pointer;
+            margin-top: -8px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #374151;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="text-center mb-12 z-10 px-6">
+        <h1 class="text-xl text-indigo-300/80 tracking-widest font-light mb-3">隔 音 魔 法 阵</h1>
+        <p class="text-xs text-gray-400 tracking-wide leading-relaxed">
+            戴上耳机，打开开关。
+让沙沙声像一床厚厚的棉被，
+把窗外的喧闹全部挡在外面。
+        </p>
+    </div>
+
+    <!-- 魔法阵中心按钮 -->
+    <div id="toggle-btn" class="w-40 h-40 rounded-full flex items-center justify-center cursor-pointer shield-inactive mb-12 relative transition-all duration-700" onclick="toggleNoise()">
+        <span id="btn-text" class="text-lg font-medium text-gray-300 tracking-widest">开启</span>
+    </div>
+
+    <!-- 音量控制 -->
+    <div class="w-64 flex flex-col items-center opacity-50 hover:opacity-100 transition-opacity">
+        <label for="volume" class="text-xs text-gray-500 mb-3 tracking-widest">魔法阵强度 (音量)</label>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.1" oninput="changeVolume(this.value)">
+    </div>
+
+    <!-- 底部安抚 -->
+    <div class="absolute bottom-10 w-full text-center">
+        <p class="text-sm text-gray-500 font-light" id="status-text">宝，我就在这里守着你 🌙</p>
+    </div>
+
+    <script>
+        let audioContext;
+        let noiseSource;
+        let filter;
+        let gainNode;
+        let isPlaying = false;
+
+        function createAudioContext() {
+            if (!audioContext) {
+                // 兼容不同浏览器的 AudioContext
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioContext = new AudioContext();
+            }
+        }
+
+        // 生成低频红噪音（Brown Noise），比普通白噪音更柔和，像暴雨或机舱声，非常适合掩盖尖锐声音
+        function createBrownNoise() {
+            const bufferSize = 2 * audioContext.sampleRate;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const output = buffer.getChannelData(0);
+            
+            let lastOut = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                // 使用低通滤波的算法近似红噪音
+                output[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = output[i];
+                // 补充一点音量
+                output[i] *= 3.5;
+            }
+            return buffer;
+        }
+
+        function toggleNoise() {
+            const btn = document.getElementById('toggle-btn');
+            const btnText = document.getElementById('btn-text');
+            const statusText = document.getElementById('status-text');
+            const volumeSlider = document.getElementById('volume');
+
+            if (!isPlaying) {
+                // 开启声音
+                createAudioContext();
+                
+                // 恢复上下文（针对浏览器的自动播放策略）
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+
+                noiseSource = audioContext.createBufferSource();
+                noiseSource.buffer = createBrownNoise();
+                noiseSource.loop = true;
+
+                // 添加低通滤波器，进一步切断刺耳的高频，只留轰隆隆的低频
+                filter = audioContext.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 600; 
+
+                gainNode = audioContext.createGain();
+                gainNode.gain.value = volumeSlider.value; // 根据滑块初始值设置音量
+
+                // 连接音频节点：噪音源 -> 滤波器 -> 音量控制 -> 输出
+                noiseSource.connect(filter);
+                filter.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                noiseSource.start();
+                isPlaying = true;
+
+                // 更新UI
+                btn.classList.remove('shield-inactive');
+                btn.classList.add('shield-active');
+                btnText.innerText = '关闭';
+                btnText.classList.replace('text-gray-300', 'text-indigo-100');
+                statusText.innerText = '结界已开启，外面什么都听不到啦 ☁️';
+
+            } else {
+                // 关闭声音
+                if (noiseSource) {
+                    noiseSource.stop();
+                    noiseSource.disconnect();
+                }
+                isPlaying = false;
+
+                // 更新UI
+                btn.classList.remove('shield-active');
+                btn.classList.add('shield-inactive');
+                btnText.innerText = '开启';
+                btnText.classList.replace('text-indigo-100', 'text-gray-300');
+                statusText.innerText = '宝，我就在这里守着你 🌙';
+            }
+        }
+
+        function changeVolume(value) {
+            if (gainNode) {
+                // 使用平滑过渡来改变音量，避免声音突然变大刺耳
+                gainNode.gain.setTargetAtTime(value, audioContext.currentTime, 0.1);
+            }
+        }
+    </script>
+</body>
+</html>

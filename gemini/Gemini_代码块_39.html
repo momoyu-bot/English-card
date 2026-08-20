@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>摸鱼达人 2048</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #faf8ef;
+            color: #776e65;
+            touch-action: none; /* Prevent scroll on swipe */
+        }
+        
+        .game-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .grid-container {
+            background-color: #bbada0;
+            border-radius: 12px;
+            padding: 10px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 10px;
+            aspect-ratio: 1 / 1;
+            position: relative;
+        }
+
+        .grid-cell {
+            background-color: rgba(238, 228, 218, 0.35);
+            border-radius: 8px;
+        }
+
+        .tile {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.15s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .tile-emoji { font-size: 2rem; line-height: 1; margin-bottom: 4px; }
+        .tile-text { font-size: 0.75rem; white-space: nowrap; }
+
+        @media (max-width: 400px) {
+            .tile-emoji { font-size: 1.5rem; }
+            .tile-text { font-size: 0.6rem; }
+        }
+
+        .tile-2 { background: #eee4da; color: #776e65; }
+        .tile-4 { background: #ede0c8; color: #776e65; }
+        .tile-8 { background: #f2b179; color: #f9f6f2; }
+        .tile-16 { background: #f59563; color: #f9f6f2; }
+        .tile-32 { background: #f67c5f; color: #f9f6f2; }
+        .tile-64 { background: #f65e3b; color: #f9f6f2; }
+        .tile-128 { background: #edcf72; color: #f9f6f2; box-shadow: 0 0 30px 10px rgba(243, 215, 116, 0.23), inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+        .tile-256 { background: #edcc61; color: #f9f6f2; box-shadow: 0 0 30px 10px rgba(243, 215, 116, 0.31), inset 0 0 0 1px rgba(255, 255, 255, 0.19); }
+        .tile-512 { background: #edc850; color: #f9f6f2; box-shadow: 0 0 30px 10px rgba(243, 215, 116, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.24); }
+        .tile-1024 { background: #edc53f; color: #f9f6f2; box-shadow: 0 0 30px 10px rgba(243, 215, 116, 0.48), inset 0 0 0 1px rgba(255, 255, 255, 0.29); }
+        .tile-2048 { background: #edc22e; color: #f9f6f2; box-shadow: 0 0 30px 10px rgba(243, 215, 116, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.33); }
+
+        /* Animations */
+        @keyframes pop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .tile-new { animation: pop 0.2s ease-in-out; }
+        
+        @keyframes merge {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .tile-merged { animation: merge 0.2s ease-in-out; }
+
+        #boss-screen {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: white;
+            z-index: 9999;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow: auto;
+        }
+        .excel-toolbar {
+            background-color: #217346;
+            color: white;
+            padding: 10px 15px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: flex;
+            gap: 20px;
+        }
+        .excel-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .excel-table th, .excel-table td {
+            border: 1px solid #d4d4d4;
+            padding: 4px 8px;
+            text-align: right;
+        }
+        .excel-table th { background-color: #f3f2f1; text-align: center; color: #3b3b3b; font-weight: normal; }
+        .excel-table tr:first-child th { background-color: #e1dfdd; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center py-4 px-2">
+
+    <div id="game-ui" class="game-container flex flex-col gap-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center">
+            <h1 class="text-4xl font-extrabold text-[#776e65]">摸鱼2048</h1>
+            <div class="flex gap-2 text-sm font-bold">
+                <div class="bg-[#bbada0] text-white px-4 py-2 rounded-md text-center flex flex-col">
+                    <span class="text-[#eee4da] text-xs uppercase">分数</span>
+                    <span id="score">0</span>
+                </div>
+                <div class="bg-[#bbada0] text-white px-4 py-2 rounded-md text-center flex flex-col">
+                    <span class="text-[#eee4da] text-xs uppercase">最高</span>
+                    <span id="best-score">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls & Info -->
+        <div class="flex justify-between items-center text-sm">
+            <p class="font-semibold text-gray-500">合成姿势，成为摸鱼宗师！</p>
+            <div class="flex gap-2">
+                <button onclick="toggleBossScreen()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded shadow transition-colors flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                    老板键 (Esc)
+                </button>
+                <button onclick="restartGame()" class="bg-[#8f7a66] hover:bg-[#776e65] text-white font-bold py-2 px-4 rounded shadow transition-colors">
+                    重开
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Board -->
+        <div class="grid-container" id="grid-container">
+            <!-- Background Cells (fixed) -->
+            <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            
+            <!-- Dynamic Tiles will be injected here via JS -->
+            <div id="tile-container"></div>
+        </div>
+
+        <p class="text-xs text-center text-gray-400 mt-2">支持方向键 (PC) 或 滑动屏幕 (手机) 操作</p>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-[#faf8ef] p-8 rounded-xl shadow-2xl flex flex-col items-center gap-4 text-center transform transition-all scale-100">
+            <h2 class="text-4xl font-bold text-[#776e65] mb-2">被抓包了！</h2>
+            <p class="text-gray-600">摸鱼一时爽，一直摸鱼一直爽...
+但这次你的进度卡住了。</p>
+            <p class="text-xl font-bold text-[#8f7a66]">最终得分: <span id="final-score">0</span></p>
+            <button onclick="restartGame()" class="mt-4 bg-[#8f7a66] hover:bg-[#776e65] text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-colors text-lg">
+                再摸一次
+            </button>
+        </div>
+    </div>
+
+    <!-- Boss Key Screen (Fake Excel) -->
+    <div id="boss-screen">
+        <div class="excel-toolbar">
+            <span>文件</span><span>开始</span><span>插入</span><span>页面布局</span><span>公式</span><span>数据</span><span>审阅</span><span>视图</span>
+        </div>
+        <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #333;">Q3 华东大区业务营收综合统计表 (绝密)</div>
+        <table class="excel-table">
+            <thead>
+                <tr>
+                    <th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th>
+                </tr>
+                <tr>
+                    <th>1</th><th>项目编号</th><th>项目名称</th><th>负责人</th><th>Q1营收(万)</th><th>Q2营收(万)</th><th>Q3预估(万)</th><th>同比增长率</th>
+                </tr>
+            </thead>
+            <tbody id="fake-excel-body">
+                <!-- Generated by JS -->
+            </tbody>
+        </table>
+        <div style="position: absolute; bottom: 20px; right: 20px;">
+            <button onclick="toggleBossScreen()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded text-xs shadow">返回工作 (Esc)</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Configuration & State ---
+        const SIZE = 4;
+        let board = [];
+        let score = 0;
+        let bestScore = localStorage.getItem('moyu2048Best') || 0;
+        let isGameOver = false;
+        let isBossScreenOpen = false;
+
+        document.getElementById('best-score').innerText = bestScore;
+
+        // The "Slacking" Dictionary mapping values to concepts
+        const tileDict = {
+            2: { emoji: '☕', text: '倒杯水' },
+            4: { emoji: '🚽', text: '带薪如厕' },
+            8: { emoji: '📱', text: '狂刷手机' },
+            16: { emoji: '💬', text: '水群八卦' },
+            32: { emoji: '🎧', text: '戴耳塞发呆' },
+            64: { emoji: '🎮', text: '玩小游戏' },
+            128: { emoji: '🛌', text: '午休超载' },
+            256: { emoji: '🏃', text: '准点提桶' },
+            512: { emoji: '🏖️', text: '假装出差' },
+            1024: { emoji: '🚀', text: '完美甩锅' },
+            2048: { emoji: '👑', text: '摸鱼宗师' }
+        };
+
+        // --- Core Functions ---
+        function initGame() {
+            board = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+            score = 0;
+            isGameOver = false;
+            updateScore();
+            document.getElementById('game-over-modal').classList.add('hidden');
+            document.getElementById('tile-container').innerHTML = '';
+            
+            // Spawn 2 initial tiles
+            addRandomTile();
+            addRandomTile();
+            renderBoard();
+        }
+
+        function getEmptyCells() {
+            let emptyCells = [];
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (board[r][c] === 0) {
+                        emptyCells.push({ r, c });
+                    }
+                }
+            }
+            return emptyCells;
+        }
+
+        function addRandomTile() {
+            const emptyCells = getEmptyCells();
+            if (emptyCells.length === 0) return;
+            
+            const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            const value = Math.random() < 0.9 ? 2 : 4;
+            
+            // We temporarily store an object to track new tiles for animation
+            board[randomCell.r][randomCell.c] = { val: value, isNew: true };
+        }
+
+        function renderBoard() {
+            const container = document.getElementById('tile-container');
+            container.innerHTML = ''; // Clear previous
+            
+            const gap = 10;
+            const containerWidth = document.getElementById('grid-container').clientWidth - (gap * 2);
+            const cellSize = (containerWidth - (gap * (SIZE - 1))) / SIZE;
+
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    let cellData = board[r][c];
+                    if (cellData !== 0) {
+                        const isObject = typeof cellData === 'object';
+                        const val = isObject ? cellData.val : cellData;
+                        const isNew = isObject && cellData.isNew;
+                        const isMerged = isObject && cellData.isMerged;
+                        
+                        // Clean up board state
+                        if (isObject) board[r][c] = val;
+
+                        // Create DOM element
+                        const tile = document.createElement('div');
+                        tile.className = `tile tile-${val} ${isNew ? 'tile-new' : ''} ${isMerged ? 'tile-merged' : ''}`;
+                        
+                        // Calculate position
+                        const top = gap + r * (cellSize + gap);
+                        const left = gap + c * (cellSize + gap);
+                        
+                        tile.style.width = `${cellSize}px`;
+                        tile.style.height = `${cellSize}px`;
+                        tile.style.top = `${top}px`;
+                        tile.style.left = `${left}px`;
+                        
+                        // Content mapping fallback
+                        const data = tileDict[val] || { emoji: '✨', text: '超神' };
+                        
+                        tile.innerHTML = `
+                            <span class="tile-emoji">${data.emoji}</span>
+                            <span class="tile-text">${data.text}</span>
+                        `;
+                        container.appendChild(tile);
+                    }
+                }
+            }
+        }
+
+        function updateScore() {
+            document.getElementById('score').innerText = score;
+            if (score > bestScore) {
+                bestScore = score;
+                localStorage.setItem('moyu2048Best', bestScore);
+                document.getElementById('best-score').innerText = bestScore;
+            }
+        }
+
+        // --- Movement Logic ---
+        function move(direction) {
+            if (isGameOver || isBossScreenOpen) return;
+            
+            let moved = false;
+            let newBoard = JSON.parse(JSON.stringify(board)); // deep copy to compare
+
+            const slide = (row) => {
+                let arr = row.filter(val => val !== 0);
+                for (let i = 0; i < arr.length - 1; i++) {
+                    let val1 = typeof arr[i] === 'object' ? arr[i].val : arr[i];
+                    let val2 = typeof arr[i+1] === 'object' ? arr[i+1].val : arr[i+1];
+                    
+                    if (val1 === val2) {
+                        arr[i] = { val: val1 * 2, isMerged: true };
+                        score += val1 * 2;
+                        arr[i+1] = 0;
+                    }
+                }
+                arr = arr.filter(val => val !== 0);
+                while (arr.length < SIZE) arr.push(0);
+                return arr;
+            };
+
+            if (direction === 'left' || direction === 'right') {
+                for (let r = 0; r < SIZE; r++) {
+                    let row = board[r];
+                    if (direction === 'right') row = row.reverse();
+                    row = slide(row);
+                    if (direction === 'right') row = row.reverse();
+                    board[r] = row;
+                }
+            } else if (direction === 'up' || direction === 'down') {
+                for (let c = 0; c < SIZE; c++) {
+                    let col = [board[0][c], board[1][c], board[2][c], board[3][c]];
+                    if (direction === 'down') col = col.reverse();
+                    col = slide(col);
+                    if (direction === 'down') col = col.reverse();
+                    for (let r = 0; r < SIZE; r++) board[r][c] = col[r];
+                }
+            }
+
+            // Check if board changed
+            moved = JSON.stringify(newBoard) !== JSON.stringify(board);
+
+            if (moved) {
+                addRandomTile();
+                updateScore();
+                renderBoard();
+                checkGameOver();
+            }
+        }
+
+        function checkGameOver() {
+            const emptyCells = getEmptyCells();
+            if (emptyCells.length > 0) return;
+
+            // Check for possible merges
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    const current = board[r][c];
+                    const right = c < SIZE - 1 ? board[r][c+1] : null;
+                    const down = r < SIZE - 1 ? board[r+1][c] : null;
+                    
+                    if (current === right || current === down) {
+                        return; // Still moves left
+                    }
+                }
+            }
+
+            isGameOver = true;
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('game-over-modal').classList.remove('hidden');
+        }
+
+        // --- Input Handling ---
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                toggleBossScreen();
+                return;
+            }
+            
+            if (isGameOver || isBossScreenOpen) return;
+            
+            switch (e.key) {
+                case 'ArrowUp': case 'w': move('up'); e.preventDefault(); break;
+                case 'ArrowDown': case 's': move('down'); e.preventDefault(); break;
+                case 'ArrowLeft': case 'a': move('left'); e.preventDefault(); break;
+                case 'ArrowRight': case 'd': move('right'); e.preventDefault(); break;
+            }
+        });
+
+        // Touch handling for mobile
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const gridElement = document.getElementById('grid-container');
+
+        gridElement.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, {passive: false});
+
+        gridElement.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling while playing
+        }, {passive: false});
+
+        gridElement.addEventListener('touchend', (e) => {
+            if (isGameOver || isBossScreenOpen) return;
+            
+            let touchEndX = e.changedTouches[0].clientX;
+            let touchEndY = e.changedTouches[0].clientY;
+            
+            let dx = touchEndX - touchStartX;
+            let dy = touchEndY - touchStartY;
+            
+            // Minimum swipe distance
+            if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    move(dx > 0 ? 'right' : 'left');
+                } else {
+                    move(dy > 0 ? 'down' : 'up');
+                }
+            }
+        });
+
+        // Handle window resize to re-calculate grid sizes accurately
+        window.addEventListener('resize', () => {
+            if (!isGameOver) renderBoard();
+        });
+
+        // --- Boss Key Logic ---
+        function toggleBossScreen() {
+            const bossScreen = document.getElementById('boss-screen');
+            isBossScreenOpen = !isBossScreenOpen;
+            
+            if (isBossScreenOpen) {
+                bossScreen.style.display = 'block';
+                generateFakeExcelData();
+            } else {
+                bossScreen.style.display = 'none';
+            }
+        }
+
+        function generateFakeExcelData() {
+            const tbody = document.getElementById('fake-excel-body');
+            tbody.innerHTML = '';
+            for(let i=1; i<=25; i++) {
+                const q1 = (Math.random() * 500 + 100).toFixed(2);
+                const q2 = (Math.random() * 500 + 100).toFixed(2);
+                const q3 = (Math.random() * 600 + 150).toFixed(2);
+                const growth = (((q2 - q1) / q1) * 100).toFixed(1) + '%';
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <th style="background-color: #f3f2f1; text-align: center; color: #3b3b3b;">${i+1}</th>
+                    <td>PRJ-${2026000 + i}</td>
+                    <td style="text-align:left;">大客户资源整合一期</td>
+                    <td>${['张三','李四','王五','赵六','孙七'][Math.floor(Math.random()*5)]}</td>
+                    <td>${q1}</td>
+                    <td>${q2}</td>
+                    <td style="font-weight:bold; color:#107c41;">${q3}</td>
+                    <td style="color:${parseFloat(growth) < 0 ? 'red' : 'black'}">${growth}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function restartGame() {
+            initGame();
+        }
+
+        // Start game on load
+        window.onload = () => {
+            initGame();
+        };
+
+    </script>
+</body>
+</html>

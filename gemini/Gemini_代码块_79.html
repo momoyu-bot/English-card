@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量子魔法快递站 - 隐形传态模拟器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans SC', sans-serif; }
+
+        /* 独角兽动画 */
+        .float { animation: floating 3s ease-in-out infinite; }
+        @keyframes floating {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* 销毁融合时的爆炸动画 */
+        .smash-explode {
+            animation: explode 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes explode {
+            0% { transform: scale(1); opacity: 1; filter: brightness(1); }
+            50% { transform: scale(1.5) rotate(15deg); opacity: 0.8; filter: brightness(2) hue-rotate(90deg); }
+            100% { transform: scale(0); opacity: 0; filter: brightness(3); }
+        }
+
+        /* 乱码变形状态 (对应4种可能) */
+        .scramble-1 { filter: hue-rotate(0deg); transform: rotate(0deg); } /* 正常，极为罕见 */
+        .scramble-2 { filter: hue-rotate(180deg); transform: rotate(0deg); } /* 颜色反转 */
+        .scramble-3 { filter: hue-rotate(0deg); transform: rotate(180deg) scaleX(-1); } /* 倒立 */
+        .scramble-4 { filter: grayscale(100%); transform: rotate(180deg); } /* 灰态且倒立 */
+
+        /* 发光边框 */
+        .glow-box { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col p-4 items-center">
+
+    <div class="max-w-4xl w-full space-y-6">
+        
+        <!-- 头部说明 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+            <h1 class="text-2xl font-black bg-gradient-to-r from-pink-400 to-violet-500 bg-clip-text text-transparent flex items-center mb-2">
+                <i class="fa-solid fa-truck-fast text-pink-500 mr-3"></i> 量子魔法快递站
+            </h1>
+            <p class="text-sm text-slate-300 leading-relaxed">
+                宝，欢迎来到地球发件中心！你桌上有一只举世无双的<b class="text-pink-400">七彩独角兽 🦄</b>。你需要通过“量子隐形传态”把它寄给火星的朋友。请严格按照下方的按钮步骤操作哦！
+            </p>
+        </div>
+
+        <!-- 核心沙盒交互区 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-3xl p-6 relative flex flex-col items-center">
+            
+            <!-- 上方场景：地球和火星 -->
+            <div class="flex justify-between items-end w-full relative h-[300px] md:h-[250px] mb-8 border-b border-slate-800 pb-4">
+                
+                <!-- 慢速电话线 (横跨中间) -->
+                <div class="absolute top-1/2 left-1/4 w-2/4 border-t-2 border-dashed border-slate-700 -translate-y-1/2 flex items-center justify-center">
+                    <span class="absolute -top-6 text-[10px] text-slate-500 bg-slate-950 px-2 rounded">普通电话信号 (绝不超光速)</span>
+                    <div id="phone-signal" class="text-2xl absolute left-0 hidden transition-all duration-[2500ms] ease-linear">
+                        📞
+                    </div>
+                </div>
+
+                <!-- 左侧：地球 (Alice / 宝) -->
+                <div class="text-center w-36 relative z-10 flex flex-col items-center space-y-3">
+                    <p class="text-xs font-bold text-slate-400 bg-slate-800 px-3 py-1 rounded-full uppercase tracking-wider">📍 地球 (宝)</p>
+                    
+                    <!-- 独角兽实体 -->
+                    <div id="earth-item" class="text-6xl float w-24 h-24 flex items-center justify-center relative">
+                        🦄
+                        <!-- 融合爆炸特效层 -->
+                        <div id="explosion-fx" class="absolute inset-0 bg-pink-500/0 rounded-full hidden"></div>
+                    </div>
+                    
+                    <!-- 量子盲盒 -->
+                    <div class="w-20 h-20 bg-slate-800 border-2 border-violet-500 rounded-xl flex items-center justify-center text-3xl shadow-[0_0_15px_rgba(139,92,246,0.5)] relative">
+                        📦
+                        <!-- 吐出的说明书 -->
+                        <div id="receipt" class="absolute -right-16 top-0 bg-amber-200 text-amber-900 text-xs font-bold px-2 py-1 rounded border-2 border-amber-400 hidden transform rotate-12 shadow-lg z-20">
+                            密码: <span id="receipt-num">?</span>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-violet-400 font-bold" id="earth-box-label">半个量子纠缠盲盒</p>
+                </div>
+
+                <!-- 右侧：火星 (Bob) -->
+                <div class="text-center w-36 relative z-10 flex flex-col items-center space-y-3">
+                    <p class="text-xs font-bold text-slate-400 bg-slate-800 px-3 py-1 rounded-full uppercase tracking-wider">📍 火星 (朋友)</p>
+                    
+                    <!-- 接收到的物品 -->
+                    <div id="mars-item" class="text-6xl float w-24 h-24 flex items-center justify-center opacity-0 transition-opacity duration-300">
+                        🦄
+                    </div>
+
+                    <!-- 量子盲盒 -->
+                    <div id="mars-box" class="w-20 h-20 bg-slate-800 border-2 border-cyan-500 rounded-xl flex items-center justify-center text-3xl shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+                        📦
+                    </div>
+                    <p class="text-[10px] text-cyan-400 font-bold" id="mars-box-label">另外半个纠缠盲盒</p>
+                </div>
+            </div>
+
+            <!-- 控制台 (5个步骤的操作按钮) -->
+            <div class="w-full space-y-3">
+                <div class="flex flex-col md:flex-row gap-3">
+                    <!-- 按钮 1 -->
+                    <button id="btn-step1" onclick="step1_smash()" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold py-3 px-4 rounded-xl transition-all shadow-lg text-left flex items-center">
+                        <span class="bg-black/20 w-6 h-6 rounded-full flex items-center justify-center mr-2">1</span> 联合测量并销毁！
+                    </button>
+                    <!-- 按钮 2 -->
+                    <button id="btn-step2" onclick="step2_call()" disabled class="flex-1 bg-slate-800 text-slate-500 cursor-not-allowed text-sm font-bold py-3 px-4 rounded-xl transition-all border border-slate-700 text-left flex items-center">
+                        <span class="bg-black/20 w-6 h-6 rounded-full flex items-center justify-center mr-2">2</span> 打电话告诉密码
+                    </button>
+                    <!-- 按钮 3 -->
+                    <button id="btn-step3" onclick="step3_fix()" disabled class="flex-1 bg-slate-800 text-slate-500 cursor-not-allowed text-sm font-bold py-3 px-4 rounded-xl transition-all border border-slate-700 text-left flex items-center">
+                        <span class="bg-black/20 w-6 h-6 rounded-full flex items-center justify-center mr-2">3</span> 火星朋友执行修复
+                    </button>
+                </div>
+
+                <!-- 讲解器状态栏 -->
+                <div id="narrator-box" class="bg-slate-800/60 border border-slate-700 rounded-xl p-4 mt-4">
+                    <p id="narrator-text" class="text-sm text-slate-300 leading-relaxed">
+                        <strong class="text-pink-400">目前状态：</strong> 地球和火星已经各拿着半个相互纠缠的盲盒。你的独角兽在地球上活蹦乱跳。请点击上方按钮 <b class="text-white">“联合测量并销毁！”</b>。
+                    </p>
+                </div>
+            </div>
+
+            <button id="btn-reset" onclick="resetSim()" class="mt-6 text-xs text-slate-500 hover:text-slate-300 underline hidden transition-colors">
+                <i class="fa-solid fa-rotate-right mr-1"></i> 再寄一只独角兽
+            </button>
+
+        </div>
+
+        <!-- 总结卡片 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 mt-6">
+            <h3 class="text-pink-300 font-bold mb-2">💡 宝，翻译 Claude 的知识点：</h3>
+            <ul class="text-xs text-slate-400 space-y-2 list-disc list-inside">
+                <li><span class="text-slate-200">2个经典比特：</span> 就是吐出来的那张“密码说明书”（有4种可能）。</li>
+                <li><span class="text-slate-200">没有密码什么都做不了：</span> 因为火星冒出来的是一只“乱码独角兽”，不看密码，朋友根本不知道它是倒了还是掉色了，不敢乱动！</li>
+                <li><span class="text-slate-200">量子态不可复制：</span> 宝的独角兽在地球上彻底炸了！这保证了宇宙中永远只有1只独角兽，它是真真切切被“传送”走了。</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentScrambleType = 1; // 1-4
+        let step = 0;
+
+        function step1_smash() {
+            if(step !== 0) return;
+
+            const earthItem = document.getElementById('earth-item');
+            const receipt = document.getElementById('receipt');
+            const receiptNum = document.getElementById('receipt-num');
+            const marsItem = document.getElementById('mars-item');
+            const narrator = document.getElementById('narrator-text');
+            const earthLabel = document.getElementById('earth-box-label');
+            const marsBox = document.getElementById('mars-box');
+
+            // 1. 决定随机的变形方式 (2, 3, 4，排除1以便有视觉效果)
+            currentScrambleType = Math.floor(Math.random() * 3) + 2; 
+
+            // 2. 地球上的独角兽销毁动画
+            earthItem.classList.remove('float');
+            earthItem.classList.add('smash-explode');
+            earthLabel.innerText = "盲盒已消耗！";
+            earthLabel.className = "text-[10px] text-slate-600 font-bold";
+
+            // 3. 吐出密码单
+            receiptNum.innerText = currentScrambleType;
+            setTimeout(() => {
+                receipt.classList.remove('hidden');
+                
+                // 4. 火星瞬间冒出乱码独角兽 (纠缠的超光速瞬间)
+                marsItem.className = `text-6xl float w-24 h-24 flex items-center justify-center transition-all duration-500 opacity-100 scramble-${currentScrambleType}`;
+                marsBox.innerText = "💨"; // 盲盒消耗掉
+                document.getElementById('mars-box-label').innerText = "盲盒已消耗，吐出乱码态！";
+
+                // 5. 更新文案和按钮
+                narrator.innerHTML = `<strong class="text-amber-400">震惊！</strong> 宝的独角兽被彻底销毁了（无法复制规则）！机器吐出了密码单 <b>[${currentScrambleType}]</b>。
+而在同一瞬间，火星上凭空冒出了一只<b>变形的乱码独角兽</b>！如果不打电话告诉朋友密码，他根本无法复原它！`;
+                
+                document.getElementById('btn-step1').classList.replace('bg-violet-600', 'bg-slate-800');
+                document.getElementById('btn-step1').classList.replace('text-white', 'text-slate-500');
+                document.getElementById('btn-step1').classList.add('opacity-50');
+
+                const btn2 = document.getElementById('btn-step2');
+                btn2.disabled = false;
+                btn2.className = "flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold py-3 px-4 rounded-xl transition-all shadow-lg text-left flex items-center";
+
+                step = 1;
+            }, 600); // 等待爆炸动画大半
+        }
+
+        function step2_call() {
+            if(step !== 1) return;
+
+            const signal = document.getElementById('phone-signal');
+            const narrator = document.getElementById('narrator-text');
+
+            // 电话动画开始
+            signal.classList.remove('hidden');
+            void signal.offsetWidth; // 触发重绘
+            signal.style.left = "100%"; // 慢慢飞向右边
+
+            narrator.innerHTML = `<strong class="text-cyan-400">正在打电话...</strong> 光速信道很慢，宝正在用电话把密码 <b>[${currentScrambleType}]</b> 告诉火星朋友。这限制了整个传送过程不可能超过光速。`;
+
+            // 按钮状态更新
+            const btn2 = document.getElementById('btn-step2');
+            btn2.classList.replace('bg-cyan-600', 'bg-slate-800');
+            btn2.classList.replace('hover:bg-cyan-500', 'cursor-not-allowed');
+            btn2.classList.replace('text-white', 'text-slate-500');
+            btn2.disabled = true;
+
+            setTimeout(() => {
+                signal.classList.add('hidden');
+                signal.style.left = "0%";
+
+                narrator.innerHTML = `<strong class="text-emerald-400">电话打通了！</strong> 朋友听到了密码 <b>[${currentScrambleType}]</b>！快点击步骤3让他进行修复操作！`;
+                
+                const btn3 = document.getElementById('btn-step3');
+                btn3.disabled = false;
+                btn3.className = "flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-3 px-4 rounded-xl transition-all shadow-lg text-left flex items-center";
+
+                step = 2;
+            }, 2500); // 与CSS动画时长匹配
+        }
+
+        function step3_fix() {
+            if(step !== 2) return;
+
+            const marsItem = document.getElementById('mars-item');
+            const narrator = document.getElementById('narrator-text');
+
+            // 移除乱码的 CSS 类，恢复正常的独角兽
+            marsItem.className = `text-6xl float w-24 h-24 flex items-center justify-center transition-all duration-1000 opacity-100 scramble-1 glow-box rounded-full bg-pink-500/20`;
+
+            narrator.innerHTML = `<strong class="text-pink-400">🎉 传送大功告成！</strong> 朋友根据密码，给乱码独角兽做了一次精确的“量子按摩”。看！地球上那只活蹦乱跳的七彩独角兽，完好无损地在火星上<b>复活</b>啦！`;
+
+            const btn3 = document.getElementById('btn-step3');
+            btn3.classList.replace('bg-emerald-600', 'bg-slate-800');
+            btn3.classList.replace('hover:bg-emerald-500', 'cursor-not-allowed');
+            btn3.classList.replace('text-white', 'text-slate-500');
+            btn3.disabled = true;
+
+            document.getElementById('btn-reset').classList.remove('hidden');
+            step = 3;
+        }
+
+        function resetSim() {
+            step = 0;
+            currentScrambleType = 1;
+
+            // 恢复地球
+            const earthItem = document.getElementById('earth-item');
+            earthItem.classList.remove('smash-explode');
+            earthItem.classList.add('float');
+            earthItem.style.opacity = '1';
+            
+            document.getElementById('earth-box-label').innerText = "半个量子纠缠盲盒";
+            document.getElementById('earth-box-label').className = "text-[10px] text-violet-400 font-bold";
+            document.getElementById('receipt').classList.add('hidden');
+
+            // 恢复火星
+            const marsItem = document.getElementById('mars-item');
+            marsItem.className = "text-6xl float w-24 h-24 flex items-center justify-center opacity-0 transition-opacity duration-300";
+            document.getElementById('mars-box').innerText = "📦";
+            document.getElementById('mars-box-label').innerText = "另外半个纠缠盲盒";
+
+            // 恢复 UI 和按钮
+            document.getElementById('narrator-text').innerHTML = `<strong class="text-pink-400">目前状态：</strong> 地球和火星已经各拿着半个相互纠缠的盲盒。你的独角兽在地球上活蹦乱跳。请点击上方按钮 <b class="text-white">“联合测量并销毁！”</b>。`;
+            
+            const btn1 = document.getElementById('btn-step1');
+            btn1.className = "flex-1 bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold py-3 px-4 rounded-xl transition-all shadow-lg text-left flex items-center";
+            btn1.disabled = false;
+
+            document.getElementById('btn-reset').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

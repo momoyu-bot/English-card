@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>势能函数交互演示 - 给宝的专属科普</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #fdf2f8; /* 可爱的淡粉色背景 */
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+        canvas {
+            touch-action: none; /* 防止手机端滑动屏幕 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-radius: 1rem;
+            background: linear-gradient(to bottom, #e0f2fe, #bae6fd);
+        }
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 2px, 0); }
+            20%, 80% { transform: translate3d(4px, -2px, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 4px, 0); }
+            40%, 60% { transform: translate3d(6px, -4px, 0); }
+        }
+        .btn-cute {
+            transition: all 0.2s;
+        }
+        .btn-cute:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center py-10 px-4">
+
+    <div class="max-w-4xl w-full bg-white rounded-3xl shadow-xl overflow-hidden p-6 md:p-8 border-4 border-pink-100">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-pink-500 mb-2">🏔️ 帮小球找谷底</h1>
+            <p class="text-gray-500 text-sm md:text-base">宝，试着点击按钮或者直接点屏幕，看看怎么帮小球逃出半山腰的“局部最优解”吧！</p>
+        </div>
+
+        <!-- 画布容器 -->
+        <div class="relative w-full flex justify-center mb-6">
+            <canvas id="simCanvas" width="800" height="450" class="max-w-full h-auto bg-blue-50"></canvas>
+            
+            <!-- 状态提示文字 -->
+            <div id="statusText" class="absolute top-4 left-0 right-0 text-center font-bold text-lg text-indigo-700 drop-shadow-md transition-all">
+                小球正在准备出发...
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+            
+            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <h3 class="text-gray-700 font-bold mb-3">😫 为什么会卡住？</h3>
+                <button onclick="runNormal()" class="btn-cute w-full bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2">
+                    <span>1. 普通滚落 (阻力大)</span>
+                </button>
+                <p class="text-xs text-gray-400 mt-2">小球没有冲劲，遇到半山腰的平地就以为到底了，直接躺平。</p>
+            </div>
+
+            <div class="bg-pink-50 p-4 rounded-2xl border border-pink-100">
+                <h3 class="text-pink-600 font-bold mb-3">✨ 怎么跳出小坑？</h3>
+                <div class="flex flex-col gap-2">
+                    <button onclick="runMomentum()" class="btn-cute w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2">
+                        <span>🏃 2. 给它加冲劲 (动量法)</span>
+                    </button>
+                    <button onclick="shakeWorld()" class="btn-cute w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2">
+                        <span>🌋 3. 晃动大地 (模拟退火)</span>
+                    </button>
+                </div>
+            </div>
+            
+        </div>
+        
+        <div class="mt-4 text-center">
+            <p class="text-sm text-gray-400">💡 提示：你可以随时在画面上任意位置点击，手动把小球放在那里哦！</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('statusText');
+
+        // 物理参数
+        let ballX = 680; // 初始位置 (右侧高处)
+        let ballVX = 0;
+        let ballY = 0;
+        
+        let gravity = 0.4; // 重力加速度 (向下的拉力转化为沿切线的力)
+        let friction = 0.85; // 摩擦力 (越小越容易停下，越接近1越能保持惯性)
+        let isShaking = false;
+        
+        // 轨迹
+        let trail = [];
+
+        // 我们设计的势能函数方程
+        // 为了构造一个明显的局部最优和全局最优，我们用一个四次多项式
+        // y = x^4 - 2x^2 + 0.5x
+        // 将x映射到画布宽度 [100, 700] 对应 nx [-2, 2]
+        function getCurveY(nx) {
+            return Math.pow(nx, 4) - 2 * Math.pow(nx, 2) + 0.5 * nx;
+        }
+
+        // 求导数 (斜率)，用于计算重力分量
+        function getCurveDerivative(nx) {
+            return 4 * Math.pow(nx, 3) - 4 * nx + 0.5;
+        }
+
+        function updatePhysics() {
+            // 将画布坐标映射到数学坐标 nx
+            let nx = (ballX - 400) / 150;
+            
+            // 获取当前位置的斜率
+            let slope = getCurveDerivative(nx);
+            
+            // 物理受力分析：斜率越大，沿切线向下的力越大
+            let force = -slope; 
+
+            // 如果正在晃动大地 (模拟退火)，给小球加上随机的横向速度
+            if (isShaking) {
+                ballVX += (Math.random() - 0.5) * 15;
+            }
+
+            // 更新速度和位置
+            ballVX += force * gravity;
+            ballVX *= friction; // 摩擦力让速度慢慢衰减
+            ballX += ballVX;
+
+            // 边界反弹保护
+            if (ballX < 50) { ballX = 50; ballVX *= -0.5; }
+            if (ballX > 750) { ballX = 750; ballVX *= -0.5; }
+
+            // 计算Y坐标
+            let ny = getCurveY((ballX - 400) / 150);
+            ballY = 280 + ny * 60; // 映射回画布高度
+
+            // 记录轨迹
+            trail.push({x: ballX, y: ballY});
+            if (trail.length > 40) trail.shift(); // 只保留最近40帧的轨迹
+
+            updateStatusText();
+        }
+
+        function updateStatusText() {
+            let speed = Math.abs(ballVX);
+            if (speed > 0.5) {
+                statusText.innerText = "💨 小球正在翻山越岭...";
+                statusText.className = "absolute top-4 left-0 right-0 text-center font-bold text-lg text-blue-600 drop-shadow-md";
+            } else {
+                // 判断停在哪了
+                if (Math.abs(ballX - 536) < 15) { // 536 是局部最优的大致X坐标
+                    statusText.innerText = "哎呀！被困在【局部最优解】啦！宝，快点按钮帮帮它！";
+                    statusText.className = "absolute top-4 left-0 right-0 text-center font-bold text-lg text-red-500 drop-shadow-md";
+                } else if (Math.abs(ballX - 244) < 15) { // 244 是全局最优的大致X坐标
+                    statusText.innerText = "🎉 完美！成功到达最深的【全局最优解】！";
+                    statusText.className = "absolute top-4 left-0 right-0 text-center font-bold text-lg text-green-600 drop-shadow-md scale-110 transition-transform";
+                } else {
+                    statusText.innerText = "小球停下休息了。";
+                    statusText.className = "absolute top-4 left-0 right-0 text-center font-bold text-lg text-gray-500 drop-shadow-md";
+                }
+            }
+        }
+
+        function drawLandscape() {
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            
+            // 画出起伏的山脉曲线
+            for(let x = 0; x <= canvas.width; x += 5) {
+                let nx = (x - 400) / 150;
+                let ny = getCurveY(nx);
+                let y = 280 + ny * 60;
+                ctx.lineTo(x, y);
+            }
+            
+            ctx.lineTo(canvas.width, canvas.height);
+            
+            // 填充山脉颜色
+            let gradient = ctx.createLinearGradient(0, 100, 0, canvas.height);
+            gradient.addColorStop(0, '#a7f3d0'); // 浅绿
+            gradient.addColorStop(1, '#059669'); // 深绿
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // 画曲线边框
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+
+            // 标记局部最优解和全局最优解的文字
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "center";
+            
+            // 局部最优解 (右边那个浅坑)
+            ctx.fillStyle = "rgba(239, 68, 68, 0.8)";
+            ctx.fillText("⚠️ 局部最优", 536, 280 + getCurveY((536-400)/150)*60 + 30);
+            
+            // 全局最优解 (左边那个深坑)
+            ctx.fillStyle = "rgba(16, 185, 129, 0.9)";
+            ctx.fillText("🚩 全局最优", 244, 280 + getCurveY((244-400)/150)*60 + 30);
+        }
+
+        function drawBall() {
+            // 画轨迹拖尾
+            if (trail.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(trail[0].x, trail[0].y);
+                for(let i=1; i<trail.length; i++) {
+                    ctx.lineTo(trail[i].x, trail[i].y);
+                }
+                ctx.strokeStyle = 'rgba(236, 72, 153, 0.4)'; // 粉色拖尾
+                ctx.lineWidth = 12;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+            }
+
+            // 画小球本体
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, 15, 0, Math.PI * 2);
+            ctx.fillStyle = '#ec4899'; // 亮粉色小球
+            ctx.fill();
+            
+            // 小球高光
+            ctx.beginPath();
+            ctx.arc(ballX - 4, ballY - 4, 4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.fill();
+        }
+
+        // 主循环
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updatePhysics();
+            drawLandscape();
+            drawBall();
+            requestAnimationFrame(animate);
+        }
+
+        // --- 交互控制逻辑 ---
+
+        // 放置小球并清空轨迹
+        function resetBall(x) {
+            ballX = x;
+            ballVX = 0;
+            trail = [];
+        }
+
+        // 1. 普通滚落 (阻力大，无法冲过山头)
+        window.runNormal = function() {
+            friction = 0.83; 
+            resetBall(680);
+        }
+
+        // 2. 动量法 (阻力小，保留惯性)
+        window.runMomentum = function() {
+            friction = 0.985; // 几乎没有摩擦力，冲冲冲！
+            resetBall(680);
+        }
+
+        // 3. 模拟退火 (突然晃动)
+        window.shakeWorld = function() {
+            // 只要小球卡在局部最优附近，才给大震动
+            isShaking = true;
+            canvas.classList.add('shake');
+            
+            // 持续震动0.6秒后停止 (模拟冷却)
+            setTimeout(() => {
+                isShaking = false;
+                canvas.classList.remove('shake');
+                friction = 0.90; // 震完后给一点摩擦力让它稳稳停下
+            }, 600);
+        }
+
+        // 鼠标/触摸点击任意位置放置小球
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            // 计算自适应缩放后的真实X坐标
+            const scaleX = canvas.width / rect.width;
+            const x = (e.clientX - rect.left) * scaleX;
+            resetBall(x);
+            friction = 0.85; // 恢复默认阻力
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // 阻止默认滚动
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const x = (e.touches[0].clientX - rect.left) * scaleX;
+            resetBall(x);
+            friction = 0.85;
+        }, {passive: false});
+
+        // 启动动画
+        animate();
+    </script>
+</body>
+</html>

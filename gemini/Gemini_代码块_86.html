@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍿 爆米花与泊松过程的秘密 🍿</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+        body {
+            font-family: 'ZCOOL KuaiLe', 'Comic Sans MS', sans-serif;
+            background-color: #fffaf0;
+        }
+        .popcorn-kernel {
+            transition: transform 0.1s ease-out;
+        }
+        @keyframes pop {
+            0% { transform: scale(1) translateY(0); }
+            50% { transform: scale(1.8) translateY(-40px) rotate(15deg); }
+            100% { transform: scale(1.4) translateY(-20px) rotate(-10deg); opacity: 0.9; }
+        }
+        .popped {
+            animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.2) forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen py-8 px-4 flex flex-col items-center">
+
+    <!-- 顶栏 -->
+    <div class="text-center mb-6">
+        <h1 class="text-4xl text-amber-600 font-bold mb-2 flex justify-center items-center gap-2">
+            🍿 爆米花魔法锅 🍿
+        </h1>
+        <p class="text-gray-600 text-lg">宝，用爆米花的第一视角，轻松看懂泊松过程的两张图！</p>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 gap-6">
+        
+        <!-- 左边：爆米花机与控制区 -->
+        <div class="md:col-span-5 bg-white rounded-3xl p-6 shadow-xl border-4 border-amber-100 flex flex-col justify-between">
+            <div>
+                <h2 class="text-2xl font-bold text-amber-700 mb-4">第一步：调大火候 (&lambda;)</h2>
+                <p class="text-gray-600 text-sm mb-4">
+                    数学里的 <b>&lambda; (Lambda)</b> 就是我们的火候！火越旺，平均每秒蹦出来的爆米花就越多。
+                </p>
+                
+                <!-- 控制滑块 -->
+                <div class="bg-amber-50 rounded-2xl p-4 mb-6">
+                    <div class="flex justify-between text-amber-800 font-bold mb-2">
+                        <span>文火 🪵</span>
+                        <span>猛火 🔥</span>
+                    </div>
+                    <input type="range" id="lambdaSlider" min="1" max="6" step="0.5" value="2" class="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                    <div class="text-center mt-3 text-lg text-amber-700 font-bold">
+                        当前火候 &lambda; = <span id="lambdaValue" class="text-3xl text-amber-600">2.0</span> 颗 / 秒
+                    </div>
+                </div>
+
+                <!-- 爆米花大锅 -->
+                <div class="relative bg-amber-950 rounded-2xl h-56 overflow-hidden border-4 border-amber-800 flex items-end justify-center pb-2">
+                    <div class="absolute top-2 left-3 text-amber-200 text-xs font-mono">POP-O-MATIC 3000</div>
+                    <div class="absolute top-2 right-3 flex items-center gap-1">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                        <span class="text-red-400 text-xs font-bold font-mono">HEATING</span>
+                    </div>
+                    
+                    <!-- 锅内的爆米花 -->
+                    <div id="pot" class="relative w-full h-full flex flex-wrap items-end justify-center px-4 gap-1 overflow-hidden">
+                        <!-- 动态生成的爆米花会放在这里 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 控制按钮 -->
+            <div class="mt-6 flex gap-3">
+                <button id="startBtn" onclick="toggleSimulation()" class="flex-grow bg-amber-500 hover:bg-amber-600 text-white text-xl font-bold py-3 px-6 rounded-2xl shadow-lg transition-transform active:scale-95">
+                    🚀 开始加热！
+                </button>
+                <button onclick="resetData()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-2xl border-2 border-gray-200">
+                    重置
+                </button>
+            </div>
+        </div>
+
+        <!-- 右边：两张神秘图表的终极解密 -->
+        <div class="md:col-span-7 flex flex-col gap-6">
+            
+            <!-- 图表1：等待时间 (指数分布) -->
+            <div class="bg-white rounded-3xl p-6 shadow-xl border-4 border-orange-100">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-full">看法 1</span>
+                        <h3 class="text-xl font-bold text-gray-800 mt-1">🕒 两次爆炸之间，要等多久？（指数分布）</h3>
+                    </div>
+                </div>
+                <p class="text-gray-500 text-xs mb-3">
+                    记录每两颗爆米花蹦出来之间的<b>时间差</b>。最左边永远最高，说明“刚等一下下就又蹦一颗”是最常见的！
+                </p>
+                <!-- Canvas 绘制指数分布 -->
+                <div class="relative h-40 bg-orange-50 rounded-2xl p-2">
+                    <canvas id="intervalChart" class="w-full h-full"></canvas>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-3 text-center text-sm">
+                    <div class="bg-orange-50/50 p-2 rounded-xl border border-orange-100">
+                        <div class="text-gray-500 text-xs">实测平均间隔</div>
+                        <div class="text-lg font-bold text-orange-600" id="avgIntervalText">0.000 s</div>
+                    </div>
+                    <div class="bg-amber-50/50 p-2 rounded-xl border border-amber-100">
+                        <div class="text-gray-500 text-xs">理论值 (1/&lambda;)</div>
+                        <div class="text-lg font-bold text-amber-600" id="theoIntervalText">0.500 s</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图表2：每秒蹦几颗 (泊松分布) -->
+            <div class="bg-white rounded-3xl p-6 shadow-xl border-4 border-amber-100">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">看法 2</span>
+                        <h3 class="text-xl font-bold text-gray-800 mt-1">📊 每一秒钟里，到底爆了几颗？（泊松分布）</h3>
+                    </div>
+                </div>
+                <p class="text-gray-500 text-xs mb-3">
+                    每隔整整1秒，数一数这1秒内爆了多少颗。你会得到一个小山丘！盯住它的神级特征：<b>均值 &approx; 方差 &approx; &lambda;</b>。
+                </p>
+                <!-- Canvas 绘制泊松分布 -->
+                <div class="relative h-40 bg-amber-50 rounded-2xl p-2">
+                    <canvas id="poissonChart" class="w-full h-full"></canvas>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-3 text-center text-xs">
+                    <div class="bg-amber-50/50 p-2 rounded-xl border border-amber-100">
+                        <div class="text-gray-500">实测均值 (Mean)</div>
+                        <div class="text-base font-bold text-amber-700" id="meanText">0.00</div>
+                    </div>
+                    <div class="bg-amber-50/50 p-2 rounded-xl border border-amber-100">
+                        <div class="text-gray-500">实测方差 (Variance)</div>
+                        <div class="text-base font-bold text-amber-700" id="varianceText">0.00</div>
+                    </div>
+                    <div class="bg-red-50/50 p-2 rounded-xl border border-red-100">
+                        <div class="text-gray-500">理论 &lambda; (火候)</div>
+                        <div class="text-base font-bold text-red-600" id="theoLambdaText">2.00</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 底部科普小卡片 -->
+    <div class="w-full max-w-4xl mt-6 bg-amber-50 border-2 border-amber-200 rounded-3xl p-6">
+        <h4 class="text-lg font-bold text-amber-800 mb-2">💡 宝，听我给你讲这两个图表的秘密：</h4>
+        <div class="text-sm text-gray-700 space-y-3 leading-relaxed">
+            <p>
+                <b>🍿 第一张图（指数分布）：</b>
+
+                宝，你看它的柱子，<b>为什么在 0 秒附近是最高的？</b> 
+                很多宝贝会觉得：“既然平均0.5秒爆一颗，那我等了0.4秒，下一颗是不是马上就要爆了？” 
+                <b>不对哦！</b> 爆米花是“无记忆”的。它在任意一瞬间爆不爆，和它已经憋了多久<b>没有任何关系</b>。
+                正因为随时随地都可能突然爆炸，所以两颗爆炸之间“时间间隔超级短（比如只隔了0.05秒）”的情况，反而比“刚好隔了0.5秒”的情况要多得多！最左侧永远最高，这就是<b>无记忆性（Memorylessness）</b>的最美外形！
+            </p>
+            <p>
+                <b>📊 第二张图（泊松分布）：</b>
+
+                这次我们手里拿个秒表，每滴答过 1 秒，就记下“刚刚这一秒爆了多少个”。
+                如果火候 $\lambda=2$，你以为每一秒都刚好爆 2 个？其实不是，有时候爆 0 个（哑弹），有时候爆 5 个（大爆发）！
+                当我们把很多个“一秒钟内的数量”画成柱状图，它就变成了一个漂亮的<b>小山丘</b>。
+                这个分布有一个神奇的指纹（特征）：<b>平均数（均值）和它的混乱程度（方差）几乎一模一样，都等于我们的火候 $\lambda$！</b>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // 数据存储
+        let isRunning = false;
+        let lastPopTime = 0;
+        let popIntervals = []; // 两次爆炸的间隔时间
+        
+        let currentSecondCount = 0;
+        let countsPerSecond = []; // 每一秒钟里爆的颗数
+        let secondTimer = null;
+        
+        let lambda = 2.0;
+        let loopTimeout = null;
+
+        const pot = document.getElementById('pot');
+        const lambdaSlider = document.getElementById('lambdaSlider');
+        const lambdaValue = document.getElementById('lambdaValue');
+        const startBtn = document.getElementById('startBtn');
+        
+        const avgIntervalText = document.getElementById('avgIntervalText');
+        const theoIntervalText = document.getElementById('theoIntervalText');
+        const meanText = document.getElementById('meanText');
+        const varianceText = document.getElementById('varianceText');
+        const theoLambdaText = document.getElementById('theoLambdaText');
+
+        // 绑定滑块
+        lambdaSlider.addEventListener('input', (e) => {
+            lambda = parseFloat(e.target.value);
+            lambdaValue.textContent = lambda.toFixed(1);
+            theoIntervalText.textContent = (1 / lambda).toFixed(3) + ' s';
+            theoLambdaText.textContent = lambda.toFixed(2);
+            drawCharts();
+        });
+
+        // 泊松事件生成核心：生成下一个事件需要的等待时间 dt (指数分布)
+        function getNextInterval(lam) {
+            return -Math.log(Math.random()) / lam; // 单位：秒
+        }
+
+        // 模拟循环
+        function runSimulation() {
+            if (!isRunning) return;
+
+            const dt = getNextInterval(lambda); // 计算距离下一次爆还要等多少秒
+            
+            loopTimeout = setTimeout(() => {
+                if (!isRunning) return;
+                
+                // 触发爆炸
+                triggerPop();
+                
+                // 记录间隔时间
+                const now = performance.now();
+                if (lastPopTime !== 0) {
+                    const actualDt = (now - lastPopTime) / 1000;
+                    popIntervals.push(actualDt);
+                    // 限制最大存储
+                    if (popIntervals.length > 500) popIntervals.shift();
+                }
+                lastPopTime = now;
+                
+                // 当前秒内的计数+1
+                currentSecondCount++;
+                
+                // 刷新图表
+                drawCharts();
+                
+                // 递归下一次
+                runSimulation();
+            }, dt * 1000);
+        }
+
+        // 每秒钟结算一次
+        function startSecondTracker() {
+            secondTimer = setInterval(() => {
+                if (!isRunning) return;
+                countsPerSecond.push(currentSecondCount);
+                if (countsPerSecond.length > 200) countsPerSecond.shift();
+                currentSecondCount = 0;
+                drawCharts();
+            }, 1000);
+        }
+
+        // 触发一颗爆米花的视觉效果
+        const popcornEmojis = ['🍿', '✨', '💥'];
+        function triggerPop() {
+            const el = document.createElement('div');
+            el.className = 'text-3xl animate-bounce';
+            el.style.transform = `translateY(${Math.random() * -10}px)`;
+            el.innerHTML = popcornEmojis[Math.floor(Math.random() * popcornEmojis.length)];
+            
+            pot.appendChild(el);
+            
+            // 保持锅内元素不要溢出太多
+            if (pot.childNodes.length > 30) {
+                pot.removeChild(pot.firstChild);
+            }
+            
+            // 自动移除
+            setTimeout(() => {
+                if (el.parentNode === pot) {
+                    pot.removeChild(el);
+                }
+            }, 1000);
+        }
+
+        // 启动/暂停
+        function toggleSimulation() {
+            if (isRunning) {
+                // 暂停
+                isRunning = false;
+                startBtn.innerHTML = '🚀 继续加热！';
+                startBtn.classList.replace('bg-red-500', 'bg-amber-500');
+                clearTimeout(loopTimeout);
+                clearInterval(secondTimer);
+            } else {
+                // 启动
+                isRunning = true;
+                startBtn.innerHTML = '⏸️ 正在加热...';
+                startBtn.classList.replace('bg-amber-500', 'bg-red-500');
+                lastPopTime = performance.now();
+                runSimulation();
+                startSecondTracker();
+            }
+        }
+
+        // 重置数据
+        function resetData() {
+            popIntervals = [];
+            countsPerSecond = [];
+            currentSecondCount = 0;
+            lastPopTime = 0;
+            pot.innerHTML = '';
+            drawCharts();
+        }
+
+        // ==================== 绘图逻辑 ====================
+        const intervalCanvas = document.getElementById('intervalChart');
+        const poissonCanvas = document.getElementById('poissonChart');
+
+        function resizeCanvas() {
+            // 解决高分屏模糊问题
+            const dpr = window.devicePixelRatio || 1;
+            [intervalCanvas, poissonCanvas].forEach(canvas => {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                const ctx = canvas.getContext('2d');
+                ctx.scale(dpr, dpr);
+            });
+            drawCharts();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        function drawCharts() {
+            drawIntervalChart();
+            drawPoissonChart();
+        }
+
+        // 1. 绘制等待时间分布 (指数分布)
+        function drawIntervalChart() {
+            const ctx = intervalCanvas.getContext('2d');
+            const w = intervalCanvas.width / (window.devicePixelRatio || 1);
+            const h = intervalCanvas.height / (window.devicePixelRatio || 1);
+            ctx.clearRect(0, 0, w, h);
+
+            if (popIntervals.length === 0) {
+                ctx.fillStyle = '#9a3412';
+                ctx.font = '14px sans-serif';
+                ctx.fillText('等待爆米花蹦出来中... ⌛', w/2 - 70, h/2);
+                return;
+            }
+
+            // 计算均值
+            const avgInterval = popIntervals.reduce((a,b)=>a+b, 0) / popIntervals.length;
+            avgIntervalText.textContent = avgInterval.toFixed(3) + ' s';
+
+            // 统计直方图
+            const maxVal = 2.5; // X轴最大2.5秒
+            const numBins = 15;
+            const bins = new Array(numBins).fill(0);
+            popIntervals.forEach(val => {
+                const binIdx = Math.floor((val / maxVal) * numBins);
+                if (binIdx >= 0 && binIdx < numBins) {
+                    bins[binIdx]++;
+                }
+            });
+
+            const maxBinCount = Math.max(...bins, 1);
+            const padding = 25;
+            const chartW = w - padding * 2;
+            const chartH = h - padding * 2;
+
+            // 绘制实测柱状图
+            const binW = chartW / numBins;
+            ctx.fillStyle = '#f97316'; // 橙色实测
+            for(let i=0; i<numBins; i++) {
+                const barH = (bins[i] / maxBinCount) * chartH;
+                const x = padding + i * binW;
+                const y = h - padding - barH;
+                ctx.fillRect(x + 1, y, binW - 2, barH);
+            }
+
+            // 绘制理论曲线: y = lambda * e^(-lambda * t)
+            ctx.strokeStyle = '#b45309'; // 深褐色理论线
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for(let xPixel = 0; xPixel <= chartW; xPixel++) {
+                const t = (xPixel / chartW) * maxVal;
+                const yVal = lambda * Math.exp(-lambda * t);
+                // 归一化高度
+                const maxTheoreticalY = lambda; 
+                const yPixel = h - padding - (yVal / maxTheoreticalY) * chartH;
+                if (xPixel === 0) ctx.moveTo(padding + xPixel, yPixel);
+                else ctx.lineTo(padding + xPixel, yPixel);
+            }
+            ctx.stroke();
+
+            // 轴线与标签
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, h - padding);
+            ctx.lineTo(w - padding, h - padding);
+            ctx.stroke();
+
+            ctx.fillStyle = '#64748b';
+            ctx.font = '10px sans-serif';
+            ctx.fillText('0.0s (极短)', padding, h - 8);
+            ctx.fillText('1.3s', padding + chartW/2 - 10, h - 8);
+            ctx.fillText('2.5s (极长)', padding + chartW - 40, h - 8);
+        }
+
+        // 2. 绘制数量分布 (泊松分布)
+        function drawPoissonChart() {
+            const ctx = poissonCanvas.getContext('2d');
+            const w = poissonCanvas.width / (window.devicePixelRatio || 1);
+            const h = poissonCanvas.height / (window.devicePixelRatio || 1);
+            ctx.clearRect(0, 0, w, h);
+
+            if (countsPerSecond.length === 0) {
+                ctx.fillStyle = '#78350f';
+                ctx.font = '14px sans-serif';
+                ctx.fillText('正在累计每秒爆炸数... ⏱️', w/2 - 70, h/2);
+                return;
+            }
+
+            // 计算均值和方差
+            const n = countsPerSecond.length;
+            const mean = countsPerSecond.reduce((a,b)=>a+b, 0) / n;
+            const variance = countsPerSecond.reduce((a,b)=>a+(b-mean)*(b-mean), 0) / n;
+
+            meanText.textContent = mean.toFixed(2);
+            varianceText.textContent = variance.toFixed(2);
+
+            // 统计 0 到 10 颗的频数
+            const maxK = 10;
+            const bins = new Array(maxK + 1).fill(0);
+            countsPerSecond.forEach(val => {
+                if (val >= 0 && val <= maxK) {
+                    bins[val]++;
+                }
+            });
+
+            const maxBinCount = Math.max(...bins, 1);
+            const padding = 25;
+            const chartW = w - padding * 2;
+            const chartH = h - padding * 2;
+            const binW = chartW / (maxK + 1);
+
+            // 绘制实测柱状图
+            ctx.fillStyle = '#f59e0b'; // 黄色实测
+            for(let k=0; k<=maxK; k++) {
+                const barH = (bins[k] / maxBinCount) * chartH;
+                const x = padding + k * binW;
+                const y = h - padding - barH;
+                ctx.fillRect(x + 2, y, binW - 4, barH);
+            }
+
+            // 阶乘函数
+            function fact(num) {
+                if (num <= 1) return 1;
+                let r = 1;
+                for(let i=2; i<=num; i++) r *= i;
+                return r;
+            }
+
+            // 绘制理论泊松概率点并连线: P(k) = (lambda^k * e^-lambda) / k!
+            ctx.strokeStyle = '#b45309';
+            ctx.fillStyle = '#b45309';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            
+            // 计算最大理论概率用于归一化
+            let maxTheoP = 0.01;
+            for(let k=0; k<=maxK; k++) {
+                const p = (Math.pow(lambda, k) * Math.exp(-lambda)) / fact(k);
+                if (p > maxTheoP) maxTheoP = p;
+            }
+
+            for(let k=0; k<=maxK; k++) {
+                const p = (Math.pow(lambda, k) * Math.exp(-lambda)) / fact(k);
+                const x = padding + k * binW + binW/2;
+                const y = h - padding - (p / maxTheoP) * chartH;
+                
+                if (k === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+                
+                // 绘制理论点
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.setLineDash([]); // 还原
+            
+            // 轴线与标签
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, h - padding);
+            ctx.lineTo(w - padding, h - padding);
+            ctx.stroke();
+
+            ctx.fillStyle = '#64748b';
+            ctx.font = '10px sans-serif';
+            for(let k=0; k<=maxK; k+=2) {
+                const x = padding + k * binW + binW/2 - 3;
+                ctx.fillText(k, x, h - 8);
+            }
+        }
+    </script>
+</body>
+</html>

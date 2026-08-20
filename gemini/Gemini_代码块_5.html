@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>root@production-server:~</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #1e1e1e;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        /* 模拟 Mac 终端顶部栏 */
+        .title-bar {
+            background-color: #323233;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            color: #ccc;
+            font-size: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            border-bottom: 1px solid #111;
+        }
+        .window-controls {
+            display: flex;
+            gap: 6px;
+        }
+        .control-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .btn-close { background-color: #ff5f56; }
+        .btn-min { background-color: #ffbd2e; }
+        .btn-max { background-color: #27c93f; }
+        .title-text {
+            flex-grow: 1;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        /* 终端主体内容区 */
+        .terminal-body {
+            flex-grow: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .prompt {
+            color: #00ff00;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .prompt-path { color: #3b8eea; }
+        
+        /* 2048 游戏区域 */
+        #game-view {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 80px);
+            grid-template-rows: repeat(4, 80px);
+            gap: 4px;
+            background-color: #2d2d2d;
+            padding: 4px;
+            border: 1px solid #444;
+            margin-bottom: 20px;
+        }
+
+        .grid-cell {
+            background-color: #1e1e1e;
+            border: 1px dashed #444;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff00;
+            transition: all 0.1s ease-in-out;
+        }
+
+        /* 终端样式的 2048 颜色 (用不同深浅的绿色/蓝色区分) */
+        .val-2 { color: #87ff87; }
+        .val-4 { color: #4dff4d; }
+        .val-8 { color: #00ff00; text-shadow: 0 0 5px #00ff00; }
+        .val-16 { color: #00cc00; font-weight: 900;}
+        .val-32 { color: #00ffff; text-shadow: 0 0 5px #00ffff; }
+        .val-64 { color: #00cccc; }
+        .val-128 { color: #ff00ff; text-shadow: 0 0 5px #ff00ff; }
+        .val-256 { color: #cc00cc; }
+        .val-512 { color: #ffff00; text-shadow: 0 0 5px #ffff00; }
+        .val-1024 { color: #ffaa00; text-shadow: 0 0 8px #ffaa00; }
+        .val-2048 { color: #ff0000; text-shadow: 0 0 10px #ff0000; }
+
+        /* 老板键日志区域 */
+        #log-view {
+            display: none;
+            flex-direction: column;
+            overflow-y: hidden;
+            height: 100%;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .log-line {
+            word-wrap: break-word;
+            opacity: 0.9;
+        }
+        .log-error { color: #ff5f56; }
+        .log-warn { color: #ffbd2e; }
+        .log-info { color: #3b8eea; }
+        .log-success { color: #27c93f; }
+
+        .blinking-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background-color: #00ff00;
+            animation: blink 1s step-end infinite;
+            vertical-align: middle;
+            margin-left: 2px;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .instructions {
+            color: #666;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        /* Gemini 帮忙按钮 */
+        #gemini-btn {
+            background-color: transparent;
+            border: 1px dashed #3b8eea;
+            color: #3b8eea;
+            padding: 6px 12px;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 15px;
+            outline: none;
+        }
+        #gemini-btn:hover {
+            background-color: rgba(59, 142, 234, 0.2);
+        }
+        #gemini-btn.active {
+            border-color: #ffbd2e;
+            color: #ffbd2e;
+        }
+        #gemini-btn.active:hover {
+            background-color: rgba(255, 189, 46, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部假装的系统栏 -->
+    <div class="title-bar">
+        <div class="window-controls">
+            <div class="control-btn btn-close"></div>
+            <div class="control-btn btn-min"></div>
+            <div class="control-btn btn-max"></div>
+        </div>
+        <div class="title-text">root@production-server:~ — ssh — 80x24</div>
+    </div>
+
+    <!-- 主体区域 -->
+    <div class="terminal-body">
+        
+        <!-- 游戏视图 -->
+        <div id="game-view">
+            <div class="prompt">
+                <span class="prompt-path">root@production-server:~/core-engine$</span> ./run_matrix_sort.sh
+            </div>
+            
+            <div style="margin-bottom: 10px; color: #888;">
+                [INFO] Initializing memory grid allocation...
+
+                [INFO] Use ARROW KEYS to merge data blocks.
+
+                Score: <span id="score-display" class="text-green-400">0</span>
+                <span id="gemini-status" style="margin-left: 20px; color: #3b8eea; font-weight: bold;">[Gemini Copilot: Standby]</span>
+            </div>
+
+            <!-- 4x4 Grid -->
+            <div class="grid-container" id="grid-container">
+                <!-- JS 动态生成 16 个格子 -->
+            </div>
+
+            <div class="instructions">
+                &gt; [SYSTEM MSG]: 紧急情况请按 'Esc' 键开启安全脱敏模式。
+
+                &gt; 按方向键 ⬆️ ⬇️ ⬅️ ➡️ 开始/操作。
+
+                &gt; <span style="color: #ffbd2e;">按 'G' 键呼叫 Gemini Copilot 自动托管代打，再次按 'G' 取消。</span>
+            </div>
+
+            <button id="gemini-btn" onclick="toggleGemini()">[ 🤖 Gemini 帮帮忙 (当前: 关闭) ]</button>
+        </div>
+
+        <!-- 老板键伪装日志视图 -->
+        <div id="log-view">
+            <div id="log-content"></div>
+            <div>
+                <span class="prompt-path">root@production-server:~/core-engine$</span> npm run build --verbose
+                <span class="blinking-cursor"></span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let board = Array(4).fill().map(() => Array(4).fill(0));
+        let score = 0;
+        let isGameOver = false;
+        let isBossKeyActive = false;
+        let isGeminiPlaying = false;
+        let geminiTimer = null;
+        
+        const gridContainer = document.getElementById('grid-container');
+        const scoreDisplay = document.getElementById('score-display');
+        const gameView = document.getElementById('game-view');
+        const logView = document.getElementById('log-view');
+        const logContent = document.getElementById('log-content');
+        
+        let logInterval = null;
+
+        // 初始化 16 个 DOM 单元格
+        function initGrid() {
+            gridContainer.innerHTML = '';
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.id = `cell-${r}-${c}`;
+                    gridContainer.appendChild(cell);
+                }
+            }
+        }
+
+        function startGame() {
+            board = Array(4).fill().map(() => Array(4).fill(0));
+            score = 0;
+            isGameOver = false;
+            if (isGeminiPlaying) toggleGemini(); // 重置时停止托管
+            updateScore();
+            addRandomTile();
+            addRandomTile();
+            updateBoardUI();
+        }
+
+        function addRandomTile() {
+            let emptyCells = [];
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (board[r][c] === 0) emptyCells.push({r, c});
+                }
+            }
+            if (emptyCells.length > 0) {
+                let randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                board[randomCell.r][randomCell.c] = Math.random() < 0.9 ? 2 : 4;
+            }
+        }
+
+        function updateBoardUI() {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const cell = document.getElementById(`cell-${r}-${c}`);
+                    const val = board[r][c];
+                    // 清除旧的颜色 class
+                    cell.className = 'grid-cell';
+                    
+                    if (val === 0) {
+                        cell.innerText = '';
+                    } else {
+                        cell.innerText = val;
+                        // 为了让它看起来像十六进制或者终端代码，我们可以在数字两边加个括号
+                        if (val > 0) cell.innerText = `[${val}]`;
+                        // 添加颜色伪装
+                        if (val <= 2048) cell.classList.add(`val-${val}`);
+                        else cell.classList.add('val-2048'); // 超过2048保持红色
+                    }
+                }
+            }
+        }
+
+        function updateScore() {
+            scoreDisplay.innerText = score;
+        }
+
+        // 核心滑动逻辑 (针对一行或一列)
+        function slideAndMerge(line) {
+            // 1. 移除 0
+            let filtered = line.filter(val => val !== 0);
+            // 2. 合并相同的
+            for (let i = 0; i < filtered.length - 1; i++) {
+                if (filtered[i] !== 0 && filtered[i] === filtered[i+1]) {
+                    filtered[i] *= 2;
+                    score += filtered[i];
+                    filtered[i+1] = 0;
+                }
+            }
+            // 3. 再次移除 0 并补齐
+            filtered = filtered.filter(val => val !== 0);
+            while (filtered.length < 4) {
+                filtered.push(0);
+            }
+            return filtered;
+        }
+
+        function move(direction) {
+            if (isGameOver || isBossKeyActive) return;
+            let boardChanged = false;
+            let originalBoard = JSON.parse(JSON.stringify(board));
+
+            if (direction === 'Left' || direction === 'Right') {
+                for (let r = 0; r < 4; r++) {
+                    let row = board[r].slice();
+                    if (direction === 'Right') row.reverse();
+                    row = slideAndMerge(row);
+                    if (direction === 'Right') row.reverse();
+                    board[r] = row;
+                }
+            } else if (direction === 'Up' || direction === 'Down') {
+                for (let c = 0; c < 4; c++) {
+                    let col = [board[0][c], board[1][c], board[2][c], board[3][c]];
+                    if (direction === 'Down') col.reverse();
+                    col = slideAndMerge(col);
+                    if (direction === 'Down') col.reverse();
+                    for (let r = 0; r < 4; r++) {
+                        board[r][c] = col[r];
+                    }
+                }
+            }
+
+            // 检查是否有变动
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (originalBoard[r][c] !== board[r][c]) {
+                        boardChanged = true;
+                    }
+                }
+            }
+
+            if (boardChanged) {
+                addRandomTile();
+                updateBoardUI();
+                updateScore();
+                checkGameOver();
+            }
+        }
+
+        function checkGameOver() {
+            // 检查是否有空格
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (board[r][c] === 0) return;
+                }
+            }
+            // 检查是否相邻可以合并
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    let current = board[r][c];
+                    if (r < 3 && current === board[r+1][c]) return;
+                    if (c < 3 && current === board[r][c+1]) return;
+                }
+            }
+            isGameOver = true;
+            setTimeout(() => {
+                const instructions = document.querySelector('.instructions');
+                instructions.innerHTML = `<span style="color:red">>>> ERROR: Stack Overflow! (Game Over)</span>
+按 'R' 键重启服务 (重新开始).`;
+            }, 500);
+        }
+
+        // 假日志库
+        const logTemplates = [
+            "INFO: Resolving dependencies...",
+            "FETCH: Downloading package core-js@3.21.1",
+            "WARN: DeprecationWarning: Buffer() is deprecated due to security and usability issues.",
+            "SUCCESS: Compiled successfully in 2341ms.",
+            "INFO: Building target x86_64-unknown-linux-gnu",
+            "VERIFY: Checking SHA256 checksum for downloaded assets...",
+            "INFO: Updating local database cache...",
+            "ERROR: [Ignored] Cannot read property 'type' of undefined at Module.load",
+            "INFO: Applying patch 001-fix-memory-leak.diff",
+            "SUCCESS: Database migrations applied.",
+            "INFO: Restarting worker node 3...",
+            "INFO: Starting typescript compilation (tsc --noEmit)...",
+            "FETCH: git pull origin master --rebase",
+            "INFO: Compressing static assets (gzip, brotli)...",
+            "INFO: -> 10.21.32.11 - [GET /api/health_check] 200 OK"
+        ];
+
+        function generateFakeLogLine() {
+            const template = logTemplates[Math.floor(Math.random() * logTemplates.length)];
+            const time = new Date().toISOString().split('T')[1].slice(0, 8); // e.g. 12:34:56
+            
+            let htmlClass = 'log-line';
+            if (template.includes('WARN')) htmlClass += ' log-warn';
+            else if (template.includes('ERROR')) htmlClass += ' log-error';
+            else if (template.includes('SUCCESS')) htmlClass += ' log-success';
+            else if (template.includes('FETCH')) htmlClass += ' log-info';
+
+            // 随机生成一些哈希值增加真实感
+            const hash = Math.random().toString(36).substring(2, 10);
+            
+            return `<div class="${htmlClass}">[${time}] [sys-${hash}] ${template}</div>`;
+        }
+
+        // --- Gemini Copilot AI 逻辑 ---
+        function simulateMove(currentBoard, direction) {
+            let tempBoard = currentBoard.map(row => row.slice());
+            let tempScore = 0;
+            let changed = false;
+
+            function slideTemp(line) {
+                let filtered = line.filter(val => val !== 0);
+                for (let i = 0; i < filtered.length - 1; i++) {
+                    if (filtered[i] !== 0 && filtered[i] === filtered[i+1]) {
+                        filtered[i] *= 2;
+                        tempScore += filtered[i];
+                        filtered[i+1] = 0;
+                    }
+                }
+                filtered = filtered.filter(val => val !== 0);
+                while (filtered.length < 4) filtered.push(0);
+                return filtered;
+            }
+
+            if (direction === 'Left' || direction === 'Right') {
+                for (let r = 0; r < 4; r++) {
+                    let row = tempBoard[r].slice();
+                    if (direction === 'Right') row.reverse();
+                    row = slideTemp(row);
+                    if (direction === 'Right') row.reverse();
+                    tempBoard[r] = row;
+                }
+            } else if (direction === 'Up' || direction === 'Down') {
+                for (let c = 0; c < 4; c++) {
+                    let col = [tempBoard[0][c], tempBoard[1][c], tempBoard[2][c], tempBoard[3][c]];
+                    if (direction === 'Down') col.reverse();
+                    col = slideTemp(col);
+                    if (direction === 'Down') col.reverse();
+                    for (let r = 0; r < 4; r++) {
+                        tempBoard[r][c] = col[r];
+                    }
+                }
+            }
+            
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (currentBoard[r][c] !== tempBoard[r][c]) changed = true;
+                }
+            }
+            
+            let emptyCount = 0;
+            tempBoard.forEach(row => row.forEach(val => { if (val === 0) emptyCount++; }));
+            return { changed, score: tempScore, emptyCount };
+        }
+
+        function executeGeminiMove() {
+            if (isGameOver || isBossKeyActive) return;
+            // 经典2048角落策略：偏好向右和向下
+            const directions = ['Down', 'Right', 'Left', 'Up']; 
+            let bestMove = null;
+            let maxWeight = -1;
+
+            for (let dir of directions) {
+                let res = simulateMove(board, dir);
+                if (res.changed) {
+                    // 核心算法权重：优先保证空出来的格子多，其次再看单步得分
+                    let weight = res.emptyCount * 100 + res.score;
+                    if (weight > maxWeight) {
+                        maxWeight = weight;
+                        bestMove = dir;
+                    }
+                }
+            }
+
+            if (bestMove) {
+                move(bestMove);
+            } else {
+                toggleGemini(); // 没路可走了，自动关闭托管
+            }
+        }
+
+        function toggleGemini() {
+            if (isGameOver) return;
+            isGeminiPlaying = !isGeminiPlaying;
+            const statusEl = document.getElementById('gemini-status');
+            const btnEl = document.getElementById('gemini-btn');
+            
+            if (isGeminiPlaying) {
+                statusEl.innerText = "[Gemini Copilot: Active 🚀]";
+                statusEl.style.color = "#ffbd2e";
+                if (btnEl) {
+                    btnEl.className = "active";
+                    btnEl.innerText = "[ 🛑 Gemini 帮帮忙 (当前: 托管中) ]";
+                }
+                // 每 120ms 自动跑一步，让你感受 AI 的手速
+                geminiTimer = setInterval(executeGeminiMove, 120); 
+            } else {
+                statusEl.innerText = "[Gemini Copilot: Standby]";
+                statusEl.style.color = "#3b8eea";
+                if (btnEl) {
+                    btnEl.className = "";
+                    btnEl.innerText = "[ 🤖 Gemini 帮帮忙 (当前: 关闭) ]";
+                }
+                clearInterval(geminiTimer);
+            }
+        }
+        // ------------------------------
+
+        function toggleBossKey() {
+            isBossKeyActive = !isBossKeyActive;
+            
+            if (isBossKeyActive) {
+                if (isGeminiPlaying) toggleGemini(); // 老板来了，赶紧停下 AI 托管
+                gameView.style.display = 'none';
+                logView.style.display = 'flex';
+                
+                // 开始疯狂滚动假日志
+                if (logInterval) clearInterval(logInterval);
+                logContent.innerHTML = ''; // 清空之前的日志
+                
+                let lines = 0;
+                logInterval = setInterval(() => {
+                    logContent.innerHTML += generateFakeLogLine();
+                    lines++;
+                    
+                    // 保持最多显示一定数量的日志，防止内存泄漏
+                    if (lines > 50) {
+                        logContent.removeChild(logContent.firstElementChild);
+                    }
+                    
+                    // 自动滚动到底部
+                    logView.scrollTop = logView.scrollHeight;
+                }, 150 + Math.random() * 300); // 随机间隔 150-450ms 生成一条
+                
+            } else {
+                // 恢复游戏
+                gameView.style.display = 'flex';
+                logView.style.display = 'none';
+                if (logInterval) clearInterval(logInterval);
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            // 防止页面滚动
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+                e.preventDefault();
+            }
+
+            if (e.key === 'Escape') {
+                toggleBossKey();
+                return;
+            }
+
+            if (isBossKeyActive) return; // 老板键激活时禁用游戏操作
+
+            if (e.key.toLowerCase() === 'g') {
+                toggleGemini();
+                return;
+            }
+
+            if (isGeminiPlaying) return; // AI 托管期间不允许手动抢方向盘干扰
+
+            if (e.key === 'ArrowUp') move('Up');
+            else if (e.key === 'ArrowDown') move('Down');
+            else if (e.key === 'ArrowLeft') move('Left');
+            else if (e.key === 'ArrowRight') move('Right');
+            else if (e.key.toLowerCase() === 'r' && isGameOver) {
+                document.querySelector('.instructions').innerHTML = `&gt; [SYSTEM MSG]: 紧急情况请按 'Esc' 键开启安全脱敏模式。
+&gt; 按方向键 ⬆️ ⬇️ ⬅️ ➡️ 开始/操作。`;
+                startGame();
+            }
+        });
+
+        // 屏蔽鼠标右键，防止泄露网页身份
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // 初始化并启动游戏
+        initGrid();
+        startGame();
+
+    </script>
+</body>
+</html>

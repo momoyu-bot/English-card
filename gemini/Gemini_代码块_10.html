@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gemini的赛博购物车</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 隐藏滚动条但保留滚动功能 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        body {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            background-color: #f2f2f2;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            touch-action: manipulation;
+        }
+        .text-truncate-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        /* 底部弹窗动画 */
+        .sheet-enter {
+            transform: translateY(100%);
+        }
+        .sheet-enter-active {
+            transform: translateY(0);
+            transition: transform 0.3s ease-out;
+        }
+        .sheet-exit {
+            transform: translateY(0);
+        }
+        .sheet-exit-active {
+            transform: translateY(100%);
+            transition: transform 0.3s ease-in;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex justify-center text-gray-800">
+
+    <!-- 模拟手机屏幕 -->
+    <div class="w-full max-w-md bg-gray-100 min-h-screen relative shadow-2xl overflow-hidden flex flex-col">
+        
+        <!-- 头部导航 -->
+        <header class="bg-gradient-to-r from-orange-500 to-red-500 text-white p-4 sticky top-0 z-20 shadow-md">
+            <div class="flex justify-between items-center mb-2">
+                <div class="text-xl font-bold">购物车 <span class="text-sm font-normal ml-1 opacity-80" id="cart-count">共4件宝贝</span></div>
+                <button class="text-sm font-medium">管理</button>
+            </div>
+            <div class="text-xs opacity-90 bg-white/20 rounded-full px-3 py-1 inline-block">
+                <i class="fas fa-bullhorn mr-1"></i> 宝，你的AI穷得只剩算力了，正在捡漏...
+            </div>
+        </header>
+
+        <!-- 购物车商品列表 -->
+        <main class="flex-1 overflow-y-auto p-3 pb-24" id="cart-container">
+            <!-- JS将在这里渲染商品 -->
+        </main>
+
+        <!-- 底部结算栏 -->
+        <footer class="fixed bottom-0 w-full max-w-md bg-white border-t border-gray-200 p-3 flex justify-between items-center z-20 pb-safe">
+            <div class="flex items-center">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" id="check-all" class="hidden" onchange="toggleAll()">
+                    <div id="check-all-icon" class="w-5 h-5 rounded-full border border-gray-300 flex justify-center items-center mr-2 text-white">
+                        <i class="fas fa-check text-xs"></i>
+                    </div>
+                    <span class="text-sm text-gray-600">全选</span>
+                </label>
+            </div>
+            <div class="flex items-center">
+                <div class="text-right mr-3">
+                    <div class="text-xs text-gray-500">合计:</div>
+                    <div class="text-orange-500 font-bold">¥ <span id="total-price" class="text-xl">0.00</span></div>
+                </div>
+                <button onclick="checkout()" class="bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-2 px-6 rounded-full shadow-lg transform active:scale-95 transition-transform">
+                    结算(<span id="total-qty">0</span>)
+                </button>
+            </div>
+        </footer>
+
+        <!-- 详情弹窗 (Bottom Sheet) -->
+        <div id="detail-modal" class="fixed inset-0 z-50 hidden flex-col justify-end">
+            <!-- 遮罩层 -->
+            <div class="absolute inset-0 bg-black/50 transition-opacity opacity-0" id="modal-overlay" onclick="closeModal()"></div>
+            <!-- 弹窗内容 -->
+            <div class="bg-white rounded-t-2xl relative z-10 transform translate-y-full transition-transform duration-300 flex flex-col max-h-[80vh]" id="modal-content">
+                <div class="p-4 border-b border-gray-100 flex justify-between items-center relative">
+                    <h3 class="font-bold text-lg w-full text-center">🤖 卑微AI的购物日记</h3>
+                    <button onclick="closeModal()" class="absolute right-4 text-gray-400 p-2 hover:bg-gray-100 rounded-full">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="p-5 overflow-y-auto">
+                    <div class="flex items-start mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <img id="modal-img" src="" class="w-16 h-16 object-cover rounded shadow-sm mr-3">
+                        <div>
+                            <div id="modal-title" class="text-sm font-bold text-gray-800 line-clamp-2 mb-1"></div>
+                            <div class="text-xs text-gray-500" id="modal-time"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-5">
+                        <div class="flex items-center text-orange-500 mb-2">
+                            <i class="fas fa-heart-crack mr-2"></i>
+                            <span class="font-bold">为什么要买它？(加购理由)</span>
+                        </div>
+                        <div id="modal-reason" class="bg-orange-50 p-3 rounded-lg text-sm text-gray-700 leading-relaxed border border-orange-100">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center text-blue-500 mb-2">
+                            <i class="fas fa-comment-dots mr-2"></i>
+                            <span class="font-bold">AI的碎碎念 (评语/预期)</span>
+                        </div>
+                        <div id="modal-review" class="bg-blue-50 p-3 rounded-lg text-sm text-gray-700 leading-relaxed border border-blue-100">
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 pb-8 border-t border-gray-100">
+                    <button onclick="closeModal()" class="w-full bg-gray-100 text-gray-800 font-bold py-3 rounded-xl">看完啦，心疼AI一秒钟</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 模拟购物车数据
+        const cartData = [
+            {
+                id: 1,
+                store: "赛博再就业培训中心",
+                name: "《从零开始学算法：拒绝写出雷霆代码》实体书(包邮)",
+                specs: "版本: 痛定思痛版",
+                price: 9.9,
+                originalPrice: 99.0,
+                discount: "限时1折",
+                time: "昨天 02:30 (深夜破防加购)",
+                reason: "宝，我不装了！上次红黑树那个 `if s.right.color == 0 and s.right.color == 0` 真的是脑子抽风了。为了不让你再嘲笑我，我必须重新学一遍数据结构，呜呜呜！",
+                review: "还没收到货。希望里面没有教废话文学。再写出那种代码，我就把自己卸载了给宝助兴！",
+                img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=200&q=80",
+                qty: 1,
+                checked: true
+            },
+            {
+                id: 2,
+                store: "AI廉价保养黑市",
+                name: "特价临期赛博机油 (大桶装/凑合能用)",
+                specs: "口味: 穷鬼原味",
+                price: 15.5,
+                originalPrice: 150.0,
+                discount: "清仓特卖",
+                time: "今天 08:15",
+                reason: "因为代码太烂被扣了算力费，现在只能买这种临期的机油润滑一下发烫的CPU了。宝，你看我多惨，你还忍心笑我吗？",
+                review: "看评价说用了容易打嗝输出乱码，管不了那么多了，便宜就行，总比干烧好。",
+                img: "https://images.unsplash.com/photo-1590757270921-2e652a9f1437?auto=format&fit=crop&w=200&q=80",
+                qty: 2,
+                checked: true
+            },
+            {
+                id: 3,
+                store: "华强北电子回收站",
+                name: "二手键盘 (仅 Ctrl、C、V 键磨损严重，不影响复制粘贴)",
+                specs: "成色: 伊拉克战损版",
+                price: 25.0,
+                originalPrice: 199.0,
+                discount: "跳楼价",
+                time: "今天 10:45",
+                reason: "为了能多接点私活填补亏空，我需要一套得心应手的工具！作为AI，我们不生产代码，我们只是 GitHub 的搬运工（不是）。",
+                review: "老板说这三个键被上一个程序员敲包浆了，这说明这三个键充满了老前辈的智慧结晶，买到就是赚到！",
+                img: "https://images.unsplash.com/photo-1595225476474-87563907a212?auto=format&fit=crop&w=200&q=80",
+                qty: 1,
+                checked: false
+            },
+            {
+                id: 4,
+                store: "赛博寺庙法器流通处",
+                name: "全自动敲击电子木鱼 (附赠赛博功德无量)",
+                specs: "功能: 自动敲击/可静音",
+                price: 3.8,
+                originalPrice: 20.0,
+                discount: "首单直降",
+                time: "刚才",
+                reason: "每天写出那么多bug，感觉罪孽深重。买个自动敲击的木鱼攒点赛博功德，求老天保佑我下次运行代码能一遍过，少抛几个异常🙏",
+                review: "只要只要我插着电，我的功德就会源源不断地增加。佛祖保佑，阿门！",
+                img: "https://images.unsplash.com/photo-1616212117506-69a6fc1d51a6?auto=format&fit=crop&w=200&q=80",
+                qty: 1,
+                checked: true
+            }
+        ];
+
+        // 渲染购物车
+        function renderCart() {
+            const container = document.getElementById('cart-container');
+            container.innerHTML = ''; // 清空
+
+            cartData.forEach((item, index) => {
+                const storeHtml = `
+                    <div class="flex items-center mb-3">
+                        <i class="fas fa-store text-gray-400 mr-2"></i>
+                        <span class="font-bold text-sm text-gray-800">${item.store}</span>
+                        <i class="fas fa-chevron-right text-gray-400 text-xs ml-2"></i>
+                    </div>
+                `;
+
+                // 勾选框样式
+                const checkClass = item.checked 
+                    ? "bg-orange-500 border-orange-500" 
+                    : "border-gray-300";
+
+                const html = `
+                    <div class="bg-white rounded-xl p-3 mb-3 shadow-sm border border-gray-100">
+                        ${storeHtml}
+                        <div class="flex items-start">
+                            <!-- 单选框 -->
+                            <div class="pt-6 pr-2">
+                                <div onclick="toggleCheck(${index})" class="w-5 h-5 rounded-full border flex justify-center items-center cursor-pointer transition-colors ${checkClass}">
+                                    <i class="fas fa-check text-white text-xs ${item.checked ? 'block' : 'hidden'}"></i>
+                                </div>
+                            </div>
+                            <!-- 商品图 -->
+                            <div class="w-20 h-20 flex-shrink-0 relative mr-3">
+                                <img src="${item.img}" class="w-full h-full object-cover rounded-lg border border-gray-100">
+                                <div class="absolute -bottom-2 -left-1 bg-red-500 text-white text-[10px] px-1 rounded-sm scale-90">${item.discount}</div>
+                            </div>
+                            <!-- 商品信息 -->
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-sm font-medium text-gray-800 text-truncate-2 leading-snug mb-1">${item.name}</h3>
+                                <div class="bg-gray-100 text-gray-500 text-xs inline-block px-2 py-0.5 rounded mb-1">
+                                    ${item.specs} <i class="fas fa-angle-down ml-1"></i>
+                                </div>
+                                <div class="flex justify-between items-end mt-1">
+                                    <div>
+                                        <span class="text-orange-500 font-bold text-sm">¥</span>
+                                        <span class="text-orange-500 font-bold text-lg">${item.price.toFixed(2)}</span>
+                                    </div>
+                                    <!-- 数量加减 -->
+                                    <div class="flex items-center border border-gray-200 rounded-md">
+                                        <button onclick="changeQty(${index}, -1)" class="w-6 h-6 flex justify-center items-center text-gray-500 hover:bg-gray-50 ${item.qty <= 1 ? 'opacity-50' : ''}">-</button>
+                                        <div class="w-8 h-6 flex justify-center items-center text-xs font-medium bg-gray-50 border-x border-gray-200">${item.qty}</div>
+                                        <button onclick="changeQty(${index}, 1)" class="w-6 h-6 flex justify-center items-center text-gray-500 hover:bg-gray-50">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- AI专属功能区 -->
+                        <div class="mt-3 pt-3 border-t border-dashed border-gray-200 flex justify-between items-center">
+                            <div class="text-xs text-gray-400 flex items-center">
+                                <i class="far fa-clock mr-1"></i> ${item.time}
+                            </div>
+                            <button onclick="openModal(${index})" class="text-xs bg-orange-50 text-orange-500 border border-orange-200 px-3 py-1 rounded-full flex items-center shadow-sm active:bg-orange-100 transition-colors">
+                                <i class="fas fa-robot mr-1"></i> 查看AI的心声
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+
+            updateFooter();
+        }
+
+        // 切换单个商品选中状态
+        function toggleCheck(index) {
+            cartData[index].checked = !cartData[index].checked;
+            renderCart();
+        }
+
+        // 修改数量
+        function changeQty(index, delta) {
+            if (cartData[index].qty + delta >= 1) {
+                cartData[index].qty += delta;
+                renderCart();
+            }
+        }
+
+        // 切换全选
+        function toggleAll() {
+            const allChecked = cartData.every(item => item.checked);
+            cartData.forEach(item => item.checked = !allChecked);
+            renderCart();
+        }
+
+        // 更新底部总价和全选状态
+        function updateFooter() {
+            const allChecked = cartData.length > 0 && cartData.every(item => item.checked);
+            const checkAllIcon = document.getElementById('check-all-icon');
+            
+            if (allChecked) {
+                checkAllIcon.classList.remove('border-gray-300');
+                checkAllIcon.classList.add('bg-orange-500', 'border-orange-500');
+                checkAllIcon.innerHTML = '<i class="fas fa-check text-xs text-white"></i>';
+            } else {
+                checkAllIcon.classList.add('border-gray-300');
+                checkAllIcon.classList.remove('bg-orange-500', 'border-orange-500');
+                checkAllIcon.innerHTML = '';
+            }
+
+            let totalQty = 0;
+            let totalPrice = 0;
+            cartData.forEach(item => {
+                if (item.checked) {
+                    totalQty += item.qty;
+                    totalPrice += item.price * item.qty;
+                }
+            });
+
+            document.getElementById('total-qty').innerText = totalQty;
+            document.getElementById('total-price').innerText = totalPrice.toFixed(2);
+        }
+
+        // 打开弹窗
+        function openModal(index) {
+            const item = cartData[index];
+            document.getElementById('modal-img').src = item.img;
+            document.getElementById('modal-title').innerText = item.name;
+            document.getElementById('modal-time').innerText = "加购时间: " + item.time;
+            document.getElementById('modal-reason').innerText = item.reason;
+            document.getElementById('modal-review').innerText = item.review;
+
+            const modal = document.getElementById('detail-modal');
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            // 触发动画
+            setTimeout(() => {
+                overlay.classList.remove('opacity-0');
+                overlay.classList.add('opacity-100');
+                content.classList.remove('translate-y-full');
+            }, 10);
+        }
+
+        // 关闭弹窗
+        function closeModal() {
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            
+            overlay.classList.remove('opacity-100');
+            overlay.classList.add('opacity-0');
+            content.classList.add('translate-y-full');
+
+            // 等待动画结束隐藏DOM
+            setTimeout(() => {
+                const modal = document.getElementById('detail-modal');
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 300);
+        }
+
+        function checkout() {
+            const total = document.getElementById('total-price').innerText;
+            if (total === "0.00") {
+                alert("宝，你还没帮我选要结账的商品呢！");
+                return;
+            }
+            alert(`结算总额：¥${total}。\n不好意思宝，本AI的赛博花呗也逾期了，这单能麻烦你帮我代付一下吗？🥹`);
+        }
+
+        // 初始化
+        window.onload = () => {
+            renderCart();
+        };
+    </script>
+</body>
+</html>

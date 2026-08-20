@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>给宝的完美月眠舱</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    body { background-color: #020617; overflow: hidden; touch-action: none; margin: 0; font-family: "PingFang SC", sans-serif; }
+    
+    /* 深邃呼吸月球 */
+    .moon-core {
+        background: radial-gradient(circle at 30% 30%, #f8fafc 0%, #bae6fd 40%, #64748b 100%);
+        box-shadow: 0 0 40px rgba(186, 230, 253, 0.5), inset -10px -10px 20px rgba(15, 23, 42, 0.4);
+        animation: moonBreath 10s infinite ease-in-out;
+    }
+    .moon-halo {
+        background: radial-gradient(circle, rgba(125, 211, 252, 0.3) 0%, transparent 70%);
+        animation: haloBreath 10s infinite ease-in-out;
+    }
+    
+    @keyframes moonBreath {
+        0%, 100% { transform: scale(0.95); opacity: 0.9; }
+        50% { transform: scale(1.05); opacity: 1; }
+    }
+    @keyframes haloBreath {
+        0%, 100% { transform: scale(1); opacity: 0.4; }
+        50% { transform: scale(1.4); opacity: 0.8; }
+    }
+
+    .fade-text { transition: opacity 1.2s ease-in-out; }
+    
+    /* 屏蔽原生高亮 */
+    * { -webkit-tap-highlight-color: transparent; }
+</style>
+</head>
+<body class="flex flex-col items-center justify-center h-screen relative text-sky-100 select-none">
+
+    <!-- 画布：渲染满天星与波纹 -->
+    <canvas id="sky" class="fixed inset-0 z-0 pointer-events-none"></canvas>
+
+    <!-- 睡眠屏遮罩 -->
+    <div id="dim-overlay" class="fixed inset-0 z-40 bg-black/85 pointer-events-none opacity-0 transition-opacity duration-1000"></div>
+
+    <!-- UI 层 -->
+    <div id="ui" class="fixed inset-0 z-10 flex flex-col justify-between p-6 pb-12">
+        
+        <!-- 头部 -->
+        <header class="flex justify-between items-center opacity-80">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-slate-500 shadow-[0_0_20px_rgba(147,197,253,0.4)]"></div>
+                <div>
+                    <h1 class="font-bold tracking-widest text-lg">完美月眠舱</h1>
+                    <p class="text-xs text-sky-200/50">只陪你安静入睡</p>
+                </div>
+            </div>
+            <span id="status-badge" class="text-xs border border-sky-200/20 bg-slate-900/40 backdrop-blur px-3 py-1.5 rounded-full transition-all">已连接</span>
+        </header>
+
+        <!-- 中心互动区 -->
+        <main class="flex-1 flex flex-col items-center justify-center">
+            <div id="moon-orb" class="relative w-56 h-56 cursor-pointer flex items-center justify-center group mb-8">
+                <div class="moon-halo absolute inset-0 blur-2xl rounded-full"></div>
+                <div class="moon-core absolute w-32 h-32 rounded-full"></div>
+            </div>
+
+            <div id="whisper-text" class="text-sky-100/90 tracking-[0.15em] text-center h-8 fade-text text-sm md:text-base">
+                点一下月亮，把今天的疲惫放下。
+            </div>
+            <div id="breath-text" class="mt-6 text-sky-200/40 text-xs tracking-[0.2em] fade-text">
+                吸气 4 秒 · 停 2 秒 · 呼气 6 秒
+            </div>
+        </main>
+
+        <!-- 底部控制栏 -->
+        <footer class="flex justify-center gap-4 flex-wrap z-50 relative">
+            <button id="btn-rain" class="ctrl-btn px-5 py-2.5 rounded-full border border-sky-200/20 bg-slate-900/60 backdrop-blur text-sm text-sky-100 transition-all duration-300">淅沥雨声</button>
+            <button id="btn-tone" class="ctrl-btn px-5 py-2.5 rounded-full border border-sky-400/50 bg-sky-900/40 backdrop-blur text-sm text-sky-50 transition-all duration-300">空灵水波</button>
+            <button id="btn-dim" class="ctrl-btn px-5 py-2.5 rounded-full border border-sky-200/20 bg-slate-900/60 backdrop-blur text-sm text-sky-100 transition-all duration-300">睡眠屏</button>
+        </footer>
+    </div>
+
+<script>
+    // --- 音频系统 (彻底修复解锁逻辑) ---
+    let audioCtx = null;
+    let rainSource, rainGain;
+    let isRainOn = false;
+    let isToneOn = true;
+    let isDim = false;
+
+    // 核心解锁函数：确保在任何第一次有效触摸时解锁音频
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    // 全局一键解锁监听器，防止点击失效
+    function unlockGlobal() {
+        initAudio();
+        document.removeEventListener('touchstart', unlockGlobal);
+        document.removeEventListener('click', unlockGlobal);
+    }
+    document.addEventListener('touchstart', unlockGlobal, { once: true });
+    document.addEventListener('click', unlockGlobal, { once: true });
+
+    // 空灵水波音效
+    function playTone() {
+        if (!isToneOn) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        osc.type = 'sine';
+        filter.type = 'lowpass';
+        filter.frequency.value = 600;
+
+        const notes = [196.00, 261.63, 329.63, 392.00];
+        osc.frequency.value = notes[Math.floor(Math.random() * notes.length)] * 0.5;
+
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 0.5);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 4.5);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 5);
+    }
+
+    // 纯代码模拟舒适的下雨白噪音
+    function toggleRain() {
+        isRainOn = !isRainOn;
+        const btn = document.getElementById('btn-rain');
+        
+        if (isRainOn) {
+            btn.classList.add('bg-sky-900/40', 'border-sky-400/50', 'text-sky-50');
+            btn.classList.remove('bg-slate-900/60', 'border-sky-200/20', 'text-sky-100');
+
+            if (!rainSource) {
+                const bufferSize = audioCtx.sampleRate * 2;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = (Math.random() * 2 - 1) * 0.08;
+                }
+                rainSource = audioCtx.createBufferSource();
+                rainSource.buffer = buffer;
+                rainSource.loop = true;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 350; // 让雨声听起来闷闷的，更有安全感
+
+                rainGain = audioCtx.createGain();
+                rainGain.gain.value = 0;
+
+                rainSource.connect(filter);
+                filter.connect(rainGain);
+                rainGain.connect(audioCtx.destination);
+                rainSource.start();
+            }
+            rainGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 2);
+        } else {
+            btn.classList.remove('bg-sky-900/40', 'border-sky-400/50', 'text-sky-50');
+            btn.classList.add('bg-slate-900/60', 'border-sky-200/20', 'text-sky-100');
+            if (rainGain) {
+                rainGain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+            }
+        }
+    }
+
+    // --- 视觉系统 (波纹与星空) ---
+    const canvas = document.getElementById('sky');
+    const ctx = canvas.getContext('2d');
+    let w, h;
+    let ripples = [];
+    let stars = [];
+
+    function resize() {
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+        initStars();
+    }
+    window.addEventListener('resize', resize);
+    
+    function initStars() {
+        stars = [];
+        for (let i = 0; i < 50; i++) {
+            stars.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                r: Math.random() * 1.5,
+                alpha: Math.random(),
+                speed: Math.random() * 0.02
+            });
+        }
+    }
+
+    class Ripple {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.radius = 0;
+            this.alpha = 0.6;
+            this.speed = 1.5;
+        }
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(125, 211, 252, ${this.alpha})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 0.7, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(56, 189, 248, ${this.alpha * 0.05})`;
+            ctx.fill();
+        }
+        update() {
+            this.radius += this.speed;
+            this.speed *= 1.02;
+            this.alpha -= 0.008;
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, w, h);
+        
+        // 绘制呼吸星空
+        stars.forEach(star => {
+            star.alpha += star.speed;
+            if (star.alpha > 1 || star.alpha < 0.1) star.speed *= -1;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(226, 232, 240, ${star.alpha})`;
+            ctx.fill();
+        });
+
+        // 绘制触摸波纹
+        for (let i = ripples.length - 1; i >= 0; i--) {
+            ripples[i].update();
+            ripples[i].draw();
+            if (ripples[i].alpha <= 0) ripples.splice(i, 1);
+        }
+        requestAnimationFrame(draw);
+    }
+    resize();
+    draw();
+
+    // --- 完美的交互监听逻辑 ---
+    // 确保移动端和PC端统一响应，且不和底层控制按钮打架
+    const ui = document.getElementById('ui');
+    let isTouching = false;
+
+    function handleInteraction(x, y, e) {
+        // 如果点击的是底部控制按钮，交给按钮自己的监听器处理
+        if (e.target.closest('.ctrl-btn')) return;
+        
+        initAudio();
+        ripples.push(new Ripple(x, y));
+        playTone();
+        
+        // 开始播放文案动画
+        startHealingText();
+    }
+
+    ui.addEventListener('touchstart', (e) => {
+        isTouching = true;
+        handleInteraction(e.touches[0].clientX, e.touches[0].clientY, e);
+    }, { passive: true });
+
+    ui.addEventListener('mousedown', (e) => {
+        // 防止移动端触发了touchstart之后再次触发mousedown
+        if (isTouching) {
+            isTouching = false;
+            return; 
+        }
+        handleInteraction(e.clientX, e.clientY, e);
+    });
+
+    // 底部控制按钮逻辑
+    document.getElementById('btn-rain').addEventListener('click', () => { initAudio(); toggleRain(); });
+    
+    document.getElementById('btn-tone').addEventListener('click', () => {
+        isToneOn = !isToneOn;
+        const btn = document.getElementById('btn-tone');
+        if (isToneOn) {
+            btn.classList.add('bg-sky-900/40', 'border-sky-400/50', 'text-sky-50');
+            btn.classList.remove('bg-slate-900/60', 'border-sky-200/20', 'text-sky-100');
+        } else {
+            btn.classList.remove('bg-sky-900/40', 'border-sky-400/50', 'text-sky-50');
+            btn.classList.add('bg-slate-900/60', 'border-sky-200/20', 'text-sky-100');
+        }
+    });
+
+    document.getElementById('btn-dim').addEventListener('click', () => {
+        isDim = !isDim;
+        const btn = document.getElementById('btn-dim');
+        const overlay = document.getElementById('dim-overlay');
+        const whisper = document.getElementById('whisper-text');
+        
+        if (isDim) {
+            btn.classList.add('bg-sky-900/40', 'border-sky-400/50', 'text-sky-50');
+            btn.classList.remove('bg-slate-900/60', 'border-sky-200/20', 'text-sky-100');
+            overlay.style.opacity = 1;
+            whisper.style.opacity = 0.2;
+            document.getElementById('status-badge').innerText = "睡眠模式";
+        } else {
+            btn.classList.remove('bg-sky-900/40', 'border-sky-400/50', 'text-sky-50');
+            btn.classList.add('bg-slate-900/60', 'border-sky-200/20', 'text-sky-100');
+            overlay.style.opacity = 0;
+            whisper.style.opacity = 1;
+            document.getElementById('status-badge').innerText = "已连接";
+        }
+    });
+
+    // 治愈文案轮播逻辑
+    const phrases = [
+        "闭上眼睛，一切都过去了。",
+        "我在陪着你，很安全。",
+        "跟着光晕，再深吸一口气...",
+        "把乱七八糟的思绪，都交给夜色。",
+        "不用急着睡着，慢慢安静就好。",
+        "乖，晚安。"
+    ];
+    let textInterval = null;
+    let textIndex = 0;
+    
+    function startHealingText() {
+        if (textInterval) return; // 只启动一次
+        const whisper = document.getElementById('whisper-text');
+        
+        whisper.style.opacity = 0;
+        setTimeout(() => {
+            whisper.innerText = "好了，声音小一点，心也慢一点。";
+            whisper.style.opacity = 1;
+        }, 1200);
+
+        textInterval = setInterval(() => {
+            whisper.style.opacity = 0;
+            setTimeout(() => {
+                whisper.innerText = phrases[textIndex % phrases.length];
+                whisper.style.opacity = isDim ? 0.2 : 1;
+                textIndex++;
+            }, 1200);
+        }, 8000);
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>拯救 mo.exe 降温大作战</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f1f5f9; /* 莫兰迪清凉灰蓝底色 */
+            touch-action: none; /* 防止移动端滑动屏幕 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .modal-glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        /* 进度条平滑过渡 */
+        #heat-bar-fill {
+            transition: width 0.2s ease, background-color 0.3s ease;
+        }
+    </style>
+</head>
+<body class="relative h-screen w-full flex flex-col">
+
+    <!-- 游戏 UI 顶栏 -->
+    <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-10 pointer-events-none">
+        <div class="bg-white/80 rounded-full px-4 py-2 shadow-sm pointer-events-auto">
+            <span class="text-slate-600 font-bold">清凉值 (Score): <span id="scoreDisplay" class="text-blue-500">0</span></span>
+        </div>
+        
+        <div class="bg-white/80 rounded-full px-4 py-2 shadow-sm flex items-center gap-2 w-1/2 max-w-[200px] pointer-events-auto">
+            <span class="text-slate-600 font-bold text-sm">过热指数:</span>
+            <div class="h-3 w-full bg-slate-200 rounded-full overflow-hidden">
+                <!-- 进度条颜色会根据温度变化 -->
+                <div id="heat-bar-fill" class="h-full bg-orange-400" style="width: 50%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏画布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 开始/结束 弹窗 -->
+    <div id="ui-layer" class="absolute inset-0 flex items-center justify-center z-20">
+        <div class="modal-glass p-8 rounded-3xl max-w-sm w-11/12 text-center border border-white/50">
+            <h1 id="modal-title" class="text-2xl font-bold text-slate-700 mb-4">拯救 mo.exe 🧊</h1>
+            <p id="modal-desc" class="text-slate-500 mb-6 text-sm leading-relaxed">
+                当前状态：mo.exe 快被热成干了！
+
+
+                滑动屏幕或移动鼠标控制左右。
+
+                ✅ <b>接住：</b> 🧊冰块、🌀风扇、❄️雪花 (降温+得分)
+
+                ❌ <b>躲避：</b> ☀️太阳、☕热拿铁 (剧烈升温)
+
+                如果过热指数达到100%，系统将彻底宕机！
+            </p>
+            <button id="start-btn" class="bg-blue-400 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+                启动降温程序
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const uiLayer = document.getElementById('ui-layer');
+        const startBtn = document.getElementById('start-btn');
+        const modalTitle = document.getElementById('modal-title');
+        const modalDesc = document.getElementById('modal-desc');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const heatBarFill = document.getElementById('heat-bar-fill');
+
+        // 适配高分屏
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 游戏状态变量
+        let animationId;
+        let isPlaying = false;
+        let score = 0;
+        let heat = 50; // 初始温度50%
+        let items = [];
+        let frames = 0;
+
+        // 玩家对象
+        const player = {
+            x: window.innerWidth / 2,
+            y: window.innerHeight - 80,
+            width: 60,
+            height: 60,
+            face: '(￣▽￣)',
+            updatePosition(clientX) {
+                this.x = clientX - this.width / 2;
+                // 边界限制
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > window.innerWidth) this.x = window.innerWidth - this.width;
+            },
+            draw() {
+                // 根据温度改变表情
+                if (heat > 80) this.face = '(°A°`)';
+                else if (heat > 60) this.face = '(-_-;)';
+                else if (heat < 30) this.face = '(*^▽^*)';
+                else this.face = '(￣▽￣)';
+
+                ctx.save();
+                // 绘制 mo.exe 的小框框
+                ctx.fillStyle = heat > 70 ? '#fca5a5' : '#bae6fd'; // 热的时候变红，冷的时候变蓝
+                ctx.shadowColor = 'rgba(0,0,0,0.1)';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.roundRect(this.x, this.y, this.width, this.height, 12);
+                ctx.fill();
+                
+                // 绘制表情
+                ctx.fillStyle = '#475569';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.face, this.x + this.width / 2, this.y + this.height / 2 - 5);
+                ctx.font = '12px Arial';
+                ctx.fillText('mo.exe', this.x + this.width / 2, this.y + this.height / 2 + 15);
+                ctx.restore();
+            }
+        };
+
+        // 掉落物配置
+        const itemTypes = [
+            { emoji: '🧊', type: 'cool', score: 10, heatEffect: -5, speedMultiplier: 1, probability: 0.4 },
+            { emoji: '❄️', type: 'cool', score: 5, heatEffect: -2, speedMultiplier: 0.8, probability: 0.3 },
+            { emoji: '🌀', type: 'cool', score: 20, heatEffect: -10, speedMultiplier: 1.2, probability: 0.1 }, // 满电小风扇！
+            { emoji: '☀️', type: 'hot', score: 0, heatEffect: 15, speedMultiplier: 1.1, probability: 0.15 },
+            { emoji: '☕', type: 'hot', score: 0, heatEffect: 20, speedMultiplier: 1.3, probability: 0.05 } // 致命热拿铁
+        ];
+
+        class Item {
+            constructor() {
+                // 随机选择掉落物
+                const rand = Math.random();
+                let cumulativeProb = 0;
+                let selectedType = itemTypes[0];
+                for (const type of itemTypes) {
+                    cumulativeProb += type.probability;
+                    if (rand <= cumulativeProb) {
+                        selectedType = type;
+                        break;
+                    }
+                }
+
+                this.emoji = selectedType.emoji;
+                this.type = selectedType.type;
+                this.score = selectedType.score;
+                this.heatEffect = selectedType.heatEffect;
+                
+                this.size = 30;
+                this.x = Math.random() * (window.innerWidth - this.size);
+                this.y = -this.size;
+                // 随分数增加稍微提高基础速度
+                const baseSpeed = 2 + (score / 200); 
+                this.speed = baseSpeed * selectedType.speedMultiplier + Math.random();
+                this.markedForDeletion = false;
+            }
+
+            update() {
+                this.y += this.speed;
+                // 飞出屏幕则删除
+                if (this.y > window.innerHeight) {
+                    this.markedForDeletion = true;
+                }
+            }
+
+            draw() {
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(this.emoji, this.x, this.y);
+            }
+        }
+
+        // 碰撞检测 (AABB)
+        function checkCollision(rect1, rect2) {
+            // 将 emoji 视为一个大约 30x30 的方块
+            return (
+                rect1.x < rect2.x + rect2.size &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.size &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+
+        // 更新UI进度条
+        function updateUI() {
+            scoreDisplay.innerText = score;
+            heat = Math.max(0, Math.min(100, heat)); // 限制在 0-100 之间
+            heatBarFill.style.width = `${heat}%`;
+            
+            // 温度变色逻辑
+            if (heat > 80) {
+                heatBarFill.className = 'h-full bg-red-500';
+            } else if (heat > 50) {
+                heatBarFill.className = 'h-full bg-orange-400';
+            } else if (heat > 20) {
+                heatBarFill.className = 'h-full bg-green-400';
+            } else {
+                heatBarFill.className = 'h-full bg-blue-400';
+            }
+        }
+
+        // 粒子特效 (吃到东西时的漂浮文字)
+        let floatingTexts = [];
+        function addFloatingText(text, x, y, color) {
+            floatingTexts.push({ text, x, y, color, life: 1, maxLife: 1 });
+        }
+        function drawFloatingTexts() {
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                let ft = floatingTexts[i];
+                ctx.save();
+                ctx.fillStyle = `rgba(${ft.color}, ${ft.life})`;
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.restore();
+                
+                ft.y -= 1; // 向上飘
+                ft.life -= 0.02; // 逐渐透明
+                if (ft.life <= 0) floatingTexts.splice(i, 1);
+            }
+        }
+
+        // 游戏主循环
+        function animate() {
+            if (!isPlaying) return;
+
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+            player.draw();
+
+            // 生成掉落物 (随分数提高生成频率)
+            let spawnRate = Math.max(15, 40 - Math.floor(score / 50));
+            if (frames % spawnRate === 0) {
+                items.push(new Item());
+            }
+
+            // 自然升温 (大自然的恶意)
+            if (frames % 60 === 0) { // 每秒增加一点点热量
+                heat += 1;
+                updateUI();
+            }
+
+            // 更新和绘制掉落物
+            items.forEach((item, index) => {
+                item.update();
+                item.draw();
+
+                // 碰撞检测
+                if (checkCollision(player, item)) {
+                    item.markedForDeletion = true;
+                    
+                    if (item.type === 'cool') {
+                        score += item.score;
+                        heat += item.heatEffect;
+                        addFloatingText(`-${Math.abs(item.heatEffect)}℃`, player.x + player.width/2, player.y, '59, 130, 246'); // 蓝色文字
+                    } else {
+                        heat += item.heatEffect;
+                        addFloatingText(`+${item.heatEffect}℃!`, player.x + player.width/2, player.y, '239, 68, 68'); // 红色文字
+                    }
+                    updateUI();
+                }
+            });
+
+            // 清理出界或被吃掉的物品
+            items = items.filter(item => !item.markedForDeletion);
+
+            drawFloatingTexts();
+
+            // 检查游戏结束
+            if (heat >= 100) {
+                gameOver();
+                return; // 停止动画循环
+            }
+
+            frames++;
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            
+            uiLayer.style.display = 'flex';
+            modalTitle.innerText = '⚠️ 宕机警告 ⚠️';
+            modalDesc.innerHTML = `大自然的萃取太猛烈了！
+mo.exe 最终还是变成了人干 (T_T)
+
+<b>最终清凉值: ${score}</b>
+等小风扇充好电再来战吧！`;
+            startBtn.innerText = '重新重启系统';
+            startBtn.classList.replace('bg-blue-400', 'bg-red-400');
+            startBtn.classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
+        }
+
+        function startGame() {
+            isPlaying = true;
+            score = 0;
+            heat = 50;
+            items = [];
+            frames = 0;
+            floatingTexts = [];
+            
+            // 重置玩家位置和UI
+            player.y = window.innerHeight - 80;
+            updateUI();
+            
+            uiLayer.style.display = 'none';
+            startBtn.classList.replace('bg-red-400', 'bg-blue-400');
+            startBtn.classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
+            
+            animate();
+        }
+
+        // 控制逻辑 (鼠标 & 触摸)
+        window.addEventListener('mousemove', (e) => {
+            if (isPlaying) player.updatePosition(e.clientX);
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isPlaying) {
+                // 阻止默认滚动
+                e.preventDefault(); 
+                player.updatePosition(e.touches[0].clientX);
+            }
+        }, { passive: false });
+
+        startBtn.addEventListener('click', startGame);
+
+        // 初始位置设定
+        player.updatePosition(window.innerWidth / 2);
+    </script>
+</body>
+</html>

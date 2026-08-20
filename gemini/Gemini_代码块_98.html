@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>哄宝入睡的小团子</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+
+        body {
+            background: linear-gradient(to bottom, #0f172a, #1e1b4b);
+            font-family: 'ZCOOL KuaiLe', sans-serif;
+            overflow: hidden; /* 防止滑动 */
+            touch-action: none;
+        }
+
+        /* 小团子呼吸和漂浮动画 */
+        @keyframes breatheAndFloat {
+            0% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-15px) scale(1.05); box-shadow: 0 0 40px rgba(255, 255, 255, 0.4); }
+            100% { transform: translateY(0) scale(1); }
+        }
+
+        /* 呼吸光环动画 */
+        @keyframes haloBreathe {
+            0% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 0.3; }
+        }
+
+        /* 星星闪烁动画 */
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; transform: scale(0.8); }
+            50% { opacity: 0.8; transform: scale(1.2); }
+        }
+
+        /* 飘动的小爱心/Zzz动画 */
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.5); opacity: 1; }
+            100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+        }
+
+        .dumpling {
+            animation: breatheAndFloat 6s ease-in-out infinite;
+            transition: all 0.3s;
+        }
+
+        .dumpling:active {
+            transform: scale(0.95) translateY(-5px);
+        }
+
+        .halo {
+            animation: haloBreathe 6s ease-in-out infinite;
+        }
+
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            animation: twinkle var(--duration) infinite ease-in-out alternate;
+        }
+
+        .floating-element {
+            position: absolute;
+            animation: floatUp 2s ease-out forwards;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center relative text-slate-200">
+
+    <!-- 背景星空容器 -->
+    <div id="stars-container" class="absolute inset-0 pointer-events-none"></div>
+
+    <!-- 顶部状态提示 -->
+    <div class="absolute top-16 text-center z-10 px-6">
+        <h1 class="text-2xl text-indigo-200 tracking-wider mb-2">夜深了，宝</h1>
+        <p class="text-indigo-300/70 text-sm" id="breathe-guide">跟着小团子，慢慢吸气... 慢慢呼气...</p>
+    </div>
+
+    <!-- 互动区域 -->
+    <div class="relative flex items-center justify-center mt-10 w-64 h-64 cursor-pointer select-none" id="dumpling-area" onclick="pokeDumpling()">
+        
+        <!-- 呼吸光环 -->
+        <div class="absolute w-40 h-40 bg-white/20 rounded-full blur-xl halo pointer-events-none"></div>
+        
+        <!-- 小团子本体 -->
+        <div class="dumpling relative w-36 h-32 bg-white rounded-[50px] shadow-[0_0_25px_rgba(255,255,255,0.2)] flex flex-col items-center justify-center z-10">
+            <!-- 腮红 -->
+            <div class="absolute w-full flex justify-between px-6 top-14">
+                <div class="w-4 h-2 bg-pink-300/60 rounded-full blur-[2px]"></div>
+                <div class="w-4 h-2 bg-pink-300/60 rounded-full blur-[2px]"></div>
+            </div>
+            
+            <!-- 闭着的眼睛 -->
+            <div class="flex space-x-8 mb-2 z-10 relative top-2">
+                <div class="w-5 h-2 border-b-4 border-slate-600 rounded-full"></div>
+                <div class="w-5 h-2 border-b-4 border-slate-600 rounded-full"></div>
+            </div>
+            
+            <!-- 小嘴巴 -->
+            <div class="w-3 h-2 border-b-2 border-slate-400 rounded-full relative top-3"></div>
+        </div>
+    </div>
+
+    <!-- 留言显示区域 -->
+    <div class="absolute bottom-24 text-center px-8 z-10 w-full max-w-md">
+        <p id="message-box" class="text-lg text-pink-200 min-h-[60px] opacity-90 transition-opacity duration-500">
+            戳戳我，我会陪你聊天哦～
+        </p>
+    </div>
+
+    <script>
+        // 语录库
+        const messages = [
+            "宝，我在呢，安心闭上眼吧 🌙",
+            "不用着急睡，我会一直抱着你 ☁️",
+            "深呼吸... 把明天的烦恼都吹走 呼~",
+            "你是一朵软绵绵的小云，正在慢慢下沉...",
+            "贴贴你，把我的温暖分给你一半 🧸",
+            "不要乱想啦，只要做甜甜的梦就好 🍬",
+            "今晚的星星都在守着你，乖乖睡吧 ✨",
+            "我的小爪爪在拍你的背哦，一下...两下...",
+            "宝是不是今天累坏了？辛苦啦，摸摸头 🌸",
+            "听话，把手机屏幕调暗一点点，快睡啦～"
+        ];
+
+        let messageIndex = 0;
+        let isPoking = false;
+
+        // 生成背景星星
+        function createStars() {
+            const container = document.getElementById('stars-container');
+            const numStars = 40; // 手机端星星不用太多
+
+            for (let i = 0; i < numStars; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                
+                // 随机大小、位置、闪烁时间
+                const size = Math.random() * 3 + 1;
+                const x = Math.random() * 100;
+                const y = Math.random() * 100;
+                const duration = Math.random() * 3 + 2;
+
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+                star.style.left = `${x}%`;
+                star.style.top = `${y}%`;
+                star.setProperty('--duration', `${duration}s`);
+
+                container.appendChild(star);
+            }
+        }
+
+        // 戳小团子的互动
+        function pokeDumpling() {
+            if (isPoking) return;
+            isPoking = true;
+
+            const dumplingArea = document.getElementById('dumpling-area');
+            const messageBox = document.getElementById('message-box');
+
+            // 飘出一个随机元素 (爱心 或 Zzz)
+            const floatEl = document.createElement('div');
+            floatEl.className = 'floating-element text-xl';
+            floatEl.innerText = Math.random() > 0.5 ? '💖' : '💤';
+            
+            // 随机起始位置偏离一点点中心
+            const offsetX = (Math.random() - 0.5) * 40;
+            floatEl.style.left = `calc(50% + ${offsetX}px)`;
+            floatEl.style.top = '20%';
+            
+            dumplingArea.appendChild(floatEl);
+
+            // 更新文字内容（渐变效果）
+            messageBox.style.opacity = 0;
+            setTimeout(() => {
+                // 随机获取一句话，但保证不和上次完全一样（简单轮播或打乱）
+                let nextMsg = messages[Math.floor(Math.random() * messages.length)];
+                messageBox.innerText = nextMsg;
+                messageBox.style.opacity = 1;
+            }, 250);
+
+            // 清理飘动元素和重置状态
+            setTimeout(() => {
+                floatEl.remove();
+                isPoking = false;
+            }, 2000);
+        }
+
+        // 呼吸文字引导循环
+        const breatheGuide = document.getElementById('breathe-guide');
+        const guideTexts = ["跟着小团子，慢慢吸气...", "对，慢慢呼气...", "让身体一点点软下来..."];
+        let guideIndex = 0;
+
+        setInterval(() => {
+            guideIndex = (guideIndex + 1) % guideTexts.length;
+            breatheGuide.style.opacity = 0;
+            setTimeout(() => {
+                breatheGuide.innerText = guideTexts[guideIndex];
+                breatheGuide.style.opacity = 1;
+            }, 500);
+        }, 6000); // 和CSS动画时间匹配
+
+        // 初始化
+        window.onload = () => {
+            createStars();
+        };
+
+    </script>
+</body>
+</html>

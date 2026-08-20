@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>哄睡小精灵</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            /* 初始背景：温柔的黄昏暮色 */
+            background-color: #4a5d82;
+            transition: background-color 2s ease;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #sky {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        #ui {
+            z-index: 10;
+            color: #f8e9a1;
+            text-align: center;
+            margin-top: 5vh;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            pointer-events: none;
+        }
+
+        h1 {
+            font-weight: 300;
+            font-size: 1.5rem;
+            margin: 0 0 10px 0;
+            letter-spacing: 2px;
+        }
+
+        p {
+            font-size: 0.9rem;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        #game-area {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            z-index: 5;
+        }
+
+        /* 小精灵宝的样式 */
+        .bao-sprite {
+            position: absolute;
+            font-size: 3.5rem;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), filter 0.5s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .bao-label {
+            font-size: 0.8rem;
+            color: white;
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 5px;
+            pointer-events: none;
+            text-shadow: none;
+        }
+
+        /* 清醒状态的动画 */
+        .awake {
+            animation: bounce 2s infinite alternate ease-in-out;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
+        }
+
+        /* 睡着状态 */
+        .asleep {
+            animation: float-sleep 4s infinite alternate ease-in-out;
+            filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+            opacity: 0.7;
+        }
+
+        @keyframes bounce {
+            0% { transform: translateY(0) rotate(-5deg) scale(1); }
+            100% { transform: translateY(-20px) rotate(5deg) scale(1.1); }
+        }
+
+        @keyframes float-sleep {
+            0% { transform: translateY(0) scale(0.9); }
+            100% { transform: translateY(10px) scale(0.9); }
+        }
+
+        #goodnight-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 2rem;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 2s ease;
+            pointer-events: none;
+            z-index: 20;
+            text-shadow: 0 0 20px rgba(255,255,255,0.8);
+        }
+
+        /* 睡意飘浮符号 (Zzz) */
+        .zzz {
+            position: absolute;
+            color: #a8d8ea;
+            font-weight: bold;
+            font-size: 1rem;
+            pointer-events: none;
+            animation: floatUpZzz 2s forwards linear;
+        }
+
+        @keyframes floatUpZzz {
+            0% { transform: translate(0, 0) scale(0.5); opacity: 1; }
+            100% { transform: translate(20px, -50px) scale(1.5); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sky"></div>
+
+    <div id="ui">
+        <h1>嘘，动作轻一点</h1>
+        <p id="instruction">点击乱跑的清醒宝，哄他们睡觉</p>
+    </div>
+
+    <div id="game-area"></div>
+
+    <div id="goodnight-msg">
+        全都很安静啦
+
+        <span style="font-size: 1.2rem; font-weight: normal; color: #f8e9a1;">宝也乖乖闭上眼睛吧，晚安 🌙</span>
+    </div>
+
+    <script>
+        const gameArea = document.getElementById('game-area');
+        const instruction = document.getElementById('instruction');
+        const goodnightMsg = document.getElementById('goodnight-msg');
+        const sky = document.getElementById('sky');
+        
+        // 我们要哄睡的精灵数量
+        const totalBaos = 6;
+        let awakeCount = totalBaos;
+
+        // 可爱的表情包组合
+        const awakeEmojis = ['🥺', '😳', '👀', '🏃‍♂️', '🤪', '🤩'];
+        const asleepEmoji = '😴';
+
+        // 生成背景星星
+        for(let i=0; i<50; i++) {
+            let star = document.createElement('div');
+            star.className = 'star';
+            star.style.width = Math.random() * 3 + 'px';
+            star.style.height = star.style.width;
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 5 + 's';
+            sky.appendChild(star);
+        }
+
+        // 创建小精灵
+        for (let i = 0; i < totalBaos; i++) {
+            createBao(i);
+        }
+
+        function createBao(index) {
+            const bao = document.createElement('div');
+            bao.classList.add('bao-sprite', 'awake');
+            
+            // 随机位置 (避免太靠近边缘)
+            const left = 10 + Math.random() * 70;
+            const top = 10 + Math.random() * 60;
+            bao.style.left = `${left}%`;
+            bao.style.top = `${top}%`;
+            
+            // 设置初始随机表情
+            const emojiSpan = document.createElement('span');
+            emojiSpan.innerText = awakeEmojis[index % awakeEmojis.length];
+            
+            const labelSpan = document.createElement('span');
+            labelSpan.classList.add('bao-label');
+            labelSpan.innerText = '清醒宝';
+
+            bao.appendChild(emojiSpan);
+            bao.appendChild(labelSpan);
+            
+            // 错开动画时间
+            bao.style.animationDelay = `-${Math.random() * 2}s`;
+
+            // 点击哄睡事件
+            const putToSleep = (e) => {
+                e.preventDefault();
+                if (bao.classList.contains('asleep')) return; // 已经睡了就不管了
+
+                // 变成睡着状态
+                bao.classList.remove('awake');
+                bao.classList.add('asleep');
+                emojiSpan.innerText = asleepEmoji;
+                labelSpan.innerText = '困困宝';
+                
+                // 飘出 Zzz 动画
+                createZzz(bao);
+
+                awakeCount--;
+                updateEnvironment();
+            };
+
+            bao.addEventListener('mousedown', putToSleep);
+            bao.addEventListener('touchstart', putToSleep, {passive: false});
+
+            gameArea.appendChild(bao);
+        }
+
+        function createZzz(parent) {
+            const zzz = document.createElement('div');
+            zzz.className = 'zzz';
+            zzz.innerText = 'Zzz...';
+            // 获取相对于屏幕的位置
+            const rect = parent.getBoundingClientRect();
+            zzz.style.left = (rect.left + rect.width / 2) + 'px';
+            zzz.style.top = (rect.top - 20) + 'px';
+            document.body.appendChild(zzz);
+            
+            setTimeout(() => {
+                zzz.remove();
+            }, 2000);
+        }
+
+        function updateEnvironment() {
+            const progress = 1 - (awakeCount / totalBaos);
+            
+            // 背景颜色渐渐变深，从黄昏变成深夜
+            // 黄昏 #4a5d82 -> 深夜 #0a0f1d
+            const r = Math.floor(74 - progress * 64);
+            const g = Math.floor(93 - progress * 78);
+            const b = Math.floor(130 - progress * 101);
+            document.body.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+
+            // 显示星星
+            const stars = document.querySelectorAll('.star');
+            stars.forEach(star => {
+                if (Math.random() < progress) {
+                    star.style.opacity = Math.random() * 0.8 + 0.2;
+                }
+            });
+
+            if (awakeCount === 0) {
+                instruction.innerText = "嘘... 大家都睡着啦";
+                setTimeout(() => {
+                    goodnightMsg.style.opacity = 1;
+                    document.getElementById('ui').style.opacity = 0;
+                }, 1000);
+            } else {
+                instruction.innerText = `还有 ${awakeCount} 个清醒宝在闹腾，点点他们`;
+            }
+        }
+    </script>
+</body>
+</html>

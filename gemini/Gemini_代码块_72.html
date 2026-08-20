@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>摸鱼大作战 - 嘘！</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 确保无滚动条，完美全屏 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #f3f4f6;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            touch-action: none; /* 防止移动端滑动引发的默认行为 */
+        }
+        
+        /* 游戏画布样式 */
+        canvas {
+            display: block;
+            background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            margin: 0 auto;
+        }
+
+        /* 老板键伪装页面的表格样式 */
+        .excel-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .excel-table th, .excel-table td {
+            border: 1px solid #d1d5db;
+            padding: 4px 8px;
+            text-align: right;
+        }
+        .excel-table th {
+            background-color: #f3f4f6;
+            text-align: center;
+            font-weight: bold;
+        }
+        .excel-table tr:first-child th {
+            background-color: #e5e7eb;
+        }
+        .excel-row-header {
+            background-color: #f3f4f6;
+            text-align: center !important;
+            font-weight: bold;
+            width: 40px;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center relative">
+
+    <!-- 游戏主界面 -->
+    <div id="game-ui" class="w-full max-w-md flex flex-col items-center p-4">
+        <div class="w-full flex justify-between items-center mb-4 px-2">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800 flex items-center">
+                    🐟 摸鱼大作战
+                </h1>
+                <p class="text-xs text-gray-500">点击/空格跳跃避开工作！</p>
+            </div>
+            <button id="btn-boss" class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 px-4 rounded shadow-lg transition transform hover:scale-105">
+                老板键 (Esc)
+            </button>
+        </div>
+
+        <!-- 画布容器 -->
+        <div class="relative w-full" style="aspect-ratio: 2/3;">
+            <canvas id="gameCanvas"></canvas>
+            
+            <!-- 开始/重新开始遮罩层 -->
+            <div id="overlay" class="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center rounded-xl z-10 transition-opacity">
+                <div class="text-white text-4xl mb-2 font-bold" id="score-display">0</div>
+                <h2 id="overlay-title" class="text-white text-2xl font-bold mb-4">准备摸鱼</h2>
+                <button id="btn-start" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg transition transform hover:scale-105 active:scale-95">
+                    开始摸鱼
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 老板键伪装界面 (默认隐藏) -->
+    <div id="boss-screen" class="hidden absolute inset-0 bg-white z-50 flex flex-col">
+        <!-- 伪装的Excel菜单栏 -->
+        <div class="bg-green-600 text-white px-4 py-2 flex items-center text-sm">
+            <span class="mr-4">文件</span>
+            <span class="mr-4 font-bold border-b-2 border-white pb-1">主页</span>
+            <span class="mr-4">插入</span>
+            <span class="mr-4">页面布局</span>
+            <span class="mr-4">公式</span>
+            <span class="mr-4">数据</span>
+        </div>
+        <div class="bg-gray-100 border-b border-gray-300 p-2 text-xs flex items-center text-gray-600 gap-4">
+            <span>剪贴板</span> | <span>字体</span> | <span>对齐方式</span> | <span>数字</span>
+        </div>
+        <div class="flex flex-col flex-1 overflow-hidden">
+            <div class="flex items-center px-2 py-1 border-b border-gray-300 bg-white text-xs">
+                <div class="w-10 text-center font-bold text-gray-500">fx</div>
+                <div class="flex-1 border border-gray-300 px-2">=SUM(C4:M4)*1.05</div>
+            </div>
+            <!-- 伪装表格内容 -->
+            <div class="flex-1 overflow-auto bg-white">
+                <table class="excel-table">
+                    <thead>
+                        <tr>
+                            <th class="excel-row-header"></th>
+                            <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fake-data-body">
+                        <!-- JS动态生成枯燥的数据 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bg-gray-200 text-xs text-gray-600 p-1 flex justify-between border-t border-gray-300">
+            <span>就绪</span>
+            <span>平均值: 45,210.5  计数: 12  求和: 542,526.0</span>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlay-title');
+        const scoreDisplay = document.getElementById('score-display');
+        const btnStart = document.getElementById('btn-start');
+        const btnBoss = document.getElementById('btn-boss');
+        const bossScreen = document.getElementById('boss-screen');
+
+        // 职场词汇库 (障碍物文字)
+        const toxicWords = ["KPI", "开会", "996", "周报", "PPT", "DDL", "团建", "加班", "画饼", "复盘"];
+
+        // 游戏状态变量
+        let gameState = 'START'; // START, PLAYING, GAMEOVER, PAUSED
+        let isBossScreenActive = false;
+        let animationId;
+        let frames = 0;
+        let score = 0;
+
+        // 游戏对象：咸鱼 (玩家)
+        const fish = {
+            x: 50,
+            y: 150,
+            size: 40,      // Emoji的绘制大小
+            velocity: 0,   // 当前垂直速度
+            gravity: 0.3,  // 重力
+            jump: -6,      // 每次跳跃的力度
+            draw: function() {
+                ctx.save();
+                ctx.translate(this.x + this.size/2, this.y + this.size/2);
+                // 根据速度稍微倾斜咸鱼
+                const rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (this.velocity * 0.1)));
+                ctx.rotate(rotation);
+                
+                ctx.font = `${this.size}px Arial`;
+                ctx.textBaseline = 'top';
+                ctx.fillText('🐟', -this.size/2, -this.size/2);
+                ctx.restore();
+            },
+            update: function() {
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+                
+                // 防止飞出屏幕顶部
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.velocity = 0;
+                }
+            },
+            flap: function() {
+                this.velocity = this.jump;
+            }
+        };
+
+        // 游戏对象：职场障碍物 (管道)
+        const pipes = {
+            items: [],
+            width: 70,
+            gap: 160, // 上下障碍物的间距 (越小越难)
+            dx: 2.5,  // 移动速度
+            
+            draw: function() {
+                for (let i = 0; i < this.items.length; i++) {
+                    let p = this.items[i];
+                    
+                    // 绘制上方的障碍物 (代表压下来的工作)
+                    ctx.fillStyle = '#4b5563'; // 灰色
+                    ctx.fillRect(p.x, 0, this.width, p.top);
+                    
+                    // 绘制下方的障碍物
+                    ctx.fillRect(p.x, canvas.height - p.bottom, this.width, p.bottom);
+                    
+                    // 绘制边框增加立体感
+                    ctx.strokeStyle = '#374151';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(p.x, 0, this.width, p.top);
+                    ctx.strokeRect(p.x, canvas.height - p.bottom, this.width, p.bottom);
+
+                    // 在障碍物上写职场黑话
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // 写在上管道靠近底部的位置
+                    if (p.top > 30) ctx.fillText(p.word1, p.x + this.width/2, p.top - 20);
+                    // 写在下管道靠近顶部的位置
+                    if (p.bottom > 30) ctx.fillText(p.word2, p.x + this.width/2, canvas.height - p.bottom + 20);
+                }
+            },
+            
+            update: function() {
+                // 每隔大约100帧生成一个新的障碍物
+                if (frames % 100 === 0) {
+                    // 随机生成上管道的高度
+                    let minHeight = 50;
+                    let maxHeight = canvas.height - this.gap - minHeight;
+                    let h = Math.floor(Math.random() * (maxHeight - minHeight + 1) + minHeight);
+                    
+                    // 随机抽取两个职场词汇
+                    let w1 = toxicWords[Math.floor(Math.random() * toxicWords.length)];
+                    let w2 = toxicWords[Math.floor(Math.random() * toxicWords.length)];
+                    
+                    this.items.push({
+                        x: canvas.width,
+                        top: h,
+                        bottom: canvas.height - (h + this.gap),
+                        passed: false,
+                        word1: w1,
+                        word2: w2
+                    });
+                }
+                
+                for (let i = 0; i < this.items.length; i++) {
+                    let p = this.items[i];
+                    p.x -= this.dx;
+                    
+                    // 碰撞检测逻辑
+                    // 鱼的碰撞箱 (稍微缩小一点比emoji真实体积小，让游戏没那么硬核)
+                    let fishHitbox = {
+                        left: fish.x + 5,
+                        right: fish.x + fish.size - 5,
+                        top: fish.y + 10,
+                        bottom: fish.y + fish.size - 5
+                    };
+                    
+                    let pipeHitboxTop = {
+                        left: p.x, right: p.x + this.width,
+                        top: 0, bottom: p.top
+                    };
+                    
+                    let pipeHitboxBottom = {
+                        left: p.x, right: p.x + this.width,
+                        top: canvas.height - p.bottom, bottom: canvas.height
+                    };
+                    
+                    // 检测是否与上下管道碰撞
+                    if (this.checkCollision(fishHitbox, pipeHitboxTop) || 
+                        this.checkCollision(fishHitbox, pipeHitboxBottom)) {
+                        gameState = 'GAMEOVER';
+                    }
+                    
+                    // 计分逻辑
+                    if (p.x + this.width < fish.x && !p.passed) {
+                        score++;
+                        p.passed = true;
+                    }
+                    
+                    // 移除移出屏幕的管道
+                    if (p.x + this.width < 0) {
+                        this.items.shift();
+                        i--; // 调整索引
+                    }
+                }
+            },
+            
+            checkCollision: function(rect1, rect2) {
+                return (rect1.left < rect2.right &&
+                        rect1.right > rect2.left &&
+                        rect1.top < rect2.bottom &&
+                        rect1.bottom > rect2.top);
+            },
+            
+            reset: function() {
+                this.items = [];
+            }
+        };
+
+        // 绘制简单的背景气泡
+        const bgParticles = {
+            items: [],
+            init: function() {
+                for(let i=0; i<15; i++) {
+                    this.items.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        r: Math.random() * 4 + 1,
+                        speed: Math.random() * 1 + 0.5
+                    });
+                }
+            },
+            draw: function() {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.beginPath();
+                for(let i=0; i<this.items.length; i++) {
+                    let p = this.items[i];
+                    ctx.moveTo(p.x, p.y);
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                }
+                ctx.fill();
+            },
+            update: function() {
+                for(let i=0; i<this.items.length; i++) {
+                    let p = this.items[i];
+                    p.y -= p.speed;
+                    if(p.y < -10) {
+                        p.y = canvas.height + 10;
+                        p.x = Math.random() * canvas.width;
+                    }
+                }
+            }
+        };
+
+        // 核心游戏循环
+        function gameLoop() {
+            // 处理暂停
+            if (gameState === 'PAUSED' || isBossScreenActive) {
+                return; // 不请求下一帧，画面冻结
+            }
+            
+            update();
+            draw();
+            
+            if (gameState !== 'GAMEOVER') {
+                animationId = requestAnimationFrame(gameLoop);
+            } else {
+                showGameOver();
+            }
+        }
+
+        // 状态更新
+        function update() {
+            frames++;
+            bgParticles.update();
+            fish.update();
+            pipes.update();
+            
+            // 掉落地面检测
+            if (fish.y + fish.size >= canvas.height) {
+                gameState = 'GAMEOVER';
+            }
+        }
+
+        // 画面渲染
+        function draw() {
+            // 清空画布 (渐变背景由CSS控制，这里直接清空透明即可)
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            bgParticles.draw();
+            pipes.draw();
+            fish.draw();
+            
+            // 绘制分数
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.strokeText(score, canvas.width / 2, 60);
+            ctx.fillText(score, canvas.width / 2, 60);
+        }
+
+        // 游戏结束处理
+        function showGameOver() {
+            overlay.classList.remove('hidden');
+            scoreDisplay.classList.remove('hidden');
+            scoreDisplay.innerText = score;
+            overlayTitle.innerText = "被工作抓住了！";
+            btnStart.innerText = "再次摸鱼";
+        }
+
+        // 重新开始游戏
+        function resetGame() {
+            fish.y = 150;
+            fish.velocity = 0;
+            pipes.reset();
+            score = 0;
+            frames = 0;
+            gameState = 'PLAYING';
+            overlay.classList.add('hidden');
+            scoreDisplay.classList.add('hidden');
+            
+            if (animationId) cancelAnimationFrame(animationId);
+            gameLoop();
+        }
+
+        // 调整画布大小以适应容器
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            if(bgParticles.items.length === 0) {
+                bgParticles.init();
+            }
+            if(gameState !== 'PLAYING') {
+                draw(); // 初始化时绘制一帧
+            }
+        }
+
+        // --- 老板键逻辑 (核心功能) ---
+        function toggleBossScreen() {
+            isBossScreenActive = !isBossScreenActive;
+            
+            if (isBossScreenActive) {
+                // 显示Excel，暂停游戏
+                bossScreen.classList.remove('hidden');
+                if (gameState === 'PLAYING') {
+                    gameState = 'PAUSED';
+                }
+            } else {
+                // 隐藏Excel，恢复游戏
+                bossScreen.classList.add('hidden');
+                if (gameState === 'PAUSED') {
+                    gameState = 'PLAYING';
+                    gameLoop(); // 重启循环
+                }
+            }
+        }
+
+        // 监听控制事件
+        function handleInput(e) {
+            if (isBossScreenActive) return; // 如果在老板键状态下，不响应游戏操作
+            
+            // 如果按下了空格，并且游戏在运行
+            if ((e.type === 'keydown' && e.code === 'Space') || 
+                e.type === 'mousedown' || 
+                e.type === 'touchstart') {
+                
+                if(e.type === 'touchstart') e.preventDefault(); // 防止双击缩放
+                
+                if (gameState === 'PLAYING') {
+                    fish.flap();
+                } else if (gameState === 'START' || gameState === 'GAMEOVER') {
+                    // 如果点击画布也能开始，可以取消下面注释
+                    // resetGame(); 
+                }
+            }
+        }
+
+        // 绑定键盘事件
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape') {
+                toggleBossScreen();
+            } else {
+                handleInput(e);
+            }
+        });
+        
+        // 绑定触摸/点击事件
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', handleInput, {passive: false});
+        
+        // UI按钮事件
+        btnStart.addEventListener('click', resetGame);
+        btnBoss.addEventListener('click', toggleBossScreen);
+
+        // 生成虚假的Excel数据
+        function generateFakeExcelData() {
+            const tbody = document.getElementById('fake-data-body');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
+            const regions = ['华北区', '华东区', '华南区', '西南区', '海外部'];
+            
+            for (let i = 0; i < 25; i++) {
+                const tr = document.createElement('tr');
+                // 行号
+                const th = document.createElement('th');
+                th.className = 'excel-row-header';
+                th.innerText = i + 1;
+                tr.appendChild(th);
+                
+                // 随机数据生成
+                let rowData = [
+                    `PRJ-${Math.floor(Math.random()*9000)+1000}`, // 项目号
+                    regions[i % regions.length],                  // 区域
+                    months[i % months.length] + " '23",           // 月份
+                    (Math.random() * 50000 + 10000).toFixed(2),   // 收入
+                    (Math.random() * 20000 + 5000).toFixed(2),    // 成本
+                    "", // 毛利 (通过公式计算)
+                    (Math.random() * 100).toFixed(1) + "%",       // 达成率
+                    Math.random() > 0.3 ? 'Completed' : 'Pending' // 状态
+                ];
+                
+                // 计算毛利
+                rowData[5] = (parseFloat(rowData[3]) - parseFloat(rowData[4])).toFixed(2);
+                
+                rowData.forEach((text, colIndex) => {
+                    const td = document.createElement('td');
+                    td.innerText = text;
+                    // 给状态列加上颜色伪装
+                    if (colIndex === 7) {
+                        td.style.color = text === 'Completed' ? 'green' : '#d97706';
+                    }
+                    tr.appendChild(td);
+                });
+                
+                tbody.appendChild(tr);
+            }
+        }
+
+        // 初始化
+        window.addEventListener('resize', resizeCanvas);
+        window.onload = () => {
+            generateFakeExcelData();
+            resizeCanvas();
+            draw(); // 初始渲染静态画面
+        };
+
+    </script>
+</body>
+</html>

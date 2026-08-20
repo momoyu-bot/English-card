@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>给宝的小惊喜</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b090a; /* 深邃的暗色背景，让爱心更明显 */
+            overflow: hidden; /* 防止滑动出现滚动条 */
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            touch-action: none; /* 优化移动端触摸体验 */
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        .text-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            text-align: center;
+            pointer-events: none; /* 让鼠标穿透文字，直接和粒子交互 */
+            width: 100%;
+        }
+        .greeting {
+            color: #ffb3c6;
+            font-size: clamp(2.5rem, 6vw, 4rem); /* 响应式字体大小 */
+            font-weight: 300;
+            letter-spacing: 5px;
+            text-shadow: 0 0 20px rgba(255, 179, 198, 0.8), 0 0 40px rgba(255, 179, 198, 0.4);
+            opacity: 0;
+            animation: fadeIn 3s ease-in-out forwards 1s;
+            margin: 0;
+        }
+        .sub-text {
+            color: #ff8fab;
+            font-size: clamp(0.9rem, 3vw, 1.2rem);
+            margin-top: 15px;
+            font-weight: 300;
+            opacity: 0;
+            animation: fadeIn 3s ease-in-out forwards 2.5s;
+            letter-spacing: 2px;
+        }
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="heartCanvas"></canvas>
+    </div>
+    
+    <div class="text-container">
+        <h1 class="greeting">早安，宝</h1>
+        <p class="sub-text">鼠标滑过爱心，或者点一下屏幕试试 😏</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('heartCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 自适应窗口大小
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        const particles = [];
+        // 根据屏幕大小决定粒子数量，手机上少一点防止卡顿
+        const numParticles = (window.innerWidth < 768) ? 600 : 1200; 
+
+        // 爱心形状的数学公式
+        function getHeartPoint(t) {
+            const x = 16 * Math.pow(Math.sin(t), 3);
+            const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+            return { x, y };
+        }
+
+        // 粒子类
+        class Particle {
+            constructor() {
+                this.t = Math.random() * Math.PI * 2; // 爱心路径上的随机点
+                // 调整爱心大小
+                this.scale = (window.innerWidth < 768) ? (Math.random() * 8 + 6) : (Math.random() * 12 + 10);
+                
+                // 初始位置（屏幕各处随机散开）
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                
+                // 初始速度
+                this.vx = (Math.random() - 0.5) * 5;
+                this.vy = (Math.random() - 0.5) * 5;
+                
+                // 颜色配置 (粉色/红色系)
+                const hue = Math.random() * 30 + 330; 
+                const lightness = Math.random() * 30 + 50;
+                this.baseColor = `hsl(${hue}, 100%, ${lightness}%)`;
+                this.color = this.baseColor;
+                this.size = Math.random() * 1.5 + 0.5;
+                
+                // 用于让粒子产生呼吸/漂浮感的随机相位
+                this.phase = Math.random() * Math.PI * 2;
+            }
+
+            update(mouse) {
+                // 计算目标位置（爱心上的点）
+                const heartPos = getHeartPoint(this.t);
+                let targetX = canvas.width / 2 + heartPos.x * this.scale;
+                let targetY = canvas.height / 2 - heartPos.y * this.scale; 
+
+                // 加上轻微的漂浮动画
+                const time = Date.now() * 0.001;
+                targetX += Math.sin(time + this.phase) * 8;
+                targetY += Math.cos(time + this.phase) * 8;
+
+                // 受到弹簧力吸引回目标位置
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                this.vx += dx * 0.02; // 吸引力强度
+                this.vy += dy * 0.02;
+                
+                // 鼠标交互逻辑
+                if (mouse.x !== undefined && mouse.y !== undefined) {
+                    const distToMouse = Math.hypot(this.x - mouse.x, this.y - mouse.y);
+                    const interactionRadius = 120; // 交互半径
+                    
+                    if (distToMouse < interactionRadius) {
+                        // 鼠标靠近时产生排斥力
+                        const angle = Math.atan2(this.y - mouse.y, this.x - mouse.x);
+                        const force = (interactionRadius - distToMouse) * 0.02; 
+                        this.vx += Math.cos(angle) * force;
+                        this.vy += Math.sin(angle) * force;
+                        // 靠近鼠标时变白发亮
+                        this.color = '#ffffff'; 
+                        this.size = 2.5;
+                    } else {
+                        // 恢复原来的颜色和大小
+                        this.color = this.baseColor;
+                        this.size = Math.random() * 1.5 + 0.5;
+                    }
+                }
+                
+                // 阻尼/摩擦力，防止无限加速
+                this.vx *= 0.85;
+                this.vy *= 0.85;
+                
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 初始化粒子群
+        for (let i = 0; i < numParticles; i++) {
+            particles.push(new Particle());
+        }
+
+        // 鼠标与触摸状态
+        let mouse = { x: undefined, y: undefined };
+        
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if(e.touches.length > 0){
+                mouse.x = e.touches[0].clientX;
+                mouse.y = e.touches[0].clientY;
+            }
+        });
+
+        // 离开屏幕时重置
+        const resetMouse = () => {
+            mouse.x = undefined;
+            mouse.y = undefined;
+        };
+        window.addEventListener('mouseleave', resetMouse);
+        window.addEventListener('touchend', resetMouse);
+
+        // 点击产生爆炸打散效果
+        const scatter = (e) => {
+            let cx = e.clientX;
+            let cy = e.clientY;
+            
+            // 兼容移动端触摸
+            if (e.touches && e.touches.length > 0) {
+                cx = e.touches[0].clientX;
+                cy = e.touches[0].clientY;
+            } else if (!cx || !cy) {
+                cx = canvas.width / 2;
+                cy = canvas.height / 2;
+            }
+            
+            particles.forEach(p => {
+                const angle = Math.atan2(p.y - cy, p.x - cx);
+                const force = Math.random() * 60 + 20; // 爆炸力度
+                p.vx += Math.cos(angle) * force;
+                p.vy += Math.sin(angle) * force;
+            });
+        };
+        
+        window.addEventListener('click', scatter);
+
+        // 动画循环
+        function animate() {
+            // 使用带有透明度的背景填充，制造出尾迹（拖影）效果
+            ctx.fillStyle = 'rgba(11, 9, 10, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            particles.forEach(p => {
+                p.update(mouse);
+                p.draw();
+            });
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // 确保页面加载完成后开始动画
+        window.onload = () => {
+            animate();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>晚安拾星</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050b14; /* Deep night sky color */
+            font-family: 'Inter', sans-serif;
+            touch-action: none; /* Prevent scrolling on touch devices */
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Ambient glowing text */
+        .glow-text {
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: opacity 2s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- UI Overlay -->
+    <div class="absolute top-0 left-0 w-full h-full pointer-events-none flex flex-col items-center justify-between py-10">
+        <div class="text-white text-opacity-70 text-lg tracking-widest font-light glow-text" id="scoreDisplay">
+            收集了 0 颗星星
+        </div>
+        
+        <div class="text-white text-opacity-50 text-2xl tracking-widest font-light text-center px-4 glow-text" id="messageDisplay">
+            轻轻滑动，接住落下的星星...
+        </div>
+        
+        <div class="text-white text-opacity-30 text-sm tracking-widest font-light">
+            困了就随时闭上眼睛休息哦
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const messageDisplay = document.getElementById('messageDisplay');
+
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+        let score = 0;
+        let animationFrameId;
+
+        // 先把小云朵准备好
+        let player = {
+            x: width / 2,
+            y: height - 100,
+            radius: 25,
+            glow: 40
+        };
+
+        // Resize handling
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Re-center player if resized
+            if (player) {
+                player.y = height - 100;
+            }
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        const stars = [];
+        const particles = [];
+
+        class Star {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = -20;
+                this.radius = Math.random() * 3 + 2;
+                this.speed = Math.random() * 1.5 + 0.5; // Very slow and sleepy falling speed
+                this.wobbleOffset = Math.random() * Math.PI * 2;
+                this.wobbleSpeed = Math.random() * 0.02 + 0.01;
+                this.opacity = Math.random() * 0.5 + 0.5;
+            }
+
+            update() {
+                this.y += this.speed;
+                // Gentle horizontal drift
+                this.x += Math.sin(Date.now() * this.wobbleSpeed + this.wobbleOffset) * 0.5;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(253, 224, 71, ${this.opacity})`; // Soft yellow
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(253, 224, 71, 0.8)';
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.velocity = {
+                    x: (Math.random() - 0.5) * 3,
+                    y: (Math.random() - 0.5) * 3
+                };
+                this.radius = Math.random() * 2 + 1;
+                this.life = 1;
+                this.decay = Math.random() * 0.02 + 0.015; // Slow decay
+            }
+
+            update() {
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.life})`;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = `rgba(255, 255, 255, ${this.life})`;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function handleInput(e) {
+            let clientX;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+            } else {
+                clientX = e.clientX;
+            }
+            
+            // Smoothly move player towards input x
+            player.x = clientX;
+        }
+
+        window.addEventListener('mousemove', handleInput);
+        window.addEventListener('touchmove', handleInput, { passive: false });
+        // Set initial position on first touch
+        window.addEventListener('touchstart', handleInput, { passive: false });
+
+        function checkCollisions() {
+            for (let i = stars.length - 1; i >= 0; i--) {
+                const star = stars[i];
+                // Calculate distance between player and star
+                const dx = player.x - star.x;
+                const dy = player.y - star.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < player.radius + star.radius + 15) { // generous hitbox
+                    // Catch!
+                    score++;
+                    updateUI();
+                    
+                    // Create particles
+                    for (let p = 0; p < 8; p++) {
+                        particles.push(new Particle(star.x, star.y));
+                    }
+                    
+                    // Remove star
+                    stars.splice(i, 1);
+                } else if (star.y > height + 20) {
+                    // Missed star, just remove it quietly
+                    stars.splice(i, 1);
+                }
+            }
+        }
+
+        function updateUI() {
+            scoreDisplay.innerText = `收集了 ${score} 颗星星`;
+            
+            // Sleepy messages progression
+            if (score === 10) {
+                changeMessage("夜深了，风很轻...");
+            } else if (score === 25) {
+                changeMessage("星星落在怀里，化作柔软的梦...");
+            } else if (score === 40) {
+                changeMessage("放下白天的疲惫，什么都不用想...");
+            } else if (score === 60) {
+                changeMessage("闭上眼睛，我在这里陪你...");
+            } else if (score === 80) {
+                changeMessage("晚安，做个好梦...");
+            }
+        }
+
+        function changeMessage(text) {
+            messageDisplay.style.opacity = 0;
+            setTimeout(() => {
+                messageDisplay.innerText = text;
+                messageDisplay.style.opacity = 1;
+            }, 2000);
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            
+            // Gentle pulsing effect
+            const pulse = Math.sin(Date.now() * 0.002) * 5;
+            const currentRadius = player.radius + pulse;
+
+            // Outer soft glow
+            const gradient = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, currentRadius + player.glow);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+            gradient.addColorStop(0.4, 'rgba(167, 243, 208, 0.4)'); // Soft minty green/blue glow
+            gradient.addColorStop(1, 'rgba(167, 243, 208, 0)');
+
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, currentRadius + player.glow, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // Inner core
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, currentRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ffffff';
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function loop() {
+            // Soft clearing to create motion blur trails
+            ctx.fillStyle = 'rgba(5, 11, 20, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Randomly spawn stars (very low frequency to keep it relaxing)
+            if (Math.random() < 0.02) {
+                stars.push(new Star());
+            }
+
+            // Update and draw stars
+            stars.forEach(star => {
+                star.update();
+                star.draw();
+            });
+
+            // Update and draw particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+                p.draw();
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            drawPlayer();
+            checkCollisions();
+
+            animationFrameId = requestAnimationFrame(loop);
+        }
+
+        window.onload = () => {
+            setTimeout(() => {
+                changeMessage("不用刻意去接，顺其自然就好...");
+            }, 5000);
+            loop();
+        };
+
+    </script>
+</body>
+</html>

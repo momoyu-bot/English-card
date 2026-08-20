@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>打爆坏心情 - 专属解压小游戏</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+
+        body {
+            font-family: 'ZCOOL KuaiLe', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%); /* 换成暖暖的粉色调 */
+            touch-action: manipulation;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Styling for the mood balloons */
+        .mood-balloon {
+            position: absolute;
+            bottom: -100px;
+            width: 90px;
+            height: 100px;
+            border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1), inset 0 -10px 15px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+
+        .mood-balloon::before {
+            content: '';
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 18px solid;
+            /* Color inherited in JS */
+        }
+
+        .mood-balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 30px;
+            background-color: rgba(255,255,255,0.4);
+        }
+
+        .mood-balloon:active {
+            transform: scale(0.95);
+        }
+
+        /* Slower, gentler floating animation */
+        @keyframes floatUp {
+            0% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-50vh) rotate(3deg); }
+            100% { transform: translateY(-120vh) rotate(-3deg); }
+        }
+
+        #score-board, #timer-board {
+            position: absolute;
+            top: 20px;
+            font-size: 24px;
+            color: #5a6e85;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+        
+        #score-board { left: 20px; }
+        #timer-board { right: 20px; }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            z-index: 20;
+            transition: opacity 0.5s ease;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+            color: #3b5998;
+            font-size: 22px;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(132, 250, 176, 0.4);
+            transition: all 0.3s ease;
+            margin-top: 30px;
+            font-weight: bold;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(132, 250, 176, 0.5);
+        }
+
+        h1 {
+            color: #4a6572;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        p.subtitle {
+            color: #78909c;
+            font-size: 1.1rem;
+            text-align: center;
+            max-width: 85%;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        /* Particle effects - Softer colors */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
+            animation: particleFade 0.8s ease-out forwards;
+        }
+        
+        @keyframes particleFade {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+        
+        /* Gentle healing art animation */
+        .healing-art {
+            position: absolute;
+            font-weight: bold;
+            text-align: center;
+            z-index: 100;
+            pointer-events: none;
+            animation: floatHealGentle 2s ease-out forwards;
+            color: #5c6bc0; /* Soft indigo */
+        }
+
+        .healing-art pre {
+            margin: 0;
+            font-family: monospace;
+            font-size: 18px;
+            white-space: pre;
+            line-height: 1.1;
+        }
+
+        .pop-text {
+            font-family: 'ZCOOL KuaiLe', sans-serif;
+            font-size: 16px;
+            margin-top: 8px;
+            color: #7986cb;
+        }
+
+        @keyframes floatHealGentle {
+            0% { transform: scale(0.8); opacity: 0; }
+            20% { transform: scale(1.1); opacity: 1; }
+            50% { transform: scale(1) translateY(-15px); opacity: 1; }
+            100% { transform: scale(1) translateY(-40px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- In-Game UI -->
+        <div id="score-board">抱抱值: <span id="score">0</span></div>
+        <div id="timer-board">发呆时间: <span id="timer">45</span>s</div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="screen">
+            <h1 class="text-4xl md:text-5xl font-bold text-pink-400">融化成一摊了...</h1>
+            <pre class="text-pink-400 font-mono text-2xl mt-6 mb-4 leading-tight text-center">
+   . ⌒ . ⌒ .
+  (   _  _   )
+   \  o  o  /
+    \  __  / 
+     '----'
+            </pre>
+            <p class="subtitle">感冒还没好透，又遇上姨妈造访，
+双重暴击下，大早上的电量就耗尽了。
+既然已经融化成一摊了，就别勉强自己凝固啦。
+点点气球，让我给你递个暖水袋吧。</p>
+            <button class="btn-start" style="background: linear-gradient(135deg, #ffb6c1 0%, #ffc0cb 100%); color: #d81b60; box-shadow: 0 4px 15px rgba(255, 182, 193, 0.4);" onclick="startGame()">戳气球求抱抱</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="screen hidden">
+            <h1 class="text-4xl md:text-5xl font-bold text-pink-400">乖乖休息哦~</h1>
+            <pre class="text-pink-400 font-mono text-2xl mt-6 mb-4 leading-tight text-center">
+   [▓▓] ε:) 
+  (裹紧小被子)
+            </pre>
+            <p class="subtitle mt-4 text-xl" id="final-message">刚才送给你了 <span id="final-score" class="text-pink-500 font-bold">0</span> 个暖暖的拥抱！</p>
+            <p class="text-gray-500 mt-2 mb-6 text-center max-w-md px-6 leading-relaxed">
+                今天能坐在工位上就已经用尽全力了！
+千万不要有任何愧疚感。
+如果实在难受，一定要请假回家躺着哦。
+我在这里陪着你。
+            </p>
+            <button class="btn-start" style="background: linear-gradient(135deg, #ffb6c1 0%, #ffc0cb 100%); color: #d81b60; box-shadow: 0 4px 15px rgba(255, 182, 193, 0.4);" onclick="startGame()">再要一个抱抱</button>
+        </div>
+    </div>
+
+    <script>
+        let score = 0;
+        let timeLeft = 45; // Increased time, less pressure
+        let gameInterval;
+        let spawnInterval;
+        let isPlaying = false;
+
+        const scoreElement = document.getElementById('score');
+        const timerElement = document.getElementById('timer');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreElement = document.getElementById('final-score');
+        const gameContainer = document.getElementById('game-container');
+
+        // 换成感冒和生理期专属的感受标签
+        const moods = [
+            { color: '#ffcdd2', darkColor: '#ef9a9a', label: '肚子痛痛', emoji: '🩸' },
+            { color: '#f8bbd0', darkColor: '#f48fb1', label: '好冷哦', emoji: '🥶' },
+            { color: '#e1bee7', darkColor: '#ce93d8', label: '要化了', emoji: '🫠' },
+            { color: '#ffecb3', darkColor: '#ffd54f', label: '没力气', emoji: '🍂' },
+            { color: '#b2dfdb', darkColor: '#80cbc4', label: '头晕晕', emoji: '💫' }
+        ];
+
+        // 专属的治愈动作
+        const healingArts = [
+            ` 递暖水袋\n [==♨️==]`,
+            ` 揉揉肚子\n ( ´･･)ﾉ(._.\`)`,
+            ` 裹紧小被子\n  [▓▓] ε:)`,
+            ` 泡红糖水\n c( -_-c)🍵`,
+            ` 贴贴抱抱\n (つ´ω\`)つ`,
+            ` 变成一朵云\n ☁️🫠☁️`
+        ];
+
+        function startGame() {
+            score = 0;
+            timeLeft = 45;
+            isPlaying = true;
+            scoreElement.innerText = score;
+            timerElement.innerText = timeLeft;
+
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+
+            const existingBalloons = document.querySelectorAll('.mood-balloon');
+            existingBalloons.forEach(b => b.remove());
+
+            gameInterval = setInterval(updateTimer, 1000);
+            
+            // Slower spawn rate for a more relaxed feel
+            const spawnRate = window.innerWidth < 600 ? 1200 : 900;
+            spawnInterval = setInterval(spawnBalloon, spawnRate);
+            
+            spawnBalloon();
+        }
+
+        function updateTimer() {
+            timeLeft--;
+            timerElement.innerText = timeLeft;
+            if (timeLeft <= 0) {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            isPlaying = false;
+            clearInterval(gameInterval);
+            clearInterval(spawnInterval);
+            
+            finalScoreElement.innerText = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function spawnBalloon() {
+            if (!isPlaying) return;
+
+            const balloon = document.createElement('div');
+            balloon.classList.add('mood-balloon');
+            
+            const mood = moods[Math.floor(Math.random() * moods.length)];
+            
+            balloon.style.backgroundColor = mood.color;
+            balloon.style.setProperty('--triangle-color', mood.darkColor);
+            
+            balloon.innerHTML = `
+                <style>.mood-balloon::before { border-top-color: ${mood.darkColor}; }</style>
+                <div style="display:flex; flex-direction:column; align-items:center;">
+                    <span style="font-size: 32px; line-height: 1;">${mood.emoji}</span>
+                    <span style="font-size: 14px; font-weight: bold; margin-top: 4px; color: #555;">${mood.label}</span>
+                </div>
+            `;
+
+            const size = 90;
+            const maxX = window.innerWidth - size;
+            const randomX = Math.floor(Math.random() * maxX);
+            balloon.style.left = `${randomX}px`;
+
+            // Slower floating duration
+            const minDuration = 5;
+            const maxDuration = 8;
+            const duration = Math.random() * (maxDuration - minDuration) + minDuration;
+            
+            balloon.style.animation = `floatUp ${duration}s linear forwards`;
+
+            balloon.addEventListener('mousedown', () => popBalloon(balloon, mood));
+            balloon.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                popBalloon(balloon, mood);
+            }, {passive: false});
+
+            balloon.addEventListener('animationend', (e) => {
+                if(e.animationName === 'floatUp' && balloon.parentNode) {
+                    balloon.remove();
+                }
+            });
+
+            gameContainer.appendChild(balloon);
+        }
+
+        function createParticles(x, y, color) {
+            const particleCount = 5; // Fewer particles for gentler effect
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                
+                const size = Math.random() * 6 + 3;
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                particle.style.backgroundColor = color;
+                
+                particle.style.left = `${x - size/2}px`;
+                particle.style.top = `${y - size/2}px`;
+                
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 30 + 10;
+                const tx = Math.cos(angle) * distance;
+                const ty = Math.sin(angle) * distance;
+                
+                particle.style.transform = `translate(${tx}px, ${ty}px)`;
+                
+                gameContainer.appendChild(particle);
+                
+                setTimeout(() => {
+                    if(particle.parentNode) particle.remove();
+                }, 800);
+            }
+        }
+
+        function popBalloon(balloon, mood) {
+            if (!isPlaying || balloon.classList.contains('healing-art')) return;
+
+            const rect = balloon.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            balloon.style.animation = 'none'; 
+            
+            balloon.className = 'healing-art';
+            balloon.style.left = `${centerX - 40}px`; 
+            balloon.style.top = `${centerY - 40}px`;
+            
+            const randomArt = healingArts[Math.floor(Math.random() * healingArts.length)];
+            
+            balloon.innerHTML = `
+                <pre>${randomArt}</pre>
+                <div class="pop-text" style="color: #d81b60;">暖暖的~ +1</div>
+            `;
+
+            createParticles(centerX, centerY, mood.color);
+            
+            score++;
+            scoreElement.innerText = score;
+            
+            playSoftPopSound();
+
+            setTimeout(() => {
+                if (balloon.parentNode) {
+                    balloon.remove();
+                }
+            }, 2000);
+        }
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSoftPopSound() {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.type = 'sine';
+            // Lower, softer frequency
+            oscillator.frequency.setValueAtTime(400, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); // Lower volume
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1);
+        }
+        
+        gameContainer.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+    </script>
+</body>
+</html>

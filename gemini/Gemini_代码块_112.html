@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>接住我的心</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    touch-action: none; /* 防止页面滚动 */
+  }
+
+  #game-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #score-board {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    font-size: 24px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.3);
+    padding: 10px 20px;
+    border-radius: 20px;
+    backdrop-filter: blur(5px);
+  }
+
+  #player {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 60px;
+    user-select: none;
+    z-index: 20;
+    transition: transform 0.1s;
+  }
+
+  .falling-item {
+    position: absolute;
+    font-size: 35px;
+    user-select: none;
+    z-index: 15;
+  }
+
+  #start-screen, #win-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+  }
+
+  h1 {
+    color: #ff6b81;
+    font-size: 32px;
+    margin-bottom: 10px;
+    text-shadow: 1px 1px 0px #fff;
+  }
+
+  p {
+    color: #555;
+    font-size: 16px;
+    margin-bottom: 30px;
+  }
+
+  button {
+    background: #ff6b81;
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 20px;
+    font-weight: bold;
+    border-radius: 30px;
+    box-shadow: 0 8px 15px rgba(255, 107, 129, 0.3);
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  button:active {
+    transform: scale(0.95);
+    box-shadow: 0 4px 10px rgba(255, 107, 129, 0.3);
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  .floating-text {
+    position: absolute;
+    color: #fff;
+    font-weight: bold;
+    font-size: 20px;
+    pointer-events: none;
+    animation: floatUpFade 1s forwards;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+  }
+
+  @keyframes floatUpFade {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div id="score-board">爱心: <span id="score">0</span> / 20</div>
+  <!-- 宝的小篮子 -->
+  <div id="player">🧺</div>
+</div>
+
+<!-- 开始界面 -->
+<div id="start-screen">
+  <h1>接住我的心 💕</h1>
+  <p>左右滑动/移动鼠标，帮宝接住天上掉下来的爱心！</p>
+  <button onclick="startGame()">开始游戏</button>
+</div>
+
+<!-- 胜利界面 -->
+<div id="win-screen" class="hidden">
+  <h1>🎉 宝太厉害啦！</h1>
+  <p>成功收集满 20 颗爱心！奖励一个超级大抱抱 🤗</p>
+  <button onclick="startGame()">再玩一次</button>
+</div>
+
+<script>
+  const player = document.getElementById('player');
+  const gameContainer = document.getElementById('game-container');
+  const scoreDisplay = document.getElementById('score');
+  const startScreen = document.getElementById('start-screen');
+  const winScreen = document.getElementById('win-screen');
+  
+  let score = 0;
+  let gameActive = false;
+  let items = [];
+  let fallSpeed = 3;
+  let spawnRate = 60; // 越小越快
+  let frameCount = 0;
+  let animationId;
+
+  const emojis = ['❤️', '💖', '💕', '🍓', '🍬', '✨'];
+
+  // 处理移动（支持触摸和鼠标）
+  function movePlayer(clientX) {
+    if (!gameActive) return;
+    const containerRect = gameContainer.getBoundingClientRect();
+    let x = clientX - containerRect.left;
+    
+    // 边界限制
+    const playerWidth = 60;
+    if (x < playerWidth/2) x = playerWidth/2;
+    if (x > containerRect.width - playerWidth/2) x = containerRect.width - playerWidth/2;
+    
+    player.style.left = x + 'px';
+  }
+
+  gameContainer.addEventListener('touchmove', (e) => {
+    e.preventDefault(); // 防止屏幕滑动
+    movePlayer(e.touches[0].clientX);
+  }, { passive: false });
+
+  gameContainer.addEventListener('mousemove', (e) => {
+    movePlayer(e.clientX);
+  });
+
+  function startGame() {
+    score = 0;
+    fallSpeed = 3;
+    scoreDisplay.innerText = score;
+    startScreen.classList.add('hidden');
+    winScreen.classList.add('hidden');
+    
+    // 清理之前的物品
+    items.forEach(item => item.el.remove());
+    items = [];
+    
+    gameActive = true;
+    gameLoop();
+  }
+
+  function spawnItem() {
+    const el = document.createElement('div');
+    el.classList.add('falling-item');
+    el.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+    
+    const x = Math.random() * (gameContainer.clientWidth - 40);
+    el.style.left = x + 'px';
+    el.style.top = '-40px';
+    
+    gameContainer.appendChild(el);
+    items.push({ el: el, x: x, y: -40, type: el.innerText });
+  }
+
+  function showFloatingText(x, y) {
+    const txt = document.createElement('div');
+    txt.classList.add('floating-text');
+    txt.innerText = '+1';
+    txt.style.left = x + 'px';
+    txt.style.top = y + 'px';
+    gameContainer.appendChild(txt);
+    setTimeout(() => txt.remove(), 1000);
+  }
+
+  function checkWin() {
+    if (score >= 20) {
+      gameActive = false;
+      cancelAnimationFrame(animationId);
+      winScreen.classList.remove('hidden');
+    }
+  }
+
+  function gameLoop() {
+    if (!gameActive) return;
+
+    frameCount++;
+    if (frameCount % spawnRate === 0) {
+      spawnItem();
+      // 稍微增加难度
+      if (spawnRate > 20) spawnRate -= 2;
+      if (fallSpeed < 8) fallSpeed += 0.1;
+    }
+
+    const playerRect = player.getBoundingClientRect();
+
+    for (let i = items.length - 1; i >= 0; i--) {
+      let item = items[i];
+      item.y += fallSpeed;
+      item.el.style.top = item.y + 'px';
+
+      // 碰撞检测 (简单的矩形重叠)
+      const itemRect = item.el.getBoundingClientRect();
+      
+      const isColliding = !(
+        playerRect.right < itemRect.left + 10 || 
+        playerRect.left > itemRect.right - 10 || 
+        playerRect.bottom < itemRect.top + 10 || 
+        playerRect.top > itemRect.bottom - 10
+      );
+
+      if (isColliding) {
+        score++;
+        scoreDisplay.innerText = score;
+        showFloatingText(itemRect.left, itemRect.top);
+        
+        // 放大篮子一下作为反馈
+        player.style.transform = 'translateX(-50%) scale(1.3)';
+        setTimeout(() => player.style.transform = 'translateX(-50%) scale(1)', 100);
+
+        item.el.remove();
+        items.splice(i, 1);
+        checkWin();
+      } 
+      // 掉出屏幕
+      else if (item.y > gameContainer.clientHeight) {
+        item.el.remove();
+        items.splice(i, 1);
+      }
+    }
+
+    if (gameActive) {
+      animationId = requestAnimationFrame(gameLoop);
+    }
+  }
+</script>
+</body>
+</html>

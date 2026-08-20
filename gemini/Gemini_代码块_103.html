@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>摸鱼打地鼠</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f0fdf4; /* 护眼绿背景，适合摸鱼 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* 防止出现滚动条 */
+            user-select: none; /* 防止双击选中文字影响体验 */
+        }
+
+        .hole {
+            background-color: #8b5a2b; /* 泥土颜色 */
+            box-shadow: inset 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            border-radius: 50%;
+        }
+
+        .mole {
+            position: absolute;
+            bottom: -100%; /* 初始隐藏在洞底 */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 90%;
+            background-color: #a0522d;
+            border-radius: 50% 50% 10% 10%;
+            cursor: crosshair; /* 鼠标变成瞄准星 */
+            transition: bottom 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 弹出动画效果 */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 10px;
+        }
+        
+        .mole::before {
+            /* 地鼠的眼睛 */
+            content: '';
+            position: absolute;
+            top: 20%;
+            left: 25%;
+            width: 15%;
+            height: 15%;
+            background-color: white;
+            border-radius: 50%;
+            box-shadow: 25px 0 0 white;
+        }
+
+        .mole::after {
+            /* 地鼠的瞳孔 */
+            content: '';
+            position: absolute;
+            top: 25%;
+            left: 28%;
+            width: 6%;
+            height: 6%;
+            background-color: black;
+            border-radius: 50%;
+            box-shadow: 25px 0 0 black;
+        }
+
+        .mole .nose {
+            /* 地鼠的鼻子 */
+            position: absolute;
+            top: 40%;
+            width: 15%;
+            height: 10%;
+            background-color: pink;
+            border-radius: 50%;
+        }
+
+        .mole.up {
+            bottom: 0; /* 地鼠探出头 */
+        }
+
+        /* 被打中的动画效果 */
+        .mole.whacked {
+            background-color: #dc2626; /* 变成红色 */
+            transform: translateX(-50%) scale(0.8) rotate(15deg); /* 缩小并倾斜 */
+            transition: all 0.1s ease-out;
+        }
+        
+        .mole.whacked::before, .mole.whacked::after {
+            /* 眩晕的眼睛 (简单的十字形代替) */
+            background-color: transparent;
+            box-shadow: none;
+            border: 2px solid white;
+        }
+
+        /* 游戏结束弹窗样式 */
+        #game-over-modal {
+            backdrop-filter: blur(4px);
+        }
+
+        /* 隐藏的 boss 地鼠 (老板来啦) */
+        .mole.boss {
+            background-color: #333;
+            border-radius: 20% 20% 10% 10%;
+        }
+        .mole.boss::after {
+             /* 愤怒的红眼 */
+             background-color: #ef4444;
+             box-shadow: 25px 0 0 #ef4444;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center relative">
+
+    <div class="absolute top-8 w-full max-w-md px-6 flex justify-between items-center z-10">
+        <div class="bg-white px-4 py-2 rounded-xl shadow-sm border border-green-200">
+            <span class="text-gray-500 font-bold mr-2">得分:</span>
+            <span id="score" class="text-2xl font-black text-green-600">0</span>
+        </div>
+        <div class="bg-white px-4 py-2 rounded-xl shadow-sm border border-red-200">
+            <span class="text-gray-500 font-bold mr-2">时间:</span>
+            <span id="time" class="text-2xl font-black text-red-500">30</span>
+            <span class="text-gray-400 text-sm ml-1">s</span>
+        </div>
+    </div>
+
+    <div class="text-center mb-8 z-10">
+        <h1 class="text-4xl font-extrabold text-green-800 tracking-tight mb-2 opacity-80">悄悄摸鱼</h1>
+        <p class="text-green-600 font-medium mb-6">看准了再点，小心点到老板！</p>
+        <button id="start-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-lg transform transition hover:-translate-y-1 active:translate-y-0 active:bg-green-700 text-xl w-48">
+            开始摸鱼
+        </button>
+    </div>
+
+    <div id="game-board" class="grid grid-cols-3 gap-4 sm:gap-6 w-full max-w-md p-4 opacity-50 transition-opacity duration-300 pointer-events-none">
+        <!-- 9个洞口 -->
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+        <div class="hole w-full aspect-square relative rounded-full">
+            <div class="mole cursor-pointer"><div class="nose"></div></div>
+        </div>
+    </div>
+
+    <div id="game-over-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4 text-center transform scale-95 transition-transform duration-300" id="modal-content">
+            <h2 class="text-3xl font-bold text-gray-800 mb-4" id="final-message">摸鱼结束！</h2>
+            <p class="text-gray-600 mb-6 text-lg">你一共摸到了 <span id="final-score" class="font-black text-green-600 text-2xl mx-1">0</span> 条鱼！</p>
+            <p class="text-sm text-gray-500 mb-6 italic" id="evaluation">评语：继续努力！</p>
+            <button id="restart-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl shadow transition">
+                再来一次
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素获取
+        const holes = document.querySelectorAll('.hole');
+        const scoreBoard = document.getElementById('score');
+        const timeBoard = document.getElementById('time');
+        const startBtn = document.getElementById('start-btn');
+        const gameBoard = document.getElementById('game-board');
+        
+        const modal = document.getElementById('game-over-modal');
+        const modalContent = document.getElementById('modal-content');
+        const finalScoreSpan = document.getElementById('final-score');
+        const finalMessage = document.getElementById('final-message');
+        const evaluationText = document.getElementById('evaluation');
+        const restartBtn = document.getElementById('restart-btn');
+
+        let lastHole;       // 记录上一次出地鼠的洞口，防止连续在同一个洞口出
+        let timeUp = false; // 游戏是否结束的标志
+        let score = 0;      // 当前得分
+        let gameTimer;      // 控制游戏总时间的定时器
+        let moleTimer;      // 控制地鼠出现和消失的定时器
+        const GAME_DURATION = 30; // 游戏时长 30秒
+
+        // 获取随机时间，控制地鼠弹出的快慢
+        function randomTime(min, max) {
+            return Math.round(Math.random() * (max - min) + min);
+        }
+
+        // 随机选择一个洞口
+        function randomHole(holesList) {
+            const idx = Math.floor(Math.random() * holesList.length);
+            const hole = holesList[idx];
+            // 如果随机到的洞口和上次一样，重新递归获取
+            if (hole === lastHole) {
+                return randomHole(holesList);
+            }
+            lastHole = hole;
+            return hole;
+        }
+
+        // 让地鼠探出头
+        function peep() {
+            const time = randomTime(500, 1200); // 地鼠停留的随机时间
+            const hole = randomHole(holes);
+            const mole = hole.querySelector('.mole');
+            
+            // 移除可能残留的 boss 样式和被打中的样式
+            mole.classList.remove('boss', 'whacked');
+
+            // 15% 的概率出现 boss (老板)
+            const isBoss = Math.random() < 0.15;
+            if (isBoss) {
+                mole.classList.add('boss');
+            }
+
+            // 添加 'up' 类，触发 CSS 弹出动画
+            mole.classList.add('up');
+
+            // 设置定时器，时间到了地鼠缩回去，并准备下一次弹出
+            moleTimer = setTimeout(() => {
+                mole.classList.remove('up');
+                // 只要游戏没结束，就继续弹出地鼠
+                if (!timeUp) peep();
+            }, time);
+        }
+
+        // 开始游戏主函数
+        function startGame() {
+            scoreBoard.textContent = 0;
+            timeBoard.textContent = GAME_DURATION;
+            timeUp = false;
+            score = 0;
+            
+            // 禁用开始按钮，激活游戏区域
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            gameBoard.classList.remove('opacity-50', 'pointer-events-none');
+
+            // 开始倒计时和地鼠弹出
+            startCountdown();
+            peep();
+        }
+
+        // 处理倒计时
+        function startCountdown() {
+            let timeLeft = GAME_DURATION;
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                timeBoard.textContent = timeLeft;
+
+                // 时间快到了字变红提示
+                if (timeLeft <= 5) {
+                    timeBoard.classList.add('text-red-600', 'animate-pulse');
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(gameTimer);
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        // 游戏结束处理
+        function endGame() {
+            timeUp = true;
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            gameBoard.classList.add('opacity-50', 'pointer-events-none');
+            timeBoard.classList.remove('text-red-600', 'animate-pulse');
+            
+            // 停止所有未完成的地鼠动作
+            clearTimeout(moleTimer);
+            holes.forEach(hole => hole.querySelector('.mole').classList.remove('up'));
+
+            showModal();
+        }
+
+        // 显示结果弹窗
+        function showModal() {
+            finalScoreSpan.textContent = score;
+            
+            // 根据分数给评语
+            if (score < 0) {
+                finalMessage.textContent = "惨遭开除！";
+                evaluationText.textContent = "打到老板了！明天不用来上班了。";
+                finalMessage.classList.add('text-red-600');
+            } else if (score === 0) {
+                 finalMessage.textContent = "老实巴交";
+                 evaluationText.textContent = "一点鱼都不摸，真是好员工。";
+                 finalMessage.classList.remove('text-red-600');
+            } else if (score < 10) {
+                finalMessage.textContent = "摸鱼新手";
+                evaluationText.textContent = "胆子不够大，手法不够快。";
+                finalMessage.classList.remove('text-red-600');
+            } else if (score < 20) {
+                finalMessage.textContent = "摸鱼达人";
+                evaluationText.textContent = "游刃有余，老板都看不出来。";
+                finalMessage.classList.remove('text-red-600');
+            } else {
+                finalMessage.textContent = "摸鱼宗师！";
+                evaluationText.textContent = "工资小偷就是你！";
+                finalMessage.classList.remove('text-red-600');
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // 简单的小动画让弹窗更平滑
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            }, 10);
+        }
+
+        // 打击地鼠的逻辑
+        function bonk(e) {
+            // 防作弊检查（如果不是用户真实的点击）
+            if (!e.isTrusted) return; 
+
+            const mole = this;
+            
+            // 如果地鼠没冒头或者已经打过了，就不处理
+            if (!mole.classList.contains('up') || mole.classList.contains('whacked')) return;
+
+            // 标记为被打中，触发被打中的 CSS 动画
+            mole.classList.add('whacked');
+            
+            // 计分逻辑
+            if (mole.classList.contains('boss')) {
+                // 打到黑色的 boss (老板)，扣大分！
+                score -= 5;
+                // 屏幕闪烁红色警告
+                document.body.style.backgroundColor = '#fee2e2';
+                setTimeout(() => document.body.style.backgroundColor = '#f0fdf4', 200);
+            } else {
+                // 打到普通地鼠，加分
+                score++;
+            }
+            
+            scoreBoard.textContent = score;
+
+            // 被打中后，稍微延迟一下就缩回去
+            setTimeout(() => {
+                mole.classList.remove('up');
+                mole.classList.remove('whacked'); // 清理状态准备下一次
+            }, 150);
+        }
+
+        // 绑定事件监听
+        startBtn.addEventListener('click', startGame);
+        
+        restartBtn.addEventListener('click', () => {
+            // 隐藏弹窗并重新开始
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                startGame();
+            }, 200);
+        });
+
+        // 给每个地鼠绑定点击事件 (触摸屏设备用 mousedown 响应更快，或者直接 click)
+        holes.forEach(hole => {
+            const mole = hole.querySelector('.mole');
+            // 兼容触屏和鼠标点击
+            mole.addEventListener('mousedown', bonk);
+            mole.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // 防止双击缩放等默认行为
+                bonk.call(mole, e);
+            }, { passive: false });
+        });
+
+    </script>
+</body>
+</html>

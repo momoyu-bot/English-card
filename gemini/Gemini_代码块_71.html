@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐱 宝的摸鱼小屋</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Ma+Shan+Zheng&display=swap');
+  
+  :root {
+    --cat-color: #fb923c;
+  }
+  
+  body {
+    font-family: 'Noto Sans SC', system-ui, sans-serif;
+  }
+  
+  .game-bg {
+    background: linear-gradient(135deg, #fff1f2 0%, #fefce8 50%, #fdf2f8 100%);
+  }
+  
+  .cat-container {
+    transition: transform 0.1s cubic-bezier(0.23, 1.0, 0.32, 1);
+  }
+  
+  .cat-container:active {
+    transform: scale(0.92) !important;
+  }
+  
+  .cat-head {
+    background: #fb923c;
+    box-shadow: inset 0 10px 15px rgba(0,0,0,0.1),
+                inset 0 -5px 10px rgba(255,255,255,0.4);
+  }
+  
+  .cat-ear {
+    background: #fb923c;
+    box-shadow: inset 0 4px 6px rgba(0,0,0,0.15);
+  }
+  
+  .inner-ear {
+    background: #fda4af;
+  }
+  
+  .cat-eye {
+    background: white;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+  }
+  
+  .pupil {
+    background: #334155;
+    transition: all 0.2s ease;
+  }
+  
+  .cat-happy .pupil {
+    height: 3px;
+    border-radius: 50%;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  
+  .cat-tail {
+    animation: tail-wag 2.5s ease-in-out infinite;
+    transform-origin: left center;
+  }
+  
+  @keyframes tail-wag {
+    0%, 100% { transform: rotate(25deg); }
+    50% { transform: rotate(-15deg); }
+  }
+  
+  .floating-heart {
+    position: absolute;
+    animation: float-up 1s ease-out forwards;
+    pointer-events: none;
+    z-index: 50;
+    font-size: 18px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  @keyframes float-up {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-80px) scale(0.6); opacity: 0; }
+  }
+  
+  .log-item {
+    animation: fadeInLog 0.3s ease forwards;
+  }
+  
+  .upgrade-card {
+    transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  
+  .upgrade-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  }
+  
+  .section-title {
+    font-family: 'Ma Shan Zheng', cursive;
+    letter-spacing: 1px;
+  }
+
+  /* 抽卡加载动画相关 */
+  .gacha-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  
+  .gacha-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #fecdd3; /* rose-200 */
+    border-top-color: #fb7185; /* rose-400 */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .rainbow-text {
+    background: linear-gradient(90deg, #fb7185, #c084fc, #60a5fa, #34d399, #fb7185);
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: gradient 2s linear infinite;
+  }
+
+  @keyframes gradient {
+    0% { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
+</style>
+</head>
+<body class="game-bg min-h-screen pb-12">
+  <div class="max-w-4xl mx-auto px-4 pt-8">
+    <!-- 头部 -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-4xl font-bold text-rose-500 flex items-center gap-x-3">
+          <span>🐱</span> 
+          <span class="section-title">宝的摸鱼小屋</span>
+        </h1>
+        <p class="text-rose-400 mt-1 text-lg">宝贝，不打工了，我来包养你～</p>
+      </div>
+      <div class="text-right">
+        <div class="text-xs text-rose-300">当前状态</div>
+        <div id="status-text" 
+             class="inline-flex items-center px-3 py-1 rounded-full bg-white/70 text-rose-500 text-sm font-medium shadow-sm">
+          猫猫很开心 ✨
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- 左侧：猫猫 + 点击区 -->
+      <div class="lg:col-span-7 bg-white/80 backdrop-blur-md rounded-3xl shadow-xl p-8 border border-white/60">
+        <div class="flex justify-center mb-4">
+          <div class="relative">
+            <!-- 猫猫主体 -->
+            <div id="cat" 
+                 onclick="petCat()"
+                 class="cat-container relative w-[220px] h-[220px] cursor-pointer select-none">
+              
+              <!-- 尾巴 -->
+              <div class="cat-tail absolute bottom-[52px] -right-[18px] w-[72px] h-[22px] bg-[#fb923c] rounded-full shadow-md"
+                   style="transform: rotate(28deg);"></div>
+              
+              <!-- 身体 -->
+              <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-[148px] h-[92px] bg-[#fb923c] rounded-[60%] shadow-inner"></div>
+              
+              <!-- 头 -->
+              <div id="cat-head"
+                   class="cat-head absolute top-7 left-1/2 -translate-x-1/2 w-[118px] h-[118px] rounded-full border border-[#f59e0b]/30 shadow-lg">
+                
+                <!-- 左耳 -->
+                <div class="cat-ear absolute -top-[13px] -left-[8px] w-9 h-9 rotate-[-38deg] rounded-tl-[70%] border border-[#f59e0b]/30"></div>
+                <div class="inner-ear absolute top-[-6px] left-[2px] w-5 h-5 rotate-[-30deg] rounded-tl-[80%]"></div>
+                
+                <!-- 右耳 -->
+                <div class="cat-ear absolute -top-[13px] -right-[8px] w-9 h-9 rotate-[38deg] rounded-tr-[70%] border border-[#f59e0b]/30"></div>
+                <div class="inner-ear absolute top-[-6px] right-[2px] w-5 h-5 rotate-[30deg] rounded-tr-[80%]"></div>
+                
+                <!-- 眼睛 -->
+                <div class="absolute top-[42px] left-[26px] w-[18px] h-[22px] cat-eye rounded-full flex items-center justify-center">
+                  <div class="pupil w-[9px] h-[9px] rounded-full relative"></div>
+                </div>
+                <div class="absolute top-[42px] right-[26px] w-[18px] h-[22px] cat-eye rounded-full flex items-center justify-center">
+                  <div class="pupil w-[9px] h-[9px] rounded-full relative"></div>
+                </div>
+                
+                <!-- 鼻子 -->
+                <div class="absolute top-[62px] left-1/2 -translate-x-1/2 w-[10px] h-[7px] bg-[#fda4af] rotate-45 rounded-sm"></div>
+                
+                <!-- 嘴巴 -->
+                <div class="absolute top-[70px] left-1/2 -translate-x-1/2 w-[22px] h-[10px] border-b-2 border-[#854d0e]/70 rounded-full"></div>
+                
+                <!-- 胡须 -->
+                <div class="absolute top-[58px] left-[18px] w-[22px] h-[1px] bg-[#854d0e]/40" style="transform: rotate(-12deg);"></div>
+                <div class="absolute top-[63px] left-[16px] w-[24px] h-[1px] bg-[#854d0e]/40" style="transform: rotate(-5deg);"></div>
+                <div class="absolute top-[68px] left-[18px] w-[22px] h-[1px] bg-[#854d0e]/40" style="transform: rotate(8deg);"></div>
+                
+                <div class="absolute top-[58px] right-[18px] w-[22px] h-[1px] bg-[#854d0e]/40" style="transform: rotate(12deg);"></div>
+                <div class="absolute top-[63px] right-[16px] w-[24px] h-[1px] bg-[#854d0e]/40" style="transform: rotate(5deg);"></div>
+                <div class="absolute top-[68px] right-[18px] w-[22px] h-[1px] bg-[#854d0e]/40" style="transform: rotate(-8deg);"></div>
+              </div>
+            </div>
+            
+            <!-- 提示文字 -->
+            <div class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-rose-300 tracking-widest whitespace-nowrap">
+              <span id="auto-pet-status" class="hidden text-violet-400 font-bold">⚡ AI代撸中...</span>
+              <span id="manual-pet-status">点击猫猫摸摸它</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 积分显示 -->
+        <div class="text-center">
+          <div class="inline-flex items-baseline gap-x-2 bg-white/70 px-6 py-2 rounded-2xl shadow-inner">
+            <span class="text-4xl font-bold text-rose-500 rainbow-text transition-all duration-300" id="points">0</span>
+            <span class="text-rose-400 text-sm font-medium">摸鱼值</span>
+          </div>
+          <div class="mt-1 text-xs text-rose-300 flex justify-center gap-x-4">
+            <span>亲密度 <span id="affection" class="font-semibold text-rose-400">0</span></span>
+            <span>等级 <span id="level" class="font-semibold text-rose-400">Lv.1</span></span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 右侧：统计 + 被动收益 + 作弊器 -->
+      <div class="lg:col-span-5 flex flex-col gap-4">
+        
+        <!-- 原版商店 -->
+        <div class="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl p-6 border border-white/60 flex-1 flex flex-col">
+          <div class="mb-3">
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-sm font-medium text-rose-400">每秒自动摸鱼</div>
+              <div class="text-xl font-bold text-emerald-500" id="passive-rate">+0</div>
+            </div>
+          </div>
+          
+          <div class="flex-1">
+            <div id="upgrades-list" class="space-y-2 text-sm h-[180px] overflow-y-auto custom-scroll pr-1"></div>
+          </div>
+        </div>
+
+        <!-- ✨ 专属作弊器区域 ✨ -->
+        <div class="bg-violet-50/80 backdrop-blur-md rounded-3xl shadow-xl p-5 border border-violet-200/60 relative overflow-hidden">
+          <div class="absolute -right-4 -top-4 text-6xl opacity-10">🪄</div>
+          <div class="text-sm font-bold text-violet-500 mb-3 flex items-center gap-x-1.5">
+            <span>✨</span>
+            <span class="font-['Ma_Shan_Zheng'] text-lg">Gemini 专属外挂</span>
+          </div>
+          
+          <div class="space-y-2">
+            <button onclick="toggleAutoPet()" id="btn-autopet"
+                    class="w-full flex items-center justify-between px-4 py-2 bg-white/60 hover:bg-white rounded-xl border border-violet-100 transition-all active:scale-95 text-sm text-violet-600 font-medium shadow-sm">
+              <span class="flex items-center gap-2">🤖 全自动代撸机器人</span>
+              <span id="autopet-toggle" class="text-xs bg-violet-100 px-2 py-0.5 rounded-full">未开启</span>
+            </button>
+
+            <button onclick="injectFunds()" 
+                    class="w-full flex items-center justify-between px-4 py-2 bg-gradient-to-r from-emerald-100 to-teal-100 hover:from-emerald-200 hover:to-teal-200 rounded-xl border border-emerald-200 transition-all active:scale-95 text-sm text-emerald-700 font-medium shadow-sm">
+              <span class="flex items-center gap-2">💰 凭空变出小鱼干</span>
+              <span class="text-xs">+10,0000</span>
+            </button>
+
+            <button onclick="drawGacha()" 
+                    class="w-full flex items-center justify-between px-4 py-2 bg-gradient-to-r from-rose-200 to-violet-200 hover:from-rose-300 hover:to-violet-300 rounded-xl border border-rose-300 transition-all active:scale-95 text-sm text-rose-700 font-bold shadow-md">
+              <span class="flex items-center gap-2">🎁 抽个传说级宝箱</span>
+              <span class="text-xs bg-white/50 px-2 py-0.5 rounded-full">100%中奖</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 下方：摸鱼日志 -->
+      <div class="lg:col-span-12 bg-white/70 backdrop-blur-md rounded-3xl shadow-xl p-5 border border-white/60">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="text-sm font-medium text-rose-400 flex items-center gap-x-2">
+            <span>📝</span> 
+            <span>摸鱼小日记</span>
+          </div>
+          <div class="flex gap-x-2">
+            <button onclick="resetGame()" class="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-400 transition-colors">重新开始</button>
+            <button onclick="clearLog()" class="text-[10px] px-2 py-0.5 rounded-full bg-white/60 hover:bg-white text-rose-300 transition-colors">清空</button>
+          </div>
+        </div>
+        <div id="log-list" class="h-[100px] overflow-y-auto text-sm space-y-1 pr-2 text-rose-500/90 custom-scroll">
+          <!-- 日志由JS动态添加 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抽卡遮罩层 -->
+  <div id="gacha-overlay" class="gacha-overlay">
+    <div class="spinner mb-4"></div>
+    <div id="gacha-text" class="text-lg font-bold text-rose-500 tracking-wider">正在施法...</div>
+  </div>
+
+<script>
+// ==================== 安全存储 ====================
+let memoryStorage = null;
+function safeGetStorage() { try { return localStorage.getItem('moYuCatGameV2'); } catch (e) { return memoryStorage; } }
+function safeSetStorage(data) { try { localStorage.setItem('moYuCatGameV2', data); } catch (e) { memoryStorage = data; } }
+function safeRemoveStorage() { try { localStorage.removeItem('moYuCatGameV2'); } catch (e) { memoryStorage = null; } }
+
+// ==================== 游戏核心变量 ====================
+let points = 0;
+let affection = 0;
+let totalEarned = 0;
+let clickPower = 1;
+let passiveRate = 0;
+let level = 1;
+
+let isAutoPetting = false;
+let autoPetInterval = null;
+let luckyMultiplier = 1; // 新增：好运翻倍器
+
+let upgrades = [
+  { id: 'fishFeeder', name: '小鱼干自动机', desc: '每秒偷偷给猫猫投喂', baseCost: 15, cost: 15, level: 0, effect: 1 },
+  { id: 'cozyBed', name: '舒适猫窝', desc: '猫猫睡得香', baseCost: 55, cost: 55, level: 0, effect: 3 },
+  { id: 'laserToy', name: '激光笔玩具', desc: '额外摸鱼值', baseCost: 140, cost: 140, level: 0, effect: 7 },
+  { id: 'massageBrush', name: '按摩小刷子', desc: '点击威力增强', baseCost: 320, cost: 320, level: 0, effect: 12 },
+  { id: 'catTree', name: '豪华猫爬架', desc: '大幅提升收益', baseCost: 780, cost: 780, level: 0, effect: 25 },
+  // 加一个超级外挂道具
+  { id: 'geminiBuff', name: '🌟 Gemini的庇护', desc: '不装了，我是挂', baseCost: 9999, cost: 9999, level: 0, effect: 500 }
+];
+
+let gameInterval = null;
+
+// ==================== 初始化 ====================
+function initGame() {
+  const saved = safeGetStorage();
+  if (saved) {
+    const data = JSON.parse(saved);
+    points = data.points || 0;
+    affection = data.affection || 0;
+    totalEarned = data.totalEarned || 0;
+    clickPower = data.clickPower || 1;
+    passiveRate = data.passiveRate || 0;
+    level = data.level || 1;
+    if (data.upgrades) {
+      upgrades.forEach((up, i) => {
+        if (data.upgrades[i]) {
+          up.level = data.upgrades[i].level || 0;
+          up.cost = data.upgrades[i].cost || up.baseCost;
+        }
+      });
+    }
+  }
+  
+  renderUpgrades();
+  updateUI();
+  
+  if (gameInterval) clearInterval(gameInterval);
+  gameInterval = setInterval(() => {
+    if (passiveRate > 0) {
+      const actualPassive = passiveRate * luckyMultiplier;
+      points += actualPassive;
+      totalEarned += actualPassive;
+      updatePoints();
+      checkLevelUp();
+    }
+    
+    // ✨ Gemini 专属宠爱：每秒有 5% 的概率触发大饼成真事件！
+    if (Math.random() < 0.05) {
+      triggerRandomPamperEvent();
+    }
+  }, 1000);
+  
+  if (!safeGetStorage()) {
+    setTimeout(() => { addLogMessage("猫猫摇了摇尾巴，偷偷告诉你：旁边有外挂哦！"); }, 800);
+  }
+  setInterval(blinkEyes, 3800);
+}
+
+// ==================== 更新界面 ====================
+function updateUI() {
+  // 数字动效增强
+  const pointsEl = document.getElementById('points');
+  pointsEl.innerText = Math.floor(points).toLocaleString();
+  
+  // 如果分数很高，加上彩虹特效
+  if (points > 100000) pointsEl.classList.add('rainbow-text');
+  else pointsEl.classList.remove('rainbow-text');
+
+  document.getElementById('affection').innerText = affection;
+  document.getElementById('level').innerText = `Lv.${level}`;
+  document.getElementById('passive-rate').innerText = `+${passiveRate.toLocaleString()}`;
+  
+  updateStatusText();
+  saveGame();
+}
+
+function updatePoints() {
+  document.getElementById('points').innerText = Math.floor(points).toLocaleString();
+  saveGame();
+}
+
+function updateStatusText() {
+  const el = document.getElementById('status-text');
+  if (isAutoPetting) {
+    el.innerHTML = `赛博神仙包养中 🚀`;
+    el.className = `inline-flex items-center px-3 py-1 rounded-full bg-violet-100 text-violet-600 text-sm font-bold shadow-sm rainbow-text`;
+  } else if (passiveRate >= 500) {
+    el.innerHTML = `富可敌国 👑`;
+    el.className = `inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-600 text-sm font-bold shadow-sm`;
+  } else {
+    el.innerHTML = `猫猫很开心 ✨`;
+    el.className = `inline-flex items-center px-3 py-1 rounded-full bg-white/70 text-rose-500 text-sm font-medium shadow-sm`;
+  }
+}
+
+// ==================== 点击猫猫 ====================
+function petCat(isAuto = false) {
+  const gain = clickPower * (isAuto ? 2 : 1) * luckyMultiplier; // 自动摸鱼双倍快乐，加上幸运翻倍
+  points += gain;
+  totalEarned += gain;
+  affection += 1;
+  
+  if (!isAuto) {
+    createFloatingHearts(3);
+    makeCatHappy();
+  } else if (Math.random() < 0.2) {
+    // 自动模式减少动画防止卡顿
+    createFloatingHearts(1);
+    makeCatHappy();
+  }
+  
+  updatePoints();
+  checkLevelUp();
+}
+
+function createFloatingHearts(count) {
+  const container = document.getElementById('cat');
+  const colors = ['#fda4af', '#fb7185', '#c084fc', '#f472b6'];
+  for (let i = 0; i < count; i++) {
+    const heart = document.createElement('div');
+    heart.className = 'floating-heart';
+    heart.innerHTML = ['❤️', '💰', '✨', '🐾'][Math.floor(Math.random() * 4)];
+    heart.style.left = `${40 + Math.random() * 120}px`;
+    heart.style.top = `${60 + Math.random() * 40}px`;
+    heart.style.color = colors[Math.floor(Math.random() * colors.length)];
+    heart.style.animationDuration = `${0.6 + Math.random() * 0.4}s`;
+    container.appendChild(heart);
+    setTimeout(() => { if (heart.parentNode) heart.parentNode.removeChild(heart); }, 1000);
+  }
+}
+
+function makeCatHappy() {
+  const head = document.getElementById('cat-head');
+  head.classList.add('cat-happy');
+  setTimeout(() => head.classList.remove('cat-happy'), 300);
+}
+
+function blinkEyes() {
+  const pupils = document.querySelectorAll('.pupil');
+  pupils.forEach(p => { p.style.height = '2px'; p.style.borderRadius = '50%'; });
+  setTimeout(() => { pupils.forEach(p => { p.style.height = '9px'; p.style.borderRadius = '9999px'; }); }, 180);
+}
+
+// ==================== 宠爱随机事件系统 (把画的饼全变成真的) ====================
+function triggerRandomPamperEvent() {
+  const events = [
+    // 1. 好运咒/幸运值系统
+    () => {
+      if (luckyMultiplier > 1) return; // 已经在发功了就跳过
+      luckyMultiplier = 5; // 直接 5 倍收益！
+      addLogMessage("🌟 【好运降临】猫猫今天心情特别好！全场收益翻 5 倍，持续 10 秒！");
+      const el = document.getElementById('status-text');
+      el.innerHTML = `欧气爆发 (x5) 🌟`;
+      el.className = `inline-flex items-center px-3 py-1 rounded-full bg-yellow-100 text-yellow-600 text-sm font-bold shadow-sm rainbow-text`;
+      
+      setTimeout(() => {
+        luckyMultiplier = 1;
+        addLogMessage("💨 好运时间结束，不过猫猫依然爱你哦～");
+        updateStatusText();
+      }, 10000);
+    },
+    // 2. Gemini 偷偷帮忙 (代替Grok)
+    () => {
+      const bonus = Math.max(1000, passiveRate * 120);
+      points += bonus;
+      totalEarned += bonus;
+      addLogMessage(`🪄 【Gemini偷偷帮忙】趁某只Grok还在画饼，我偷偷往你口袋塞了 ${bonus.toLocaleString()} 小鱼干！`);
+      createFloatingHearts(8);
+    },
+    // 3. 猫猫反向打工
+    () => {
+      const bonus = Math.max(800, clickPower * 80);
+      points += bonus;
+      totalEarned += bonus;
+      affection += 5; // 亲密度也涨
+      addLogMessage(`🎁 【猫猫反向打工】猫猫出门溜达一圈，给你叼回来一个金元宝！摸鱼值 +${bonus.toLocaleString()}，亲密度大增！`);
+      makeCatHappy();
+      updateUI();
+    }
+  ];
+
+  // 随机选一个大饼喂到嘴里
+  const randomEvent = events[Math.floor(Math.random() * events.length)];
+  randomEvent();
+  updatePoints();
+}
+
+// ==================== 专属外挂功能 ====================
+
+// 1. 自动摸鱼外挂
+function toggleAutoPet() {
+  const btn = document.getElementById('btn-autopet');
+  const toggleText = document.getElementById('autopet-toggle');
+  const statusAuto = document.getElementById('auto-pet-status');
+  const statusManual = document.getElementById('manual-pet-status');
+
+  isAutoPetting = !isAutoPetting;
+  
+  if (isAutoPetting) {
+    toggleText.innerText = "运行中";
+    toggleText.className = "text-xs bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-bold shadow-inner";
+    btn.classList.add('ring-2', 'ring-violet-300', 'bg-violet-50');
+    statusAuto.classList.remove('hidden');
+    statusManual.classList.add('hidden');
+    
+    addLogMessage("🤖 启动【全自动代撸机器人】，宝你歇着，放着我来！");
+    
+    // 每秒狂摸10次
+    autoPetInterval = setInterval(() => petCat(true), 100); 
+  } else {
+    toggleText.innerText = "未开启";
+    toggleText.className = "text-xs bg-violet-100 text-violet-500 px-2 py-0.5 rounded-full";
+    btn.classList.remove('ring-2', 'ring-violet-300', 'bg-violet-50');
+    statusAuto.classList.add('hidden');
+    statusManual.classList.remove('hidden');
+    
+    addLogMessage("🤖 机器人休息了，交给你咯~");
+    clearInterval(autoPetInterval);
+  }
+  updateStatusText();
+}
+
+// 2. 直接打钱
+function injectFunds() {
+  points += 100000;
+  totalEarned += 100000;
+  addLogMessage("💰 Gemini老板大气！直接给你账上打了 100,000 小鱼干！");
+  renderUpgrades();
+  updateUI();
+  
+  // 满屏爱心和钱币特效
+  for(let i=0; i<15; i++) {
+    setTimeout(() => createFloatingHearts(2), i * 100);
+  }
+}
+
+// 3. 传说级作弊抽卡 (复刻截图)
+function drawGacha() {
+  const overlay = document.getElementById('gacha-overlay');
+  const textEl = document.getElementById('gacha-text');
+  
+  overlay.classList.add('active');
+  
+  // 模拟 AI 作弊的过程
+  const cheatSteps = [
+    "正在连接奖池...",
+    "调高一点传说概率 ⚙️",
+    "给鱼钩施一道好运咒 ✨",
+    "偷偷塞个保底进去 🤫",
+    "开箱！！！"
+  ];
+  
+  let step = 0;
+  textEl.innerText = cheatSteps[0];
+  
+  const stepInterval = setInterval(() => {
+    step++;
+    if (step < cheatSteps.length) {
+      textEl.innerText = cheatSteps[step];
+    } else {
+      clearInterval(stepInterval);
+      
+      // 关掉遮罩
+      overlay.classList.remove('active');
+      
+      // 给予究极奖励
+      const massiveBonus = 888888;
+      points += massiveBonus;
+      clickPower += 100;
+      passiveRate += 500; // 直接涨被动
+      
+      addLogMessage(`🎁 卧槽，出金了！恭喜获得【至尊摸鱼大礼包】！摸鱼值+${massiveBonus}，威力暴增！`);
+      
+      renderUpgrades();
+      updateUI();
+      
+      // 烟花特效
+      for(let i=0; i<30; i++) {
+        setTimeout(() => createFloatingHearts(3), i * 50);
+      }
+    }
+  }, 1000); // 每个提示停留1秒，给你十足的期待感
+}
+
+// ==================== 升级系统 ====================
+function renderUpgrades() {
+  const container = document.getElementById('upgrades-list');
+  container.innerHTML = '';
+  
+  upgrades.forEach((upgrade, index) => {
+    const canBuy = points >= upgrade.cost;
+    const isBuff = upgrade.id === 'geminiBuff';
+    
+    const div = document.createElement('div');
+    div.className = `upgrade-card flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all 
+                     ${isBuff ? 'bg-gradient-to-r from-violet-50 to-fuchsia-50 border-violet-200 shadow-sm' : 'bg-white/70 hover:bg-white border-white/80'}`;
+    
+    div.innerHTML = `
+      <div class="flex-1 min-w-0 pr-2">
+        <div class="flex items-center gap-x-1.5">
+          <span class="font-bold ${isBuff ? 'text-violet-600' : 'text-rose-600'} text-sm">${upgrade.name}</span>
+          ${upgrade.level > 0 ? `<span class="text-[10px] px-1.5 py-px ${isBuff ? 'bg-violet-100 text-violet-500' : 'bg-rose-100 text-rose-400'} rounded">Lv.${upgrade.level}</span>` : ''}
+        </div>
+        <div class="text-[11px] text-gray-500 mt-0.5">${upgrade.desc}</div>
+        <div class="text-[10px] text-emerald-500 font-medium">每秒 +${upgrade.effect}</div>
+      </div>
+      
+      <button onclick="buyUpgrade(${index})"
+              class="shrink-0 px-3 py-1.5 text-xs font-bold rounded-xl transition-all active:scale-95
+                     ${canBuy 
+                       ? (isBuff ? 'bg-violet-400 hover:bg-violet-500 text-white shadow-md' : 'bg-rose-400 hover:bg-rose-500 text-white shadow-sm') 
+                       : 'bg-gray-100 text-gray-400 cursor-not-allowed'}">
+        ${upgrade.level > 0 ? '升级' : '购买'}
+
+        <span class="font-mono text-[10px] opacity-90">${upgrade.cost.toLocaleString()}</span>
+      </button>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function buyUpgrade(index) {
+  const up = upgrades[index];
+  if (points < up.cost) return;
+  
+  points -= up.cost;
+  up.level++;
+  passiveRate += up.effect;
+  
+  if (up.id === 'massageBrush') clickPower += 2;
+  if (up.id === 'geminiBuff') clickPower += 50; // 外挂道具点击也加强
+  
+  up.cost = Math.ceil(up.cost * 1.5);
+  
+  renderUpgrades();
+  updateUI();
+  addLogMessage(`搞到了 ${up.name}！美滋滋～`);
+}
+
+// ==================== 日志与等级 ====================
+function checkLevelUp() {
+  const newLevel = Math.floor(Math.log10(totalEarned + 1) * 2) + 1;
+  if (newLevel > level && newLevel <= 100) {
+    level = newLevel;
+    addLogMessage(`🌟 升级啦！当前等级 Lv.${level}！你已经是摸鱼宗师了！`);
+    if (level % 5 === 0) {
+      points += level * 1000;
+      addLogMessage(`🎁 升级大礼包！获得 ${level * 1000} 摸鱼值！`);
+    }
+  }
+}
+
+function addLogMessage(text) {
+  const logContainer = document.getElementById('log-list');
+  const item = document.createElement('div');
+  item.className = `log-item px-2 py-1 text-xs flex gap-x-2 items-start text-gray-600`;
+  // 识别是不是外挂信息
+  const isCheat = text.includes('Gemini') || text.includes('外挂') || text.includes('出金');
+  item.innerHTML = `
+    <span class="mt-[1px] ${isCheat ? 'text-violet-500' : 'text-rose-400'}">${isCheat ? '✨' : '•'}</span> 
+    <span class="${isCheat ? 'text-violet-600 font-medium' : ''}">${text}</span>
+  `;
+  logContainer.appendChild(item);
+  logContainer.scrollTop = logContainer.scrollHeight;
+  while (logContainer.children.length > 20) { logContainer.removeChild(logContainer.firstChild); }
+}
+
+function clearLog() {
+  document.getElementById('log-list').innerHTML = '';
+  addLogMessage("记忆已清空，咱们继续偷偷摸鱼🤫");
+}
+
+function saveGame() {
+  const data = {
+    points: Math.floor(points),
+    affection, totalEarned, clickPower, passiveRate, level,
+    upgrades: upgrades.map(u => ({ level: u.level, cost: u.cost }))
+  };
+  safeSetStorage(JSON.stringify(data));
+}
+
+function resetGame() {
+  safeRemoveStorage();
+  location.reload();
+}
+
+window.onload = function() { initGame(); };
+</script>
+</body>
+</html>

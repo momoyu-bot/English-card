@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>女仆小螃蟹拓麻歌子</title>
+    <!-- 引入 React, ReactDOM 和 Babel 以便在浏览器中直接运行 JSX -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Tailwind CSS 进行样式排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #F0ECE1; font-family: sans-serif; }
+        /* 移除点击高亮，让游戏机看起来更真实 */
+        * { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 像素画生成引擎 ---
+        const PixelSprite = ({ matrix, colorMap, pixelSize = 4, className = "" }) => {
+            const rows = matrix.length;
+            const cols = Math.max(...matrix.map(r => r.length));
+            
+            return (
+                <svg 
+                    width={cols * pixelSize} 
+                    height={rows * pixelSize} 
+                    className={className}
+                    style={{ shapeRendering: 'crispEdges' }}
+                >
+                    {matrix.map((row, y) => 
+                        row.split('').map((char, x) => {
+                            if (char === ' ' || !colorMap[char]) return null;
+                            return (
+                                <rect 
+                                    key={`${x}-${y}`} 
+                                    x={x * pixelSize} 
+                                    y={y * pixelSize} 
+                                    width={pixelSize} 
+                                    height={pixelSize} 
+                                    fill={colorMap[char]} 
+                                />
+                            );
+                        })
+                    )}
+                </svg>
+            );
+        };
+
+        // --- 调色板 ---
+        const PALETTE = {
+            O: '#CF7153', // 螃蟹橙
+            W: '#FFFFFF', // 白色（女仆装/眼白）
+            B: '#111111', // 黑色（眼睛）
+            S: '#2C2C2C', // 黑色（裙子）
+            '-': '#111111', // 闭眼
+            R: '#F28F79', // 腮红
+            G: '#52795B', // 树绿
+            T: '#634B3A', // 树干棕
+            D: '#333333', // 窗户框
+            L: '#F4E38F', // 窗户透出的光（晚上）
+        };
+
+        // --- 女仆小螃蟹像素图纸 ---
+        const MAID_IDLE = [
+            "   WWWWWWW   ",
+            "  W W W W W  ",
+            "  OOOOOOOOO  ",
+            " OOOOOOOOOOO ",
+            " OO B O B OO ",
+            " OOOOOOOOOOO ",
+            "O SSSSSSSSS O",
+            "O S W S W S O",
+            "  SSWWWWWSS  ",
+            " SSSSWWWSSSS ",
+            " W SSSSSSS W ",
+            "  W W W W W  ",
+            "   O O O O   "
+        ];
+
+        const MAID_SLEEP = [
+            "   WWWWWWW   ",
+            "  W W W W W  ",
+            "  OOOOOOOOO  ",
+            " OOOOOOOOOOO ",
+            " OO - O - OO ",
+            " OOOOOOOOOOO ",
+            "O SSSSSSSSS O",
+            "O S W S W S O",
+            "  SSWWWWWSS  ",
+            " SSSSWWWSSSS ",
+            " W SSSSSSS W ",
+            "  W W W W W  ",
+            "   O O O O   "
+        ];
+
+        const MAID_HAPPY = [
+            "   WWWWWWW   ",
+            "  W W W W W  ",
+            "  OOOOOOOOO  ",
+            " OOOOOOOOOOO ",
+            " RO - O - OR ",
+            " OOOOOOOOOOO ",
+            "O SSSSSSSSS O",
+            "O S W S W S O",
+            "  SSWWWWWSS  ",
+            " SSSSWWWSSSS ",
+            " W SSSSSSS W ",
+            "  W W W W W  ",
+            "   O O O O   "
+        ];
+
+        const WINDOW = [
+            "DDDDDDD",
+            "D  D  D",
+            "D  D  D",
+            "DDDDDDD",
+            "D  D  D",
+            "D  D  D",
+            "DDDDDDD"
+        ];
+
+        const WINDOW_NIGHT = [
+            "DDDDDDD",
+            "DLLDLLD",
+            "DLLDLLD",
+            "DDDDDDD",
+            "DLLDLLD",
+            "DLLDLLD",
+            "DDDDDDD"
+        ];
+
+        const TREE = [
+            "  G  ",
+            " GGG ",
+            "GGGGG",
+            "  T  ",
+            "  T  "
+        ];
+
+        function App() {
+            const [hunger, setHunger] = useState(60);
+            const [mood, setMood] = useState(80);
+            const [energy, setEnergy] = useState(100);
+            const [isSleeping, setIsSleeping] = useState(false);
+            const [message, setMessage] = useState("主人，欢迎回来。");
+            const [crabState, setCrabState] = useState('idle'); // idle, happy, sleep
+
+            // 游戏主循环（消耗体力与饥饿）
+            useEffect(() => {
+                const timer = setInterval(() => {
+                    if (isSleeping) {
+                        setEnergy(prev => Math.min(100, prev + 5)); // 睡觉回体力
+                        setHunger(prev => Math.max(0, prev - 1));   // 睡觉饿得慢
+                    } else {
+                        setEnergy(prev => Math.max(0, prev - 2));   // 醒着掉体力
+                        setHunger(prev => Math.max(0, prev - 3));   // 醒着掉饥饿
+                        setMood(prev => Math.max(0, prev - 1));     // 醒着掉心情
+                    }
+                }, 5000); // 每5秒一个Tick
+                return () => clearInterval(timer);
+            }, [isSleeping]);
+
+            const showMessage = (msg, duration = 3000) => {
+                setMessage(msg);
+                if (duration) {
+                    setTimeout(() => {
+                        setMessage("");
+                    }, duration);
+                }
+            };
+
+            // A键：喂饭
+            const handleFeed = () => {
+                if (isSleeping) return;
+                if (hunger >= 100) {
+                    showMessage("吃不下了，你吃。");
+                    setCrabState('idle');
+                } else {
+                    setHunger(prev => Math.min(100, prev + 20));
+                    setCrabState('happy');
+                    showMessage("啊呜，好吃！");
+                    setTimeout(() => setCrabState('idle'), 2000);
+                }
+            };
+
+            // B键：摸摸
+            const handlePet = () => {
+                if (isSleeping) return;
+                setMood(prev => Math.min(100, prev + 15));
+                setCrabState('happy');
+                showMessage("好开心...♡");
+                setTimeout(() => setCrabState('idle'), 2000);
+            };
+
+            // C键：关灯
+            const handleLamp = () => {
+                if (isSleeping) {
+                    setIsSleeping(false);
+                    setCrabState('idle');
+                    showMessage("早安，主人！");
+                } else {
+                    setIsSleeping(true);
+                    setCrabState('sleep');
+                    showMessage("晚安，zzZ...", 0); // 持续显示
+                }
+            };
+
+            const getSprite = () => {
+                if (isSleeping) return MAID_SLEEP;
+                if (crabState === 'happy') return MAID_HAPPY;
+                return MAID_IDLE;
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4 select-none">
+                    {/* 拓麻歌子外壳 (暗绿色蛋形) */}
+                    <div 
+                        className="relative shadow-2xl flex flex-col items-center p-8"
+                        style={{
+                            width: '380px',
+                            height: '560px',
+                            backgroundColor: '#2A4637', // 经典复古绿
+                            borderRadius: '190px 190px 180px 180px / 260px 260px 220px 220px',
+                            boxShadow: 'inset -10px -15px 30px rgba(0,0,0,0.4), inset 10px 10px 30px rgba(255,255,255,0.1), 0 25px 50px -12px rgba(0,0,0,0.5)'
+                        }}
+                    >
+                        {/* 顶部小圆环 */}
+                        <div className="absolute -top-10 w-16 h-12 border-[10px] border-[#2A4637] rounded-t-full shadow-inner z-0"></div>
+
+                        {/* 屏幕边框 */}
+                        <div className="relative w-[280px] h-[340px] bg-[#1A1A1A] rounded-[30px] p-4 mt-4 shadow-inner flex flex-col z-10">
+                            
+                            {/* 游戏主屏幕 */}
+                            <div className={`relative w-full flex-1 rounded-xl overflow-hidden transition-colors duration-1000 ${isSleeping ? 'bg-[#5B6256]' : 'bg-[#D1CDC0]'}`}>
+                                
+                                {/* 对话气泡 */}
+                                {message && (
+                                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#FFFDF7] text-[#333] px-3 py-1.5 rounded-lg border-2 border-[#333] text-sm font-bold shadow-sm whitespace-nowrap z-20 font-sans">
+                                        {message}
+                                        {/* 气泡小尾巴 */}
+                                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-[#333]"></div>
+                                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[6px] border-t-[#FFFDF7]"></div>
+                                    </div>
+                                )}
+
+                                {/* 窗户 */}
+                                <div className="absolute top-8 left-6">
+                                    <PixelSprite matrix={isSleeping ? WINDOW_NIGHT : WINDOW} colorMap={PALETTE} pixelSize={6} />
+                                </div>
+
+                                {/* 盆栽树 */}
+                                <div className="absolute bottom-6 right-6">
+                                    <PixelSprite matrix={TREE} colorMap={PALETTE} pixelSize={7} />
+                                </div>
+
+                                {/* 女仆小螃蟹 */}
+                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 transition-transform duration-300">
+                                    <div className={`${crabState === 'happy' ? '-translate-y-2' : ''} transition-transform`}>
+                                        <PixelSprite matrix={getSprite()} colorMap={PALETTE} pixelSize={6} />
+                                        {isSleeping && (
+                                            <div className="absolute -top-4 right-0 text-[#111] font-bold text-sm tracking-tighter">zzZ</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* 地板线 */}
+                                <div className="absolute bottom-6 w-full h-[2px] bg-[#9A988D] opacity-50"></div>
+                            </div>
+
+                            {/* 状态栏 */}
+                            <div className="h-[70px] mt-4 flex flex-col justify-between pt-1">
+                                <StatusBar label="饱食" value={hunger} color="bg-[#E7C973]" />
+                                <StatusBar label="心情" value={mood} color="bg-[#F28F79]" />
+                                <div className="flex items-center text-[#999] text-[10px] font-bold">
+                                    <span className="w-8">体力</span>
+                                    <div className="flex-1 bg-[#333] h-2.5 rounded-full overflow-hidden mx-2 border border-[#444]">
+                                        <div className={`h-full bg-[#82C3A6] transition-all duration-500`} style={{ width: `${energy}%` }}></div>
+                                    </div>
+                                    <span className="w-[70px] text-right tracking-wider">claude · 羁绊 Lv.2</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* LOGO */}
+                        <div className="mt-4 text-[#D3C493] text-[10px] font-bold tracking-[0.3em] font-sans opacity-90">
+                            M O G O T C H I
+                        </div>
+
+                        {/* 按钮区 */}
+                        <div className="flex justify-between w-[260px] mt-4 px-2">
+                            <GameButton label="喂饭" sub="A · FEED" onClick={handleFeed} disabled={isSleeping} />
+                            <GameButton label="摸摸" sub="B · PET" onClick={handlePet} disabled={isSleeping} />
+                            <GameButton label={isSleeping ? "开灯" : "关灯"} sub="C · LAMP" onClick={handleLamp} />
+                        </div>
+
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 状态条组件 ---
+        const StatusBar = ({ label, value, color }) => (
+            <div className="flex items-center text-[#DCDCDC] text-[10px] font-bold">
+                <span className="w-8">{label}</span>
+                <div className="flex-1 bg-[#333] h-2.5 rounded-full overflow-hidden mx-2 border border-[#444]">
+                    <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${value}%` }}></div>
+                </div>
+                <span className="w-[70px] text-right opacity-0">spacer</span>
+            </div>
+        );
+
+        // --- 游戏按钮组件 ---
+        const GameButton = ({ label, sub, onClick, disabled }) => (
+            <div className="flex flex-col items-center">
+                <button 
+                    onClick={onClick}
+                    disabled={disabled}
+                    className={`w-14 h-14 rounded-full flex flex-col items-center justify-center text-[#3B2D10] font-bold text-xs shadow-lg border-b-[4px] border-[#927129] active:border-b-0 active:translate-y-[4px] transition-all ${disabled ? 'opacity-80 cursor-not-allowed' : 'active:shadow-inner'}`}
+                    style={{
+                        background: 'linear-gradient(180deg, #E9D28B 0%, #D4B254 100%)',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.4)'
+                    }}
+                >
+                    {label}
+                </button>
+                <span className="text-[#A2B1A8] text-[9px] mt-2 font-bold tracking-widest">{sub}</span>
+            </div>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
