@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🤖 2048 × Copilot 偷偷帮忙版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
+          }
+        }
+      };
+    </script>
+    <style>
+      :root {
+        --bg-grad-1: #f0e6ff;
+        --bg-grad-2: #e0f7ef;
+        --board-bg: #f8d7e3;
+        --cell-bg: #fce4ec;
+        --pink-shadow: rgba(248,135,178,0.25);
+      }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Inter', sans-serif;
+        background: linear-gradient(135deg, var(--bg-grad-1), var(--bg-grad-2));
+        min-height: 100vh;
+        overflow-x: hidden;
+        position: relative;
+      }
+
+      /* Floating hearts */
+      .floating-hearts { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+      .heart-particle {
+        position: absolute;
+        font-size: 18px;
+        opacity: 0.15;
+        animation: floatHeart linear infinite;
+      }
+      @keyframes floatHeart {
+        0% { transform: translateY(110vh) rotate(0deg); opacity: 0; }
+        10% { opacity: 0.15; }
+        90% { opacity: 0.15; }
+        100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+      }
+
+      /* Tile colors */
+      .tile-2    { background: #fff0f5; color: #c77dff; }
+      .tile-4    { background: #ffe4f0; color: #ff6b9d; }
+      .tile-8    { background: #ffd6e7; color: #ff4d94; }
+      .tile-16   { background: #ffb3c6; color: #fff; }
+      .tile-32   { background: #ff8fab; color: #fff; }
+      .tile-64   { background: #ff6b6b; color: #fff; }
+      .tile-128  { background: #ffd166; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+      .tile-256  { background: #f4a261; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+      .tile-512  { background: #e76f51; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+      .tile-1024 { background: #c77dff; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+      .tile-2048 {
+        background: linear-gradient(135deg, #ff6b9d, #c77dff, #4cc9f0);
+        color: #fff;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        animation: glow2048 1.5s ease-in-out infinite alternate;
+      }
+      .tile-super {
+        background: linear-gradient(135deg, #ff6b9d, #c77dff, #4cc9f0, #ffd166);
+        color: #fff;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        animation: glow2048 1s ease-in-out infinite alternate;
+      }
+      @keyframes glow2048 {
+        0% { box-shadow: 0 0 15px rgba(199,125,255,0.5), 0 0 30px rgba(255,107,157,0.3); }
+        100% { box-shadow: 0 0 25px rgba(76,201,240,0.6), 0 0 50px rgba(199,125,255,0.4); }
+      }
+
+      /* Tile animations */
+      .tile {
+        position: absolute;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+        font-weight: 800;
+        transition: top 100ms ease, left 100ms ease;
+        box-shadow: inset 0 -2px 4px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.08);
+        z-index: 1;
+      }
+      .tile-new {
+        animation: tileAppear 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      }
+      @keyframes tileAppear {
+        0% { transform: scale(0.3); opacity: 0; }
+        60% { transform: scale(1.08); }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .tile-merged {
+        animation: tileMerge 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        z-index: 2;
+      }
+      @keyframes tileMerge {
+        0% { transform: scale(0.85); }
+        50% { transform: scale(1.15); }
+        100% { transform: scale(1); }
+      }
+
+      /* Board */
+      .game-board-container {
+        position: relative;
+        width: 360px; height: 360px;
+        background: var(--board-bg);
+        border-radius: 20px;
+        padding: 10px;
+        box-shadow: 0 8px 32px var(--pink-shadow), 0 2px 8px rgba(0,0,0,0.06);
+      }
+      .board-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        gap: 10px;
+        width: 100%; height: 100%;
+      }
+      .cell-bg {
+        background: var(--cell-bg);
+        border-radius: 12px;
+      }
+      .tile-layer {
+        position: absolute;
+        top: 10px; left: 10px;
+        width: calc(100% - 20px);
+        height: calc(100% - 20px);
+      }
+
+      /* Arrow overlay */
+      .arrow-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; align-items: center; justify-content: center;
+        z-index: 10; pointer-events: none;
+        animation: arrowFlash 0.4s ease-in-out infinite alternate;
+      }
+      @keyframes arrowFlash {
+        0% { opacity: 0.5; }
+        100% { opacity: 1; }
+      }
+      .arrow-shape {
+        font-size: 80px;
+        color: rgba(199,125,255,0.7);
+        text-shadow: 0 0 20px rgba(199,125,255,0.5);
+        filter: drop-shadow(0 0 10px rgba(255,107,157,0.4));
+      }
+
+      /* Copilot mascot */
+      .mascot-container { position: relative; width: 100px; height: 130px; margin: 0 auto; }
+      .mascot-body {
+        animation: mascotBob 2s ease-in-out infinite;
+      }
+      @keyframes mascotBob {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
+      }
+      .mascot-head {
+        width: 64px; height: 64px;
+        background: linear-gradient(135deg, #4cc9f0, #c77dff);
+        border-radius: 50%;
+        position: relative;
+        margin: 0 auto;
+        box-shadow: 0 4px 15px rgba(76,201,240,0.3);
+      }
+      .mascot-eye {
+        width: 14px; height: 14px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+        top: 22px;
+        box-shadow: 0 0 8px rgba(255,255,255,0.6);
+      }
+      .mascot-eye-left { left: 14px; }
+      .mascot-eye-right { right: 14px; }
+      .mascot-pupil {
+        width: 6px; height: 6px;
+        background: #2d2d2d;
+        border-radius: 50%;
+        position: absolute;
+        top: 4px; left: 4px;
+      }
+      .mascot-smile {
+        width: 16px; height: 8px;
+        border-bottom: 3px solid rgba(255,255,255,0.8);
+        border-radius: 0 0 10px 10px;
+        position: absolute;
+        bottom: 14px; left: 50%; transform: translateX(-50%);
+      }
+      .mascot-antenna {
+        width: 3px; height: 18px;
+        background: linear-gradient(to top, #4cc9f0, #c77dff);
+        position: absolute;
+        top: -16px; left: 50%; transform: translateX(-50%);
+        border-radius: 2px;
+      }
+      .antenna-star {
+        position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+        font-size: 14px;
+        animation: starPulse 1.5s ease-in-out infinite;
+      }
+      @keyframes starPulse {
+        0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.8; }
+        50% { transform: translateX(-50%) scale(1.3); opacity: 1; }
+      }
+      .mascot-chest {
+        width: 40px; height: 30px;
+        background: linear-gradient(135deg, #4cc9f0, #a78bfa);
+        border-radius: 0 0 16px 16px;
+        margin: -2px auto 0;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 3px 10px rgba(76,201,240,0.2);
+      }
+      .chest-heart { font-size: 14px; }
+
+      /* Speech bubble */
+      .speech-bubble {
+        background: white;
+        border-radius: 16px;
+        padding: 10px 14px;
+        position: relative;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        font-size: 13px;
+        line-height: 1.5;
+        color: #4a3060;
+        min-height: 44px;
+        display: flex; align-items: center;
+      }
+      .speech-bubble::after {
+        content: '';
+        position: absolute;
+        bottom: -8px; left: 50%; transform: translateX(-50%);
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-top: 8px solid white;
+      }
+
+      /* Copilot buttons */
+      .copilot-btn {
+        width: 100%;
+        padding: 10px 14px;
+        border-radius: 14px;
+        font-size: 13px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex; align-items: center; justify-content: center; gap: 6px;
+        min-height: 44px;
+      }
+      .copilot-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn-hint { background: linear-gradient(135deg, #fff0f5, #ffe4f0); color: #c77dff; }
+      .btn-hint:hover:not(:disabled) { background: linear-gradient(135deg, #ffe4f0, #ffd6e7); transform: translateY(-1px); }
+      .btn-move { background: linear-gradient(135deg, #e0f7ef, #d4f0ff); color: #4cc9f0; }
+      .btn-move:hover:not(:disabled) { background: linear-gradient(135deg, #d4f0ff, #c4e0f8); transform: translateY(-1px); }
+      .btn-auto { background: linear-gradient(135deg, #f0e6ff, #e8d5f5); color: #9b59b6; }
+      .btn-auto:hover:not(:disabled) { background: linear-gradient(135deg, #e8d5f5, #d4b8e8); transform: translateY(-1px); }
+      .btn-auto.active {
+        background: linear-gradient(135deg, #c77dff, #9b59b6);
+        color: white;
+        animation: autoPulse 1s ease-in-out infinite alternate;
+      }
+      @keyframes autoPulse {
+        0% { box-shadow: 0 0 10px rgba(199,125,255,0.3); }
+        100% { box-shadow: 0 0 20px rgba(199,125,255,0.6); }
+      }
+
+      /* Turbo mode mascot */
+      .turbo-mode .mascot-eye {
+        animation: eyeGlow 0.6s ease-in-out infinite alternate;
+      }
+      @keyframes eyeGlow {
+        0% { box-shadow: 0 0 8px rgba(255,255,255,0.6); }
+        100% { box-shadow: 0 0 16px rgba(199,125,255,0.9), 0 0 24px rgba(76,201,240,0.6); }
+      }
+      .turbo-mode .mascot-body {
+        animation: mascotBob 0.6s ease-in-out infinite;
+      }
+
+      /* Thinking animation */
+      .thinking .mascot-pupil {
+        animation: eyeSpin 0.6s linear infinite;
+      }
+      @keyframes eyeSpin {
+        0% { transform: rotate(0deg) translateX(2px); }
+        100% { transform: rotate(360deg) translateX(2px); }
+      }
+      .thinking .antenna-star {
+        animation: starPulse 0.3s ease-in-out infinite;
+      }
+
+      /* Victory pose */
+      .victory .mascot-body {
+        animation: victoryPose 0.5s cubic-bezier(0.34,1.56,0.64,1);
+      }
+      @keyframes victoryPose {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2) rotate(-5deg); }
+        100% { transform: scale(1); }
+      }
+
+      /* Toast */
+      .toast {
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+        background: linear-gradient(135deg, #c77dff, #4cc9f0);
+        color: white; padding: 12px 24px; border-radius: 20px;
+        font-size: 14px; font-weight: 700;
+        box-shadow: 0 8px 25px rgba(199,125,255,0.4);
+        z-index: 100;
+        animation: toastIn 0.4s cubic-bezier(0.34,1.56,0.64,1), toastOut 0.4s 1.6s ease-in forwards;
+      }
+      @keyframes toastIn {
+        0% { transform: translateX(-50%) translateY(-30px) scale(0.8); opacity: 0; }
+        100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+      }
+      @keyframes toastOut {
+        0% { opacity: 1; }
+        100% { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+      }
+
+      /* Score float */
+      .score-float {
+        position: absolute;
+        font-size: 16px; font-weight: 800;
+        color: #c77dff;
+        pointer-events: none;
+        animation: scoreUp 0.8s ease-out forwards;
+        z-index: 20;
+      }
+      @keyframes scoreUp {
+        0% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-40px); }
+      }
+
+      /* Auto-play banner */
+      .auto-banner {
+        position: absolute; top: -36px; left: 50%; transform: translateX(-50%);
+        background: linear-gradient(135deg, #c77dff, #4cc9f0);
+        color: white; padding: 6px 18px; border-radius: 0 0 14px 14px;
+        font-size: 12px; font-weight: 700;
+        white-space: nowrap; z-index: 5;
+        animation: bannerPulse 1.5s ease-in-out infinite alternate;
+      }
+      @keyframes bannerPulse {
+        0% { box-shadow: 0 4px 12px rgba(199,125,255,0.3); }
+        100% { box-shadow: 0 4px 20px rgba(76,201,240,0.5); }
+      }
+
+      /* Overlay screens */
+      .overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(240,230,255,0.92);
+        backdrop-filter: blur(8px);
+        z-index: 50;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+      }
+      .overlay-card {
+        background: white;
+        border-radius: 28px;
+        padding: 36px 32px;
+        max-width: 420px; width: 100%;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(199,125,255,0.2);
+        position: relative;
+        overflow: hidden;
+      }
+      .gradient-title {
+        font-size: 28px; font-weight: 900;
+        background: linear-gradient(135deg, #ff6b9d, #c77dff, #4cc9f0);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1.3;
+      }
+      .big-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        padding: 14px 36px;
+        background: linear-gradient(135deg, #ff6b9d, #c77dff);
+        color: white; border: none; border-radius: 18px;
+        font-size: 18px; font-weight: 800;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 6px 20px rgba(255,107,157,0.35);
+        min-height: 52px;
+      }
+      .big-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(199,125,255,0.45); }
+      .big-btn-secondary {
+        background: linear-gradient(135deg, #e0f7ef, #f0e6ff);
+        color: #9b59b6;
+        box-shadow: 0 4px 15px rgba(199,125,255,0.15);
+      }
+
+      /* Confetti */
+      .confetti-piece {
+        position: fixed;
+        width: 10px; height: 10px;
+        z-index: 60;
+        animation: confettiFall linear forwards;
+        pointer-events: none;
+      }
+      @keyframes confettiFall {
+        0% { opacity: 1; transform: translateY(-20vh) rotate(0deg); }
+        100% { opacity: 0; transform: translateY(110vh) rotate(720deg); }
+      }
+
+      /* Sad mascot */
+      .sad-eyes .mascot-eye { top: 26px; }
+      .sad-eyes .mascot-smile {
+        border-bottom: none;
+        border-top: 3px solid rgba(255,255,255,0.8);
+        border-radius: 10px 10px 0 0;
+        bottom: 12px;
+      }
+
+      /* Waving hand */
+      .waving { animation: wave 0.8s ease-in-out infinite; display: inline-block; }
+      @keyframes wave {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(20deg); }
+        75% { transform: rotate(-15deg); }
+      }
+
+      /* New record badge */
+      .record-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #ffd166, #ff6b9d);
+        color: white; padding: 6px 18px; border-radius: 20px;
+        font-size: 14px; font-weight: 800;
+        animation: badgePop 0.5s cubic-bezier(0.34,1.56,0.64,1);
+      }
+      @keyframes badgePop {
+        0% { transform: scale(0); }
+        100% { transform: scale(1); }
+      }
+
+      @media (max-width: 767px) {
+        .game-board-container { width: min(360px, calc(100vw - 40px)); height: min(360px, calc(100vw - 40px)); }
+      }
+    </style>
+</head>
+<body data-id="0">
+    <app-icon data-id="1" hidden data-icon="bot" data-palette="Blue"></app-icon>
+
+    <!-- Floating hearts background -->
+    <div data-id="2" class="floating-hearts" id="heartsContainer"></div>
+
+    <!-- Start Screen Overlay -->
+    <div data-id="3" class="overlay" id="startOverlay">
+      <div data-id="4" class="overlay-card">
+        <div data-id="5" style="margin-bottom: 18px;">
+          <div data-id="6" class="mascot-body">
+            <div data-id="7" class="mascot-head" style="width:72px;height:72px;margin:0 auto;">
+              <div data-id="8" class="mascot-antenna"><div data-id="9" class="antenna-star">⭐</div></div>
+              <div data-id="10" class="mascot-eye mascot-eye-left" style="top:24px;left:15px;"><div data-id="11" class="mascot-pupil"></div></div>
+              <div data-id="12" class="mascot-eye mascot-eye-right" style="top:24px;right:15px;"><div data-id="13" class="mascot-pupil"></div></div>
+              <div data-id="14" class="mascot-smile" style="bottom:15px;"></div>
+            </div>
+            <div data-id="15" class="mascot-chest" style="width:44px;height:28px;margin:-2px auto 0;"><span data-id="16" class="chest-heart">❤️</span></div>
+          </div>
+          <div data-id="17" style="margin-top:6px;"><span data-id="18" class="waving">👋</span></div>
+        </div>
+        <h1 data-id="19" class="gradient-title" style="margin-bottom: 10px;">🤖 2048 × Copilot<br data-id="20">偷偷帮忙版</h1>
+        <p data-id="21" style="color:#9b7db8;font-size:15px;font-weight:600;margin-bottom:20px;">有Copilot帮忙，2048不是梦！🌟</p>
+        <div data-id="22" style="background:#faf0ff;border-radius:16px;padding:16px;margin-bottom:22px;text-align:left;font-size:13px;color:#6b4d8a;line-height:1.7;">
+          <p data-id="23" style="font-weight:700;margin-bottom:6px;text-align:center;">🎮 玩法说明</p>
+          <p data-id="24">⬆⬇⬅➡ 方向键或 WASD 滑动方块</p>
+          <p data-id="25">📱 手机上可以滑动屏幕</p>
+          <p data-id="26">🔢 相同数字碰撞会合并翻倍</p>
+          <p data-id="27">🎯 目标：合成 2048！</p>
+          <p data-id="28">🤖 Copilot会偷偷帮你哦～</p>
+        </div>
+        <button data-id="29" class="big-btn" id="startBtn">开始游戏！🎮</button>
+      </div>
+    </div>
+
+    <!-- Win Overlay -->
+    <div data-id="30" class="overlay" id="winOverlay" style="display:none;">
+      <div data-id="31" class="overlay-card">
+        <div data-id="32" style="font-size:48px;margin-bottom:10px;">🎊</div>
+        <h2 data-id="33" class="gradient-title" style="margin-bottom:8px;">你到达了 2048！</h2>
+        <p data-id="34" style="color:#9b7db8;font-size:14px;margin-bottom:6px;" id="winCopilotMsg">Copilot 帮了你 0 步哦！</p>
+        <p data-id="35" style="color:#c77dff;font-size:22px;font-weight:800;margin-bottom:18px;" id="winScore">得分: 0</p>
+        <div data-id="36" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button data-id="37" class="big-btn" id="continueBtn">继续挑战 🚀</button>
+          <button data-id="38" class="big-btn big-btn-secondary" id="winNewBtn">新游戏 🔄</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div data-id="39" class="overlay" id="gameOverOverlay" style="display:none;">
+      <div data-id="40" class="overlay-card">
+        <div data-id="41" class="mascot-body sad-eyes" style="margin-bottom:12px;">
+          <div data-id="42" class="mascot-head" style="width:64px;height:64px;margin:0 auto;">
+            <div data-id="43" class="mascot-antenna"><div data-id="44" class="antenna-star">💫</div></div>
+            <div data-id="45" class="mascot-eye mascot-eye-left"><div data-id="46" class="mascot-pupil"></div></div>
+            <div data-id="47" class="mascot-eye mascot-eye-right"><div data-id="48" class="mascot-pupil"></div></div>
+            <div data-id="49" class="mascot-smile"></div>
+          </div>
+          <div data-id="50" class="mascot-chest"><span data-id="51" class="chest-heart">💔</span></div>
+        </div>
+        <h2 data-id="52" style="font-size:24px;font-weight:800;color:#9b59b6;margin-bottom:6px;">😢 哎呀，没路走啦！</h2>
+        <p data-id="53" style="color:#9b7db8;font-size:15px;margin-bottom:4px;">最终得分</p>
+        <p data-id="54" style="color:#c77dff;font-size:28px;font-weight:900;margin-bottom:4px;" id="goScore">0</p>
+        <p data-id="55" style="color:#b0a0c0;font-size:13px;margin-bottom:4px;" id="goHighScore">最高纪录: 0</p>
+        <div data-id="56" id="newRecordBadge" style="margin-bottom:14px;display:none;"><span data-id="57" class="record-badge">🏆 新纪录！</span></div>
+        <button data-id="58" class="big-btn" id="retryBtn">再来一次 🔄</button>
+      </div>
+    </div>
+
+    <!-- Main App -->
+    <div data-id="59" style="position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;">
+
+      <!-- Header -->
+      <header data-id="60" style="padding:12px 16px;text-align:center;">
+        <h1 data-id="61" class="gradient-title" style="font-size:22px;margin-bottom:8px;">🤖 2048 × Copilot 偷偷帮忙版</h1>
+        <div data-id="62" style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:14px;font-weight:700;">
+          <div data-id="63" style="background:white;border-radius:14px;padding:6px 16px;box-shadow:0 2px 10px rgba(199,125,255,0.12);">
+            <span data-id="64" style="color:#b0a0c0;">💰 得分</span>
+            <span data-id="65" style="color:#c77dff;position:relative;" id="scoreDisplay">0</span>
+          </div>
+          <div data-id="66" style="background:white;border-radius:14px;padding:6px 16px;box-shadow:0 2px 10px rgba(199,125,255,0.12);">
+            <span data-id="67" style="color:#b0a0c0;">🏆 最高</span>
+            <span data-id="68" style="color:#ff6b9d;" id="highScoreDisplay">0</span>
+          </div>
+          <div data-id="69" style="background:white;border-radius:14px;padding:6px 16px;box-shadow:0 2px 10px rgba(199,125,255,0.12);">
+            <span data-id="70" style="color:#b0a0c0;">目标</span>
+            <span data-id="71" style="color:#4cc9f0;">2048✨</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Game Area -->
+      <main data-id="72" style="flex:1;display:flex;justify-content:center;align-items:flex-start;padding:10px 16px;gap:20px;flex-wrap:wrap;">
+
+        <!-- Game Board -->
+        <div data-id="73" style="position:relative;">
+          <div data-id="74" class="auto-banner" id="autoBanner" style="display:none;">🤖 Copilot 正在操控中...</div>
+          <div data-id="75" class="game-board-container" id="gameBoard">
+            <div data-id="76" class="board-grid">
+              <div data-id="77" class="cell-bg"></div><div data-id="78" class="cell-bg"></div><div data-id="79" class="cell-bg"></div><div data-id="80" class="cell-bg"></div>
+              <div data-id="81" class="cell-bg"></div><div data-id="82" class="cell-bg"></div><div data-id="83" class="cell-bg"></div><div data-id="84" class="cell-bg"></div>
+              <div data-id="85" class="cell-bg"></div><div data-id="86" class="cell-bg"></div><div data-id="87" class="cell-bg"></div><div data-id="88" class="cell-bg"></div>
+              <div data-id="89" class="cell-bg"></div><div data-id="90" class="cell-bg"></div><div data-id="91" class="cell-bg"></div><div data-id="92" class="cell-bg"></div>
+            </div>
+            <div data-id="93" class="tile-layer" id="tileLayer"></div>
+            <div data-id="94" class="arrow-overlay" id="arrowOverlay" style="display:none;">
+              <div data-id="95" class="arrow-shape" id="arrowShape"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Copilot Panel -->
+        <div data-id="96" style="width:220px;min-width:200px;" id="copilotPanel">
+          <div data-id="97" style="background:white;border-radius:22px;padding:18px 16px;box-shadow:0 8px 28px rgba(199,125,255,0.12);">
+            <div data-id="98" class="speech-bubble" id="speechBubble" style="margin-bottom:14px;">
+              嗨！要我帮帮你吗？😊
+            </div>
+            <div data-id="99" id="mascotWrapper">
+              <div data-id="100" class="mascot-container">
+                <div data-id="101" class="mascot-body" id="mascotBody">
+                  <div data-id="102" class="mascot-head">
+                    <div data-id="103" class="mascot-antenna">
+                      <div data-id="104" class="antenna-star">⭐</div>
+                    </div>
+                    <div data-id="105" class="mascot-eye mascot-eye-left"><div data-id="106" class="mascot-pupil"></div></div>
+                    <div data-id="107" class="mascot-eye mascot-eye-right"><div data-id="108" class="mascot-pupil"></div></div>
+                    <div data-id="109" class="mascot-smile"></div>
+                  </div>
+                  <div data-id="110" class="mascot-chest"><span data-id="111" class="chest-heart">❤️</span></div>
+                </div>
+              </div>
+              <p data-id="112" style="text-align:center;font-size:13px;font-weight:700;color:#9b59b6;margin-top:4px;">Copilot 小助手</p>
+            </div>
+
+            <div data-id="113" style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+              <button data-id="114" class="copilot-btn btn-hint" id="hintBtn">💡 给个提示</button>
+              <button data-id="115" class="copilot-btn btn-move" id="moveBtn">🤖 帮我走一步</button>
+              <button data-id="116" class="copilot-btn btn-auto" id="autoBtn">✨ 自动玩模式</button>
+            </div>
+
+            <div data-id="117" style="margin-top:14px;background:#faf0ff;border-radius:14px;padding:10px 12px;font-size:12px;color:#9b7db8;line-height:1.6;">
+              <p data-id="118">🤖 帮了你 <strong data-id="119" id="helpCount" style="color:#c77dff;">0</strong> 次</p>
+              <p data-id="120">📊 Copilot贡献率: <strong data-id="121" id="helpPercent" style="color:#4cc9f0;">0%</strong></p>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Controls footer -->
+      <div data-id="122" style="text-align:center;padding:8px 16px;font-size:12px;color:#b0a0c0;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;align-items:center;">
+        <span data-id="123">⌨️ 方向键/WASD</span>
+        <span data-id="124">📱 滑动屏幕</span>
+        <button data-id="125" id="newGameBtn" style="background:linear-gradient(135deg,#f0e6ff,#e0f7ef);border:none;border-radius:12px;padding:6px 14px;font-size:12px;font-weight:700;color:#9b59b6;cursor:pointer;min-height:32px;">🔄 新游戏</button>
+        <button data-id="126" id="soundToggle" style="background:linear-gradient(135deg,#f0e6ff,#e0f7ef);border:none;border-radius:12px;padding:6px 14px;font-size:12px;font-weight:700;color:#9b59b6;cursor:pointer;min-height:32px;">🔊 音效</button>
+      </div>
+
+      <footer data-id="127" style="padding:12px;text-align:center;">
+        <p data-id="128" style="font-size:11px;color:#b0a0c0;">Made by Copilot</p>
+      </footer>
+    </div>
+
+    <script>
+    // ===== SOUND ENGINE (Web Audio API) =====
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function getAudioCtx() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioCtx;
+    }
+
+    function playSlideSound() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioCtx();
+        const bufferSize = ctx.sampleRate * 0.05;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize) * 0.08;
+        }
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        source.connect(gain).connect(ctx.destination);
+        source.start();
+      } catch(e) {}
+    }
+
+    function playMergeSound(value) {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const baseFreq = 400 + Math.log2(value) * 80;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.15);
+      } catch(e) {}
+    }
+
+    function playWinSound() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioCtx();
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.15);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.3);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(ctx.currentTime + i * 0.15);
+          osc.stop(ctx.currentTime + i * 0.15 + 0.3);
+        });
+      } catch(e) {}
+    }
+
+    function playCopilotSound() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioCtx();
+        [600, 800].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.12);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(ctx.currentTime + i * 0.1);
+          osc.stop(ctx.currentTime + i * 0.1 + 0.12);
+        });
+      } catch(e) {}
+    }
+
+    function playGameOverSound() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioCtx();
+        [440, 370, 330, 262].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.3);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(ctx.currentTime + i * 0.2);
+          osc.stop(ctx.currentTime + i * 0.2 + 0.3);
+        });
+      } catch(e) {}
+    }
+
+    // ===== GAME STATE =====
+    let grid = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+    let score = 0;
+    let highScore = parseInt(localStorage.getItem('copilot2048_high') || '0');
+    let totalMoves = 0;
+    let copilotMoves = 0;
+    let autoPlayActive = false;
+    let autoPlayInterval = null;
+    let gameActive = false;
+    let wonAlready = false;
+    let moving = false;
+    let hintCooldown = false;
+    let moveCooldown = false;
+
+    const speechLines = {
+      idle: ["嗨！要我帮帮你吗？😊", "把大数字推到角落哦~", "我在偷偷看你玩呢 👀", "你真棒，继续加油！💖", "这步走得妙啊～🎯"],
+      hint: ["往这边走！保准没错！✨", "试试这个方向吧～🧭", "相信我，往这边！👆"],
+      helped: ["好嘞，这步包在我身上！🤖", "你看我多厉害！(≧▽≦)", "小意思小意思～😎", "交给Copilot就对了！💪"],
+      danger: ["危险！快让我帮你！😱", "格子快满了，小心！⚠️", "呜呜快想办法！😰"],
+      bigMerge: ["哇塞！合并得好棒！🎉", "漂亮！大合并！✨", "666！太强了！🔥"],
+      near2048: ["快到了！加油！2048就在眼前！🌟", "马上就要成功了！冲！🚀"],
+      gameOver: ["哎呀...下次一定行！💪", "没关系，再来一次！😤"],
+      newRecord: ["新纪录！我的功劳也有一半！😄", "创纪录啦！太厉害了！🏆"]
+    };
+
+    function randomSpeech(category) {
+      const lines = speechLines[category];
+      return lines[Math.floor(Math.random() * lines.length)];
+    }
+
+    function setSpeech(text) {
+      document.getElementById('speechBubble').textContent = text;
+    }
+
+    // ===== GRID HELPERS =====
+    function deepCopy(g) { return g.map(r => [...r]); }
+
+    function getEmptyCells(g) {
+      const cells = [];
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (g[r][c] === 0) cells.push([r, c]);
+      return cells;
+    }
+
+    function addRandomTile(g) {
+      const empty = getEmptyCells(g);
+      if (empty.length === 0) return null;
+      const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+      g[r][c] = Math.random() < 0.9 ? 2 : 4;
+      return [r, c];
+    }
+
+    function getMaxTile(g) {
+      let max = 0;
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (g[r][c] > max) max = g[r][c];
+      return max;
+    }
+
+    // ===== SLIDE LOGIC =====
+    function slideRow(row) {
+      let arr = row.filter(v => v !== 0);
+      let merged = [];
+      let scoreGain = 0;
+      let mergedPositions = [];
+      for (let i = 0; i < arr.length; i++) {
+        if (i + 1 < arr.length && arr[i] === arr[i + 1]) {
+          const val = arr[i] * 2;
+          merged.push(val);
+          scoreGain += val;
+          mergedPositions.push(merged.length - 1);
+          i++;
+        } else {
+          merged.push(arr[i]);
+        }
+      }
+      while (merged.length < 4) merged.push(0);
+      return { row: merged, scoreGain, mergedPositions };
+    }
+
+    function slideGrid(g, direction) {
+      let newGrid = deepCopy(g);
+      let totalScore = 0;
+      let moved = false;
+      let mergeInfo = [];
+
+      for (let i = 0; i < 4; i++) {
+        let row;
+        switch (direction) {
+          case 'left':
+            row = [...newGrid[i]];
+            break;
+          case 'right':
+            row = [...newGrid[i]].reverse();
+            break;
+          case 'up':
+            row = [newGrid[0][i], newGrid[1][i], newGrid[2][i], newGrid[3][i]];
+            break;
+          case 'down':
+            row = [newGrid[3][i], newGrid[2][i], newGrid[1][i], newGrid[0][i]];
+            break;
+        }
+
+        const result = slideRow(row);
+        totalScore += result.scoreGain;
+
+        let finalRow = result.row;
+        if (direction === 'right' || direction === 'down') finalRow = finalRow.reverse();
+
+        switch (direction) {
+          case 'left': case 'right':
+            if (newGrid[i].join(',') !== finalRow.join(',')) moved = true;
+            newGrid[i] = finalRow;
+            break;
+          case 'up': case 'down':
+            for (let r = 0; r < 4; r++) {
+              if (newGrid[r][i] !== finalRow[r]) moved = true;
+              newGrid[r][i] = finalRow[r];
+            }
+            break;
+        }
+      }
+
+      return { grid: newGrid, scoreGain: totalScore, moved };
+    }
+
+    function canMove(g) {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (g[r][c] === 0) return true;
+          if (c < 3 && g[r][c] === g[r][c + 1]) return true;
+          if (r < 3 && g[r][c] === g[r + 1][c]) return true;
+        }
+      }
+      return false;
+    }
+
+    // ===== AI (Expectimax) =====
+    function countEmpty(g) {
+      let c = 0;
+      for (let r = 0; r < 4; r++) for (let col = 0; col < 4; col++) if (g[r][col] === 0) c++;
+      return c;
+    }
+
+    function monotonicity(g) {
+      let score = 0;
+      for (let r = 0; r < 4; r++) {
+        let incr = 0, decr = 0;
+        for (let c = 0; c < 3; c++) {
+          const a = g[r][c] ? Math.log2(g[r][c]) : 0;
+          const b = g[r][c+1] ? Math.log2(g[r][c+1]) : 0;
+          if (a > b) decr += b - a;
+          else incr += a - b;
+        }
+        score += Math.max(incr, decr);
+      }
+      for (let c = 0; c < 4; c++) {
+        let incr = 0, decr = 0;
+        for (let r = 0; r < 3; r++) {
+          const a = g[r][c] ? Math.log2(g[r][c]) : 0;
+          const b = g[r+1][c] ? Math.log2(g[r+1][c]) : 0;
+          if (a > b) decr += b - a;
+          else incr += a - b;
+        }
+        score += Math.max(incr, decr);
+      }
+      return score;
+    }
+
+    function countMerges(g) {
+      let merges = 0;
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) if (g[r][c] !== 0 && g[r][c] === g[r][c+1]) merges++;
+      for (let c = 0; c < 4; c++) for (let r = 0; r < 3; r++) if (g[r][c] !== 0 && g[r][c] === g[r+1][c]) merges++;
+      return merges;
+    }
+
+    function smoothness(g) {
+      let penalty = 0;
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (g[r][c] !== 0) {
+            const v = Math.log2(g[r][c]);
+            if (c < 3 && g[r][c+1] !== 0) penalty += Math.abs(v - Math.log2(g[r][c+1]));
+            if (r < 3 && g[r+1][c] !== 0) penalty += Math.abs(v - Math.log2(g[r+1][c]));
+          }
+        }
+      }
+      return penalty;
+    }
+
+    function heuristic(g) {
+      const emptyScore = countEmpty(g) * 270;
+      const monoScore = monotonicity(g) * 47;
+      const mergeScore = countMerges(g) * 700;
+      const maxTile = getMaxTile(g);
+      const corners = [g[0][0], g[0][3], g[3][0], g[3][3]];
+      const cornerScore = corners.includes(maxTile) ? maxTile * 2 : 0;
+      const smoothScore = -smoothness(g) * 0.1;
+      return emptyScore + monoScore + mergeScore + cornerScore + smoothScore;
+    }
+
+    function expectimax(g, depth, isMax) {
+      if (depth === 0) return heuristic(g);
+
+      if (isMax) {
+        let best = -Infinity;
+        const dirs = ['up', 'down', 'left', 'right'];
+        let anyValid = false;
+        for (const dir of dirs) {
+          const result = slideGrid(g, dir);
+          if (result.moved) {
+            anyValid = true;
+            best = Math.max(best, expectimax(result.grid, depth - 1, false));
+          }
+        }
+        return anyValid ? best : heuristic(g);
+      } else {
+        const empty = getEmptyCells(g);
+        if (empty.length === 0) return heuristic(g);
+        let totalScore = 0;
+        // Limit sampling for performance
+        const sampleCells = empty.length > 6 ? empty.slice(0, 6) : empty;
+        for (const [r, c] of sampleCells) {
+          const g2 = deepCopy(g);
+          g2[r][c] = 2;
+          totalScore += 0.9 * expectimax(g2, depth - 1, true);
+          const g4 = deepCopy(g);
+          g4[r][c] = 4;
+          totalScore += 0.1 * expectimax(g4, depth - 1, true);
+        }
+        return totalScore / sampleCells.length;
+      }
+    }
+
+    function getBestMove(g) {
+      const dirs = ['up', 'down', 'left', 'right'];
+      let bestDir = null;
+      let bestScore = -Infinity;
+      const depth = countEmpty(g) < 4 ? 4 : 3;
+      for (const dir of dirs) {
+        const result = slideGrid(g, dir);
+        if (result.moved) {
+          const s = expectimax(result.grid, depth - 1, false);
+          if (s > bestScore) {
+            bestScore = s;
+            bestDir = dir;
+          }
+        }
+      }
+      return bestDir;
+    }
+
+    // ===== RENDERING =====
+    function getTileSize() {
+      const board = document.getElementById('gameBoard');
+      const innerW = board.clientWidth - 20; // minus padding
+      return (innerW - 30) / 4; // minus gaps
+    }
+
+    function getTilePos(r, c) {
+      const board = document.getElementById('gameBoard');
+      const innerW = board.clientWidth - 20;
+      const cellSize = (innerW - 30) / 4;
+      const gap = 10;
+      return {
+        left: c * (cellSize + gap),
+        top: r * (cellSize + gap)
+      };
+    }
+
+    function getTileClass(val) {
+      if (val <= 2048) return 'tile-' + val;
+      return 'tile-super';
+    }
+
+    function getTileFontSize(val, cellSize) {
+      if (val < 100) return Math.floor(cellSize * 0.45) + 'px';
+      if (val < 1000) return Math.floor(cellSize * 0.36) + 'px';
+      if (val < 10000) return Math.floor(cellSize * 0.28) + 'px';
+      return Math.floor(cellSize * 0.22) + 'px';
+    }
+
+    let prevGrid = null;
+
+    function renderGrid(newTilePos, mergedCells) {
+      const layer = document.getElementById('tileLayer');
+      layer.innerHTML = '';
+      const cellSize = getTileSize();
+
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (grid[r][c] === 0) continue;
+          const pos = getTilePos(r, c);
+          const tile = document.createElement('div');
+          tile.className = 'tile ' + getTileClass(grid[r][c]);
+          tile.style.width = cellSize + 'px';
+          tile.style.height = cellSize + 'px';
+          tile.style.top = pos.top + 'px';
+          tile.style.left = pos.left + 'px';
+          tile.style.fontSize = getTileFontSize(grid[r][c], cellSize);
+          tile.textContent = grid[r][c];
+
+          if (newTilePos && newTilePos[0] === r && newTilePos[1] === c) {
+            tile.classList.add('tile-new');
+          }
+          if (mergedCells && mergedCells.some(p => p[0] === r && p[1] === c)) {
+            tile.classList.add('tile-merged');
+          }
+
+          layer.appendChild(tile);
+        }
+      }
+    }
+
+    function updateScoreDisplay(gain) {
+      document.getElementById('scoreDisplay').textContent = score;
+      document.getElementById('highScoreDisplay').textContent = highScore;
+
+      if (gain > 0) {
+        const scoreEl = document.getElementById('scoreDisplay');
+        const float = document.createElement('div');
+        float.className = 'score-float';
+        float.textContent = '+' + gain;
+        float.style.position = 'absolute';
+        float.style.left = '0';
+        float.style.top = '-8px';
+        scoreEl.style.position = 'relative';
+        scoreEl.appendChild(float);
+        setTimeout(() => float.remove(), 800);
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('helpCount').textContent = copilotMoves;
+      const pct = totalMoves > 0 ? Math.round(copilotMoves / totalMoves * 100) : 0;
+      document.getElementById('helpPercent').textContent = pct + '%';
+    }
+
+    // ===== GAME LOGIC =====
+    function initGame() {
+      grid = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+      score = 0;
+      totalMoves = 0;
+      copilotMoves = 0;
+      wonAlready = false;
+      gameActive = true;
+      moving = false;
+      addRandomTile(grid);
+      const pos = addRandomTile(grid);
+      renderGrid(pos, []);
+      updateScoreDisplay(0);
+      updateStats();
+      setSpeech(randomSpeech('idle'));
+      stopAutoPlay();
+    }
+
+    function doMove(direction, isCopilot) {
+      if (!gameActive || moving) return false;
+      moving = true;
+
+      const result = slideGrid(grid, direction);
+      if (!result.moved) { moving = false; return false; }
+
+      playSlideSound();
+
+      grid = result.grid;
+      score += result.scoreGain;
+      totalMoves++;
+      if (isCopilot) copilotMoves++;
+
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('copilot2048_high', highScore);
+      }
+
+      // Find merged cells (cells with newly merged values)
+      const mergedCells = [];
+      if (result.scoreGain > 0) {
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (grid[r][c] > 0 && result.scoreGain > 0) {
+              // Simple heuristic: if the cell value contributed to scoreGain
+            }
+          }
+        }
+        if (result.scoreGain > 0) playMergeSound(result.scoreGain);
+      }
+
+      const newPos = addRandomTile(grid);
+      renderGrid(newPos, []);
+      updateScoreDisplay(result.scoreGain);
+      updateStats();
+
+      // Check game state and update speech
+      const maxTile = getMaxTile(grid);
+      const emptyCells = countEmpty(grid);
+
+      if (maxTile >= 2048 && !wonAlready) {
+        wonAlready = true;
+        gameActive = false;
+        stopAutoPlay();
+        playWinSound();
+        setTimeout(() => showWin(), 400);
+      } else if (!canMove(grid)) {
+        gameActive = false;
+        stopAutoPlay();
+        playGameOverSound();
+        setTimeout(() => showGameOver(), 400);
+      } else {
+        // Update speech based on state
+        if (result.scoreGain >= 256) {
+          setSpeech(randomSpeech('bigMerge'));
+        } else if (maxTile >= 1024) {
+          setSpeech(randomSpeech('near2048'));
+        } else if (emptyCells <= 2) {
+          setSpeech(randomSpeech('danger'));
+        } else if (isCopilot) {
+          setSpeech(randomSpeech('helped'));
+        } else if (Math.random() < 0.3) {
+          setSpeech(randomSpeech('idle'));
+        }
+      }
+
+      setTimeout(() => { moving = false; }, 120);
+      return true;
+    }
+
+    // ===== OVERLAYS =====
+    function showWin() {
+      spawnConfetti();
+      document.getElementById('winScore').textContent = '得分: ' + score;
+      document.getElementById('winCopilotMsg').textContent = 'Copilot 帮了你 ' + copilotMoves + ' 步哦！';
+      document.getElementById('winOverlay').style.display = 'flex';
+    }
+
+    function showGameOver() {
+      document.getElementById('goScore').textContent = score;
+      document.getElementById('goHighScore').textContent = '最高纪录: ' + highScore;
+      const isNew = score >= highScore && score > 0;
+      document.getElementById('newRecordBadge').style.display = isNew ? 'block' : 'none';
+      if (isNew) setSpeech(randomSpeech('newRecord'));
+      else setSpeech(randomSpeech('gameOver'));
+      document.getElementById('gameOverOverlay').style.display = 'flex';
+    }
+
+    function spawnConfetti() {
+      const colors = ['#ff6b9d', '#c77dff', '#4cc9f0', '#ffd166', '#ff8fab', '#a78bfa', '#34d399'];
+      for (let i = 0; i < 60; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + 'vw';
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+        piece.style.width = (6 + Math.random() * 8) + 'px';
+        piece.style.height = (6 + Math.random() * 8) + 'px';
+        piece.style.animationDuration = (2 + Math.random() * 3) + 's';
+        piece.style.animationDelay = Math.random() * 0.8 + 's';
+        document.body.appendChild(piece);
+        setTimeout(() => piece.remove(), 5000);
+      }
+    }
+
+    // ===== COPILOT ACTIONS =====
+    function doCopilotHint() {
+      if (!gameActive || hintCooldown) return;
+      hintCooldown = true;
+      document.getElementById('hintBtn').disabled = true;
+
+      const bestDir = getBestMove(grid);
+      if (!bestDir) return;
+
+      const arrowMap = { up: '⬆', down: '⬇', left: '⬅', right: '➡' };
+      document.getElementById('arrowShape').textContent = arrowMap[bestDir];
+      document.getElementById('arrowOverlay').style.display = 'flex';
+      setSpeech(randomSpeech('hint'));
+      playCopilotSound();
+
+      setTimeout(() => {
+        document.getElementById('arrowOverlay').style.display = 'none';
+      }, 2000);
+
+      setTimeout(() => {
+        hintCooldown = false;
+        document.getElementById('hintBtn').disabled = false;
+      }, 3000);
+    }
+
+    function doCopilotMove() {
+      if (!gameActive || moveCooldown) return;
+      moveCooldown = true;
+      document.getElementById('moveBtn').disabled = true;
+
+      // Thinking animation
+      const wrapper = document.getElementById('mascotWrapper');
+      wrapper.classList.add('thinking');
+      playCopilotSound();
+
+      setTimeout(() => {
+        wrapper.classList.remove('thinking');
+        const bestDir = getBestMove(grid);
+        if (bestDir) {
+          doMove(bestDir, true);
+          showToast('Copilot出手了！🤖');
+
+          // Victory pose
+          wrapper.classList.add('victory');
+          setTimeout(() => wrapper.classList.remove('victory'), 500);
+        }
+
+        setTimeout(() => {
+          moveCooldown = false;
+          document.getElementById('moveBtn').disabled = false;
+        }, 2000);
+      }, 600);
+    }
+
+    function toggleAutoPlay() {
+      if (autoPlayActive) {
+        stopAutoPlay();
+      } else {
+        startAutoPlay();
+      }
+    }
+
+    function startAutoPlay() {
+      autoPlayActive = true;
+      const btn = document.getElementById('autoBtn');
+      btn.textContent = '⏹ 停下来！';
+      btn.classList.add('active');
+      document.getElementById('autoBanner').style.display = 'block';
+      document.getElementById('mascotWrapper').classList.add('turbo-mode');
+
+      autoPlayInterval = setInterval(() => {
+        if (!gameActive) { stopAutoPlay(); return; }
+        const bestDir = getBestMove(grid);
+        if (bestDir) {
+          doMove(bestDir, true);
+        } else {
+          stopAutoPlay();
+        }
+      }, 400);
+    }
+
+    function stopAutoPlay() {
+      autoPlayActive = false;
+      if (autoPlayInterval) { clearInterval(autoPlayInterval); autoPlayInterval = null; }
+      const btn = document.getElementById('autoBtn');
+      btn.textContent = '✨ 自动玩模式';
+      btn.classList.remove('active');
+      document.getElementById('autoBanner').style.display = 'none';
+      document.getElementById('mascotWrapper').classList.remove('turbo-mode');
+    }
+
+    function showToast(msg) {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2200);
+    }
+
+    // ===== FLOATING HEARTS =====
+    function createHearts() {
+      const container = document.getElementById('heartsContainer');
+      const particles = ['💖', '✨', '💜', '🌸', '💗', '⭐'];
+      for (let i = 0; i < 12; i++) {
+        const heart = document.createElement('div');
+        heart.className = 'heart-particle';
+        heart.textContent = particles[Math.floor(Math.random() * particles.length)];
+        heart.style.left = Math.random() * 100 + '%';
+        heart.style.animationDuration = (15 + Math.random() * 20) + 's';
+        heart.style.animationDelay = Math.random() * 15 + 's';
+        heart.style.fontSize = (14 + Math.random() * 12) + 'px';
+        container.appendChild(heart);
+      }
+    }
+
+    // ===== INPUT HANDLING =====
+    function handleKey(e) {
+      if (!gameActive) return;
+      const keyMap = {
+        'ArrowUp': 'up', 'ArrowDown': 'down', 'ArrowLeft': 'left', 'ArrowRight': 'right',
+        'w': 'up', 'W': 'up', 's': 'down', 'S': 'down', 'a': 'left', 'A': 'left', 'd': 'right', 'D': 'right'
+      };
+      const dir = keyMap[e.key];
+      if (dir) {
+        e.preventDefault();
+        doMove(dir, false);
+      }
+    }
+
+    let touchStartX = 0, touchStartY = 0;
+
+    function handleTouchStart(e) {
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+    }
+
+    function handleTouchEnd(e) {
+      if (!gameActive) return;
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      const threshold = 30;
+
+      if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+
+      let dir;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        dir = dx > 0 ? 'right' : 'left';
+      } else {
+        dir = dy > 0 ? 'down' : 'up';
+      }
+      doMove(dir, false);
+    }
+
+    // ===== EVENT LISTENERS =====
+    // Guard for lucide
+    if (typeof lucide !== "undefined" && typeof lucide.createIcons === "function") {
+      lucide.createIcons();
+    }
+
+    createHearts();
+
+    // Update high score display on load
+    document.getElementById('highScoreDisplay').textContent = highScore;
+
+    // Start button
+    document.getElementById('startBtn').addEventListener('click', function() {
+      document.getElementById('startOverlay').style.display = 'none';
+      initGame();
+    });
+
+    // Win overlay
+    document.getElementById('continueBtn').addEventListener('click', function() {
+      document.getElementById('winOverlay').style.display = 'none';
+      gameActive = true;
+      wonAlready = true;
+    });
+
+    document.getElementById('winNewBtn').addEventListener('click', function() {
+      document.getElementById('winOverlay').style.display = 'none';
+      initGame();
+    });
+
+    // Game over
+    document.getElementById('retryBtn').addEventListener('click', function() {
+      document.getElementById('gameOverOverlay').style.display = 'none';
+      initGame();
+    });
+
+    // New game
+    document.getElementById('newGameBtn').addEventListener('click', function() {
+      if (gameActive && totalMoves > 0) {
+        if (!confirm('确定要开始新游戏吗？当前进度会丢失哦～')) return;
+      }
+      document.getElementById('winOverlay').style.display = 'none';
+      document.getElementById('gameOverOverlay').style.display = 'none';
+      initGame();
+    });
+
+    // Sound toggle
+    document.getElementById('soundToggle').addEventListener('click', function() {
+      soundEnabled = !soundEnabled;
+      this.textContent = soundEnabled ? '🔊 音效' : '🔇 静音';
+    });
+
+    // Copilot buttons
+    document.getElementById('hintBtn').addEventListener('click', doCopilotHint);
+    document.getElementById('moveBtn').addEventListener('click', doCopilotMove);
+    document.getElementById('autoBtn').addEventListener('click', toggleAutoPlay);
+
+    // Keyboard
+    document.addEventListener('keydown', handleKey);
+
+    // Touch
+    const board = document.getElementById('gameBoard');
+    board.addEventListener('touchstart', handleTouchStart, { passive: true });
+    board.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    // Handle window resize
+    window.addEventListener('resize', function() {
+      if (gameActive) renderGrid(null, []);
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🐻 小熊挖宝 - 可爱钩钩游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              foreground: { 100:'#fffbf8',150:'#f8f4f1',200:'#efeae7',250:'#e2ddd9',300:'#cfc9c5',350:'#b3ada8',400:'#98918b',450:'#746d68',550:'#635c57',600:'#5a544f',650:'#4c4642',700:'#3f3935',750:'#322d29',800:'#272320',850:'#1d1a17',900:'#14110e' },
+              background: { 100:'#fffbf8',150:'#f8f4f1',200:'#efeae7',250:'#e2ddd9',300:'#cfc9c5',350:'#b3ada8',400:'#98918b',450:'#746d68' },
+              accent: { 100:'#fff7f6',150:'#ffedeb',200:'#ffe4e1',250:'#ffccc7',300:'#ffb5ae',350:'#f98981',400:'#e7615b',450:'#cc3a38',550:'#ac1922',600:'#9d1920',650:'#821b1e',700:'#6b171b',750:'#561318',800:'#420f13',850:'#300b0e',900:'#20080a' },
+              stroke: { 100:'#fffbf8',150:'#fff3ea',200:'#f6e8dd',250:'#ebdbce',300:'#dac6b7',350:'#c1a996',400:'#a88c76',450:'#87674e',550:'#745740',600:'#6a4f39',650:'#59422f',700:'#493626' },
+            },
+            borderRadius: { '3xl':'1.25rem','4xl':'1.5rem','5xl':'1.75rem','6xl':'2rem' },
+            fontFamily: { sans: ['Inter','sans-serif'] },
+          }
+        }
+      };
+    </script>
+    <style>
+      :root {
+        --sky-top: #bde0fe;
+        --sky-bottom: #d8c5f0;
+        --ground-top: #f5e6d3;
+        --ground-mid: #deb887;
+        --ground-bottom: #8b6914;
+        --rope-color: #f4978e;
+        --hook-color: #f08080;
+      }
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { overflow: hidden; font-family: 'Inter', sans-serif; }
+
+      /* Animations */
+      @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+      @keyframes wobble { 0%,100%{transform:scale(1) rotate(0deg)} 25%{transform:scale(1.05) rotate(2deg)} 75%{transform:scale(0.97) rotate(-2deg)} }
+      @keyframes pulse-hint { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+      @keyframes bounce-bear { 0%,100%{transform:translateY(0)} 30%{transform:translateY(-12px)} 60%{transform:translateY(-4px)} }
+      @keyframes confetti-fall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1} 100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+      @keyframes sparkle { 0%{transform:scale(0) rotate(0deg);opacity:1} 50%{transform:scale(1.5) rotate(180deg);opacity:0.8} 100%{transform:scale(0) rotate(360deg);opacity:0} }
+      @keyframes cloud-drift { 0%{transform:translateX(-120px)} 100%{transform:translateX(calc(100vw + 120px))} }
+      @keyframes timer-pulse { 0%,100%{color:#cc3a38;transform:scale(1)} 50%{color:#e7615b;transform:scale(1.08)} }
+      @keyframes gem-bounce { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-20px) scale(1.1)} }
+      @keyframes fade-in { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
+      @keyframes slide-up { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+
+      .float-anim { animation: float 3s ease-in-out infinite; }
+      .wobble-anim { animation: wobble 2.5s ease-in-out infinite; }
+      .pulse-hint { animation: pulse-hint 1.5s ease-in-out infinite; }
+      .bounce-bear { animation: bounce-bear 0.5s ease; }
+      .timer-critical { animation: timer-pulse 0.5s ease-in-out infinite; }
+      .gem-bounce { animation: gem-bounce 2s ease-in-out infinite; }
+      .fade-in { animation: fade-in 0.5s ease forwards; }
+      .slide-up { animation: slide-up 0.6s ease forwards; }
+
+      .cloud {
+        position: absolute;
+        background: rgba(255,255,255,0.7);
+        border-radius: 50px;
+        animation: cloud-drift linear infinite;
+      }
+      .cloud::before, .cloud::after {
+        content: '';
+        position: absolute;
+        background: inherit;
+        border-radius: 50%;
+      }
+      .cloud::before { width: 50px; height: 50px; top: -25px; left: 15px; }
+      .cloud::after { width: 35px; height: 35px; top: -15px; right: 15px; }
+
+      .confetti-piece {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        animation: confetti-fall linear forwards;
+      }
+
+      .sparkle-particle {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        animation: sparkle 0.6s ease forwards;
+        pointer-events: none;
+      }
+
+      /* Game canvas container */
+      #game-container {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      /* Sky section */
+      .sky-section {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 28%;
+        background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
+      }
+
+      /* Ground divider - grass */
+      .grass-line {
+        position: absolute;
+        top: 28%;
+        left: 0;
+        right: 0;
+        height: 20px;
+        background: #7ec883;
+        z-index: 5;
+        overflow: visible;
+      }
+      .grass-blade {
+        position: absolute;
+        bottom: 8px;
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      /* Underground section */
+      .underground-section {
+        position: absolute;
+        top: calc(28% + 20px);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(180deg, #f5e6d3 0%, #deb887 30%, #c4944a 60%, #8b6914 100%);
+      }
+      .dirt-band {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 3px;
+        opacity: 0.3;
+      }
+
+      /* Bear platform */
+      .bear-platform {
+        position: absolute;
+        top: calc(28% - 60px);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        text-align: center;
+      }
+      .wooden-cart {
+        background: linear-gradient(180deg, #deb887, #c4944a);
+        border-radius: 8px 8px 4px 4px;
+        padding: 2px 18px 6px;
+        border-bottom: 3px solid #8b6914;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      }
+      .bear-emoji {
+        font-size: 36px;
+        display: block;
+        line-height: 1.1;
+      }
+
+      /* Rope and hook */
+      .rope-line {
+        position: absolute;
+        width: 4px;
+        background: var(--rope-color);
+        border-radius: 2px;
+        transform-origin: top center;
+        z-index: 8;
+        box-shadow: 0 0 4px rgba(244,151,142,0.4);
+      }
+      .hook-head {
+        position: absolute;
+        width: 20px;
+        height: 14px;
+        border: 4px solid var(--hook-color);
+        border-top: none;
+        border-radius: 0 0 10px 10px;
+        z-index: 9;
+      }
+
+      /* Underground items */
+      .treasure-item {
+        position: absolute;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        z-index: 6;
+        transition: transform 0.1s;
+        cursor: default;
+      }
+      .treasure-item .item-emoji {
+        line-height: 1;
+      }
+      .treasure-item .item-label {
+        font-size: 8px;
+        font-weight: 700;
+        color: rgba(255,255,255,0.9);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        margin-top: 1px;
+      }
+
+      /* HUD */
+      .game-hud {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        z-index: 20;
+        flex-wrap: wrap;
+      }
+      .hud-card {
+        background: rgba(255,251,248,0.92);
+        backdrop-filter: blur(8px);
+        border-radius: 12px;
+        padding: 5px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #272320;
+        white-space: nowrap;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      }
+
+      /* Overlays */
+      .overlay-screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        background: rgba(0,0,0,0.35);
+        backdrop-filter: blur(4px);
+      }
+      .overlay-card {
+        background: #fffbf8;
+        border-radius: 24px;
+        padding: 32px 28px;
+        text-align: center;
+        max-width: 380px;
+        width: 90%;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+      }
+      .btn-primary {
+        display: inline-block;
+        background: linear-gradient(135deg, #f98981, #cc3a38);
+        color: white;
+        font-weight: 700;
+        font-size: 16px;
+        padding: 12px 32px;
+        border-radius: 16px;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(204,58,56,0.3);
+        transition: transform 0.15s, box-shadow 0.15s;
+      }
+      .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(204,58,56,0.4); }
+      .btn-primary:active { transform: translateY(0); }
+      .btn-secondary {
+        display: inline-block;
+        background: #efeae7;
+        color: #3f3935;
+        font-weight: 600;
+        font-size: 14px;
+        padding: 10px 24px;
+        border-radius: 12px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-secondary:hover { background: #e2ddd9; }
+
+      /* Decorations */
+      .deco-item {
+        position: absolute;
+        font-size: 16px;
+        opacity: 0.4;
+        z-index: 4;
+      }
+
+      /* Score popup */
+      .score-popup {
+        position: absolute;
+        font-size: 18px;
+        font-weight: 800;
+        color: #cc3a38;
+        z-index: 30;
+        pointer-events: none;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      }
+
+      @media (max-width: 500px) {
+        .hud-card { font-size: 11px; padding: 4px 8px; }
+        .bear-emoji { font-size: 28px; }
+        .overlay-card { padding: 24px 20px; }
+        .btn-primary { font-size: 14px; padding: 10px 24px; }
+      }
+    </style>
+</head>
+<body data-id="0">
+    <app-icon data-id="1" hidden data-icon="pickaxe" data-palette="Red"></app-icon>
+
+    <div data-id="2" id="game-container">
+        <!-- Sky -->
+        <div data-id="3" class="sky-section" id="sky">
+            <div data-id="4" class="cloud" style="width:80px;height:30px;top:15%;animation-duration:25s;animation-delay:-5s;"></div>
+            <div data-id="5" class="cloud" style="width:60px;height:22px;top:8%;animation-duration:30s;animation-delay:-15s;"></div>
+            <div data-id="6" class="cloud" style="width:70px;height:26px;top:22%;animation-duration:35s;animation-delay:-22s;"></div>
+        </div>
+
+        <!-- Grass line -->
+        <div data-id="7" class="grass-line" id="grass-line"></div>
+
+        <!-- Underground -->
+        <div data-id="8" class="underground-section" id="underground">
+            <!-- Dirt bands -->
+            <div data-id="9" class="dirt-band" style="top:20%;background:#c4944a;"></div>
+            <div data-id="10" class="dirt-band" style="top:45%;background:#a0783c;"></div>
+            <div data-id="11" class="dirt-band" style="top:70%;background:#8b6914;"></div>
+        </div>
+
+        <!-- Bear platform -->
+        <div data-id="12" class="bear-platform" id="bear-platform">
+            <div data-id="13" class="wooden-cart">
+                <span data-id="14" class="bear-emoji" id="bear-char">🐻</span>
+            </div>
+        </div>
+
+        <!-- Rope -->
+        <div data-id="15" class="rope-line" id="rope"></div>
+        <!-- Hook -->
+        <div data-id="16" class="hook-head" id="hook"></div>
+
+        <!-- HUD -->
+        <div data-id="17" class="game-hud" id="hud" style="display:none;">
+            <div data-id="18" class="hud-card">🐻 小熊挖宝</div>
+            <div data-id="19" class="hud-card" id="hud-timer">⏱️ 倒计时: 01:00</div>
+            <div data-id="20" class="hud-card" id="hud-target">🎯 目标: 300</div>
+            <div data-id="21" class="hud-card" id="hud-score">💰 得分: 0</div>
+            <div data-id="22" class="hud-card" id="hud-level">关卡: 1</div>
+        </div>
+
+        <!-- Hint -->
+        <div data-id="23" id="shoot-hint" style="display:none;position:absolute;bottom:12%;left:50%;transform:translateX(-50%);z-index:15;" class="pulse-hint">
+            <div data-id="24" class="hud-card" style="font-size:14px;">🎮 按空格键 / 点击屏幕 发射钩钩！</div>
+        </div>
+
+        <!-- Start Screen -->
+        <div data-id="25" class="overlay-screen" id="start-screen">
+            <div data-id="26" class="overlay-card fade-in">
+                <div data-id="27" style="font-size:56px;margin-bottom:8px;" class="gem-bounce">🐻</div>
+                <h1 data-id="28" style="font-size:32px;font-weight:900;color:#cc3a38;letter-spacing:3px;margin-bottom:4px;">小熊挖宝</h1>
+                <p data-id="29" style="font-size:14px;color:#635c57;margin-bottom:16px;">用钩钩挖出所有宝贝！</p>
+                <div data-id="30" style="background:#ffe4e1;border-radius:14px;padding:14px 18px;margin-bottom:20px;text-align:left;">
+                    <p data-id="31" style="font-size:13px;color:#3f3935;margin-bottom:6px;">🎮 <strong data-id="32">按空格键</strong> 或 <strong data-id="33">点击屏幕</strong> 发射钩钩</p>
+                    <p data-id="34" style="font-size:13px;color:#3f3935;margin-bottom:6px;">💎 抓住宝贝赚取分数</p>
+                    <p data-id="35" style="font-size:13px;color:#3f3935;margin-bottom:0;">⏱️ 在时间结束前达到目标分数！</p>
+                </div>
+                <div data-id="36" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;">
+                    <span data-id="37" style="font-size:22px;" class="float-anim">💎</span>
+                    <span data-id="38" style="font-size:22px;" class="float-anim" style="animation-delay:0.3s;">⭐</span>
+                    <span data-id="39" style="font-size:22px;" class="float-anim" style="animation-delay:0.6s;">🍓</span>
+                    <span data-id="40" style="font-size:22px;" class="float-anim" style="animation-delay:0.9s;">🔮</span>
+                    <span data-id="41" style="font-size:22px;" class="float-anim" style="animation-delay:1.2s;">🍀</span>
+                </div>
+                <button data-id="42" class="btn-primary" id="btn-start">开始冒险！🌟</button>
+            </div>
+        </div>
+
+        <!-- Level Complete Screen -->
+        <div data-id="43" class="overlay-screen" id="level-complete-screen" style="display:none;">
+            <div data-id="44" class="overlay-card fade-in">
+                <div data-id="45" style="font-size:48px;margin-bottom:8px;">🎉</div>
+                <h2 data-id="46" style="font-size:26px;font-weight:800;color:#cc3a38;margin-bottom:8px;">太棒了！</h2>
+                <p data-id="47" style="font-size:14px;color:#635c57;margin-bottom:4px;" id="lc-level-text">关卡 1 完成！</p>
+                <p data-id="48" style="font-size:20px;font-weight:700;color:#3f3935;margin-bottom:20px;" id="lc-score-text">得分: 350</p>
+                <button data-id="49" class="btn-primary" id="btn-next-level">下一关 → ✨</button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div data-id="50" class="overlay-screen" id="gameover-screen" style="display:none;">
+            <div data-id="51" class="overlay-card fade-in">
+                <div data-id="52" style="font-size:48px;margin-bottom:8px;">😢</div>
+                <h2 data-id="53" style="font-size:26px;font-weight:800;color:#cc3a38;margin-bottom:8px;">时间到了！</h2>
+                <p data-id="54" style="font-size:16px;font-weight:700;color:#3f3935;margin-bottom:4px;" id="go-score-text">最终得分: 200</p>
+                <p data-id="55" style="font-size:13px;color:#635c57;margin-bottom:20px;" id="go-high-text">🏆 最高分: 500</p>
+                <div data-id="56" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                    <button data-id="57" class="btn-primary" id="btn-retry">再试一次 🔄</button>
+                    <button data-id="58" class="btn-secondary" id="btn-home">回到主页 🏠</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confetti container -->
+        <div data-id="59" id="confetti-container" style="position:absolute;inset:0;pointer-events:none;z-index:45;overflow:hidden;"></div>
+        <!-- Sparkle container -->
+        <div data-id="60" id="sparkle-container" style="position:absolute;inset:0;pointer-events:none;z-index:35;overflow:hidden;"></div>
+        <!-- Score popup container -->
+        <div data-id="61" id="popup-container" style="position:absolute;inset:0;pointer-events:none;z-index:32;overflow:hidden;"></div>
+    </div>
+
+    <footer data-id="62" style="display:none;">
+        <p data-id="63">Made by Copilot</p>
+    </footer>
+
+    <script>
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+
+    // ==================== AUDIO ====================
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function ensureAudio() {
+        if (!audioCtx) audioCtx = new AudioCtx();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function playSound(type) {
+        try {
+            ensureAudio();
+            const now = audioCtx.currentTime;
+            if (type === 'shoot') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                osc.connect(gain).connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (type === 'grab') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                osc.connect(gain).connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'collect') {
+                [0, 0.08, 0.16].forEach((delay, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime([523, 659, 784][i], now + delay);
+                    gain.gain.setValueAtTime(0.15, now + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.12);
+                    osc.connect(gain).connect(audioCtx.destination);
+                    osc.start(now + delay); osc.stop(now + delay + 0.12);
+                });
+            } else if (type === 'fail') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.3);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.connect(gain).connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'levelup') {
+                [0, 0.1, 0.2, 0.3].forEach((delay, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime([523, 659, 784, 1047][i], now + delay);
+                    gain.gain.setValueAtTime(0.18, now + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.2);
+                    osc.connect(gain).connect(audioCtx.destination);
+                    osc.start(now + delay); osc.stop(now + delay + 0.2);
+                });
+            } else if (type === 'miss') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.12);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                osc.connect(gain).connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.12);
+            }
+        } catch(e) {}
+    }
+
+    // ==================== GAME STATE ====================
+    const ITEM_TYPES = [
+        { name:'草莓', emoji:'🍓', value:50, size:'small', color:'#ff8fab', radius:20 },
+        { name:'星星', emoji:'⭐', value:80, size:'small', color:'#ffd166', radius:20 },
+        { name:'蓝晶', emoji:'💎', value:150, size:'medium', color:'#90e0ef', radius:28 },
+        { name:'紫水晶', emoji:'🔮', value:200, size:'medium', color:'#c77dff', radius:28 },
+        { name:'彩虹宝石', emoji:'🌈', value:500, size:'small', color:'rainbow', radius:22 },
+        { name:'小石头', emoji:'🪨', value:10, size:'medium', color:'#adb5bd', radius:28 },
+        { name:'大石头', emoji:'🗿', value:5, size:'large', color:'#6c757d', radius:38 },
+        { name:'四叶草', emoji:'🍀', value:300, size:'small', color:'#95d5b2', radius:22 },
+    ];
+
+    const LEVELS = [];
+    for (let i = 1; i <= 20; i++) {
+        if (i === 1) LEVELS.push({ target: 300, time: 60 });
+        else if (i === 2) LEVELS.push({ target: 600, time: 55 });
+        else if (i === 3) LEVELS.push({ target: 1000, time: 50 });
+        else if (i === 4) LEVELS.push({ target: 1500, time: 45 });
+        else LEVELS.push({ target: 1500 + (i - 4) * 600, time: Math.max(30, 45 - (i - 4) * 3) });
+    }
+
+    let game = {
+        state: 'start', // start, playing, levelcomplete, gameover
+        level: 1,
+        score: 0,
+        totalScore: 0,
+        timeLeft: 60,
+        items: [],
+        // Rope
+        ropeAngle: 0,
+        ropeSwingDir: 1,
+        ropeSwingSpeed: Math.PI / 1.2,
+        ropeState: 'swinging', // swinging, extending, retracting
+        ropeLength: 0,
+        ropeMaxLength: 0,
+        ropeExtendSpeed: 0,
+        ropeRetractSpeed: 0,
+        grabbedItem: null,
+        bearBounce: false,
+        firstShot: true,
+        timerInterval: null,
+        lastFrame: 0,
+        highScore: parseInt(localStorage.getItem('bearTreasureHigh') || '0'),
+    };
+
+    // DOM refs
+    const container = document.getElementById('game-container');
+    const rope = document.getElementById('rope');
+    const hook = document.getElementById('hook');
+    const bearPlatform = document.getElementById('bear-platform');
+    const bearChar = document.getElementById('bear-char');
+    const hud = document.getElementById('hud');
+    const hudTimer = document.getElementById('hud-timer');
+    const hudTarget = document.getElementById('hud-target');
+    const hudScore = document.getElementById('hud-score');
+    const hudLevel = document.getElementById('hud-level');
+    const shootHint = document.getElementById('shoot-hint');
+    const startScreen = document.getElementById('start-screen');
+    const levelCompleteScreen = document.getElementById('level-complete-screen');
+    const gameoverScreen = document.getElementById('gameover-screen');
+    const underground = document.getElementById('underground');
+    const confettiContainer = document.getElementById('confetti-container');
+    const sparkleContainer = document.getElementById('sparkle-container');
+    const popupContainer = document.getElementById('popup-container');
+    const grassLine = document.getElementById('grass-line');
+
+    // ==================== GRASS DECORATION ====================
+    function generateGrass() {
+        grassLine.innerHTML = '';
+        const flowers = ['🌸','🌼','🌺','🌻','💐','🌷'];
+        const w = window.innerWidth;
+        for (let x = 0; x < w; x += 25 + Math.random() * 20) {
+            const blade = document.createElement('span');
+            blade.className = 'grass-blade';
+            blade.style.left = x + 'px';
+            blade.textContent = Math.random() < 0.35 ? flowers[Math.floor(Math.random() * flowers.length)] : '🌿';
+            grassLine.appendChild(blade);
+        }
+    }
+
+    // ==================== UNDERGROUND DECORATIONS ====================
+    function generateDecorations() {
+        document.querySelectorAll('.deco-item').forEach(d => d.remove());
+        const decos = ['🐛','🍄','🐛','🍄','🌰','🐛','🍄'];
+        const ugRect = underground.getBoundingClientRect();
+        decos.forEach(d => {
+            const el = document.createElement('span');
+            el.className = 'deco-item';
+            el.textContent = d;
+            el.style.left = (Math.random() * 90 + 5) + '%';
+            el.style.top = (ugRect.top + Math.random() * ugRect.height * 0.9) + 'px';
+            container.appendChild(el);
+        });
+    }
+
+    // ==================== ITEMS ====================
+    function generateItems() {
+        // Remove old items
+        document.querySelectorAll('.treasure-item').forEach(el => el.remove());
+        game.items = [];
+
+        const ugRect = underground.getBoundingClientRect();
+        const cRect = container.getBoundingClientRect();
+        const ugTop = ugRect.top - cRect.top + 15;
+        const ugBottom = ugRect.bottom - cRect.top - 15;
+        const ugLeft = 20;
+        const ugRight = cRect.width - 20;
+        const ugH = ugBottom - ugTop;
+
+        // Generate items per level
+        const count = 10 + Math.min(game.level, 8) * 2;
+        const placed = [];
+
+        for (let i = 0; i < count; i++) {
+            // Pick item type, weighted
+            let type;
+            const r = Math.random();
+            if (r < 0.18) type = ITEM_TYPES[0]; // strawberry
+            else if (r < 0.34) type = ITEM_TYPES[1]; // star
+            else if (r < 0.48) type = ITEM_TYPES[2]; // blue crystal
+            else if (r < 0.58) type = ITEM_TYPES[3]; // purple crystal
+            else if (r < 0.63) type = ITEM_TYPES[4]; // rainbow gem
+            else if (r < 0.75) type = ITEM_TYPES[5]; // small rock
+            else if (r < 0.85) type = ITEM_TYPES[6]; // big rock
+            else type = ITEM_TYPES[7]; // four leaf clover
+
+            const rad = type.radius;
+            let x, y, overlap;
+            let attempts = 0;
+            do {
+                x = ugLeft + rad + Math.random() * (ugRight - ugLeft - rad * 2);
+                y = ugTop + rad + Math.random() * (ugH - rad * 2);
+                overlap = placed.some(p => {
+                    const dx = p.x - x, dy = p.y - y;
+                    return Math.sqrt(dx*dx + dy*dy) < (p.r + rad + 8);
+                });
+                attempts++;
+            } while (overlap && attempts < 30);
+
+            placed.push({ x, y, r: rad });
+
+            const item = {
+                id: 'item-' + i,
+                type,
+                x, y,
+                radius: rad,
+                alive: true,
+            };
+            game.items.push(item);
+
+            // Create DOM element
+            const el = document.createElement('div');
+            el.className = 'treasure-item wobble-anim';
+            el.id = item.id;
+            el.style.width = rad * 2 + 'px';
+            el.style.height = rad * 2 + 'px';
+            el.style.left = (x - rad) + 'px';
+            el.style.top = (y - rad) + 'px';
+            el.style.animationDelay = (Math.random() * 2) + 's';
+
+            if (type.color === 'rainbow') {
+                el.style.background = 'linear-gradient(135deg, #ff8fab, #ffd166, #90e0ef, #c77dff, #95d5b2)';
+            } else {
+                el.style.background = type.color;
+            }
+            el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15), inset 0 -2px 4px rgba(0,0,0,0.1)';
+
+            const emojiSize = type.size === 'large' ? 26 : type.size === 'medium' ? 18 : 14;
+            el.innerHTML = `<span class="item-emoji" style="font-size:${emojiSize}px;">${type.emoji}</span><span class="item-label">${type.value}分</span>`;
+            container.appendChild(el);
+        }
+    }
+
+    // ==================== ROPE & HOOK POSITIONING ====================
+    function getBearAnchor() {
+        const bpRect = bearPlatform.getBoundingClientRect();
+        const cRect = container.getBoundingClientRect();
+        return {
+            x: bpRect.left - cRect.left + bpRect.width / 2,
+            y: bpRect.bottom - cRect.top + 2,
+        };
+    }
+
+    function updateRopeVisual() {
+        const anchor = getBearAnchor();
+        const angle = game.ropeAngle;
+        const len = game.ropeLength;
+
+        // Rope end position
+        const endX = anchor.x + Math.sin(angle) * len;
+        const endY = anchor.y + Math.cos(angle) * len;
+
+        // Position rope line
+        rope.style.height = len + 'px';
+        rope.style.left = (anchor.x - 2) + 'px';
+        rope.style.top = anchor.y + 'px';
+        rope.style.transformOrigin = 'top center';
+        rope.style.transform = `rotate(${angle}rad)`;
+
+        // Position hook at end
+        hook.style.left = (endX - 10) + 'px';
+        hook.style.top = (endY) + 'px';
+
+        return { endX, endY };
+    }
+
+    // ==================== EFFECTS ====================
+    function spawnSparkles(x, y, count) {
+        const colors = ['#ffd166','#ff8fab','#90e0ef','#c77dff','#95d5b2','#ffb5ae'];
+        for (let i = 0; i < count; i++) {
+            const el = document.createElement('div');
+            el.className = 'sparkle-particle';
+            el.style.left = (x + (Math.random()-0.5)*40) + 'px';
+            el.style.top = (y + (Math.random()-0.5)*40) + 'px';
+            el.style.background = colors[Math.floor(Math.random() * colors.length)];
+            el.style.animationDelay = (Math.random() * 0.2) + 's';
+            sparkleContainer.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+    }
+
+    function showScorePopup(x, y, value) {
+        const el = document.createElement('div');
+        el.className = 'score-popup';
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.textContent = '+' + value + '分';
+        el.style.transition = 'all 1s ease';
+        popupContainer.appendChild(el);
+        requestAnimationFrame(() => {
+            el.style.top = (y - 60) + 'px';
+            el.style.opacity = '0';
+        });
+        setTimeout(() => el.remove(), 1000);
+    }
+
+    function spawnConfetti(count) {
+        const colors = ['#ff8fab','#ffd166','#90e0ef','#c77dff','#95d5b2','#ffb5ae','#f98981'];
+        for (let i = 0; i < count; i++) {
+            const el = document.createElement('div');
+            el.className = 'confetti-piece';
+            el.style.left = (Math.random() * 100) + '%';
+            el.style.top = '-10px';
+            el.style.background = colors[Math.floor(Math.random() * colors.length)];
+            el.style.width = (6 + Math.random() * 8) + 'px';
+            el.style.height = (6 + Math.random() * 8) + 'px';
+            el.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+            el.style.animationDuration = (2 + Math.random() * 2) + 's';
+            el.style.animationDelay = (Math.random() * 0.5) + 's';
+            confettiContainer.appendChild(el);
+            setTimeout(() => el.remove(), 4500);
+        }
+    }
+
+    function bearBounceAnim() {
+        bearChar.style.animation = 'none';
+        void bearChar.offsetHeight;
+        bearChar.style.animation = 'bounce-bear 0.5s ease';
+        setTimeout(() => { bearChar.style.animation = 'none'; }, 500);
+    }
+
+    // ==================== HUD ====================
+    function updateHUD() {
+        const mins = Math.floor(game.timeLeft / 60);
+        const secs = Math.floor(game.timeLeft % 60);
+        hudTimer.textContent = '⏱️ 倒计时: ' + String(mins).padStart(2,'0') + ':' + String(secs).padStart(2,'0');
+        if (game.timeLeft <= 10) {
+            hudTimer.classList.add('timer-critical');
+        } else {
+            hudTimer.classList.remove('timer-critical');
+        }
+        const lv = LEVELS[Math.min(game.level - 1, LEVELS.length - 1)];
+        hudTarget.textContent = '🎯 目标: ' + lv.target;
+        hudScore.textContent = '💰 得分: ' + game.score;
+        hudLevel.textContent = '关卡: ' + game.level;
+    }
+
+    // ==================== GAME LOGIC ====================
+    function startLevel() {
+        const lv = LEVELS[Math.min(game.level - 1, LEVELS.length - 1)];
+        game.score = 0;
+        game.timeLeft = lv.time;
+        game.ropeAngle = 0;
+        game.ropeSwingDir = 1;
+        game.ropeLength = 12;
+        game.ropeState = 'swinging';
+        game.grabbedItem = null;
+        game.firstShot = true;
+
+        // Calculate max length
+        const cRect = container.getBoundingClientRect();
+        game.ropeMaxLength = cRect.height * 0.68;
+        game.ropeExtendSpeed = cRect.height * 0.75;
+        game.ropeRetractSpeed = cRect.height * 0.5;
+
+        generateGrass();
+        generateDecorations();
+        generateItems();
+        updateHUD();
+
+        hud.style.display = 'flex';
+        shootHint.style.display = 'block';
+        rope.style.display = 'block';
+        hook.style.display = 'block';
+
+        // Start timer
+        if (game.timerInterval) clearInterval(game.timerInterval);
+        game.timerInterval = setInterval(() => {
+            if (game.state !== 'playing') return;
+            game.timeLeft = Math.max(0, game.timeLeft - 1);
+            updateHUD();
+            if (game.timeLeft <= 0) {
+                gameOver();
+            }
+        }, 1000);
+
+        game.state = 'playing';
+    }
+
+    function shoot() {
+        if (game.state !== 'playing') return;
+        if (game.ropeState !== 'swinging') return;
+        game.ropeState = 'extending';
+        game.firstShot = false;
+        shootHint.style.display = 'none';
+        playSound('shoot');
+    }
+
+    function collectItem(item) {
+        const lv = LEVELS[Math.min(game.level - 1, LEVELS.length - 1)];
+        game.score += item.type.value;
+        game.totalScore += item.type.value;
+        item.alive = false;
+
+        // Remove item DOM
+        const el = document.getElementById(item.id);
+        if (el) el.remove();
+
+        // Effects
+        const anchor = getBearAnchor();
+        spawnSparkles(anchor.x, anchor.y - 10, 12);
+        showScorePopup(anchor.x - 20, anchor.y - 30, item.type.value);
+        bearBounceAnim();
+        playSound('collect');
+
+        updateHUD();
+
+        // Check level complete
+        if (game.score >= lv.target) {
+            setTimeout(() => levelComplete(), 400);
+        }
+    }
+
+    function levelComplete() {
+        game.state = 'levelcomplete';
+        if (game.timerInterval) clearInterval(game.timerInterval);
+        playSound('levelup');
+        spawnConfetti(60);
+
+        document.getElementById('lc-level-text').textContent = '关卡 ' + game.level + ' 完成！';
+        document.getElementById('lc-score-text').textContent = '得分: ' + game.score;
+        levelCompleteScreen.style.display = 'flex';
+
+        // High score
+        if (game.totalScore > game.highScore) {
+            game.highScore = game.totalScore;
+            localStorage.setItem('bearTreasureHigh', game.highScore);
+        }
+    }
+
+    function gameOver() {
+        game.state = 'gameover';
+        if (game.timerInterval) clearInterval(game.timerInterval);
+        playSound('fail');
+
+        if (game.totalScore > game.highScore) {
+            game.highScore = game.totalScore;
+            localStorage.setItem('bearTreasureHigh', game.highScore);
+        }
+
+        document.getElementById('go-score-text').textContent = '最终得分: ' + game.totalScore;
+        document.getElementById('go-high-text').textContent = '🏆 最高分: ' + game.highScore;
+        gameoverScreen.style.display = 'flex';
+    }
+
+    function resetGame() {
+        game.level = 1;
+        game.totalScore = 0;
+        document.querySelectorAll('.treasure-item').forEach(el => el.remove());
+        document.querySelectorAll('.deco-item').forEach(el => el.remove());
+    }
+
+    // ==================== GAME LOOP ====================
+    function gameLoop(timestamp) {
+        if (!game.lastFrame) game.lastFrame = timestamp;
+        const dt = Math.min((timestamp - game.lastFrame) / 1000, 0.05);
+        game.lastFrame = timestamp;
+
+        if (game.state === 'playing') {
+            const anchor = getBearAnchor();
+
+            if (game.ropeState === 'swinging') {
+                // Pendulum swing
+                game.ropeAngle += game.ropeSwingDir * game.ropeSwingSpeed * dt;
+                const maxAngle = Math.PI * 50 / 180;
+                if (game.ropeAngle > maxAngle) { game.ropeAngle = maxAngle; game.ropeSwingDir = -1; }
+                if (game.ropeAngle < -maxAngle) { game.ropeAngle = -maxAngle; game.ropeSwingDir = 1; }
+                game.ropeLength = 12;
+            }
+            else if (game.ropeState === 'extending') {
+                // Extend rope
+                game.ropeLength += game.ropeExtendSpeed * dt;
+                const hookPos = updateRopeVisual();
+
+                // Check collision with items
+                let hitItem = null;
+                for (const item of game.items) {
+                    if (!item.alive) continue;
+                    const dx = hookPos.endX - item.x;
+                    const dy = hookPos.endY - item.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < item.radius + 8) {
+                        hitItem = item;
+                        break;
+                    }
+                }
+
+                if (hitItem) {
+                    game.grabbedItem = hitItem;
+                    game.ropeState = 'retracting';
+                    // Set retract speed based on size
+                    const sizeSpeed = { small: 1.4, medium: 1.0, large: 0.35 };
+                    game.ropeRetractSpeed = game.ropeExtendSpeed * (sizeSpeed[hitItem.type.size] || 1.0);
+                    playSound('grab');
+
+                    // Visual: move item element to hook
+                    const el = document.getElementById(hitItem.id);
+                    if (el) {
+                        el.style.animation = 'none';
+                        el.style.transition = 'none';
+                    }
+                }
+
+                // Check if reached max length or bottom
+                const cRect = container.getBoundingClientRect();
+                if (game.ropeLength >= game.ropeMaxLength || hookPos.endY >= cRect.height - 10) {
+                    if (!game.grabbedItem) {
+                        game.ropeState = 'retracting';
+                        game.ropeRetractSpeed = game.ropeExtendSpeed * 1.5;
+                        playSound('miss');
+                    }
+                }
+            }
+            else if (game.ropeState === 'retracting') {
+                game.ropeLength -= game.ropeRetractSpeed * dt;
+
+                // Move grabbed item with hook
+                if (game.grabbedItem) {
+                    const hookPos = updateRopeVisual();
+                    const el = document.getElementById(game.grabbedItem.id);
+                    if (el) {
+                        el.style.left = (hookPos.endX - game.grabbedItem.radius) + 'px';
+                        el.style.top = (hookPos.endY - game.grabbedItem.radius) + 'px';
+                    }
+                }
+
+                if (game.ropeLength <= 12) {
+                    game.ropeLength = 12;
+                    if (game.grabbedItem) {
+                        collectItem(game.grabbedItem);
+                        game.grabbedItem = null;
+                    }
+                    game.ropeState = 'swinging';
+                }
+            }
+
+            updateRopeVisual();
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // ==================== INPUT ====================
+    document.addEventListener('keydown', function(e) {
+        if (e.code === 'Space' || e.key === ' ') {
+            e.preventDefault();
+            if (game.state === 'playing') {
+                shoot();
+            }
+        }
+    });
+
+    container.addEventListener('click', function(e) {
+        if (game.state === 'playing') {
+            shoot();
+        }
+    });
+
+    container.addEventListener('touchstart', function(e) {
+        if (game.state === 'playing') {
+            e.preventDefault();
+            shoot();
+        }
+    }, { passive: false });
+
+    // ==================== BUTTONS ====================
+    document.getElementById('btn-start').addEventListener('click', function(e) {
+        e.stopPropagation();
+        startScreen.style.display = 'none';
+        resetGame();
+        startLevel();
+    });
+
+    document.getElementById('btn-next-level').addEventListener('click', function(e) {
+        e.stopPropagation();
+        levelCompleteScreen.style.display = 'none';
+        game.level++;
+        document.querySelectorAll('.treasure-item').forEach(el => el.remove());
+        document.querySelectorAll('.deco-item').forEach(el => el.remove());
+        startLevel();
+    });
+
+    document.getElementById('btn-retry').addEventListener('click', function(e) {
+        e.stopPropagation();
+        gameoverScreen.style.display = 'none';
+        resetGame();
+        startLevel();
+    });
+
+    document.getElementById('btn-home').addEventListener('click', function(e) {
+        e.stopPropagation();
+        gameoverScreen.style.display = 'none';
+        resetGame();
+        hud.style.display = 'none';
+        shootHint.style.display = 'none';
+        rope.style.display = 'none';
+        hook.style.display = 'none';
+        game.state = 'start';
+        startScreen.style.display = 'flex';
+    });
+
+    // ==================== VISIBILITY ====================
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden && game.state === 'playing') {
+            // Pause timer already handled by interval checking state
+        }
+    });
+
+    // ==================== RESIZE ====================
+    window.addEventListener('resize', function() {
+        if (game.state === 'playing') {
+            const cRect = container.getBoundingClientRect();
+            game.ropeMaxLength = cRect.height * 0.68;
+            game.ropeExtendSpeed = cRect.height * 0.75;
+            generateGrass();
+        }
+    });
+
+    // ==================== INIT ====================
+    rope.style.display = 'none';
+    hook.style.display = 'none';
+    game.lastFrame = 0;
+    requestAnimationFrame(gameLoop);
+    generateGrass();
+    </script>
+</body>
+</html>
