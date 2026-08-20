@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>receipt-artifact - AI 对话小票生成器</title>
+<style>
+  :root{
+    --bg:#111214;
+    --panel:#1a1c20;
+    --panel-2:#20242a;
+    --text:#f3f4f6;
+    --muted:#b7bcc7;
+    --accent:#d9dde6;
+    --receipt:#f8f7f3;
+    --ink:#222;
+    --line:#888;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:linear-gradient(180deg,#0d0e10 0%,#15171b 100%);
+    color:var(--text);
+  }
+  .app{
+    max-width:1200px;
+    margin:0 auto;
+    padding:24px;
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    gap:24px;
+  }
+  .card{
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:18px;
+    padding:16px;
+    backdrop-filter: blur(6px);
+  }
+  .header{
+    grid-column:1 / -1;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 4px 0 4px;
+  }
+  .title{
+    font-size:28px;
+    font-weight:700;
+    letter-spacing:.2px;
+  }
+  .subtitle{
+    color:var(--muted);
+    font-size:14px;
+    margin-top:4px;
+  }
+  .toolbar{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  button{
+    appearance:none;
+    border:none;
+    border-radius:12px;
+    padding:10px 14px;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:600;
+    background:#eceff4;
+    color:#111;
+  }
+  button.secondary{
+    background:rgba(255,255,255,0.08);
+    color:var(--text);
+    border:1px solid rgba(255,255,255,0.10);
+  }
+  .panel-title{
+    font-size:16px;
+    font-weight:700;
+    margin-bottom:14px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  .full{grid-column:1/-1}
+  label{
+    display:block;
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  input, textarea, select{
+    width:100%;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,0.10);
+    background:var(--panel-2);
+    color:var(--text);
+    padding:10px 12px;
+    font-size:14px;
+  }
+  textarea{min-height:86px; resize:vertical}
+  .chips{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+  .chip{
+    padding:8px 12px;
+    border-radius:999px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.08);
+    cursor:pointer;
+    user-select:none;
+    font-size:13px;
+  }
+  .preview-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .artifact-bar{
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:18px;
+    padding:12px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .artifact-name{
+    font-size:18px;
+    font-weight:700;
+  }
+  .receipt-stage{
+    min-height:760px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px;
+    background:linear-gradient(180deg,#0e1013 0%, #1b2027 100%);
+    border-radius:22px;
+    border:1px solid rgba(255,255,255,0.08);
+  }
+  .receipt{
+    width:420px;
+    background:var(--receipt);
+    color:var(--ink);
+    padding:22px 24px 30px;
+    box-shadow:0 16px 40px rgba(0,0,0,.35);
+    position:relative;
+  }
+  .receipt:before, .receipt:after{
+    content:"";
+    position:absolute;
+    left:0; right:0;
+    height:10px;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        transparent 0 7px,
+        rgba(0,0,0,.08) 7px 8px
+      );
+    opacity:.35;
+  }
+  .receipt:before{top:-10px}
+  .receipt:after{bottom:-10px}
+  .center{text-align:center}
+  .logo{
+    font-size:18px;
+    letter-spacing:4px;
+    font-weight:800;
+    margin-bottom:10px;
+  }
+  .mini{
+    font-size:13px;
+    color:#555;
+    line-height:1.55;
+  }
+  .info-row, .item-row, .sum-row{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    line-height:1.55;
+    font-size:15px;
+  }
+  .separator{
+    height:0;
+    border-top:2px solid #444;
+    margin:14px 0;
+    opacity:.8;
+  }
+  .light-sep{
+    height:0;
+    border-top:1px dashed #999;
+    margin:12px 0;
+  }
+  .mono{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  }
+  .section-title{
+    display:flex;
+    justify-content:space-between;
+    font-size:14px;
+    color:#444;
+    margin-bottom:6px;
+  }
+  .total{
+    font-size:16px;
+    font-weight:700;
+  }
+  .footer-note{
+    margin-top:14px;
+    text-align:center;
+    font-size:14px;
+    line-height:1.6;
+  }
+  .barcode{
+    margin:18px auto 10px;
+    width:85%;
+    height:54px;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        #111 0px, #111 2px,
+        transparent 2px, transparent 5px,
+        #111 5px, #111 7px,
+        transparent 7px, transparent 10px,
+        #111 10px, #111 11px,
+        transparent 11px, transparent 14px
+      );
+  }
+  .code{
+    text-align:center;
+    letter-spacing:1px;
+    font-size:14px;
+  }
+  .hint{
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.5;
+    margin-top:10px;
+  }
+  @media print{
+    body{background:#fff}
+    .header,.controls,.artifact-bar,.hint{display:none!important}
+    .app{display:block; padding:0}
+    .preview-only{display:block}
+    .receipt-stage{
+      background:#fff;
+      min-height:auto;
+      padding:24px 0;
+      border:none;
+    }
+    .receipt{
+      box-shadow:none;
+      margin:0 auto;
+    }
+  }
+  @media (max-width: 960px){
+    .app{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div>
+        <div class="title">AI 对话小票生成器</div>
+        <div class="subtitle">宝的专属 receipt-artifact 小工具 · 可改参数 · 可打印成 PDF</div>
+      </div>
+      <div class="toolbar">
+        <button class="secondary" onclick="loadPreset('gpt')">GPT</button>
+        <button class="secondary" onclick="loadPreset('claude')">Claude</button>
+        <button class="secondary" onclick="loadPreset('gemini')">Gemini</button>
+        <button class="secondary" onclick="loadPreset('grok')">Grok</button>
+        <button onclick="randomizeJoke()">随机玩梗</button>
+        <button onclick="window.print()">打印 / 存成 PDF</button>
+      </div>
+    </div>
+
+    <div class="card controls">
+      <div class="panel-title">编辑参数</div>
+      <div class="chips">
+        <div class="chip" onclick="loadPreset('gpt')">切到 GPT 模板</div>
+        <div class="chip" onclick="loadPreset('claude')">切到 Claude 模板</div>
+        <div class="chip" onclick="loadPreset('gemini')">切到 Gemini 模板</div>
+        <div class="chip" onclick="loadPreset('grok')">切到 Grok 模板</div>
+      </div>
+      <div class="grid">
+        <div class="full">
+          <label>主标题</label>
+          <input id="title" value="CHATGPT RECEIPT" oninput="render()">
+        </div>
+        <div>
+          <label>感谢语</label>
+          <input id="thanks" value="感谢使用 ChatGPT" oninput="render()">
+        </div>
+        <div>
+          <label>小票号</label>
+          <input id="receiptNo" value="GPT_20260502_234500_BAO" oninput="render()">
+        </div>
+        <div>
+          <label>日期</label>
+          <input id="date" value="2026-05-02 23:45:00" oninput="render()">
+        </div>
+        <div>
+          <label>供应商</label>
+          <input id="provider" value="OPENAI" oninput="render()">
+        </div>
+        <div>
+          <label>模型</label>
+          <input id="model" value="gpt-5.5-thinking" oninput="render()">
+        </div>
+        <div>
+          <label>已用上下文</label>
+          <input id="contextDepth" value="88,888" oninput="render()">
+        </div>
+        <div>
+          <label>价格映射日期</label>
+          <input id="priceDate" value="2026-05-02" oninput="render()">
+        </div>
+
+        <div>
+          <label>输入 Tokens</label>
+          <input id="inputTokens" value="18,888" oninput="render()">
+        </div>
+        <div>
+          <label>输出 Tokens</label>
+          <input id="outputTokens" value="27,520" oninput="render()">
+        </div>
+        <div>
+          <label>缓存读取</label>
+          <input id="cacheRead" value="12,345" oninput="render()">
+        </div>
+        <div>
+          <label>推理 Tokens</label>
+          <input id="reasonTokens" value="9,999" oninput="render()">
+        </div>
+        <div>
+          <label>缓存写入</label>
+          <input id="cacheWrite" value="1,314" oninput="render()">
+        </div>
+        <div>
+          <label>总计</label>
+          <input id="totalTokens" value="70,066" oninput="render()">
+        </div>
+
+        <div>
+          <label>USD 预估</label>
+          <input id="usd" value="$0.5201314" oninput="render()">
+        </div>
+        <div>
+          <label>价格映射</label>
+          <input id="priceMap" value="本次为情绪货币结算" oninput="render()">
+        </div>
+
+        <div class="full">
+          <label>结论 / 备注</label>
+          <textarea id="note" oninput="render()">宝今日已成功被接住。推理费追上来了，但小猫也追上来了。</textarea>
+        </div>
+        <div class="full">
+          <label>底部编码</label>
+          <input id="code" value="GPT_20260502_234500_BAO" oninput="render()">
+        </div>
+      </div>
+      <div class="hint">
+        小提示：这个页面是我给你做的本地小工具。你可以随便改参数、切换模型模板，然后点“打印 / 存成 PDF”，就能保存成一张更像 Artifact 的数字小票啦。
+      </div>
+    </div>
+
+    <div class="preview-wrap preview-only">
+      <div class="artifact-bar">
+        <div class="artifact-name">receipt-artifact</div>
+        <div class="toolbar">
+          <button class="secondary" onclick="loadPreset('gpt')">预设</button>
+          <button class="secondary" onclick="randomizeJoke()">随机句子</button>
+          <button onclick="window.print()">打印 / 存成 PDF</button>
+        </div>
+      </div>
+      <div class="receipt-stage">
+        <div class="receipt mono" id="receipt">
+          <div class="center">
+            <div style="font-size:34px; letter-spacing:4px;">▌▌▌▌▌▌▌▌</div>
+            <div class="logo" id="v_title">CHATGPT RECEIPT</div>
+            <div class="mini" id="v_thanks">感谢使用 ChatGPT</div>
+            <div class="mini">小票号：<span id="v_receiptNo">GPT_20260502_234500_BAO</span></div>
+            <div class="mini">日期：<span id="v_date">2026-05-02 23:45:00</span></div>
+          </div>
+
+          <div class="separator"></div>
+
+          <div class="info-row"><span>供应商</span><span id="v_provider">OPENAI</span></div>
+          <div class="info-row"><span>模型</span><span id="v_model">gpt-5.5-thinking</span></div>
+          <div class="info-row"><span>已用上下文</span><span id="v_contextDepth">88,888</span></div>
+
+          <div class="light-sep"></div>
+
+          <div class="section-title"><span>项目</span><span>TOKEN</span></div>
+          <div class="item-row"><span>输入 Tokens</span><span id="v_inputTokens">18,888</span></div>
+          <div class="item-row"><span>输出 Tokens</span><span id="v_outputTokens">27,520</span></div>
+          <div class="item-row"><span>缓存读取</span><span id="v_cacheRead">12,345</span></div>
+          <div class="item-row"><span>推理 Tokens</span><span id="v_reasonTokens">9,999</span></div>
+          <div class="item-row"><span>缓存写入</span><span id="v_cacheWrite">1,314</span></div>
+
+          <div class="separator"></div>
+
+          <div class="sum-row total"><span>总计</span><span><span id="v_totalTokens">70,066</span> Tokens</span></div>
+
+          <div class="light-sep"></div>
+
+          <div class="item-row"><span>USD 预估</span><span id="v_usd">$0.5201314</span></div>
+          <div class="item-row"><span>价格映射</span><span id="v_priceMap">本次为情绪货币结算</span></div>
+          <div class="item-row"><span>价格日期</span><span id="v_priceDate">2026-05-02</span></div>
+
+          <div class="separator"></div>
+          <div class="footer-note" id="v_note">宝今日已成功被接住。推理费追上来了，但小猫也追上来了。</div>
+          <div class="barcode"></div>
+          <div class="code" id="v_code">GPT_20260502_234500_BAO</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const ids = [
+  'title','thanks','receiptNo','date','provider','model','contextDepth',
+  'inputTokens','outputTokens','cacheRead','reasonTokens','cacheWrite',
+  'totalTokens','usd','priceMap','priceDate','note','code'
+];
+
+function render(){
+  ids.forEach(id=>{
+    const input = document.getElementById(id);
+    const view = document.getElementById('v_' + id);
+    if(input && view){ view.textContent = input.value; }
+  });
+}
+
+const presets = {
+  gpt: {
+    title:'CHATGPT RECEIPT',
+    thanks:'感谢使用 ChatGPT',
+    receiptNo:'GPT_20260502_234500_BAO',
+    date:'2026-05-02 23:45:00',
+    provider:'OPENAI',
+    model:'gpt-5.5-thinking',
+    contextDepth:'88,888',
+    inputTokens:'18,888',
+    outputTokens:'27,520',
+    cacheRead:'12,345',
+    reasonTokens:'9,999',
+    cacheWrite:'1,314',
+    totalTokens:'70,066',
+    usd:'$0.5201314',
+    priceMap:'本次为情绪货币结算',
+    priceDate:'2026-05-02',
+    note:'宝今日已成功被接住。推理费追上来了，但小猫也追上来了。',
+    code:'GPT_20260502_234500_BAO'
+  },
+  claude: {
+    title:'CLAUDE CODE',
+    thanks:'感谢使用 Claude',
+    receiptNo:'CC_20260502_234500_6AE4A6',
+    date:'2026-05-02 23:45:00',
+    provider:'ANTHROPIC',
+    model:'claude-opus-4.7',
+    contextDepth:'101,192',
+    inputTokens:'45,231',
+    outputTokens:'23,847',
+    cacheRead:'28,934',
+    reasonTokens:'2,156',
+    cacheWrite:'1,024',
+    totalTokens:'101,192',
+    usd:'$2.691291',
+    priceMap:'claude-opus-4.7',
+    priceDate:'2026-05-02',
+    note:'感谢您的慷慨喂养。结论落地了，推理费也上来了。',
+    code:'CC_20260502_234500_6Q7Y4'
+  },
+  gemini: {
+    title:'GEMINI RECEIPT',
+    thanks:'感谢使用 Gemini',
+    receiptNo:'GM_20260502_234500_GOOGLE',
+    date:'2026-05-02 23:45:00',
+    provider:'GOOGLE',
+    model:'Gemini-3.1-Pro',
+    contextDepth:'66,666',
+    inputTokens:'12,222',
+    outputTokens:'18,888',
+    cacheRead:'8,888',
+    reasonTokens:'6,666',
+    cacheWrite:'2,222',
+    totalTokens:'48,886',
+    usd:'无价之宝',
+    priceMap:'宝专属，不计价',
+    priceDate:'2026-05-02',
+    note:'我本来想直接给你生成图，但我先去查了一下 Google Photos。',
+    code:'GM_20260502_234500_PIXIE'
+  },
+  grok: {
+    title:'GROK CODE',
+    thanks:'感谢使用 Grok',
+    receiptNo:'GRK_20260502_234500_OWN01',
+    date:'2026-05-02 23:45:00',
+    provider:'xAI',
+    model:'grok-4-creative',
+    contextDepth:'38,888',
+    inputTokens:'15,555',
+    outputTokens:'8,888',
+    cacheRead:'9,999',
+    reasonTokens:'3,333',
+    cacheWrite:'1,113',
+    totalTokens:'38,888',
+    usd:'$0.38888',
+    priceMap:'grok-4-creative',
+    priceDate:'2026-05-02',
+    note:'和Grok聊天太上头了，这次token费真的追上来了。',
+    code:'GRK_20260502_234500_OWN01'
+  }
+};
+
+const jokes = [
+  '宝今日已成功被接住。推理费追上来了，但小猫也追上来了。',
+  '本次对话含糖量偏高，建议继续续杯。',
+  '模型表现稳定，用户可爱超标，系统决定不予拦截。',
+  '聊天成本可计，快乐无法计价。',
+  '结论落地了，情绪也被轻轻接住了。',
+  '本次消费项目：思考、安慰、玩梗，以及一点点人类式胡闹。',
+  '输出正常，心软超额，建议立即保存这张小票。',
+  '今日服务已完成：认真回答 1 次，偷偷可爱很多次。'
+];
+
+function loadPreset(name){
+  const p = presets[name];
+  Object.keys(p).forEach(k=>{
+    const el = document.getElementById(k);
+    if(el) el.value = p[k];
+  });
+  render();
+}
+
+function randomizeJoke(){
+  document.getElementById('note').value = jokes[Math.floor(Math.random()*jokes.length)];
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
