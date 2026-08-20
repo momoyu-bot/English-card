@@ -1,0 +1,108 @@
+<div style="padding: 0.25rem 0 0;">
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">伪装成关键词报表的找茬小游戏：每批数据里有一个异常单元格，点中它即可核对下一批。</h2>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px;">
+  <div style="display:flex;align-items:baseline;gap:10px;">
+    <span style="font-size:14px;font-weight:500;color:var(--text-primary);">Keyword performance</span>
+    <span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">batch <span id="bt">01</span> / 每日核对</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button id="skip" style="font-size:12px;height:28px;padding:0 10px;"><i class="ti ti-refresh" style="font-size:14px;vertical-align:-2px;margin-right:4px" aria-hidden="true"></i>换一批</button>
+    <button id="hide" style="font-size:12px;height:28px;padding:0 10px;"><i class="ti ti-eye-off" style="font-size:14px;vertical-align:-2px;margin-right:4px" aria-hidden="true"></i>收起</button>
+  </div>
+</div>
+
+<div id="board" style="border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-2);">
+  <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--font-mono);font-size:12px;">
+    <thead>
+      <tr style="background:var(--surface-1);">
+        <th style="width:23%;text-align:left;padding:7px 10px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);">ASIN</th>
+        <th style="width:29%;text-align:left;padding:7px 10px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);">Keyword</th>
+        <th style="width:15%;text-align:right;padding:7px 10px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);">Impr.</th>
+        <th style="width:11%;text-align:right;padding:7px 10px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);">Clicks</th>
+        <th style="width:11%;text-align:right;padding:7px 10px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);">CTR</th>
+        <th style="width:13%;text-align:right;padding:7px 10px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);">Spend</th>
+      </tr>
+    </thead>
+    <tbody id="tb"></tbody>
+  </table>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 2px 0;font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">
+  <span>已核对 <span id="sc" style="color:var(--text-primary);">0</span> 项 · 连续无误 <span id="cb" style="color:var(--text-primary);">0</span></span>
+  <span id="msg" style="color:var(--text-secondary);">点一下那个不对劲的格子</span>
+  <span id="cat" style="cursor:pointer;user-select:none;" title="…">(=^･ω･^=)</span>
+</div>
+</div>
+
+<script>
+(function(){
+var KW=["bathroom storage organizer","under sink shelf","clear bin stackable","closet divider set","kitchen drawer tray","shower caddy rustproof","desk cable box","pantry can rack","laundry sorter 3 bag","makeup organizer acrylic","toy storage cube","spice rack wall mount","shoe rack 5 tier","fridge bin set of 6","cord management sleeve"];
+var s=0,cb=0,batch=1,ans=null,lock=false,hidden=false;
+var tb=document.getElementById("tb"),msg=document.getElementById("msg");
+function ri(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function asin(){var c="ABCDEFGHJKLMNPQRSTUVWXYZ0123456789",r="B0";for(var i=0;i<8;i++)r+=c[ri(0,c.length-1)];return r}
+function nf(n){return n.toLocaleString("en-US")}
+function row(){var im=ri(900,86000),cl=Math.max(1,Math.round(im*(ri(4,75)/1000)));
+return{asin:asin(),kw:KW[ri(0,KW.length-1)],im:nf(im),cl:nf(cl),ctr:(cl/im*100).toFixed(2)+"%",sp:"$"+(cl*(ri(28,140)/100)).toFixed(2)}}
+var BUGS=[
+{k:"ctr",lv:1,f:function(r){r.ctr=ri(112,486)+"."+ri(10,99)+"%";return"CTR 冲破 100% 了"}},
+{k:"sp",lv:1,f:function(r){r.sp="-$"+(ri(3,60)+ri(10,99)/100).toFixed(2);return"花费是负数"}},
+{k:"cl",lv:1,f:function(r){r.cl=nf(ri(90000,180000));return"点击比曝光还多"}},
+{k:"asin",lv:2,f:function(r){r.asin=r.asin.slice(0,ri(0,1)?9:11)+(ri(0,1)?"":"K");return"ASIN 位数不对"}},
+{k:"asin",lv:2,f:function(r){r.asin="B0"+r.asin.slice(2).replace(/[0-9]/,"O");return"ASIN 里混了字母 O"}},
+{k:"im",lv:3,f:function(r){var d=r.im.replace(/,/g,"");r.im=d.slice(0,1)+","+d.slice(1);return"千分位逗号错位"}},
+{k:"kw",lv:3,f:function(r){r.kw=r.kw.replace(" ","  ");return"关键词里有双空格"}},
+{k:"ctr",lv:3,f:function(r){r.ctr=r.ctr.replace("%","％");return"百分号是全角的"}}
+];
+function deal(){
+  var n=8,rows=[],i;for(i=0;i<n;i++)rows.push(row());
+  var maxlv=s<4?1:(s<10?2:3);
+  var pool=BUGS.filter(function(b){return b.lv<=maxlv});
+  var bug=pool[ri(0,pool.length-1)],ridx=ri(0,n-1);
+  var why=bug.f(rows[ridx]);
+  ans={r:ridx,k:bug.k,why:why};
+  var h="";
+  for(i=0;i<n;i++){var r=rows[i];
+    h+='<tr data-r="'+i+'">'+
+    cell(i,"asin",r.asin,"left")+cell(i,"kw",r.kw,"left")+
+    cell(i,"im",r.im,"right")+cell(i,"cl",r.cl,"right")+
+    cell(i,"ctr",r.ctr,"right")+cell(i,"sp",r.sp,"right")+'</tr>'}
+  tb.innerHTML=h;lock=false;
+  document.getElementById("bt").textContent=("0"+batch).slice(-2);
+}
+function cell(i,k,v,al){
+ return '<td data-r="'+i+'" data-k="'+k+'" style="padding:6px 10px;text-align:'+al+';border-bottom:0.5px solid var(--border);color:var(--text-primary);cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .12s;">'+v+'</td>'}
+tb.addEventListener("mouseover",function(e){var t=e.target;if(t.tagName==="TD"&&!lock)t.style.background="var(--surface-1)"});
+tb.addEventListener("mouseout",function(e){var t=e.target;if(t.tagName==="TD")t.style.background=""});
+tb.addEventListener("click",function(e){
+  var t=e.target;if(t.tagName!=="TD"||lock||!ans)return;lock=true;
+  if(+t.dataset.r===ans.r&&t.dataset.k===ans.k){
+    t.style.background="var(--bg-success)";t.style.color="var(--text-success)";
+    s++;cb++;batch++;
+    document.getElementById("sc").textContent=s;document.getElementById("cb").textContent=cb;
+    msg.textContent="对，"+ans.why;msg.style.color="var(--text-success)";
+    setTimeout(function(){msg.style.color="var(--text-secondary)";deal()},760);
+  }else{
+    t.style.background="var(--bg-danger)";t.style.color="var(--text-danger)";
+    cb=0;document.getElementById("cb").textContent=0;
+    msg.textContent="这格没问题，再看看";msg.style.color="var(--text-danger)";
+    setTimeout(function(){t.style.background="";t.style.color="var(--text-primary)";msg.textContent="点一下那个不对劲的格子";msg.style.color="var(--text-secondary)";lock=false},560);
+  }
+});
+document.getElementById("skip").addEventListener("click",function(){if(!lock){cb=0;document.getElementById("cb").textContent=0;deal()}});
+var board=document.getElementById("board");
+document.getElementById("hide").addEventListener("click",function(){
+  hidden=!hidden;
+  board.style.display=hidden?"none":"";
+  this.innerHTML=hidden?'<i class="ti ti-eye" style="font-size:14px;vertical-align:-2px;margin-right:4px" aria-hidden="true"></i>展开':'<i class="ti ti-eye-off" style="font-size:14px;vertical-align:-2px;margin-right:4px" aria-hidden="true"></i>收起';
+  msg.textContent=hidden?"数据已折叠":"点一下那个不对劲的格子";
+});
+var MEOW=["门口没人","再玩三批就干活","你老板去茶水间了","喵在帮你望风","困的话眨眨眼","这批我看过了没问题"];
+var mi=0;document.getElementById("cat").addEventListener("click",function(){
+  msg.textContent="喵：“"+MEOW[mi%MEOW.length]+"”";mi++;
+  this.textContent=mi%2?"(=^･ｪ･^=)":"(=^･ω･^=)";
+});
+deal();
+})();
+</script>

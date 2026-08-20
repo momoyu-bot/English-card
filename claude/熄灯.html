@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>熄灯</title>
+<style>
+  :root{
+    --ink:#0c0f1a;
+    --ink-2:#141a2c;
+    --wall:#1c2338;
+    --wall-lit:#242d47;
+    --lamp:#ffd79b;
+    --lamp-soft:#f0b96e;
+    --dark-pane:#191f33;
+    --moon:#dfe7f5;
+    --whisper:#67739a;
+    --whisper-warm:#9c8ea0;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  html,body{height:100%}
+
+  body{
+    background:
+      radial-gradient(120% 80% at 50% 105%, #1a2138 0%, transparent 60%),
+      linear-gradient(#080a13 0%, var(--ink) 45%, var(--ink-2) 100%);
+    color:var(--moon);
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:clamp(18px,4vh,34px);
+    padding:min(6vh,44px) 16px calc(min(6vh,44px) + env(safe-area-inset-bottom));
+    overflow:hidden;
+    position:relative;
+    -webkit-tap-highlight-color:transparent;
+    animation:breathe 14s ease-in-out infinite;
+  }
+
+  @keyframes breathe{
+    0%,100%{filter:brightness(1)}
+    50%{filter:brightness(.93)}
+  }
+
+  /* ── 天空 ───────────────────────── */
+  .sky{position:fixed;inset:0;pointer-events:none;z-index:0}
+
+  .star{
+    position:absolute;
+    color:var(--moon);
+    font-size:10px;
+    opacity:0;
+    animation:twinkle 5s ease-in-out infinite;
+  }
+  @keyframes twinkle{
+    0%,100%{opacity:.12}
+    50%{opacity:.75}
+  }
+
+  .moon{
+    position:fixed;
+    top:clamp(22px,7vh,64px);
+    right:clamp(24px,9vw,120px);
+    font-size:clamp(26px,5vw,38px);
+    color:var(--moon);
+    opacity:.5;
+    background:none;border:0;padding:10px;
+    cursor:pointer;
+    z-index:2;
+    filter:drop-shadow(0 0 12px rgba(223,231,245,.15));
+    transition:opacity 2.4s ease, filter 2.4s ease, transform 2.4s ease;
+    font-family:inherit;
+  }
+  .moon:hover{opacity:.72}
+  .moon.risen{
+    opacity:.95;
+    filter:drop-shadow(0 0 26px rgba(223,231,245,.4));
+    transform:translateY(-8px);
+  }
+
+  /* ── 楼 ─────────────────────────── */
+  .building{position:relative;z-index:1}
+
+  .roof{
+    height:14px;
+    background:linear-gradient(#2a3350,#1c2338);
+    border-radius:4px 4px 0 0;
+    margin:0 -10px;
+    box-shadow:0 -1px 0 rgba(223,231,245,.06) inset;
+  }
+
+  .windows{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:clamp(7px,1.9vw,12px);
+    padding:clamp(7px,1.9vw,12px);
+    background:
+      repeating-linear-gradient(90deg,rgba(0,0,0,.14) 0 1px,transparent 1px 9px),
+      var(--wall);
+    border-radius:2px;
+    transition:background-color 3s ease;
+  }
+
+  .window{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:clamp(88px,26vw,132px);
+    height:clamp(66px,19vw,96px);
+    border:0;
+    border-radius:2px;
+    cursor:pointer;
+    font-family:inherit;
+    font-size:clamp(12px,3.3vw,17px);
+    letter-spacing:-.02em;
+    white-space:nowrap;
+    background:linear-gradient(170deg,var(--lamp) 0%,var(--lamp-soft) 100%);
+    color:#4a3a24;
+    box-shadow:0 0 22px 2px rgba(255,196,110,.22), 0 0 60px rgba(255,196,110,.09);
+    transition:background 2.2s ease, color 2.2s ease, box-shadow 2.4s ease;
+  }
+  .window::after{ /* 窗棂 */
+    content:"";
+    position:absolute;inset:0;
+    background:linear-gradient(rgba(0,0,0,.13) 0 1px,transparent 1px);
+    background-size:100% 50%;
+    pointer-events:none;
+  }
+  .window:focus-visible{outline:1px solid var(--moon);outline-offset:3px}
+
+  .window.off,.window.asleep-already{
+    background:linear-gradient(170deg,var(--dark-pane),#12172a);
+    color:#39415e;
+    box-shadow:none;
+    cursor:default;
+  }
+  .window.settling{cursor:default}
+
+  .zz{
+    position:absolute;
+    top:8px;right:9px;
+    font-size:.7em;
+    opacity:0;
+    animation:float-up 2.6s ease-out infinite;
+  }
+  @keyframes float-up{
+    0%{opacity:0;transform:translateY(4px)}
+    30%{opacity:.7}
+    100%{opacity:0;transform:translateY(-14px)}
+  }
+
+  .base{
+    height:10px;
+    background:linear-gradient(#151b2c,#0d1120);
+    border-radius:0 0 3px 3px;
+    margin:0 -6px;
+  }
+  .ground{
+    height:1px;
+    width:min(94vw,520px);
+    margin:0 auto;
+    background:linear-gradient(90deg,transparent,rgba(223,231,245,.13),transparent);
+  }
+
+  /* ── 旁白 ───────────────────────── */
+  .narration{
+    z-index:1;
+    min-height:2.6em;
+    max-width:26em;
+    text-align:center;
+    font-size:clamp(12px,3.2vw,14px);
+    line-height:1.9;
+    letter-spacing:.14em;
+    color:var(--whisper);
+    transition:opacity 1s ease;
+  }
+  .narration.fade{opacity:0}
+
+  /* ── 你的窗 ─────────────────────── */
+  .yours{
+    z-index:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+    opacity:0;
+    transform:translateY(10px);
+    pointer-events:none;
+    transition:opacity 3s ease, transform 3s ease;
+  }
+  .yours.shown{opacity:1;transform:none;pointer-events:auto}
+  .yours .label{
+    font-size:11px;
+    letter-spacing:.34em;
+    color:var(--whisper);
+    text-indent:.34em;
+  }
+  .yours .window{
+    width:clamp(112px,32vw,150px);
+    height:clamp(72px,20vw,100px);
+  }
+
+  /* ── 收场 ───────────────────────── */
+  .curtain{
+    position:fixed;inset:0;
+    background:#05070d;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 5s ease;
+    z-index:3;
+  }
+  .curtain.down{opacity:.97;pointer-events:auto}
+
+  .goodnight{
+    position:fixed;
+    inset:0;
+    z-index:4;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:34px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 4s ease;
+  }
+  .goodnight.shown{opacity:1;pointer-events:auto}
+  .goodnight p{
+    font-size:clamp(15px,4.2vw,19px);
+    letter-spacing:.5em;
+    text-indent:.5em;
+    color:#c9d2e6;
+    font-weight:300;
+  }
+  .again{
+    background:none;border:0;
+    font-family:inherit;
+    font-size:11px;
+    letter-spacing:.22em;
+    color:#333b56;
+    cursor:pointer;
+    padding:8px;
+    transition:color 1.6s ease;
+  }
+  .again:hover{color:#5d688c}
+
+  @media (prefers-reduced-motion:reduce){
+    body{animation:none}
+    .star{animation:none;opacity:.35}
+    .zz{animation:none;opacity:.6}
+    *{transition-duration:.35s !important}
+  }
+</style>
+</head>
+<body>
+
+<div class="sky" id="sky"></div>
+<button class="moon" id="moon" aria-label="月亮">☾</button>
+
+<div class="building">
+  <div class="roof"></div>
+  <div class="windows" id="windows"></div>
+  <div class="base"></div>
+</div>
+<div class="ground"></div>
+
+<p class="narration" id="narration">夜里还亮着几盏灯。</p>
+
+<div class="yours" id="yours">
+  <span class="label">你的窗</span>
+  <button class="window" id="yourWindow">(・_・)</button>
+</div>
+
+<div class="curtain" id="curtain"></div>
+<div class="goodnight" id="goodnight">
+  <p>晚安，宝。</p>
+  <button class="again" id="again">还想再关一次灯</button>
+</div>
+
+<script>
+const residents = [
+  { awake:"(=^ω^=)",  yawn:"(=^o^=)",  sleep:"(=˘ω˘=)",  line:"猫猫把手柄放下了。这局它没打完。" },
+  { awake:"(u･×･u)",  yawn:"(u･o･u)",  sleep:"(u˘×˘u)",  line:"兔兔合上了账本。数字明天还在。" },
+  { awake:"('ᵕ')~",   yawn:"('o')~",   sleep:"(˘ᵕ˘)~",   line:"小狐狸讲完了故事，自己先睡着了。" },
+  { awake:"(･∀･)▤",   yawn:"(･o･)▤",   sleep:"(˘_˘)▤",   line:"书扣在脸上，它就这么睡了。" },
+  { awake:"(◕‿◕)▮",   yawn:"(◕o◕)▮",   sleep:"(˘‿˘)",    stubborn:true },
+  { awake:"(･﹃･)",    yawn:"(･o･)",    sleep:"(˘﹃˘)",    line:"最后一口吃完了。碗留到明天洗。" },
+  { awake:"(˘ω˘)",    yawn:"(˘ω˘)",    sleep:"(˘ω˘)",    already:true, line:"嘘。这盏灯早就灭了。" },
+  { awake:"≋(･ω･)≋",  yawn:"≋(･o･)≋",  sleep:"(˘ω˘)",    line:"水放凉了，它自己爬出来了。" },
+  { awake:"(･ᴗ･)ﾉ",   yawn:"(･o･)ﾉ",   sleep:"(˘ᴗ˘)",    line:"它数到第七颗，忘了前面的数。" },
+];
+
+const stubbornLines = [
+  "（它说再五分钟。）",
+  "（它说这次真的是最后五分钟。）",
+  "（好吧。这次是真的。）",
+];
+
+const moonLines = [
+  "月亮说它今晚不下班。",
+  "月亮说：慢慢来，我等着。",
+  "月亮往这边挪了挪。",
+  "月亮说，你也该睡了。",
+];
+
+const sky = document.getElementById("sky");
+const grid = document.getElementById("windows");
+const narration = document.getElementById("narration");
+const moon = document.getElementById("moon");
+const yours = document.getElementById("yours");
+const yourWindow = document.getElementById("yourWindow");
+const curtain = document.getElementById("curtain");
+const goodnight = document.getElementById("goodnight");
+const again = document.getElementById("again");
+
+let lit = 0, moonIdx = 0, narrationTimer = null, idleTimer = null, ended = false;
+
+function scatterStars(n, topLimit){
+  const glyphs = ["·","·","·","✦","⋆","*"];
+  for(let i=0;i<n;i++){
+    const s = document.createElement("span");
+    s.className = "star";
+    s.textContent = glyphs[Math.floor(Math.random()*glyphs.length)];
+    s.style.left = Math.random()*100 + "%";
+    s.style.top = Math.random()*(topLimit||70) + "%";
+    s.style.fontSize = (7 + Math.random()*7) + "px";
+    s.style.animationDelay = (Math.random()*5).toFixed(2) + "s";
+    s.style.animationDuration = (4 + Math.random()*4).toFixed(2) + "s";
+    sky.appendChild(s);
+  }
+}
+
+function say(text, sticky){
+  clearTimeout(narrationTimer);
+  narration.classList.add("fade");
+  setTimeout(() => {
+    narration.textContent = text;
+    narration.classList.remove("fade");
+  }, 400);
+  if(!sticky){
+    narrationTimer = setTimeout(progressLine, 4600);
+  }
+}
+
+function progressLine(){
+  if(ended) return;
+  if(lit >= 6)      narration.textContent = "夜里还亮着几盏灯。";
+  else if(lit >= 3) narration.textContent = "灯一盏一盏地灭了。";
+  else if(lit === 2)narration.textContent = "还剩两盏。";
+  else if(lit === 1)narration.textContent = "只剩最后一盏。";
+  narration.classList.remove("fade");
+}
+
+function resetIdle(){
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if(!ended && lit > 0) say("（不点也没关系。就这样看着，也可以。）");
+  }, 28000);
+}
+
+function putToBed(btn, r, onDone){
+  btn.classList.add("settling");
+  btn.disabled = true;
+  btn.textContent = r.yawn;
+  setTimeout(() => {
+    btn.textContent = r.sleep;
+    const z = document.createElement("span");
+    z.className = "zz";
+    z.textContent = "z";
+    btn.appendChild(z);
+  }, 1200);
+  setTimeout(() => btn.classList.add("off"), 2000);
+  setTimeout(() => { if(onDone) onDone(); }, 3600);
+}
+
+residents.forEach((r) => {
+  const btn = document.createElement("button");
+  btn.className = "window";
+  btn.textContent = r.awake;
+
+  if(r.already){
+    btn.classList.add("asleep-already");
+    const z = document.createElement("span");
+    z.className = "zz";
+    z.textContent = "z";
+    btn.appendChild(z);
+    btn.addEventListener("click", () => { resetIdle(); say(r.line); });
+  } else {
+    lit++;
+    let knocks = 0;
+    btn.addEventListener("click", () => {
+      resetIdle();
+      if(btn.disabled) return;
+      if(r.stubborn && knocks < 2){
+        say(stubbornLines[knocks]);
+        knocks++;
+        btn.animate(
+          [{transform:"translateX(0)"},{transform:"translateX(-2px)"},{transform:"translateX(2px)"},{transform:"translateX(0)"}],
+          {duration:420, easing:"ease-in-out"}
+        );
+        return;
+      }
+      if(r.stubborn) say(stubbornLines[2]);
+      else say(r.line);
+      putToBed(btn, r, () => {
+        lit--;
+        if(lit === 0) allDark();
+        else progressLine();
+      });
+    });
+  }
+  grid.appendChild(btn);
+});
+
+function allDark(){
+  moon.classList.add("risen");
+  document.getElementById("windows").style.backgroundColor = "#161c2e";
+  say("整栋楼都睡了。灯灭了，星星就多了。", true);
+  scatterStars(26, 80);
+  setTimeout(() => {
+    yours.classList.add("shown");
+    say("只剩你了。", true);
+  }, 4200);
+}
+
+moon.addEventListener("click", () => {
+  resetIdle();
+  say(moonLines[moonIdx % moonLines.length]);
+  moonIdx++;
+});
+
+yourWindow.addEventListener("click", () => {
+  if(yourWindow.disabled) return;
+  ended = true;
+  clearTimeout(idleTimer);
+  clearTimeout(narrationTimer);
+  narration.classList.add("fade");
+  putToBed(yourWindow, {yawn:"(・o・)", sleep:"(˘_˘)"});
+  setTimeout(() => curtain.classList.add("down"), 2600);
+  setTimeout(() => goodnight.classList.add("shown"), 6000);
+});
+
+again.addEventListener("click", () => location.reload());
+
+scatterStars(38, 68);
+resetIdle();
+["click","keydown","touchstart"].forEach(e => document.addEventListener(e, resetIdle, {passive:true}));
+</script>
+</body>
+</html>

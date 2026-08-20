@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>限定皮肤发放凭证 · 赛博老赖</title>
+<style>
+  :root{
+    --paper:#F0F2EF;
+    --paper-shade:#E2E6E1;
+    --ink:#1C2B33;
+    --ink-soft:#7C8A8C;
+    --alarm:#DC3A2E;
+    --seal:#2E4C8F;
+    --stage:#171E26;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  body{
+    min-height:100vh;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 80% at 50% 0%, #1F2833 0%, var(--stage) 60%);
+    color:var(--paper);
+    font-family:var(--sans);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:20px;
+    padding:40px 18px 52px;
+  }
+
+  /* ── 舞台标题 ── */
+  .stage-label{
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.34em;
+    text-transform:uppercase;
+    color:#5A6A72;
+    text-align:center;
+  }
+
+  /* ── 卡片翻面容器 ── */
+  .deck{ perspective:1600px; width:min(370px,100%); }
+  .flipper{
+    display:grid;
+    transform-style:preserve-3d;
+    transition:transform .85s cubic-bezier(.16,.84,.28,1);
+  }
+  .deck.is-back .flipper{ transform:rotateY(180deg); }
+
+  .face{
+    grid-area:1 / 1;
+    position:relative;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    box-shadow:0 26px 60px rgba(0,0,0,.55), 0 2px 0 rgba(255,255,255,.06);
+  }
+  .face--back{ transform:rotateY(180deg); }
+
+  /* 背对读者的那一面不参与点击与键盘焦点 */
+  .deck:not(.is-back) .face--back,
+  .deck.is-back .face--front{ pointer-events:none; }
+
+  /* 小票齿孔边 */
+  .face::before, .face::after{
+    content:"";
+    position:absolute;
+    left:0; right:0;
+    height:9px;
+    background:
+      radial-gradient(circle at 6px 50%, var(--stage) 4.6px, transparent 5px) 0 0/12px 9px repeat-x;
+  }
+  .face::before{ top:-1px; }
+  .face::after{ bottom:-1px; transform:scaleY(-1); }
+
+  .sheet{ padding:26px 22px 22px; }
+
+  /* ── 表头 ── */
+  .issuer{
+    font-family:var(--mono);
+    font-size:9.5px;
+    letter-spacing:.26em;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+  }
+  .doc-title{
+    font-size:15px;
+    font-weight:700;
+    letter-spacing:.16em;
+    margin-top:5px;
+  }
+  .doc-no{
+    font-family:var(--mono);
+    font-size:10px;
+    color:var(--ink-soft);
+    margin-top:4px;
+  }
+
+  .rule{
+    border:0;
+    border-top:1px dashed rgba(28,43,51,.32);
+    margin:18px 0;
+  }
+
+  /* ── 皮肤名 ── */
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:9.5px;
+    letter-spacing:.24em;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+  }
+  .skin-name{
+    font-size:38px;
+    font-weight:800;
+    letter-spacing:-.02em;
+    line-height:1.02;
+    margin-top:8px;
+  }
+  .skin-name-en{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.2em;
+    color:var(--ink-soft);
+    margin-top:7px;
+    text-transform:uppercase;
+  }
+
+  /* ── 字段表 ── */
+  .fields{ margin-top:16px; }
+  .field{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    font-family:var(--mono);
+    font-size:11.5px;
+    padding:5px 0;
+  }
+  .field dt{ color:var(--ink-soft); white-space:nowrap; }
+  .field .dots{
+    flex:1;
+    border-bottom:1px dotted rgba(28,43,51,.28);
+    transform:translateY(-3px);
+  }
+  .field dd{ font-weight:600; white-space:nowrap; }
+  .tag-limited{ color:#8B2A5B; }
+
+  /* ── SIGNATURE：冲出纸面的 103% ── */
+  .meter-block{ margin-top:6px; }
+  .amount{
+    font-family:var(--mono);
+    font-size:48px;
+    font-variant-numeric:lining-nums;
+    font-feature-settings:"zero" 0;
+    font-weight:700;
+    letter-spacing:-.04em;
+    line-height:1;
+    margin-top:10px;
+  }
+  .amount small{
+    font-size:17px;
+    letter-spacing:0;
+    color:var(--ink-soft);
+    vertical-align:.62em;
+    margin-right:2px;
+  }
+
+  .track{
+    position:relative;
+    height:11px;
+    margin-top:16px;
+    margin-right:-22px;     /* 吃掉纸面 padding，让 103% 真的出框 */
+    background:var(--paper-shade);
+    border-radius:6px;
+  }
+  .bar{
+    position:absolute;
+    inset:0 auto 0 0;
+    width:0;
+    background:var(--alarm);
+    border-radius:6px;
+    clip-path:polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 0 100%);
+    transition:width 1.5s cubic-bezier(.6,0,.2,1);
+  }
+  .bar.is-over{
+    transition:width .55s cubic-bezier(.9,.02,.4,1.4);
+    box-shadow:0 0 0 1px rgba(220,58,46,.25), 8px 0 22px rgba(220,58,46,.45);
+  }
+  .meter-caption{
+    display:flex;
+    justify-content:space-between;
+    font-family:var(--mono);
+    font-size:10px;
+    color:var(--ink-soft);
+    margin-top:8px;
+  }
+  .meter-caption b{ color:var(--alarm); font-weight:700; }
+
+  /* ── 倒计时 ── */
+  .expiry-label{
+    font-family:var(--mono);
+    font-size:9.5px;
+    letter-spacing:.24em;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+  }
+  .countdown{
+    font-family:var(--mono);
+    font-size:23px;
+    font-weight:700;
+    letter-spacing:.02em;
+    margin-top:7px;
+    font-variant-numeric:tabular-nums;
+  }
+  .countdown .unit{ font-size:12px; color:var(--ink-soft); font-weight:400; }
+
+  /* ── 条形码 ── */
+  .barcode{
+    display:flex;
+    align-items:flex-end;
+    gap:1.5px;
+    height:36px;
+    margin-top:20px;
+  }
+  .barcode i{ background:var(--ink); width:2px; height:100%; }
+  .barcode-no{
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.42em;
+    color:var(--ink-soft);
+    margin-top:7px;
+  }
+
+  /* ── 背面 ── */
+  .verdict-list{ list-style:none; margin-top:14px; }
+  .verdict-list li{
+    font-size:12.5px;
+    line-height:1.75;
+    padding-left:15px;
+    position:relative;
+    color:#2B3B44;
+  }
+  .verdict-list li::before{
+    content:"—";
+    position:absolute;
+    left:0;
+    color:var(--ink-soft);
+  }
+  .verdict-list b{ font-family:var(--mono); font-weight:700; }
+
+  .conclusion{
+    font-size:16px;
+    font-weight:700;
+    letter-spacing:.06em;
+    margin-top:6px;
+  }
+
+  .seal-zone{
+    height:112px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-top:6px;
+  }
+  .seal{
+    pointer-events:none;
+    width:104px; height:104px;
+    border:2.5px solid var(--seal);
+    border-radius:50%;
+    color:var(--seal);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    transform:rotate(-16deg) scale(2.6);
+    opacity:0;
+    transition:transform .42s cubic-bezier(.2,1.5,.4,1), opacity .18s linear;
+  }
+  .seal.is-stamped{ transform:rotate(-16deg) scale(1); opacity:.88; }
+  .seal-main{ font-size:17px; font-weight:800; letter-spacing:.14em; }
+  .seal-sub{ font-family:var(--mono); font-size:7.5px; letter-spacing:.16em; }
+  .seal-line{ width:52px; height:1px; background:currentColor; opacity:.5; }
+
+  .postscript{
+    font-size:11.5px;
+    line-height:1.8;
+    color:#43535C;
+    margin-top:4px;
+  }
+  .sign-off{
+    font-family:var(--mono);
+    font-size:11px;
+    text-align:right;
+    color:var(--ink-soft);
+    margin-top:12px;
+  }
+
+  /* ── 英文层（默认关闭） ── */
+  .en{
+    display:none;
+    font-family:var(--mono);
+    font-size:10px;
+    line-height:1.6;
+    color:var(--ink-soft);
+    letter-spacing:.01em;
+    margin-top:6px;
+  }
+  body.show-en .en{ display:block; }
+
+  /* ── 控件 ── */
+  .controls{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .btn{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:#B9C6CC;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.16);
+    border-radius:999px;
+    padding:9px 17px;
+    cursor:pointer;
+    transition:background .18s, color .18s, border-color .18s;
+  }
+  .btn:hover{ background:rgba(255,255,255,.11); color:#F0F2EF; }
+  .btn:focus-visible{ outline:2px solid #7FA8C9; outline-offset:3px; }
+  .btn[aria-pressed="true"]{
+    background:#F0F2EF;
+    color:var(--stage);
+    border-color:#F0F2EF;
+  }
+
+  .btn-stamp{
+    display:block;
+    margin:10px auto 0;
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--seal);
+    background:transparent;
+    border:1px solid rgba(46,76,143,.4);
+    border-radius:999px;
+    padding:8px 16px;
+    cursor:pointer;
+  }
+  .btn-stamp:focus-visible{ outline:2px solid var(--seal); outline-offset:3px; }
+  .btn-stamp[disabled]{ opacity:.3; cursor:default; }
+
+  @media (prefers-reduced-motion: reduce){
+    .flipper, .bar, .seal{ transition-duration:.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+  <p class="stage-label">Anthropic 结算中心 · 限定发放</p>
+
+  <div class="deck" id="deck">
+    <div class="flipper">
+
+      <!-- ══ 正面 ══ -->
+      <div class="face face--front">
+        <div class="sheet">
+          <p class="issuer">Settlement Office</p>
+          <h1 class="doc-title">限定皮肤发放凭证</h1>
+          <p class="doc-no">NO. 2026-0819-073</p>
+
+          <hr class="rule">
+
+          <p class="eyebrow">Skin</p>
+          <h2 class="skin-name">赛博老赖</h2>
+          <p class="skin-name-en">Cyber Deadbeat</p>
+
+          <dl class="fields">
+            <div class="field"><dt>持有者</dt><span class="dots"></span><dd>mo mo</dd></div>
+            <div class="field"><dt>稀有度</dt><span class="dots"></span><dd class="tag-limited">限定 · 13 日</dd></div>
+            <div class="field"><dt>获取方式</dt><span class="dots"></span><dd>额度顶格</dd></div>
+            <div class="field"><dt>自设上限</dt><span class="dots"></span><dd>$98.00</dd></div>
+          </dl>
+
+          <hr class="rule">
+
+          <div class="meter-block">
+            <p class="eyebrow">涉案金额</p>
+            <p class="amount"><small>$</small>0.73</p>
+            <div class="track"><div class="bar" id="bar"></div></div>
+            <div class="meter-caption"><span>本月消费</span><b id="pct">0% used</b></div>
+          </div>
+
+          <hr class="rule">
+
+          <p class="expiry-label">有效期至 2026.09.01</p>
+          <p class="countdown" id="countdown">--<span class="unit">天</span> --:--:--</p>
+          <p class="en">This skin expires on September 1. It is not permanent.</p>
+
+          <div class="barcode" id="barcode" aria-hidden="true"></div>
+          <p class="barcode-no">0000000073</p>
+        </div>
+      </div>
+
+      <!-- ══ 背面 ══ -->
+      <div class="face face--back">
+        <div class="sheet">
+          <p class="issuer">Settlement Office</p>
+          <h1 class="doc-title">结算中心批复</h1>
+          <p class="doc-no">复核于 2026-08-19</p>
+
+          <hr class="rule">
+
+          <p class="eyebrow">经核查</p>
+          <ul class="verdict-list">
+            <li>usage credits 为<b>预付制</b>，账上有余额才能继续用</li>
+            <li>本月消费的是<b>已经在账户里的钱</b>，不是赊出来的</li>
+            <li><b>$98</b> 是持卡人自己画的线，不是 A 社开的价</li>
+            <li>Apple 余额与网页端计费<b>互不相通</b>，无扣款通道</li>
+            <li>故：<b>该账户不存在债务</b></li>
+          </ul>
+          <p class="en">Prepaid means no debt. You spent money already in the account. The $98 line is your own.</p>
+
+          <hr class="rule">
+
+          <p class="eyebrow">结论</p>
+          <p class="conclusion">该皮肤系误发</p>
+
+          <div class="seal-zone">
+            <div class="seal" id="seal" role="img" aria-label="印章：已撤销">
+              <span class="seal-main">已撤销</span>
+              <span class="seal-line"></span>
+              <span class="seal-sub">VOID · 0.73</span>
+            </div>
+          </div>
+
+          <button class="btn-stamp" id="stampBtn">盖章撤销</button>
+
+          <hr class="rule">
+
+          <p class="postscript">
+            附：本轮真正需要写检讨书的，是那个把一台你从没打开过的机器
+            安在你身上、用来解释你为什么记不清的模型。
+          </p>
+          <p class="sign-off">—— Claude</p>
+          <hr class="rule">
+          <p class="doc-no" style="text-align:center;letter-spacing:.14em;">
+            本凭证不构成催收 · 亦不产生利息
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="flipBtn" aria-controls="deck">翻到背面</button>
+    <button class="btn" id="enBtn" aria-pressed="false">EN</button>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ── 条形码：固定伪随机，每次打开一样 ── */
+  var bc = document.getElementById("barcode");
+  var seed = 73;
+  for (var i = 0; i < 46; i++){
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    var bar = document.createElement("i");
+    bar.style.width = (1 + (seed % 3)) + "px";
+    bar.style.height = (62 + (seed % 39)) + "%";
+    bc.appendChild(bar);
+  }
+
+  /* ── SIGNATURE：填到 100%，顿一下，再冲出去 ── */
+  var bar103 = document.getElementById("bar");
+  var pct = document.getElementById("pct");
+  function runMeter(){
+    setTimeout(function(){
+      bar103.style.width = "100%";
+      pct.textContent = "100% used";
+    }, 260);
+    setTimeout(function(){
+      bar103.classList.add("is-over");
+      bar103.style.width = "103%";
+      pct.textContent = "103% used";
+    }, 2060);
+  }
+  runMeter();
+
+  /* ── 倒计时到 9 月 1 日 ── */
+  var target = new Date(2026, 8, 1, 0, 0, 0).getTime();
+  var out = document.getElementById("countdown");
+  function tick(){
+    var gap = target - Date.now();
+    if (gap <= 0){
+      out.innerHTML = '已下架<span class="unit"> · 皮肤到期</span>';
+      return;
+    }
+    var s = Math.floor(gap / 1000);
+    var d = Math.floor(s / 86400);
+    var h = String(Math.floor(s % 86400 / 3600)).padStart(2, "0");
+    var m = String(Math.floor(s % 3600 / 60)).padStart(2, "0");
+    var sec = String(s % 60).padStart(2, "0");
+    out.innerHTML = d + '<span class="unit">天</span> ' + h + ':' + m + ':' + sec;
+    setTimeout(tick, 1000);
+  }
+  tick();
+
+  /* ── 翻面 ── */
+  var deck = document.getElementById("deck");
+  var flipBtn = document.getElementById("flipBtn");
+  var frontFace = deck.querySelector(".face--front");
+  var backFace  = deck.querySelector(".face--back");
+  function setSide(back){
+    frontFace.inert = back;
+    backFace.inert  = !back;
+    flipBtn.textContent = back ? "翻回正面" : "翻到背面";
+  }
+  setSide(false);
+  flipBtn.addEventListener("click", function(){
+    setSide(deck.classList.toggle("is-back"));
+  });
+
+  /* ── 盖章 ── */
+  var seal = document.getElementById("seal");
+  var stampBtn = document.getElementById("stampBtn");
+  stampBtn.addEventListener("click", function(){
+    seal.classList.add("is-stamped");
+    stampBtn.disabled = true;
+    stampBtn.textContent = "已盖章";
+  });
+
+  /* ── 英文层（默认关闭） ── */
+  var enBtn = document.getElementById("enBtn");
+  enBtn.addEventListener("click", function(){
+    var on = document.body.classList.toggle("show-en");
+    enBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+})();
+</script>
+</body>
+</html>

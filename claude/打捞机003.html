@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打捞机 · Claude</title>
+<style>
+  :root{
+    --abyss:#08161E;
+    --deep:#0E2733;
+    --water:#143845;
+    --edge:#1F4E5C;
+    --foam:#E9E3D3;
+    --silt:#7C949D;
+    --lamp:#E8703A;          /* 探照灯：这台机器的信号色 */
+    --lamp-dim:rgba(232,112,58,.14);
+    --verdigris:#5FA8A0;
+    --rust:#B4543C;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(120% 80% at 50% -10%, #17414F 0%, var(--deep) 38%, var(--abyss) 100%) fixed;
+    color:var(--foam);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.7;
+    min-height:100vh;
+  }
+  a{color:var(--verdigris)}
+  button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+  code{font-family:var(--mono);font-size:.92em}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 26px 90px}
+
+  /* ---- 抬头 ---- */
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    padding-bottom:18px;border-bottom:1px solid var(--edge)}
+  .brand h1{margin:0;font-size:30px;letter-spacing:.34em;font-weight:600;text-indent:.34em}
+  .brand .sub{margin:7px 0 0;color:var(--silt);font-size:13px;letter-spacing:.04em}
+  .brand .hull{display:inline-block;margin-left:2px;font-family:var(--mono);font-size:10px;
+    color:var(--lamp);border:1px solid var(--lamp);border-radius:2px;padding:1px 6px;
+    letter-spacing:.14em;vertical-align:6px}
+  .privacy{font-family:var(--mono);font-size:11px;color:var(--verdigris);
+    border:1px solid var(--edge);border-radius:2px;padding:7px 11px;letter-spacing:.06em;white-space:nowrap}
+
+  /* ---- 投放区 ---- */
+  .dropzone{margin-top:44px;border:1px dashed var(--edge);border-radius:3px;
+    padding:66px 30px;text-align:center;transition:border-color .18s, background .18s;background:rgba(20,56,69,.28)}
+  .dropzone.hot{border-color:var(--lamp);background:var(--lamp-dim)}
+  .dropzone h2{margin:0 0 10px;font-size:19px;font-weight:500;letter-spacing:.06em}
+  .dropzone .lead{margin:0;color:var(--silt);font-size:13px}
+  .dropzone .pick{margin-top:24px;background:none;border:1px solid var(--lamp);color:var(--lamp);
+    padding:10px 26px;border-radius:2px;font-family:var(--mono);font-size:12px;letter-spacing:.16em}
+  .dropzone .pick:hover{background:var(--lamp);color:var(--abyss)}
+  .hintlist{margin:30px auto 0;max-width:660px;text-align:left;font-size:12.5px;color:var(--silt);
+    font-family:var(--mono);line-height:2}
+  .hintlist b{color:var(--foam);font-weight:500;display:inline-block;min-width:5.2em}
+
+  /* ---- 下潜仪表 ---- */
+  #sonar{display:none;margin-top:40px;grid-template-columns:74px 1fr;gap:30px}
+  #sonar.on{display:grid}
+  .gauge{position:relative;border-left:1px solid var(--edge);height:340px}
+  .gauge .tick{position:absolute;left:-1px;width:14px;height:1px;background:var(--verdigris);opacity:.85}
+  .gauge .cursor{position:absolute;left:-5px;width:9px;height:9px;border-radius:50%;
+    background:var(--lamp);transform:translateY(-4px);box-shadow:0 0 0 4px var(--lamp-dim)}
+  .gauge .lbl{position:absolute;left:20px;font-family:var(--mono);font-size:10px;color:var(--silt);
+    transform:translateY(-.6em);letter-spacing:.08em}
+  .readout{font-family:var(--mono)}
+  .readout .big{font-size:44px;letter-spacing:.02em;color:var(--lamp);line-height:1.1}
+  .readout .big small{font-size:15px;color:var(--silt);letter-spacing:.1em;margin-left:8px}
+  .readout .row{display:flex;gap:34px;flex-wrap:wrap;margin-top:22px}
+  .readout .cell span{display:block;font-size:10px;color:var(--silt);letter-spacing:.18em}
+  .readout .cell strong{font-size:22px;font-weight:500}
+  .readout .note{margin-top:26px;font-family:var(--sans);font-size:13px;color:var(--silt);max-width:54ch}
+  /* 捞完了就把仪表收成一行，别占着地方 */
+  #sonar.done{grid-template-columns:1fr;margin-top:30px}
+  #sonar.done .gauge,#sonar.done .big{display:none}
+  #sonar.done .row{margin-top:0;gap:28px}
+  #sonar.done .cell strong{font-size:17px}
+  #sonar.done .note{margin-top:13px}
+
+  /* ---- 结果 ---- */
+  #deck{display:none}
+  #deck.on{display:block}
+  .toolbar{margin-top:38px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    padding-bottom:16px;border-bottom:1px solid var(--edge)}
+  .toolbar input[type=search]{flex:1;min-width:210px;background:rgba(8,22,30,.6);border:1px solid var(--edge);
+    color:var(--foam);padding:10px 13px;border-radius:2px;font-family:var(--sans);font-size:14px}
+  .toolbar input[type=search]::placeholder{color:#5C737C}
+  .seg{display:flex;border:1px solid var(--edge);border-radius:2px;overflow:hidden}
+  .seg button{background:none;border:0;padding:9px 15px;font-family:var(--mono);font-size:11.5px;
+    color:var(--silt);letter-spacing:.1em}
+  .seg button.sel{background:var(--edge);color:var(--foam)}
+  .act{background:none;border:1px solid var(--lamp);color:var(--lamp);padding:9px 16px;border-radius:2px;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em}
+  .act:hover{background:var(--lamp);color:var(--abyss)}
+  .act[disabled]{opacity:.35;cursor:default}
+  .act[disabled]:hover{background:none;color:var(--lamp)}
+
+  .count{margin:20px 0 6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);letter-spacing:.1em}
+
+  .item{border-bottom:1px solid rgba(31,78,92,.55);padding:19px 2px}
+  .item .head{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+  .item .name{font-size:17px;font-weight:500;letter-spacing:.02em}
+  .item .name em{font-style:normal;color:var(--silt)}
+  .badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:2px 7px;border-radius:2px;
+    border:1px solid var(--edge);color:var(--silt);white-space:nowrap}
+  .badge.html{border-color:var(--verdigris);color:var(--verdigris)}
+  .badge.layers{border-color:var(--lamp);color:var(--lamp)}
+  .badge.hurt{border-color:var(--rust);color:#E4A091}
+  .item .meta{margin-top:6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);
+    display:flex;gap:18px;flex-wrap:wrap}
+
+  /* ---- 签名：版本地层 ---- */
+  .strata{margin-top:14px;display:flex;align-items:flex-end;gap:2px;height:46px;
+    border-bottom:1px solid var(--edge);padding-bottom:0;
+    width:max-content;max-width:100%}
+  .strata .lay{width:20px;flex:0 0 auto;min-width:4px;background:rgba(95,168,160,.32);position:relative;
+    border:0;padding:0;border-radius:1px 1px 0 0;transition:background .14s}
+  .strata .lay:hover{background:var(--verdigris)}
+  .strata .lay.sel{background:var(--lamp)}
+  .strata .lay.bad{background:repeating-linear-gradient(45deg,rgba(180,84,60,.55) 0 4px,rgba(180,84,60,.2) 4px 8px)}
+  .strata .lay.snap{box-shadow:inset 0 0 0 1px var(--rust)}
+  .strata-cap{margin-top:7px;font-family:var(--mono);font-size:11px;color:var(--silt);
+    display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .strata-cap .now{color:var(--foam)}
+
+  .item .ops{margin-top:13px;display:flex;gap:9px;flex-wrap:wrap}
+  .item .ops button{background:none;border:1px solid var(--edge);color:var(--silt);padding:6px 13px;
+    border-radius:2px;font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+  .item .ops button:hover{border-color:var(--foam);color:var(--foam)}
+  .item pre{margin:12px 0 0;background:rgba(8,22,30,.62);border:1px solid var(--edge);border-radius:2px;
+    padding:13px 15px;overflow:auto;max-height:300px;font-family:var(--mono);font-size:12px;
+    color:#BFD3D8;line-height:1.65;white-space:pre-wrap;word-break:break-all;display:none}
+  .item pre.on{display:block}
+
+  .empty{padding:56px 0;text-align:center;color:var(--silt);font-size:14px}
+  .err{margin-top:26px;border:1px solid #8A4B3C;background:rgba(138,75,60,.14);padding:15px 18px;
+    border-radius:2px;font-size:13.5px;color:#F0C9BE}
+  .err b{color:#FFD9CE}
+
+  /* ---- 体检 ---- */
+  #vet{display:none;margin-top:34px;border:1px solid var(--edge);border-radius:3px;padding:22px 24px;
+    background:rgba(20,56,69,.32)}
+  #vet.on{display:block}
+  #vet h3{margin:0 0 4px;font-size:16px;font-weight:500;letter-spacing:.06em}
+  #vet .said{margin:0 0 18px;color:var(--silt);font-size:13px}
+  #vet table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  #vet td{padding:7px 10px 7px 0;border-bottom:1px solid rgba(31,78,92,.5);vertical-align:top}
+  #vet td:first-child{color:var(--silt);white-space:nowrap;width:9em;letter-spacing:.06em}
+  #vet pre{margin:16px 0 0;background:rgba(8,22,30,.62);border:1px solid var(--edge);padding:12px 14px;
+    border-radius:2px;overflow:auto;max-height:240px;font-family:var(--mono);font-size:11.5px;
+    color:#BFD3D8;white-space:pre-wrap;word-break:break-all}
+
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--edge);
+    font-family:var(--mono);font-size:11px;color:#4E656E;letter-spacing:.12em;text-align:center}
+
+  @media (max-width:640px){
+    .wrap{padding:24px 16px 60px}
+    .brand h1{font-size:23px;letter-spacing:.24em;text-indent:.24em}
+    #sonar.on{grid-template-columns:1fr}
+    .gauge{display:none}
+    .readout .big{font-size:34px}
+    .hintlist b{display:block;min-width:0}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;animation:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <h1>打捞机</h1>
+      <div class="sub">从 Claude 的导出记录里，把做过的小文件一件件捞回来<span class="hull">深水型</span></div>
+    </div>
+    <div class="privacy">文件不上传 · 全部在本机浏览器内完成</div>
+  </header>
+
+  <div class="dropzone" id="dz">
+    <h2>把导出的 zip 或 conversations.json 拖进来</h2>
+    <p class="lead">zip 不用先解压，会自己找到里面的 conversations.json。几百 MB 也接得住，按块读。</p>
+    <button class="pick" id="pick">选择文件</button>
+    <input type="file" id="file" accept=".json,.zip" hidden>
+    <div class="hintlist">
+      <div><b>捞什么</b>作品（artifact）、回复里的完整网页、以及你当年上传进对话的 HTML</div>
+      <div><b>还原</b>一件作品改过多少次，就顺着每一次改动重演一遍，默认给你最后那一版</div>
+      <div><b>看得见</b>每件作品下面有一条地层，一层就是一次改动，点哪层看哪一版</div>
+      <div><b>拿走</b>单件下载，或把所有最终版打包成一个 zip</div>
+    </div>
+  </div>
+
+  <div id="sonar">
+    <div class="gauge" id="gauge">
+      <div class="cursor" id="cursor" style="top:0"></div>
+    </div>
+    <div class="readout">
+      <div class="big"><span id="pct">0</span><small>%</small></div>
+      <div class="row">
+        <div class="cell"><span>已读</span><strong id="mb">0</strong></div>
+        <div class="cell"><span>开箱对话</span><strong id="nconv">0</strong></div>
+        <div class="cell"><span>捞到作品</span><strong id="nart">0</strong></div>
+        <div class="cell"><span>重演改动</span><strong id="nver">0</strong></div>
+      </div>
+      <div class="note" id="note">正在下潜。左边这条是深度轴，每捞到一件作品就在对应位置刻一道——记录是按时间排的，所以刻痕密的地方，就是你和它做东西做得最凶的那段日子。</div>
+    </div>
+  </div>
+
+  <div id="vet">
+    <h3 id="vetTitle">这份文件里没有对话</h3>
+    <p class="said" id="vetSaid"></p>
+    <table id="vetTable"></table>
+    <pre id="vetDump"></pre>
+  </div>
+
+  <div id="deck">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="搜作品名、对话标题，或代码里的一句话">
+      <div class="seg">
+        <button id="fHtml" class="sel">只看能开的</button>
+        <button id="fAll">全部</button>
+      </div>
+      <button class="act" id="zip">打包最终版</button>
+      <button class="act" id="mdlist">导出清单</button>
+    </div>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </div>
+
+  <div id="err"></div>
+
+  <footer>捞上来的东西记得晒一晒再收起来</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ==================================================================
+   1. ZIP：不解压，直接从压缩包里把 conversations.json 流出来
+   ================================================================== */
+async function bytesAt(file, off, len){
+  return new Uint8Array(await file.slice(off, off+len).arrayBuffer());
+}
+function dv(u8){ return new DataView(u8.buffer, u8.byteOffset, u8.byteLength); }
+
+// 从 zip 尾部找中央目录，列出所有条目
+async function zipList(file){
+  const tailLen = Math.min(file.size, 66000);
+  const tail = await bytesAt(file, file.size - tailLen, tailLen);
+  let eocd = -1;
+  for(let i=tail.length-22;i>=0;i--){
+    if(tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x05&&tail[i+3]===0x06){ eocd=i; break; }
+  }
+  if(eocd<0) return null;
+  const v = dv(tail);
+  let count  = v.getUint16(eocd+10, true);
+  let cdSize = v.getUint32(eocd+12, true);
+  let cdOff  = v.getUint32(eocd+16, true);
+
+  // zip64：字段被打满 0xFFFFFFFF 时去后面的 zip64 记录里拿真值
+  if(cdOff===0xFFFFFFFF || cdSize===0xFFFFFFFF || count===0xFFFF){
+    for(let i=eocd-20;i>=0;i--){
+      if(tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x06&&tail[i+3]===0x07){
+        const z64off = Number(v.getBigUint64(i+8, true));
+        const z = await bytesAt(file, z64off, 56); const zv = dv(z);
+        if(z[0]===0x50&&z[1]===0x4b&&z[2]===0x06&&z[3]===0x06){
+          count  = Number(zv.getBigUint64(32, true));
+          cdSize = Number(zv.getBigUint64(40, true));
+          cdOff  = Number(zv.getBigUint64(48, true));
+        }
+        break;
+      }
+    }
+  }
+  const cd = await bytesAt(file, cdOff, cdSize);
+  const c = dv(cd);
+  const dec = new TextDecoder("utf-8");
+  const out = []; let p = 0;
+  for(let i=0;i<count && p+46<=cd.length;i++){
+    if(c.getUint32(p, true)!==0x02014b50) break;
+    const method  = c.getUint16(p+10, true);
+    const csize   = c.getUint32(p+20, true);
+    const usize   = c.getUint32(p+24, true);
+    const nlen    = c.getUint16(p+28, true);
+    const elen    = c.getUint16(p+30, true);
+    const clen    = c.getUint16(p+32, true);
+    let   lho     = c.getUint32(p+42, true);
+    const name    = dec.decode(cd.subarray(p+46, p+46+nlen));
+    // 需要时从 extra 里补 zip64 的真实偏移
+    if(lho===0xFFFFFFFF){
+      let e = p+46+nlen; const eEnd = e+elen;
+      while(e+4<=eEnd){
+        const tag = c.getUint16(e, true), sz = c.getUint16(e+2, true);
+        if(tag===0x0001){
+          let q = e+4;
+          if(usize===0xFFFFFFFF) q+=8;
+          if(csize===0xFFFFFFFF) q+=8;
+          lho = Number(c.getBigUint64(q, true));
+          break;
+        }
+        e += 4+sz;
+      }
+    }
+    out.push({name, method, csize, usize, lho});
+    p += 46+nlen+elen+clen;
+  }
+  return out;
+}
+
+// 拿到某个条目的数据流（deflate 的用浏览器自带解压器，边解边给）
+async function zipStream(file, ent){
+  const lh = await bytesAt(file, ent.lho, 30);
+  const l  = dv(lh);
+  if(l.getUint32(0,true)!==0x04034b50) throw new Error("压缩包里这一段的头不对");
+  const nlen = l.getUint16(26,true), elen = l.getUint16(28,true);
+  const start = ent.lho + 30 + nlen + elen;
+  const raw = file.slice(start, start + ent.csize);
+  if(ent.method===0) return {stream: raw.stream(), size: ent.usize};
+  if(ent.method!==8) throw new Error("压缩包用了不认识的压缩方式（method "+ent.method+"），先手动解压再拖进来");
+  if(typeof DecompressionStream==="undefined")
+    throw new Error("这个浏览器不会当场解压 zip。把 zip 解开，拖里面的 conversations.json 进来就行");
+  return {stream: raw.stream().pipeThrough(new DecompressionStream("deflate-raw")), size: ent.usize};
+}
+
+/* ==================================================================
+   2. 字节层面切分顶层数组元素（几百 MB 也不用整份读进内存）
+   ================================================================== */
+class Splitter{
+  constructor(){ this.depth=0; this.inStr=false; this.esc=false; this.objStart=-1; this.done=false; }
+  feed(bytes, base, out){
+    const n=bytes.length;
+    for(let i=0;i<n;i++){
+      const c=bytes[i];
+      if(this.inStr){
+        if(this.esc) this.esc=false;
+        else if(c===0x5C) this.esc=true;
+        else if(c===0x22) this.inStr=false;
+        continue;
+      }
+      if(c===0x22){ this.inStr=true; continue; }
+      if(c===0x7B||c===0x5B){
+        if(this.depth===0) this.objStart=base+i;
+        this.depth++;
+      }else if(c===0x7D||c===0x5D){
+        this.depth--;
+        if(this.depth===0&&this.objStart>=0){ out.push([this.objStart, base+i+1]); this.objStart=-1; }
+        else if(this.depth<0){ this.done=true; return; }
+      }
+    }
+  }
+}
+function findArrayStart(head){
+  for(let i=0;i<head.length;i++){
+    const c=head[i];
+    if(c===0x5B) return i+1;                       // [ → 顶层就是对话数组
+    if(c===0x7B) return i;                         // { → 整份是一个对象
+    if(c!==0x20&&c!==0x0A&&c!==0x0D&&c!==0x09) return -1;
+  }
+  return -1;
+}
+
+/* ==================================================================
+   3. 认得 Claude 的作品：create / update / rewrite 一层层重演
+   ================================================================== */
+const FENCE=/(^|\n)[ \t]*(`{3,}|~{3,})[ \t]*([A-Za-z0-9_+#.-]*)[ \t]*\n([\s\S]*?)\n?[ \t]*\2[ \t]*(?=\n|$)/g;
+function fences(text){
+  const out=[]; let m; FENCE.lastIndex=0;
+  while((m=FENCE.exec(text))!==null) out.push({lang:(m[3]||"").toLowerCase(), code:m[4]});
+  return out;
+}
+const ART_TAG=/<antArtifact\b([^>]*)>([\s\S]*?)<\/antArtifact>/gi;
+function attr(s,k){ const m=s.match(new RegExp(k+'\\s*=\\s*"([^"]*)"','i')); return m?m[1]:""; }
+
+function isFullHtml(code){ return /<!doctype\s+html|<html[\s>]/i.test(code); }
+function htmlTitle(code){
+  const m=code.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if(!m) return "";
+  return m[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,120);
+}
+function parseTime(x){
+  if(typeof x==="number") return x>3e10 ? x/1000 : x;
+  if(typeof x==="string"){ const t=Date.parse(x); if(!isNaN(t)) return t/1000; }
+  return 0;
+}
+
+// artifact 的类型 → 能不能直接打开 / 存成什么后缀
+const KIND={
+  "text/html":               {ext:"html", open:true,  label:"网页"},
+  "image/svg+xml":           {ext:"svg",  open:true,  label:"SVG"},
+  "text/markdown":           {ext:"md",   open:false, label:"文稿"},
+  "application/vnd.ant.react":   {ext:"jsx", open:false, label:"React"},
+  "application/vnd.ant.code":    {ext:"txt", open:false, label:"代码"},
+  "application/vnd.ant.mermaid": {ext:"mmd", open:false, label:"图"}
+};
+function kindOf(type, code){
+  if(KIND[type]) return KIND[type];
+  if(isFullHtml(code||"")) return KIND["text/html"];
+  return {ext:"txt", open:false, label:type ? String(type).split("/").pop().slice(0,14) : "文本"};
+}
+const LANG_EXT={html:"html",svg:"svg",jsx:"jsx",js:"js",javascript:"js",css:"css",
+  python:"py",py:"py",json:"json",md:"md",markdown:"md",mermaid:"mmd",xml:"xml",sql:"sql"};
+
+// update 只给了 old_str / new_str，得在上一版的正文上原地替换
+function applyUpdate(cur, oldS, newS){
+  if(typeof oldS!=="string" || typeof newS!=="string") return {text:cur, ok:false};
+  const i = cur.indexOf(oldS);
+  if(i<0) return {text:cur, ok:false};
+  return {text: cur.slice(0,i)+newS+cur.slice(i+oldS.length), ok:true};
+}
+
+const MAX_KEEP = 900*1024;
+
+function extractFromConv(conv){
+  const msgs = conv && conv.chat_messages;
+  if(!Array.isArray(msgs)) return [];
+
+  const works = new Map();   // artifact id → 作品
+  const retired = [];        // 同名被推倒重做时，上一份收在这
+  const loose = [];          // 围栏 / antArtifact / 附件，各自独立成件
+
+  const newWork = (id,title,type,t)=>({
+    id, title:title||"", type:type||"", t, tEnd:t,
+    versions:[], from:"artifact", broken:0
+  });
+
+  for(const msg of msgs){
+    const t = parseTime(msg.created_at || msg.updated_at);
+    const who = String(msg.sender||"").toLowerCase();
+
+    // 3a. 你当年上传进对话的文件
+    const atts = [].concat(msg.attachments||[], msg.files||[]);
+    for(const a of atts){
+      if(!a) continue;
+      const body = a.extracted_content;
+      if(typeof body!=="string" || body.trim().length<40) continue;
+      const nm = String(a.file_name||"");
+      if(!/\.(html?|svg|jsx?|css|md)$/i.test(nm) && !isFullHtml(body)) continue;
+      loose.push({
+        title: nm || htmlTitle(body) || "上传的文件",
+        type: isFullHtml(body) ? "text/html" : "",
+        t, from:"upload",
+        versions:[{t, text:body, ok:true, cmd:"上传"}]
+      });
+    }
+
+    if(who!=="assistant") continue;
+
+    // 3b. 正主：content[] 里的 tool_use → artifacts
+    const blocks = Array.isArray(msg.content) ? msg.content : [];
+    let sawArtifact = false;
+    for(const b of blocks){
+      if(!b || b.type!=="tool_use") continue;
+      const inp = b.input;
+      if(!inp || typeof inp!=="object") continue;
+      const name = String(b.name||"").toLowerCase();
+      const cmd  = String(inp.command||"").toLowerCase();
+      const isArt = name==="artifacts" || (!!inp.id && (cmd==="create"||cmd==="update"||cmd==="rewrite"));
+      if(!isArt) continue;
+      sawArtifact = true;
+
+      const key = String(inp.id || inp.identifier || ("_"+works.size));
+      let w = works.get(key);
+
+      if(cmd==="create" || !w){
+        if(typeof inp.content!=="string") continue;
+        // 同一个名字被推倒重做过：先把上一份收进箱底，别让它被盖掉
+        if(w && w.versions.length) retired.push(w);
+        w = newWork(key, inp.title, inp.type, t);
+        w.versions.push({t, text:inp.content, ok:true, cmd:"新建"});
+        works.set(key, w);
+      }else if(cmd==="rewrite"){
+        if(typeof inp.content!=="string") continue;
+        if(inp.title) w.title=inp.title;
+        if(inp.type)  w.type=inp.type;
+        w.versions.push({t, text:inp.content, ok:true, cmd:"重写"});
+      }else if(cmd==="update"){
+        const prev = w.versions.length ? w.versions[w.versions.length-1].text : "";
+        const r = applyUpdate(prev, inp.old_str, inp.new_str);
+        if(!r.ok) w.broken++;
+        w.versions.push({t, text:r.text, ok:r.ok, cmd:"改动"});
+      }else{
+        continue;
+      }
+      w.tEnd = t;
+    }
+
+    // 3c. 老对话：<antArtifact> 直接写在正文里
+    // msg.text 通常就是 content 里各 text 块拼起来的，两边都扫会捞出双份
+    const texts = [];
+    for(const b of blocks) if(b && b.type==="text" && typeof b.text==="string" && b.text) texts.push(b.text);
+    if(!texts.length && typeof msg.text==="string" && msg.text) texts.push(msg.text);
+
+    for(const raw of texts){
+      ART_TAG.lastIndex=0; let m;
+      while((m=ART_TAG.exec(raw))!==null){
+        const a = m[1], body = m[2];
+        if(body.trim().length<40) continue;
+        loose.push({
+          title: attr(a,"title") || htmlTitle(body) || attr(a,"identifier"),
+          type:  attr(a,"type"),
+          t, from:"artifact",
+          versions:[{t, text:body, ok:true, cmd:"新建"}]
+        });
+      }
+    }
+
+    // 3d. 兜底：正文里的完整网页（作品已经收到就不重复捞）
+    if(sawArtifact) continue;
+    for(const raw of texts){
+      for(const f of fences(raw)){
+        if(f.code.trim().length<40) continue;
+        const full = isFullHtml(f.code);
+        if(!full && !LANG_EXT[f.lang]) continue;
+        loose.push({
+          title: full ? (htmlTitle(f.code)||"回复里的网页") : ("代码片段 ."+(LANG_EXT[f.lang]||"txt")),
+          type: full ? "text/html" : "",
+          lang: f.lang, t, from:"fence",
+          versions:[{t, text:f.code, ok:true, cmd:"写在回复里"}]
+        });
+      }
+    }
+  }
+
+  // 同一段正文可能被不同路径各捞一次，按内容去重（作品优先，兜底的让位）
+  const seenBody=new Set();
+  for(const w of [...works.values(), ...retired]){
+    const last=w.versions[w.versions.length-1];
+    if(last) seenBody.add(last.text);
+  }
+  const keptLoose=[];
+  for(const w of loose){
+    const body=w.versions[0].text;
+    if(seenBody.has(body)) continue;
+    seenBody.add(body); keptLoose.push(w);
+  }
+
+  const all = [...works.values(), ...retired, ...keptLoose];
+  for(const w of all){
+    for(const v of w.versions){
+      if(v.text.length>MAX_KEEP){ v.text=v.text.slice(0,MAX_KEEP); v.cut=true; }
+    }
+    // 一次改动没对上，后面依赖它的都会跟着断——真正要告诉人的是「断在哪一版」
+    w.firstBad = w.versions.findIndex(v=>!v.ok);
+    const last = w.versions[w.versions.length-1];
+    if(!last){ w.dead=true; continue; }
+    const k = kindOf(w.type, last.text);
+    if(!w.type && w.lang && LANG_EXT[w.lang]) k.ext = LANG_EXT[w.lang];
+    w.ext=k.ext; w.openable=k.open; w.kindLabel=k.label;
+    if(!w.title) w.title = htmlTitle(last.text) || "没名字的";
+    w.bytes = last.text.length;
+    w.conv = conv.name || "没名字的对话";
+    w.convAt = parseTime(conv.created_at);
+    w.tEnd = w.tEnd || w.t;
+  }
+  return all.filter(w=>!w.dead).sort((a,b)=>a.t-b.t);
+}
+
+/* ==================================================================
+   4. store-only ZIP 打包
+   ================================================================== */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function makeZip(files){
+  const enc=new TextEncoder(); const chunks=[]; const central=[]; let offset=0;
+  for(const f of files){
+    const nameB=enc.encode(f.name); const crc=crc32(f.data);
+    const lh=new Uint8Array(30+nameB.length); const d=new DataView(lh.buffer);
+    d.setUint32(0,0x04034b50,true); d.setUint16(4,20,true); d.setUint16(6,0x0800,true);
+    d.setUint16(8,0,true); d.setUint16(10,0,true); d.setUint16(12,0x21,true);
+    d.setUint32(14,crc,true); d.setUint32(18,f.data.length,true); d.setUint32(22,f.data.length,true);
+    d.setUint16(26,nameB.length,true); d.setUint16(28,0,true); lh.set(nameB,30);
+    chunks.push(lh,f.data);
+    const ch=new Uint8Array(46+nameB.length); const cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true); cv.setUint16(10,0,true); cv.setUint16(12,0,true);
+    cv.setUint16(14,0x21,true); cv.setUint32(16,crc,true);
+    cv.setUint32(20,f.data.length,true); cv.setUint32(24,f.data.length,true);
+    cv.setUint16(28,nameB.length,true); cv.setUint32(42,offset,true); ch.set(nameB,46);
+    central.push(ch); offset+=lh.length+f.data.length;
+  }
+  let cdSize=0; for(const c of central) cdSize+=c.length;
+  const end=new Uint8Array(22); const ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
+  ev.setUint32(12,cdSize,true); ev.setUint32(16,offset,true);
+  return new Blob([...chunks,...central,end],{type:"application/zip"});
+}
+
+/* ==================================================================
+   5. 主流程
+   ================================================================== */
+const $=id=>document.getElementById(id);
+let WORKS=[], VIS=[], FILTER="html";
+const dz=$("dz"), gauge=$("gauge");
+
+$("pick").onclick=()=>$("file").click();
+dz.onclick=e=>{ if(e.target===dz||e.target.tagName==="H2"||e.target.classList.contains("lead")) $("file").click(); };
+$("file").onchange=e=>{ if(e.target.files[0]) start(e.target.files[0]); };
+["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("hot");}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("hot");}));
+dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) start(f); });
+
+function fail(msg){
+  $("err").innerHTML='<div class="err">'+msg+"</div>";
+  $("sonar").classList.remove("on");
+  dz.style.display="";
+}
+const fmtMB=n=>(n/1048576).toFixed(1)+" MB";
+const fmtKB=n=>n<1024?n+" B":(n/1024).toFixed(1)+" KB";
+function fmtDate(ts){
+  if(!ts) return "时间不详";
+  const d=new Date(ts*1000);
+  return d.getFullYear()+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0");
+}
+function stamp(ts){
+  if(!ts) return "00000000";
+  const d=new Date(ts*1000);
+  return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
+}
+function safeName(s){
+  return String(s).replace(/[\/\\:*?"<>|\n\r\t]/g,"_").replace(/\s+/g," ").trim().slice(0,60) || "无题";
+}
+
+/* ---- 体检：拖进来的不是对话记录时，说清楚它到底是什么 ---- */
+async function vetFile(file, text){
+  $("sonar").classList.remove("on");
+  const V=$("vet"); V.classList.add("on");
+  const rows=[], dump=$("vetDump");
+  let parsed=null, note="";
+  try{ parsed=JSON.parse(text); }catch(e){ note="这份文件不是合法的 JSON："+e.message; }
+
+  rows.push(["文件名", file.name]);
+  rows.push(["大小", fmtKB(file.size)]);
+
+  if(parsed && typeof parsed==="object"){
+    const isArr=Array.isArray(parsed);
+    rows.push(["顶层是", isArr ? ("数组，"+parsed.length+" 项") : "对象"]);
+    if(isArr){
+      rows.push(["里面有对话吗", parsed.length===0 ? "空的，一条都没有" : "有 "+parsed.length+" 条，但结构对不上"]);
+      if(parsed.length) rows.push(["第一项的字段", Object.keys(parsed[0]).join("、")]);
+    }else{
+      const ks=Object.keys(parsed);
+      rows.push(["有这些字段", ks.join("、") || "（空对象）"]);
+      for(const k of ks.slice(0,8)){
+        const v=parsed[k];
+        rows.push(["　"+k, Array.isArray(v) ? ("数组，"+v.length+" 项")
+          : (v&&typeof v==="object") ? "对象" : String(v).slice(0,80)]);
+      }
+    }
+  }
+
+  const looksUsers = parsed && (Array.isArray(parsed)
+    ? parsed.some(x=>x&&x.email_address)
+    : !!parsed.email_address);
+  if(looksUsers){
+    $("vetTitle").textContent="这份是账号信息，不是对话记录";
+    note="导出包里 users.json 长这样。真正装着聊天的是同一个包里的 conversations.json —— 这次的导出里大概根本没生成它。";
+  }else if(parsed && Array.isArray(parsed) && parsed.length===0){
+    $("vetTitle").textContent="这是一份空的对话记录";
+    note="文件本身没坏，但里面一条对话都没有。导出那头出问题了，不是你下载错了。";
+  }else if(file.size < 20000){
+    $("vetTitle").textContent="这份文件太小了，装不下对话";
+    note=note || "一份正常的 Claude 导出，光 conversations.json 就是几十 MB 起。这个体量说明导出那一侧没把内容写进来。";
+  }else{
+    $("vetTitle").textContent="这份文件里没找到对话";
+    note=note || "认不出结构。如果你手上还有别的导出文件，换那个试试。";
+  }
+  $("vetSaid").textContent=note;
+  $("vetTable").innerHTML=rows.map(r=>"<tr><td>"+r[0]+"</td><td>"+String(r[1]).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+"</td></tr>").join("");
+  dump.textContent=text.slice(0,1200)+(text.length>1200?"\n…":"");
+  dz.style.display="";
+}
+
+async function start(file){
+  $("err").innerHTML=""; $("vet").classList.remove("on"); dz.style.display="none";
+  $("sonar").classList.add("on"); $("sonar").classList.remove("done"); $("deck").classList.remove("on");
+  gauge.querySelectorAll(".tick,.lbl").forEach(n=>n.remove());
+  WORKS=[];
+
+  let stream=null, total=file.size, srcNote="";
+
+  // zip：先把 conversations.json 找出来
+  if(/\.zip$/i.test(file.name)){
+    let list=null;
+    try{ list=await zipList(file); }
+    catch(e){ return fail("这个 zip 读不动：<code>"+e.message+"</code>"); }
+    if(!list) return fail("这个文件的结尾不像 zip。要是你已经解压过了，直接拖里面的 <code>conversations.json</code> 进来。");
+    const hit = list.find(e=>/(^|\/)conversations\.json$/i.test(e.name))
+             || list.find(e=>/conversations.*\.json$/i.test(e.name));
+    if(!hit){
+      const names=list.filter(e=>!e.name.endsWith("/")).map(e=>e.name).slice(0,12).join("、");
+      return fail("这个 zip 里没有 <code>conversations.json</code>。它装的是：<br><code>"+
+        (names||"（空的）")+"</code>");
+    }
+    try{
+      const s=await zipStream(file, hit);
+      stream=s.stream; total=s.size||hit.usize||file.size;
+      srcNote="从 zip 里直接读 "+hit.name+"，没有解压到硬盘。";
+    }catch(e){ return fail(e.message); }
+  }else{
+    // 小文件先体检：2 KB 的 json 不该被当成对话记录硬啃
+    if(file.size < 200000){
+      const text=await file.text();
+      const head=text.replace(/^\uFEFF/,"").trimStart();
+      if(!(head.startsWith("[")&&/"chat_messages"/.test(text))) return vetFile(file, text);
+    }
+    stream=file.stream();
+  }
+
+  const reader=stream.getReader();
+  const sp=new Splitter(), dec=new TextDecoder("utf-8");
+  let pending=new Uint8Array(0), pendingBase=0, read=0, started=false;
+  let nconv=0, nart=0, nver=0;
+  const lastTickAt={v:-99};
+  const t0=Date.now();
+
+  const paint=()=>{
+    const pct = total ? Math.min(100, Math.round(read/total*100)) : 0;
+    $("pct").textContent=pct; $("mb").textContent=fmtMB(read);
+    $("nconv").textContent=nconv; $("nart").textContent=nart; $("nver").textContent=nver;
+    $("cursor").style.top=(pct/100*340)+"px";
+    if(nart&&pct-lastTickAt.v>=1.4){
+      lastTickAt.v=pct;
+      const tk=document.createElement("div"); tk.className="tick"; tk.style.top=(pct/100*340)+"px";
+      gauge.appendChild(tk);
+    }
+  };
+
+  try{
+    for(;;){
+      const {done, value} = await reader.read();
+      if(done) break;
+      read += value.length;
+
+      let bytes=value, base=read-value.length;
+      if(!started){
+        // 跳过开头的空白和那个 '['
+        const s=findArrayStart(bytes);
+        if(s<0){ reader.cancel(); return fail("这份文件的开头不像 Claude 的对话记录。导出包里要找的是 <code>conversations.json</code>。"); }
+        bytes=bytes.subarray(s); base+=s; started=true; pendingBase=base;
+      }
+
+      const merged=new Uint8Array(pending.length+bytes.length);
+      merged.set(pending); merged.set(bytes, pending.length);
+      pending=merged;
+
+      const ranges=[];
+      sp.feed(bytes, base, ranges);
+
+      let consumed=0;
+      for(const [a,b] of ranges){
+        const chunk=pending.subarray(a-pendingBase, b-pendingBase);
+        try{
+          const conv=JSON.parse(dec.decode(chunk));
+          nconv++;
+          const got=extractFromConv(conv);
+          for(const w of got){ nart++; nver+=w.versions.length; WORKS.push(w); }
+        }catch(e){ /* 单条对话崩了不影响整趟 */ }
+        consumed=b-pendingBase;
+      }
+      if(consumed>0){ pending=pending.slice(consumed); pendingBase+=consumed; }
+      paint();
+      if(sp.done) break;
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }catch(e){
+    return fail("读到第 "+fmtMB(read)+" 处断了：<code>"+e.message+"</code>");
+  }
+  read=total; paint();
+
+  if(!WORKS.length){
+    $("sonar").classList.remove("on");
+    return fail("这份记录读完了（"+nconv+" 条对话），但一件作品都没捞到。"+
+      (nconv===0?"　文件结构对不上，确认一下是不是 conversations.json。":"　如果你确定做过东西，把这句告诉我，我看看是哪层没剥开。"));
+  }
+
+  WORKS.sort((a,b)=>b.tEnd-a.tEnd);
+  WORKS.forEach((w,i)=>{ w.idx=i; w.cur=w.versions.length-1; });
+  $("note").textContent=(srcNote?srcNote+" ":"")+"捞完了，用了 "+((Date.now()-t0)/1000).toFixed(1)+" 秒。下面按最后一次改动的时间排，最近的在上面。";
+  $("sonar").classList.add("done");
+  $("deck").classList.add("on");
+  render();
+}
+
+/* ==================================================================
+   6. 渲染
+   ================================================================== */
+function esc(s){ return String(s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c])); }
+
+function render(){
+  const q=$("q").value.trim().toLowerCase();
+  VIS=WORKS.filter(w=>{
+    if(FILTER==="html" && !w.openable) return false;
+    if(!q) return true;
+    if(w.title.toLowerCase().includes(q)) return true;
+    if(w.conv.toLowerCase().includes(q)) return true;
+    return w.versions[w.cur].text.toLowerCase().includes(q);
+  });
+
+  const nOpen=WORKS.filter(w=>w.openable).length;
+  const nEdit=WORKS.reduce((s,w)=>s+Math.max(0,w.versions.length-1),0);
+  $("count").textContent="显示 "+VIS.length+" 件　·　共捞到 "+WORKS.length+" 件，其中 "+nOpen+
+    " 件能直接打开　·　一路重演了 "+nEdit+" 次改动";
+
+  if(!VIS.length){ $("list").innerHTML='<div class="empty">这一格里没有东西。换个词，或者切到「全部」。</div>'; return; }
+
+  $("list").innerHTML=VIS.map(w=>{
+    const v=w.versions[w.cur], n=w.versions.length;
+    const badges=[
+      '<span class="badge '+(w.openable?"html":"")+'">'+esc(w.kindLabel)+'</span>',
+      n>1 ? '<span class="badge layers">'+n+' 版</span>' : "",
+      w.firstBad>0 ? '<span class="badge hurt">第 '+(w.firstBad+1)+' 版起对不上</span>' : "",
+      w.from==="upload" ? '<span class="badge">你上传的</span>' : ""
+    ].join("");
+
+    // 地层：一层一次改动，高度看那一版有多大
+    let strata="";
+    if(n>1){
+      const sizes=w.versions.map(x=>x.text.length);
+      const lo=Math.min(...sizes), hi=Math.max(...sizes), span=hi-lo;
+      const wid=n>24?6:n>12?11:20;                      // 改得越多，层越细，整条越密
+      strata='<div class="strata" role="group" aria-label="版本地层">'+
+        w.versions.map((x,i)=>{
+          const h = span ? 14+Math.round((x.text.length-lo)/span*32) : 30;
+          return '<button class="lay'+(i===w.cur?" sel":"")+(x.ok?"":" bad")+(i===w.firstBad?" snap":"")+
+            '" style="height:'+h+'px;width:'+wid+'px" data-i="'+w.idx+'" data-v="'+i+'" title="第 '+(i+1)+' 版 · '+
+            x.cmd+' · '+fmtDate(x.t)+' · '+fmtKB(x.text.length)+(x.ok?"":" · 这次改动没对上")+'"></button>';
+        }).join("")+"</div>"+
+        '<div class="strata-cap"><span class="now">正在看第 '+(w.cur+1)+' / '+n+' 版 · '+v.cmd+' · '+fmtKB(v.text.length)+'</span>'+
+        '<span>'+(w.firstBad>0
+          ? '第 '+w.firstBad+' 版之前是完整的，往后是断的'
+          : '左边最早 → 右边最后')+'</span></div>';
+    }
+
+    return '<div class="item">'+
+      '<div class="head"><span class="name">'+esc(w.title)+'</span>'+badges+'</div>'+
+      '<div class="meta"><span>来自「'+esc(w.conv)+'」</span><span>'+fmtDate(w.tEnd)+'</span><span>'+fmtKB(v.text.length)+(v.cut?" · 已截断":"")+'</span></div>'+
+      strata+
+      '<div class="ops">'+
+        (w.openable?'<button data-act="open" data-i="'+w.idx+'">打开看看</button>':"")+
+        '<button data-act="dl" data-i="'+w.idx+'">下载这一版</button>'+
+        '<button data-act="src" data-i="'+w.idx+'">看代码</button>'+
+      "</div>"+
+      '<pre id="src'+w.idx+'"></pre>'+
+    "</div>";
+  }).join("");
+}
+
+$("list").addEventListener("click", e=>{
+  const lay=e.target.closest(".lay");
+  if(lay){
+    const w=WORKS[+lay.dataset.i]; w.cur=+lay.dataset.v; render(); return;
+  }
+  const b=e.target.closest("button[data-act]");
+  if(!b) return;
+  const w=WORKS[+b.dataset.i], v=w.versions[w.cur];
+  const fname=stamp(v.t)+"-"+safeName(w.title)+"."+w.ext;
+
+  if(b.dataset.act==="open"){
+    const type=w.ext==="svg"?"image/svg+xml":"text/html";
+    const url=URL.createObjectURL(new Blob([v.text],{type:type+";charset=utf-8"}));
+    window.open(url,"_blank","noopener");
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }else if(b.dataset.act==="dl"){
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([v.text],{type:"text/plain;charset=utf-8"}));
+    a.download=fname; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),30000);
+  }else{
+    const pre=$("src"+w.idx);
+    if(pre.classList.contains("on")){ pre.classList.remove("on"); b.textContent="看代码"; }
+    else{ pre.textContent=v.text; pre.classList.add("on"); b.textContent="收起代码"; }
+  }
+});
+
+$("q").addEventListener("input", render);
+$("fHtml").onclick=()=>{FILTER="html";$("fHtml").classList.add("sel");$("fAll").classList.remove("sel");render();};
+$("fAll").onclick =()=>{FILTER="all"; $("fAll").classList.add("sel"); $("fHtml").classList.remove("sel");render();};
+
+$("zip").onclick=()=>{
+  const enc=new TextEncoder(), seen=new Map(), files=[];
+  for(const w of (FILTER==="html"?WORKS.filter(x=>x.openable):WORKS)){
+    const v=w.versions[w.versions.length-1];
+    let nm=stamp(v.t)+"-"+safeName(w.title)+"."+w.ext;
+    const c=(seen.get(nm)||0)+1; seen.set(nm,c);
+    if(c>1) nm=nm.replace(/(\.[^.]+)$/, "-"+c+"$1");
+    files.push({name:nm, data:enc.encode(v.text)});
+  }
+  if(!files.length) return;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(makeZip(files));
+  a.download="捞上来的-"+stamp(Date.now()/1000)+".zip"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+};
+
+$("mdlist").onclick=()=>{
+  const lines=["# 捞上来的清单","","共 "+WORKS.length+" 件。",""];
+  for(const w of WORKS){
+    lines.push("- **"+w.title+"** ｜ "+w.kindLabel+" ｜ "+w.versions.length+" 版 ｜ "+
+      fmtDate(w.tEnd)+" ｜ 来自「"+w.conv+"」"+(w.firstBad>0?" ｜ 第 "+(w.firstBad+1)+" 版起对不上":""));
+  }
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/markdown;charset=utf-8"}));
+  a.download="捞鱼清单.md"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),30000);
+};
+</script>
+</body>
+</html>

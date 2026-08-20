@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>今晚有雾</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#171C22}
+  body{
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+  #say{
+    position:fixed;left:0;right:0;bottom:11vh;text-align:center;
+    color:#E6ECEF;font-size:15px;font-weight:300;letter-spacing:.34em;text-indent:.34em;
+    opacity:0;transition:opacity 3.4s ease;pointer-events:none;
+    padding:26px 0;
+    background:radial-gradient(60% 100% at 50% 50%, rgba(11,15,19,.46) 0%, rgba(11,15,19,.22) 52%, rgba(11,15,19,0) 100%);
+    text-shadow:0 1px 2px rgba(12,16,20,.55), 0 0 30px rgba(12,16,20,.95);
+  }
+  #say.on{opacity:.78}
+  @media (max-width:640px){
+    #say{font-size:13px;letter-spacing:.26em;text-indent:.26em;bottom:14vh;padding:0 22px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #say{transition:opacity .01s}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="say"></div>
+<script>
+"use strict";
+const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+const calm=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let W=0,H=0,DPR=1,SCALE=1;
+
+/* ---------- 灯 ---------- */
+const LAMPS=50;
+let lamps=[];
+function seedLamps(){
+  lamps=[];
+  const clusters=[];
+  const NC=5+Math.floor(Math.random()*3);
+  const short=Math.min(W,H)||800;
+  for(let i=0;i<NC;i++){
+    const spread=short*(0.17+Math.random()*0.20);   // 先按像素定一团多大
+    clusters.push({
+      cx:0.08+Math.random()*0.84,
+      cy:0.24+Math.random()*0.62,
+      sx:spread/(W||1280),                          // 再折回归一化
+      sy:spread*0.62/(H||800),
+      depth:Math.pow(Math.random(),1.5)             // 同一簇远近相近
+    });
+  }
+  const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)*0.42;};
+  for(let i=0;i<LAMPS;i++){
+    const c=clusters[i%NC];
+    const x=Math.min(1.04,Math.max(-0.04,c.cx+gauss()*c.sx));
+    const y=Math.min(0.96,Math.max(0.04,c.cy+gauss()*c.sy));
+    const depth=Math.min(1,Math.max(0,c.depth+(Math.random()-0.5)*0.22));
+    lamps.push({x,y,depth,
+      base: 0.030+depth*0.115,                  // 静置时几乎看不见
+      r: (20+depth*58)*SCALE,
+      ph: Math.random()*Math.PI*2,
+      sp: 0.00022+Math.random()*0.00042,
+      glow: 0, bre:1, px:0, py:0});
+  }
+}
+
+/* 预渲染一枚光晕，之后只做缩放贴图 */
+const halo=document.createElement("canvas"); const hx=halo.getContext("2d");
+(function(){
+  const S=160; halo.width=halo.height=S;
+  const g=hx.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+  g.addColorStop(0,   "rgba(255,226,163,1)");
+  g.addColorStop(0.22,"rgba(253,203,120,0.56)");
+  g.addColorStop(0.46,"rgba(238,169,84,0.22)");
+  g.addColorStop(0.72,"rgba(238,169,84,0.07)");
+  g.addColorStop(0.88,"rgba(238,169,84,0.016)");
+  g.addColorStop(1,   "rgba(238,169,84,0)");
+  hx.fillStyle=g; hx.fillRect(0,0,S,S);
+})();
+
+const walkGlow=document.createElement("canvas"); const wx=walkGlow.getContext("2d");
+(function(){
+  const S=160; walkGlow.width=walkGlow.height=S;
+  const g=wx.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+  g.addColorStop(0,   "rgba(232,226,210,0.80)");
+  g.addColorStop(0.30,"rgba(224,215,196,0.30)");
+  g.addColorStop(0.58,"rgba(224,215,196,0.085)");
+  g.addColorStop(0.82,"rgba(224,215,196,0.018)");
+  g.addColorStop(1,   "rgba(224,215,196,0)");
+  wx.fillStyle=g; wx.fillRect(0,0,S,S);
+})();
+
+/* ---------- 雾（半分辨率，够糊） ---------- */
+const fog=document.createElement("canvas"); const fx=fog.getContext("2d");
+const blobs=[];
+for(let i=0;i<7;i++) blobs.push({
+  x:Math.random(),y:Math.random(),
+  r:0.28+Math.random()*0.36,
+  vx:(Math.random()-0.5)*0.000030,
+  vy:(Math.random()-0.5)*0.000017,
+  a:0.045+Math.random()*0.085
+});
+
+/* ---------- 走过的地方 ---------- */
+const clears=[];
+function walkAt(x,y){
+  const last=clears[clears.length-1];
+  if(last && Math.hypot(last.x-x,last.y-y)<9*SCALE) return;
+  clears.push({x,y,r:30*SCALE,life:1});
+  if(clears.length>44) clears.shift();
+}
+
+/* ---------- 无人时，雾里自己有人在散步 ---------- */
+let idle=0, strollT=Math.random()*1000;
+function stroll(dt){
+  strollT+=dt;
+  const t=strollT*0.00013;
+  const x=(0.5+0.36*Math.sin(t*1.00)+0.10*Math.sin(t*2.7+1.2))*W;
+  const y=(0.5+0.27*Math.sin(t*0.71+2.0)+0.08*Math.cos(t*1.9))*H;
+  walkAt(x,y);
+}
+
+/* ---------- 分不清是不是在下雨 ---------- */
+let rain=0, rainT=Math.random()*400;
+let dwell=0;                       // 待了多久
+const drops=[];
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth; H=window.innerHeight;
+  SCALE=Math.max(0.5,Math.min(1.15,Math.min(W,H)/820));
+  cv.width=W*DPR; cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  fog.width=Math.max(1,Math.round(W/2)); fog.height=Math.max(1,Math.round(H/2));
+  drops.length=0;
+  for(let i=0;i<130;i++) drops.push({x:Math.random()*W,y:Math.random()*H,l:9+Math.random()*16,v:0.9+Math.random()*1.5});
+}
+window.addEventListener("resize",()=>{resize();seedLamps();});
+resize(); seedLamps();
+
+/* ---------- 输入 ---------- */
+function point(e){
+  idle=0;
+  const t=e.touches?e.touches[0]:e;
+  walkAt(t.clientX,t.clientY);
+}
+window.addEventListener("mousemove",point,{passive:true});
+window.addEventListener("touchstart",point,{passive:true});
+window.addEventListener("touchmove",point,{passive:true});
+
+/* ---------- 画 ---------- */
+let prev=performance.now();
+function frame(now){
+  const dt=Math.min(now-prev,48); prev=now;
+  idle+=dt; dwell+=dt;
+  const thin=Math.min(dwell/186000,1);          // 慢慢的，不通知你
+  if(idle>2600) stroll(dt);
+
+  // 底色
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,   "#242D38");
+  bg.addColorStop(0.52,"#1D242B");
+  bg.addColorStop(1,   "#141A21");
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  // 灯：离走过的地方越近，越亮
+  ctx.globalCompositeOperation="lighter";
+  for(const l of lamps){
+    const px=l.x*W, py=l.y*H;
+    let near=0;
+    for(const c of clears){
+      const d=Math.hypot(c.x-px,c.y-py);
+      const reach=c.r*1.9;
+      if(d<reach) near=Math.max(near,(1-d/reach)*c.life);
+    }
+    l.glow += (near-l.glow)*(calm?0.12:0.055);
+    l.bre=0.87+0.13*Math.sin(now*l.sp+l.ph);
+    l.px=px; l.py=py;
+    const a=(l.base*0.60 + l.glow*1.25)*l.bre;
+    const r=l.r*(1+l.glow*0.62);
+    ctx.globalAlpha=Math.min(a,1);
+    ctx.drawImage(halo,px-r,py-r,r*2,r*2);
+  }
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation="source-over";
+
+  // 雾
+  const fw=fog.width, fh=fog.height;
+  fx.clearRect(0,0,fw,fh);
+  fx.fillStyle="rgba(206,208,206,"+(0.205-thin*0.062).toFixed(4)+")"; fx.fillRect(0,0,fw,fh);
+  for(const b of blobs){
+    if(!calm){ b.x+=b.vx*dt; b.y+=b.vy*dt; }
+    if(b.x<-0.4)b.x=1.4; if(b.x>1.4)b.x=-0.4;
+    if(b.y<-0.4)b.y=1.4; if(b.y>1.4)b.y=-0.4;
+    const cx=b.x*fw, cy=b.y*fh, rr=b.r*fw;
+    const g=fx.createRadialGradient(cx,cy,0,cx,cy,rr);
+    g.addColorStop(0,"rgba(216,219,216,"+(b.a*(1-thin*0.32))+")");
+    g.addColorStop(1,"rgba(216,219,216,0)");
+    fx.fillStyle=g; fx.fillRect(cx-rr,cy-rr,rr*2,rr*2);
+  }
+  // 走过的地方不挖开雾，只推进寿命（照亮那一层在下面画）
+  for(let i=clears.length-1;i>=0;i--){
+    const c=clears[i];
+    c.life-=dt*0.00072;
+    c.r+=dt*0.011*SCALE;
+    if(c.life<=0) clears.splice(i,1);
+  }
+  ctx.drawImage(fog,0,0,W,H);
+
+  ctx.globalCompositeOperation="lighter";
+  // 走过的地方，雾自己会亮一点点（雾没有散开，只是亮了）
+  const from=Math.max(0,clears.length-11);
+  for(let i=from;i<clears.length;i++){
+    const c=clears[i];
+    const fresh=(i-from)/Math.max(1,clears.length-from);   // 越靠近当下越亮
+    const rr=c.r*1.45;
+    ctx.globalAlpha=Math.min(c.life*c.life*(0.012+fresh*0.042),0.055);
+    ctx.drawImage(walkGlow,c.x-rr,c.y-rr,rr*2,rr*2);
+  }
+  // 灯光穿过雾散射开的暖晕：远处只看得见这个，走近了才看见灯本身
+  for(const l of lamps){
+    const rr=l.r*2.7*(1+l.glow*0.3);
+    ctx.globalAlpha=Math.min((l.base*0.50+l.glow*0.26)*l.bre,0.42);
+    ctx.drawImage(halo,l.px-rr,l.py-rr,rr*2,rr*2);
+  }
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation="source-over";
+
+  // 雨：来一阵去一阵，看不太出来
+  if(!calm){
+    rainT+=dt*0.001;
+    const w=Math.sin(rainT*0.085)*0.5+Math.sin(rainT*0.031+1.7)*0.35+Math.sin(rainT*0.013+3.1)*0.3;
+    rain=Math.max(0,w-0.42);
+    if(rain>0.001){
+      ctx.strokeStyle="rgba(216,226,232,"+Math.min(rain*0.16,0.075)+")";
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      for(const d of drops){
+        d.y+=d.v*dt*0.34; d.x+=d.v*dt*0.105;
+        if(d.y>H+20){ d.y=-20; d.x=Math.random()*W; }
+        if(d.x>W+20) d.x=-20;
+        ctx.moveTo(d.x,d.y); ctx.lineTo(d.x-d.l*0.30,d.y-d.l);
+      }
+      ctx.stroke();
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- 待久了才会浮出来的字 ---------- */
+const say=document.getElementById("say");
+const touchy=window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+const opening=touchy?"用手指在雾里走一走":"把鼠标放进去走一走";
+const lines=[
+  "雾里不用走快",
+  "分不清也可以",
+  "灯一直亮着，只是看不清",
+  "四月十八到五月二十，五十盏",
+  "都还在"
+];
+let li=0;
+function show(txt,hold,then){
+  say.textContent=txt;
+  say.classList.add("on");
+  setTimeout(()=>{
+    say.classList.remove("on");
+    setTimeout(then,3600);
+  },hold);
+}
+function loop(){
+  show(lines[li%lines.length],8600,()=>{ li++; setTimeout(loop,2600); });
+}
+setTimeout(()=>show(opening,6200,()=>setTimeout(loop,9000)),4200);
+</script>
+</body>
+</html>
