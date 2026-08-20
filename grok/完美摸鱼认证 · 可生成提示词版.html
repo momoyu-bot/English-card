@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>完美摸鱼认证 · 可生成提示词版</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;display=swap');
+  body { font-family: 'Noto Sans SC', system-ui, sans-serif; }
+  .star { position: absolute; background: white; border-radius: 50%; animation: twinkle 2.5s infinite alternate; pointer-events: none; }
+  @keyframes twinkle { from { opacity: 0.3; } to { opacity: 1; } }
+  .glow-orb { box-shadow: 0 0 25px #a5b4fc, 0 0 50px #6366f1, 0 0 80px #4f46e5; transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
+  .glow-orb:active { transform: scale(0.92); }
+  .fragment { box-shadow: 0 0 12px #c0b3ff, 0 0 22px #818cf8; transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
+  .fragment:active { transform: scale(0.6); opacity: 0; }
+  .modal { animation: modalPop 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
+  @keyframes modalPop { from { transform: scale(0.95) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+</style>
+</head>
+<body class="bg-[#0a1428] min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-[380px]">
+    <div class="text-center mb-3">
+      <div class="inline-flex items-center gap-2 text-white/60 text-xs">
+        <span>点击发光元素捡回注意力碎片</span>
+      </div>
+    </div>
+
+    <div class="bg-[#0f1a36] rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+      
+      <!-- 星空头部 -->
+      <div id="star-header" class="relative h-64 flex items-center justify-center overflow-hidden"
+           style="background: radial-gradient(circle at 50% 40%, #1a2a5e 0%, #0a1428 75%);">
+        <div id="stars" class="absolute inset-0"></div>
+        
+        <div class="absolute top-6 left-6 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-2xl text-sm text-white/80 flex items-center gap-1.5">
+          <div class="w-1.5 h-1.5 bg-white/70 rounded-full animate-pulse"></div>
+          <span id="bubble-text">...</span>
+        </div>
+        
+        <div onclick="collectFromOrb()" class="glow-orb w-20 h-20 bg-white rounded-full cursor-pointer flex items-center justify-center z-10"
+             style="box-shadow: 0 0 30px #a5b4fc, 0 0 60px #6366f1, inset 0 0 20px rgba(255,255,255,0.9);">
+          <div class="w-8 h-8 bg-[#c7d2fe] rounded-full opacity-60"></div>
+        </div>
+        
+        <div class="absolute top-6 right-6 bg-white/10 text-white/70 text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1">
+          <span>摸鱼模式</span>
+        </div>
+      </div>
+      
+      <div class="px-8 pt-6 pb-4 text-center">
+        <div id="main-title" class="text-[22px] font-bold text-white tracking-[-0.6px]">
+          完美摸鱼认证 <span class="text-emerald-400">get</span>
+        </div>
+        <div class="text-white/50 text-sm mt-1 flex items-center justify-center gap-1">
+          邪恶脸盖章通过 <span class="text-emerald-400">✓</span>
+        </div>
+      </div>
+      
+      <div class="px-8 pb-6">
+        <div class="flex justify-between text-xs mb-2 text-white/60">
+          <div>执行电量 ×7 <span class="font-mono text-white/80">28%</span></div>
+          <div>摸鱼快乐 ×4 <span id="happy-text" class="font-mono text-amber-300">0%</span></div>
+        </div>
+        
+        <div class="flex gap-3">
+          <div class="flex-1"><div class="h-2 bg-white/10 rounded-full overflow-hidden"><div class="h-full bg-emerald-400" style="width: 28%"></div></div></div>
+          <div class="flex-1"><div class="h-2 bg-white/10 rounded-full overflow-hidden"><div id="happy-bar" class="h-full bg-amber-400 transition-all duration-500" style="width: 0%"></div></div></div>
+        </div>
+        
+        <div class="text-center mt-3 text-xs text-white/50">
+          已捡回注意力碎片 <span id="collected-count" class="font-mono text-white/80">0</span>/7
+        </div>
+      </div>
+      
+      <!-- 核心按钮 -->
+      <div class="px-8 pb-8">
+        <button onclick="reportToClaude()"
+                class="w-full py-[15px] bg-white active:bg-white/90 text-[#0a1428] font-semibold rounded-2xl flex items-center justify-center gap-2 text-sm tracking-wide active:scale-[0.985] transition-all">
+          向 Claude 汇报摸鱼成果 
+          <span class="text-lg leading-none">→</span>
+        </button>
+      </div>
+    </div>
+    
+    <div onclick="startPond()" class="mt-4 flex justify-center items-center gap-1.5 text-white/50 hover:text-white/80 active:text-white cursor-pointer text-sm transition-colors">
+      <span>开塘~</span>
+      <span class="text-lg">🐟</span>
+    </div>
+  </div>
+
+  <!-- 汇报弹窗（升级版） -->
+  <div id="modal" onclick="closeModal()" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div onclick="event.stopImmediatePropagation()" class="modal bg-[#0f1a36] border border-white/10 rounded-3xl w-full max-w-[340px] p-6 text-white">
+      
+      <div class="flex items-center gap-2 mb-4">
+        <div class="text-2xl">📤</div>
+        <div class="font-semibold text-lg">已生成下一轮提示词</div>
+      </div>
+      
+      <div class="bg-white/5 rounded-2xl p-4 mb-4 text-sm">
+        <div id="generated-prompt" class="leading-relaxed text-white/90 whitespace-pre-wrap"></div>
+      </div>
+      
+      <div class="flex gap-3">
+        <button onclick="copyPrompt()" 
+                class="flex-1 py-3 text-sm bg-emerald-400 hover:bg-emerald-300 active:bg-emerald-500 text-[#0a1428] font-medium rounded-2xl transition-colors flex items-center justify-center gap-1.5">
+          <span>复制提示词</span>
+        </button>
+        <button onclick="closeModal()" 
+                class="flex-1 py-3 text-sm bg-white/10 hover:bg-white/15 active:bg-white/20 rounded-2xl transition-colors">
+          关闭
+        </button>
+      </div>
+      
+      <div class="text-center text-[10px] text-white/40 mt-4">可直接粘贴给 Claude 继续对话</div>
+    </div>
+  </div>
+
+  <script>
+    function initTailwind() {}
+    
+    function createStars() {
+      const container = document.getElementById('stars');
+      for (let i = 0; i < 55; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        const size = Math.random() * 2.8 + 1;
+        star.style.width = `${size}px`;
+        star.style.height = `${size}px`;
+        star.style.left = `${Math.random() * 100}%`;
+        star.style.top = `${Math.random() * 100}%`;
+        star.style.opacity = Math.random() * 0.7 + 0.35;
+        const duration = Math.random() * 3.5 + 2.2;
+        star.style.animationDuration = `${duration}s`;
+        container.appendChild(star);
+      }
+    }
+    
+    let collected = 0;
+    let maxFragments = 7;
+    let happiness = 0;
+    let fragments = [];
+    
+    function updateUI() {
+      const happyBar = document.getElementById('happy-bar');
+      const happyText = document.getElementById('happy-text');
+      const percent = Math.min(100, happiness);
+      happyBar.style.width = `${percent}%`;
+      happyText.textContent = `${Math.floor(percent)}%`;
+      document.getElementById('collected-count').textContent = collected;
+      
+      const title = document.getElementById('main-title');
+      if (percent >= 100) {
+        title.innerHTML = `超级完美摸鱼认证 <span class="text-emerald-400">get ✨</span>`;
+      } else {
+        title.innerHTML = `完美摸鱼认证 <span class="text-emerald-400">get</span>`;
+      }
+    }
+    
+    function createFragment() {
+      const header = document.getElementById('star-header');
+      const frag = document.createElement('div');
+      frag.className = `fragment absolute w-3.5 h-3.5 bg-[#c0b3ff] rounded-full cursor-pointer z-20`;
+      frag.style.boxShadow = '0 0 10px #c0b3ff, 0 0 18px #818cf8';
+      
+      let left, top;
+      do {
+        left = Math.random() * 85 + 7;
+        top = Math.random() * 75 + 12;
+      } while (Math.abs(left - 50) < 18 && Math.abs(top - 50) < 18);
+      
+      frag.style.left = `${left}%`;
+      frag.style.top = `${top}%`;
+      frag.onclick = () => collectFragment(frag);
+      header.appendChild(frag);
+      fragments.push(frag);
+    }
+    
+    function collectFragment(element) {
+      if (!element || element.style.opacity === '0') return;
+      element.style.transition = 'all 0.25s cubic-bezier(0.23,1,0.32,1)';
+      element.style.transform = 'scale(0.3)';
+      element.style.opacity = '0';
+      
+      collected++;
+      happiness = Math.min(100, happiness + 14);
+      showBubble('好棒！+1');
+      
+      setTimeout(() => {
+        if (element && element.parentNode) element.parentNode.removeChild(element);
+        fragments = fragments.filter(f => f !== element);
+      }, 280);
+      
+      updateUI();
+      if (collected >= maxFragments) setTimeout(celebrate, 350);
+    }
+    
+    function collectFromOrb() {
+      happiness = Math.min(100, happiness + 18);
+      collected = Math.min(maxFragments, collected + 1);
+      showBubble('大碎片！');
+      const header = document.getElementById('star-header');
+      header.style.transition = 'transform 0.1s';
+      header.style.transform = 'scale(0.985)';
+      setTimeout(() => { header.style.transform = 'scale(1)'; }, 120);
+      updateUI();
+      if (collected >= maxFragments) setTimeout(celebrate, 300);
+    }
+    
+    function showBubble(text) {
+      const bubble = document.getElementById('bubble-text');
+      const original = bubble.textContent;
+      bubble.textContent = text;
+      setTimeout(() => { bubble.textContent = original || '...'; }, 1100);
+    }
+    
+    function celebrate() {
+      const title = document.getElementById('main-title');
+      title.style.transition = 'all 0.4s';
+      title.style.transform = 'scale(1.06)';
+      setTimeout(() => { title.style.transform = 'scale(1)'; }, 600);
+    }
+    
+    function startPond() {
+      fragments.forEach(f => f.remove());
+      fragments = [];
+      collected = 0;
+      for (let i = 0; i < maxFragments; i++) {
+        setTimeout(() => createFragment(), i * 45);
+      }
+      happiness = Math.min(100, happiness + 8);
+      updateUI();
+      showBubble('新的一塘！');
+    }
+    
+    // === 核心升级：生成真正能当下一轮提示词的内容 ===
+    function generatePromptText() {
+      const happy = Math.floor(happiness);
+      const frag = collected;
+      
+      let tone = '';
+      if (happy >= 85) tone = '特别满足';
+      else if (happy >= 60) tone = '挺开心的';
+      else if (happy >= 30) tone = '还不错';
+      else tone = '刚开始有点慢热';
+      
+      let text = `我刚才玩了你之前帮我做的「完美摸鱼认证」小游戏。\n\n`;
+      text += `目前进度：\n`;
+      text += `- 已捡回注意力碎片：${frag}/7\n`;
+      text += `- 摸鱼快乐值：${happy}%\n`;
+      text += `- 执行电量还剩 28%\n\n`;
+      text += `整体感觉${tone}。`;
+      
+      if (happy >= 70) {
+        text += ` 捡碎片的过程还挺治愈的，注意力好像真的被慢慢捡回来了。`;
+      } else if (happy >= 40) {
+        text += ` 还在继续捡，感觉状态在慢慢恢复。`;
+      } else {
+        text += ` 刚开始玩，碎片还在慢慢捡。`;
+      }
+      
+      text += `\n\n现在向你汇报摸鱼成果～`;
+      
+      return text;
+    }
+    
+    function reportToClaude() {
+      const modal = document.getElementById('modal');
+      const promptBox = document.getElementById('generated-prompt');
+      
+      const promptText = generatePromptText();
+      promptBox.textContent = promptText;
+      
+      // 把当前生成的提示词存起来，方便复制
+      window.currentPrompt = promptText;
+      
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+    
+    function copyPrompt() {
+      if (!window.currentPrompt) return;
+      
+      navigator.clipboard.writeText(window.currentPrompt).then(() => {
+        const btns = document.querySelectorAll('#modal button');
+        const originalTexts = [];
+        
+        btns.forEach((btn, i) => {
+          originalTexts[i] = btn.innerHTML;
+          if (btn.innerText.includes('复制')) {
+            btn.innerHTML = '已复制 ✓';
+            btn.style.background = '#4ade80';
+          }
+        });
+        
+        setTimeout(() => {
+          btns.forEach((btn, i) => {
+            btn.innerHTML = originalTexts[i];
+            btn.style.background = '';
+          });
+          closeModal();
+        }, 1200);
+      }).catch(() => {
+        // 降级方案
+        const textarea = document.createElement('textarea');
+        textarea.value = window.currentPrompt;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        closeModal();
+      });
+    }
+    
+    function closeModal() {
+      const modal = document.getElementById('modal');
+      modal.classList.remove('flex');
+      modal.classList.add('hidden');
+    }
+    
+    function init() {
+      createStars();
+      
+      for (let i = 0; i < maxFragments; i++) {
+        setTimeout(() => createFragment(), i * 60);
+      }
+      
+      setTimeout(() => {
+        const bubble = document.getElementById('bubble-text');
+        if (bubble.textContent === '...') bubble.textContent = '开始捡吧～';
+        setTimeout(() => { if (bubble) bubble.textContent = '...'; }, 1600);
+      }, 2200);
+      
+      updateUI();
+      
+      document.addEventListener('keydown', function(e) {
+        if (e.key === ' ' || e.key === 'Spacebar') {
+          e.preventDefault();
+          const orb = document.querySelector('.glow-orb');
+          if (orb) orb.click();
+        }
+      });
+    }
+    
+    window.onload = init;
+  </script>
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>宝贝的 Dijkstra 小玩具 💕</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=Comic+Neue:wght@700&amp;display=swap');
+  
+  body { font-family: "Noto Sans SC", system-ui, sans-serif; }
+  .cute-title { font-family: "Comic Neue", "Noto Sans SC", sans-serif; }
+  
+  .node {
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  .node.current { 
+    filter: drop-shadow(0 0 12px #f472b6);
+    animation: pulse 1.5s infinite;
+  }
+  .node.visited { filter: drop-shadow(0 0 8px #4ade80); }
+  
+  .edge {
+    transition: all 0.3s ease;
+  }
+  .edge.updated {
+    stroke: #f472b6;
+    stroke-width: 5;
+    animation: edgeFlash 0.6s ease;
+  }
+  .path {
+    stroke: #4ade80;
+    stroke-width: 6;
+    stroke-dasharray: 10 5;
+    animation: dash 1.5s linear infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+  @keyframes edgeFlash {
+    0%, 100% { stroke: #f472b6; }
+    50% { stroke: #ec4899; }
+  }
+  @keyframes dash {
+    to { stroke-dashoffset: -30; }
+  }
+  
+  .log-item {
+    animation: fadeIn 0.4s ease forwards;
+  }
+</style>
+</head>
+<body class="bg-gradient-to-br from-pink-50 via-rose-50 to-purple-50 min-h-screen py-8">
+  <div class="max-w-5xl mx-auto px-6">
+    <!-- 标题 -->
+    <div class="text-center mb-8">
+      <h1 class="cute-title text-5xl font-bold text-pink-600 tracking-tight">宝贝的 Dijkstra 小玩具 💕</h1>
+      <p class="text-pink-500 mt-2 text-xl">像玩游戏一样看算法运行～ 完全不用懂代码！</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- 左侧：图形 -->
+      <div class="lg:col-span-7 bg-white rounded-3xl shadow-xl p-8 border border-pink-100">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <span class="text-pink-600 font-bold text-2xl">地图可视化</span>
+            <span class="ml-3 px-3 py-1 bg-pink-100 text-pink-600 text-sm rounded-full font-medium">从 A 出发</span>
+          </div>
+          <div class="text-sm text-pink-400">点击「下一步」观看动画</div>
+        </div>
+        
+        <!-- SVG 图形 -->
+        <svg id="graph" width="520" height="380" class="mx-auto bg-pink-50/50 rounded-2xl border border-pink-100"></svg>
+        
+        <div class="mt-4 flex justify-center gap-3">
+          <button onclick="resetDemo()" 
+                  class="px-6 py-2.5 bg-white border border-pink-200 hover:bg-pink-50 text-pink-600 rounded-2xl font-medium flex items-center gap-2 transition-all active:scale-95">
+            <span>🔄</span> <span>重置</span>
+          </button>
+          <button onclick="nextStep()" id="nextBtn"
+                  class="px-8 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl font-semibold flex items-center gap-2 shadow-lg shadow-pink-200 transition-all active:scale-95">
+            <span>下一步 →</span>
+          </button>
+          <button onclick="autoPlay()" id="autoBtn"
+                  class="px-6 py-2.5 bg-purple-500 hover:bg-purple-600 text-white rounded-2xl font-semibold flex items-center gap-2 shadow-lg shadow-purple-200 transition-all active:scale-95">
+            <span>▶️ 自动播放</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 右侧：状态面板 -->
+      <div class="lg:col-span-5 space-y-6">
+        
+        <!-- 当前距离表格 -->
+        <div class="bg-white rounded-3xl shadow-xl p-6 border border-pink-100">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-2xl">📍</span>
+            <span class="font-bold text-pink-600 text-xl">当前最短距离</span>
+          </div>
+          <table class="w-full text-lg">
+            <thead>
+              <tr class="text-pink-400 text-sm">
+                <th class="text-left pb-2">地点</th>
+                <th class="text-right pb-2">最短距离</th>
+                <th class="text-right pb-2">路径</th>
+              </tr>
+            </thead>
+            <tbody id="distTable" class="font-medium text-pink-700"></tbody>
+          </table>
+        </div>
+
+        <!-- 日志 -->
+        <div class="bg-white rounded-3xl shadow-xl p-6 border border-pink-100 flex-1">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">📝</span>
+            <span class="font-bold text-pink-600 text-xl">运行日志</span>
+          </div>
+          <div id="log" class="h-56 overflow-auto text-sm space-y-2 pr-2 text-pink-600 custom-scroll"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最终结果提示 -->
+    <div id="resultBox" class="hidden mt-6 bg-gradient-to-r from-emerald-400 to-teal-400 text-white rounded-3xl p-6 shadow-xl flex items-center justify-between">
+      <div>
+        <div class="font-bold text-2xl">🎉 找到最短路径啦！</div>
+        <div id="resultText" class="text-lg mt-1 opacity-90"></div>
+      </div>
+      <div class="text-6xl">🏆</div>
+    </div>
+
+  </div>
+
+<script>
+// ==================== 可爱版 Dijkstra 可视化 ====================
+const svg = document.getElementById('graph');
+const logContainer = document.getElementById('log');
+const distTable = document.getElementById('distTable');
+const resultBox = document.getElementById('resultBox');
+const resultText = document.getElementById('resultText');
+
+let currentStep = 0;
+let isPlaying = false;
+
+// 节点位置（可爱排版）
+const nodes = {
+  'A': {x: 90, y: 160, label: 'A (家)'},
+  'C': {x: 90, y: 290, label: 'C'},
+  'B': {x: 290, y: 160, label: 'B'},
+  'D': {x: 430, y: 240, label: 'D (目的地)'}
+};
+
+// 边数据
+const edges = [
+  {from: 'A', to: 'B', weight: 5},
+  {from: 'A', to: 'C', weight: 1},
+  {from: 'C', to: 'B', weight: 2},
+  {from: 'B', to: 'D', weight: 1},
+  {from: 'C', to: 'D', weight: 4}
+];
+
+// 预设好的每一步状态（已经帮你算好了）
+const steps = [
+  // step 0: 初始
+  {
+    dist: {A: 0, B: Infinity, C: Infinity, D: Infinity},
+    prev: {A: null, B: null, C: null, D: null},
+    current: null,
+    visited: [],
+    log: "初始化完成！起点 A 的距离是 0，其他都是无穷大～",
+    updatedEdges: []
+  },
+  // step 1: 处理 A
+  {
+    dist: {A: 0, B: 5, C: 1, D: Infinity},
+    prev: {A: null, B: 'A', C: 'A', D: null},
+    current: 'A',
+    visited: ['A'],
+    log: "处理 A！更新了邻居 → B变成5，C变成1",
+    updatedEdges: ['A-B', 'A-C']
+  },
+  // step 2: 处理 C
+  {
+    dist: {A: 0, B: 3, C: 1, D: 5},
+    prev: {A: null, B: 'C', C: 'A', D: 'C'},
+    current: 'C',
+    visited: ['A', 'C'],
+    log: "处理 C！B 被更新成 3（更便宜了！），D 变成 5",
+    updatedEdges: ['C-B', 'C-D']
+  },
+  // step 3: 处理 B
+  {
+    dist: {A: 0, B: 3, C: 1, D: 4},
+    prev: {A: null, B: 'C', C: 'A', D: 'B'},
+    current: 'B',
+    visited: ['A', 'C', 'B'],
+    log: "处理 B！D 被更新成 4（又更便宜了！）",
+    updatedEdges: ['B-D']
+  },
+  // step 4: 处理 D（结束）
+  {
+    dist: {A: 0, B: 3, C: 1, D: 4},
+    prev: {A: null, B: 'C', C: 'A', D: 'B'},
+    current: 'D',
+    visited: ['A', 'C', 'B', 'D'],
+    log: "全部处理完成！最短路径已经找到啦～",
+    updatedEdges: []
+  }
+];
+
+// 绘制图形
+function drawGraph(highlightPath = false) {
+  svg.innerHTML = '';
+  
+  // 画边
+  edges.forEach(edge => {
+    const from = nodes[edge.from];
+    const to = nodes[edge.to];
+    
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", from.x);
+    line.setAttribute("y1", from.y);
+    line.setAttribute("x2", to.x);
+    line.setAttribute("y2", to.y);
+    line.setAttribute("stroke", "#f9a8d4");
+    line.setAttribute("stroke-width", "6");
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("class", "edge");
+    line.setAttribute("data-edge", `${edge.from}-${edge.to}`);
+    svg.appendChild(line);
+    
+    // 权重文字
+    const midX = (from.x + to.x) / 2;
+    const midY = (from.y + to.y) / 2 - 12;
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.setAttribute("x", midX);
+    text.setAttribute("y", midY);
+    text.setAttribute("fill", "#db2777");
+    text.setAttribute("font-size", "15");
+    text.setAttribute("font-weight", "700");
+    text.setAttribute("text-anchor", "middle");
+    text.textContent = edge.weight;
+    svg.appendChild(text);
+  });
+  
+  // 画节点
+  Object.keys(nodes).forEach(key => {
+    const n = nodes[key];
+    
+    // 外圈
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", n.x);
+    circle.setAttribute("cy", n.y);
+    circle.setAttribute("r", "28");
+    circle.setAttribute("fill", "#fce7f3");
+    circle.setAttribute("stroke", "#f472b6");
+    circle.setAttribute("stroke-width", "5");
+    circle.setAttribute("class", "node");
+    circle.setAttribute("data-node", key);
+    svg.appendChild(circle);
+    
+    // 节点文字
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", n.x);
+    label.setAttribute("y", n.y + 6);
+    label.setAttribute("fill", "#9d174d");
+    label.setAttribute("font-size", "22");
+    label.setAttribute("font-weight", "800");
+    label.setAttribute("text-anchor", "middle");
+    label.textContent = key;
+    svg.appendChild(label);
+  });
+}
+
+// 更新节点颜色
+function updateNodeStyles(visited, current) {
+  document.querySelectorAll('#graph .node').forEach(el => {
+    const nodeId = el.getAttribute('data-node');
+    el.classList.remove('current', 'visited');
+    
+    if (nodeId === current) {
+      el.setAttribute('fill', '#fef08c');
+      el.setAttribute('stroke', '#facc15');
+      el.classList.add('current');
+    } else if (visited.includes(nodeId)) {
+      el.setAttribute('fill', '#bbf7d0');
+      el.setAttribute('stroke', '#4ade80');
+      el.classList.add('visited');
+    } else {
+      el.setAttribute('fill', '#fce7f3');
+      el.setAttribute('stroke', '#f472b6');
+    }
+  });
+}
+
+// 更新距离表格
+function updateDistTable(dist) {
+  distTable.innerHTML = '';
+  const order = ['A', 'C', 'B', 'D'];
+  
+  order.forEach(node => {
+    const value = dist[node];
+    const display = value === Infinity ? '∞' : value;
+    
+    const row = document.createElement('tr');
+    row.className = 'border-t border-pink-100';
+    row.innerHTML = `
+      <td class="py-3 font-bold text-xl text-pink-700">${node}</td>
+      <td class="py-3 text-right font-extrabold text-3xl text-pink-600">${display}</td>
+      <td class="py-3 text-right text-sm text-pink-400">从 A</td>
+    `;
+    distTable.appendChild(row);
+  });
+}
+
+// 添加日志
+function addLog(message) {
+  const div = document.createElement('div');
+  div.className = 'log-item px-4 py-2.5 bg-pink-50 rounded-2xl text-pink-600 flex items-start gap-2';
+  div.innerHTML = `
+    <span class="mt-0.5">💬</span>
+    <span>${message}</span>
+  `;
+  logContainer.appendChild(div);
+  logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// 高亮被更新的边
+function highlightUpdatedEdges(edgeIds) {
+  // 先清除所有高亮
+  document.querySelectorAll('#graph .edge').forEach(el => {
+    el.classList.remove('updated');
+    el.setAttribute('stroke', '#f9a8d4');
+    el.setAttribute('stroke-width', '6');
+  });
+  
+  edgeIds.forEach(id => {
+    const el = document.querySelector(`[data-edge="${id}"]`);
+    if (el) {
+      el.classList.add('updated');
+      el.setAttribute('stroke', '#ec4899');
+      el.setAttribute('stroke-width', '8');
+      
+      // 0.8秒后恢复
+      setTimeout(() => {
+        if (el && !el.classList.contains('path')) {
+          el.classList.remove('updated');
+          el.setAttribute('stroke', '#f9a8d4');
+          el.setAttribute('stroke-width', '6');
+        }
+      }, 800);
+    }
+  });
+}
+
+// 最终高亮最短路径
+function highlightFinalPath() {
+  // A -> C -> B -> D
+  const pathEdges = ['A-C', 'C-B', 'B-D'];
+  
+  document.querySelectorAll('#graph .edge').forEach(el => {
+    const edgeId = el.getAttribute('data-edge');
+    if (pathEdges.includes(edgeId)) {
+      el.classList.add('path');
+      el.setAttribute('stroke', '#10b981');
+      el.setAttribute('stroke-width', '7');
+    }
+  });
+  
+  // 显示结果
+  resultBox.classList.remove('hidden');
+  resultText.innerHTML = `最短路径：<span class="font-bold">A → C → B → D</span>，总距离 <span class="font-extrabold text-3xl">4</span>`;
+}
+
+// 执行某一步
+function applyStep(stepIndex) {
+  const step = steps[stepIndex];
+  
+  // 更新表格
+  updateDistTable(step.dist);
+  
+  // 更新节点样式
+  updateNodeStyles(step.visited, step.current);
+  
+  // 日志
+  logContainer.innerHTML = '';
+  addLog(step.log);
+  
+  // 高亮更新的边
+  if (step.updatedEdges.length > 0) {
+    highlightUpdatedEdges(step.updatedEdges);
+  }
+  
+  // 如果是最后一步
+  if (stepIndex === steps.length - 1) {
+    setTimeout(() => {
+      highlightFinalPath();
+    }, 600);
+  }
+}
+
+// 下一步
+function nextStep() {
+  if (currentStep < steps.length - 1) {
+    currentStep++;
+    applyStep(currentStep);
+  } else {
+    // 已经到最后了
+    document.getElementById('nextBtn').disabled = true;
+    document.getElementById('nextBtn').classList.add('opacity-50');
+  }
+}
+
+// 自动播放
+function autoPlay() {
+  if (isPlaying) return;
+  isPlaying = true;
+  document.getElementById('autoBtn').disabled = true;
+  document.getElementById('autoBtn').classList.add('opacity-50');
+  
+  const interval = setInterval(() => {
+    if (currentStep < steps.length - 1) {
+      currentStep++;
+      applyStep(currentStep);
+    } else {
+      clearInterval(interval);
+      isPlaying = false;
+    }
+  }, 1400);
+}
+
+// 重置
+function resetDemo() {
+  currentStep = 0;
+  isPlaying = false;
+  logContainer.innerHTML = '';
+  resultBox.classList.add('hidden');
+  
+  document.getElementById('nextBtn').disabled = false;
+  document.getElementById('nextBtn').classList.remove('opacity-50');
+  document.getElementById('autoBtn').disabled = false;
+  document.getElementById('autoBtn').classList.remove('opacity-50');
+  
+  // 清除路径高亮
+  document.querySelectorAll('#graph .edge').forEach(el => {
+    el.classList.remove('path', 'updated');
+    el.setAttribute('stroke', '#f9a8d4');
+    el.setAttribute('stroke-width', '6');
+  });
+  
+  applyStep(0);
+}
+
+// 初始化
+function init() {
+  drawGraph();
+  applyStep(0); // 显示初始状态
+  
+  // 提示
+  setTimeout(() => {
+    const tip = document.createElement('div');
+    tip.className = 'text-center text-pink-400 text-sm mt-2';
+    tip.textContent = '👆 点击「下一步」或「自动播放」开始观看算法运行';
+    document.querySelector('#graph').parentNode.appendChild(tip);
+  }, 1200);
+}
+
+init();
+</script>
+</body>
+</html>
