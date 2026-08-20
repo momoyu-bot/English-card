@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>三核打捞机</title>
+<style>
+  :root{
+    --abyss:#08161E;
+    --deep:#0E2733;
+    --water:#143845;
+    --edge:#1F4E5C;
+    --foam:#E9E3D3;
+    --silt:#7C949D;
+    --brass:#C9A227;
+    --verdigris:#5FA8A0;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background: radial-gradient(120% 80% at 50% -10%, #17414F 0%, var(--deep) 38%, var(--abyss) 100%) fixed;
+    color:var(--foam); font-family:var(--sans); font-size:15px; line-height:1.7; min-height:100vh;
+  }
+  a{color:var(--verdigris)}
+  button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 26px 90px}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    padding-bottom:18px;border-bottom:1px solid var(--edge)}
+  .brand h1{margin:0;font-size:30px;letter-spacing:.34em;font-weight:600;text-indent:.34em}
+  .brand p{margin:7px 0 0;color:var(--silt);font-size:13px;letter-spacing:.04em}
+  .privacy{font-family:var(--mono);font-size:11px;color:var(--verdigris);
+    border:1px solid var(--edge);border-radius:2px;padding:7px 11px;letter-spacing:.06em;white-space:nowrap}
+
+  .dropzone{margin-top:44px;border:1px dashed var(--edge);border-radius:3px;
+    padding:70px 30px;text-align:center;transition:border-color .18s, background .18s;background:rgba(20,56,69,.28)}
+  .dropzone.hot{border-color:var(--brass);background:rgba(201,162,39,.07)}
+  .dropzone h2{margin:0 0 10px;font-size:19px;font-weight:500;letter-spacing:.06em}
+  .dropzone p{margin:0;color:var(--silt);font-size:13px}
+  .dropzone .pick{margin-top:24px;background:none;border:1px solid var(--brass);color:var(--brass);
+    padding:10px 26px;border-radius:2px;font-family:var(--mono);font-size:12px;letter-spacing:.16em}
+  .dropzone .pick:hover{background:var(--brass);color:var(--abyss)}
+  .hintlist{margin:30px auto 0;max-width:640px;text-align:left;font-size:12.5px;color:var(--silt);
+    font-family:var(--mono);line-height:2}
+  .hintlist b{color:var(--foam);font-weight:500}
+
+  #sonar{display:none;margin-top:40px;grid-template-columns:74px 1fr;gap:30px}
+  #sonar.on{display:grid}
+  .gauge{position:relative;border-left:1px solid var(--edge);height:340px}
+  .gauge .tick{position:absolute;left:-1px;width:14px;height:1px;background:var(--verdigris);opacity:.85}
+  .gauge .cursor{position:absolute;left:-5px;width:9px;height:9px;border-radius:50%;
+    background:var(--brass);transform:translateY(-4px);box-shadow:0 0 0 4px rgba(201,162,39,.18)}
+  .gauge .lbl{position:absolute;left:20px;font-family:var(--mono);font-size:10px;color:var(--silt);
+    transform:translateY(-.6em);letter-spacing:.08em}
+  .readout{font-family:var(--mono)}
+  .readout .big{font-size:44px;letter-spacing:.02em;color:var(--brass);line-height:1.1}
+  .readout .big small{font-size:15px;color:var(--silt);letter-spacing:.1em;margin-left:8px}
+  .readout .row{display:flex;gap:34px;flex-wrap:wrap;margin-top:22px}
+  .readout .cell span{display:block;font-size:10px;color:var(--silt);letter-spacing:.18em}
+  .readout .cell strong{font-size:22px;font-weight:500}
+  .readout .note{margin-top:26px;font-family:var(--sans);font-size:13px;color:var(--silt);max-width:52ch}
+
+  #deck{display:none}
+  #deck.on{display:block}
+  .toolbar{margin-top:38px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    padding-bottom:16px;border-bottom:1px solid var(--edge)}
+  .toolbar input[type=search]{flex:1;min-width:210px;background:rgba(8,22,30,.6);border:1px solid var(--edge);
+    color:var(--foam);padding:10px 13px;border-radius:2px;font-family:var(--sans);font-size:14px}
+  .toolbar input[type=search]::placeholder{color:#5C737C}
+  .seg{display:flex;border:1px solid var(--edge);border-radius:2px;overflow:hidden}
+  .seg button{background:none;border:0;padding:9px 15px;font-family:var(--mono);font-size:11.5px;
+    color:var(--silt);letter-spacing:.1em}
+  .seg button.sel{background:var(--edge);color:var(--foam)}
+  .act{background:none;border:1px solid var(--brass);color:var(--brass);padding:9px 16px;border-radius:2px;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em}
+  .act:hover{background:var(--brass);color:var(--abyss)}
+  .act[disabled]{opacity:.35;cursor:default}
+  .act[disabled]:hover{background:none;color:var(--brass)}
+
+  .count{margin:20px 0 6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);letter-spacing:.1em}
+  .item{border-bottom:1px solid rgba(31,78,92,.55);padding:17px 2px}
+  .item .head{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  .item .name{font-size:17px;font-weight:500;letter-spacing:.02em}
+  .item .name em{font-style:normal;color:var(--silt)}
+  .item .badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:2px 7px;border-radius:2px;
+    border:1px solid var(--edge);color:var(--silt)}
+  .item .badge.html{border-color:var(--verdigris);color:var(--verdigris)}
+  .item .meta{margin-top:6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);display:flex;gap:18px;flex-wrap:wrap}
+  .item .ops{margin-top:12px;display:flex;gap:9px;flex-wrap:wrap}
+  .item .ops button{background:none;border:1px solid var(--edge);color:var(--silt);padding:6px 13px;
+    border-radius:2px;font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+  .item .ops button:hover{border-color:var(--foam);color:var(--foam)}
+  .item pre{margin:12px 0 0;background:rgba(8,22,30,.62);border:1px solid var(--edge);border-radius:2px;
+    padding:13px 15px;overflow:auto;max-height:280px;font-family:var(--mono);font-size:12px;
+    color:#BFD3D8;line-height:1.65;white-space:pre-wrap;word-break:break-all}
+  .vers{margin-top:12px;border-left:1px solid var(--edge);padding-left:15px;display:none}
+  .vers.on{display:block}
+  .vers .v{display:flex;gap:14px;align-items:baseline;padding:6px 0;font-family:var(--mono);font-size:11.5px;
+    color:var(--silt);flex-wrap:wrap}
+  .vers .v button{background:none;border:0;color:var(--verdigris);padding:0;font-family:var(--mono);
+    font-size:11.5px;text-decoration:underline;text-underline-offset:3px}
+
+  .empty{padding:56px 0;text-align:center;color:var(--silt);font-size:14px}
+  .err{margin-top:26px;border:1px solid #8A4B3C;background:rgba(138,75,60,.14);padding:15px 18px;
+    border-radius:2px;font-size:13.5px;color:#F0C9BE}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--edge);
+    font-family:var(--mono);font-size:11px;color:#4E656E;letter-spacing:.12em;text-align:center}
+
+  @media (max-width:640px){
+    .wrap{padding:24px 16px 60px}
+    .brand h1{font-size:23px;letter-spacing:.24em;text-indent:.24em}
+    #sonar.on{grid-template-columns:1fr}
+    .gauge{display:none}
+    .readout .big{font-size:34px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>三核打捞机</h1>
+      <p>自动识别 Gemini、ChatGPT 与 Claude 的导出档案，把赛博走私件捞回来</p>
+    </div>
+    <div class="privacy">文件不上传 · 全部在本机浏览器内完成</div>
+  </header>
+
+  <div class="dropzone" id="dz">
+    <h2>把聊天记录文件拖进来</h2>
+    <p>支持 ChatGPT/Claude 的 .json，也支持 Gemini 的 .html。<br>1GB 也没关系，按块读，不会一次性塞进内存。</p>
+    <button class="pick" id="pick">选择文件</button>
+    <input type="file" id="file" accept=".json,.html,.htm" hidden>
+    <div class="hintlist">
+      <div><b>捞什么</b>　所有回复里的完整 HTML 文档，以及 React/JSX 组件</div>
+      <div><b>怎么归拢</b>　同一个作品改过很多版，会按页面标题合成一组，默认给最后一版</div>
+      <div><b>拿走</b>　单件下载，或把所有最终版打包成一个 zip</div>
+    </div>
+  </div>
+
+  <div id="sonar">
+    <div class="gauge" id="gauge">
+      <div class="cursor" id="cursor" style="top:0"></div>
+    </div>
+    <div class="readout">
+      <div class="big"><span id="pct">0</span><small>%</small></div>
+      <div class="row">
+        <div class="cell"><span>已吞噬</span><strong id="mb">0</strong></div>
+        <div class="cell"><span>开箱批次</span><strong id="nconv">0</strong></div>
+        <div class="cell"><span>捞到网页/应用</span><strong id="nhtml">0</strong></div>
+        <div class="cell"><span>杂项代码</span><strong id="ncode">0</strong></div>
+      </div>
+      <div class="note" id="note">正在下潜。打捞机正在识别底层格式，提取你的战利品...</div>
+    </div>
+  </div>
+
+  <div id="deck">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="搜作品名、对话标题，或代码里的一句话">
+      <div class="seg">
+        <button id="fHtml">只看网页</button>
+        <button id="fAll" class="sel">全部代码</button>
+      </div>
+      <button class="act" id="zip">打包最终版</button>
+      <button class="act" id="mdlist">导出清单</button>
+    </div>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </div>
+
+  <div id="err"></div>
+  <footer>捞上来的东西记得晒一晒再收起来</footer>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const CHUNK=8*1024*1024;
+let GROUPS=[], VIS=[], FILTER="all", ALL_ITEMS=[]; // 默认直接显示全部代码！
+const dz=$("dz"), gauge=$("gauge"), cursor=$("cursor");
+
+class Splitter{
+  constructor(){ this.depth=0; this.inStr=false; this.esc=false; this.objStart=-1; this.done=false; }
+  feed(bytes, base, out){
+    const n=bytes.length;
+    for(let i=0;i<n;i++){
+      const c=bytes[i];
+      if(this.inStr){
+        if(this.esc) this.esc=false;
+        else if(c===0x5C) this.esc=true;
+        else if(c===0x22) this.inStr=false;
+        continue;
+      }
+      if(c===0x22){ this.inStr=true; continue; }
+      if(c===0x7B||c===0x5B){
+        if(this.depth===0) this.objStart=base+i;
+        this.depth++;
+      }else if(c===0x7D||c===0x5D){
+        this.depth--;
+        if(this.depth===0&&this.objStart>=0){ out.push([this.objStart, base+i+1]); this.objStart=-1; }
+        else if(this.depth<0){ this.done=true; return; }
+      }
+    }
+  }
+}
+
+function findArrayStart(head){
+  for(let i=0;i<head.length;i++){
+    if(head[i]===0x5B) return i+1; // 秒速找到 JSON 数组开头的 '['
+    if(head[i]===0x7B) return i;   // 兜底：如果是单个对象的 '{'
+  }
+  return -1;
+}
+
+const FENCE=/(^|\n)[ \t]*(`{3,}|~{3,})[ \t]*([A-Za-z0-9_+#.-]*)[ \t]*\n([\s\S]*?)\n?[ \t]*\2[ \t]*(?=\n|$)/g;
+function fences(text){
+  const out=[]; let m; FENCE.lastIndex=0;
+  while((m=FENCE.exec(text))!==null) out.push({lang:(m[3]||"").toLowerCase(), code:m[4]});
+  return out;
+}
+
+function isFullHtml(code, lang, source){
+  if(/<!doctype\s+html|<html[\s>]|<body[\s>]|<svg[\s>]/i.test(code)) return true;
+  lang = (lang || "").toLowerCase();
+  if(["html", "svg", "jsx", "tsx", "react", "vue"].includes(lang)) return true;
+  if(["js", "javascript", "ts", "typescript"].includes(lang) && 
+     (/import\s+React/i.test(code) || /export\s+default\s+/i.test(code) || /className=/i.test(code) || /<div/i.test(code))) return true;
+  if(source === "claude" || /<antArtifact/i.test(code)) return true;
+  return false;
+}
+
+function htmlTitle(code){
+  const m=code.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if(!m) return "";
+  return m[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,120);
+}
+const MAX_KEEP = 400*1024; 
+
+function stripWrapper(code){
+  const m=code.match(/<!doctype\s+html|<html[\s>]/i);
+  if(!m) return null;
+  const s0=m.index;
+  const e0=code.toLowerCase().lastIndexOf("</html>");
+  if(e0<0) return null;
+  const end=e0+7;
+  const head=code.slice(0,s0), tail=code.slice(end);
+  if(!head.trim()&&!tail.trim()) return null;   
+  return {html:code.slice(s0,end), shell:head+"\n"+tail};
+}
+
+function originalName(shell){
+  let m=shell.match(/["'`]([^"'`\n]{1,200}\.html?)["'`]/i);
+  let p=m?m[1]:"";
+  if(!p){ m=shell.match(/([A-Za-z0-9_\-.]{2,60}\.html?)\b/); p=m?m[1]:""; }
+  if(!p) return "";
+  p=p.split(/[\/\\]/).pop();
+  return (p&&p.length<=70)?p:"";
+}
+
+function extractFromConv(conv){
+  const found=[];
+  const push=(code,lang,t,source)=>{
+    if(typeof code!=="string" || code.trim().length<40) return;
+    const full=isFullHtml(code, lang, source);
+    let clean=code, raw="", origName="";
+    if(full){
+      const st=stripWrapper(code);
+      if(st){ raw=code.length>MAX_KEEP?code.slice(0,MAX_KEEP):code; clean=st.html; origName=originalName(st.shell); }
+    }
+    found.push({
+      code: clean.length>MAX_KEEP ? clean.slice(0,MAX_KEEP) : clean,
+      raw, origName, truncated: clean.length>MAX_KEEP,
+      bytes: clean.length, lang: full?"html":(lang||"txt"), t: t||0, source, full,
+      title: full?htmlTitle(clean):""
+    });
+  };
+
+  // ChatGPT 模式
+  if(conv.mapping){
+    for(const id in conv.mapping){
+      const node=conv.mapping[id]; const msg=node&&node.message;
+      if(!msg) continue;
+      const role=msg.author&&msg.author.role;
+      if(role!=="assistant"&&role!=="tool") continue;
+      const c=msg.content||{}; const t=msg.create_time||0; const recip=msg.recipient||"";
+      let texts=[];
+      if(Array.isArray(c.parts)) texts=c.parts.filter(p=>typeof p==="string");
+      else if(typeof c.text==="string") texts=[c.text];
+
+      if(recip.indexOf("canmore")===0){
+        let got=false;
+        for(const raw of texts){
+          try{
+            const j=JSON.parse(raw);
+            if(j&&typeof j.content==="string"){ push(j.content,"canvas",t,"canvas"); got=true; }
+            if(j&&Array.isArray(j.updates)) for(const u of j.updates)
+              if(u&&typeof u.replacement==="string"){ push(u.replacement,"canvas",t,"canvas"); got=true; }
+          }catch(e){}
+        }
+        if(got) continue;
+      }
+      if(c.content_type==="code"&&typeof c.text==="string"){ push(c.text,"code",t,"tool"); continue; }
+      for(const raw of texts) for(const b of fences(raw)) push(b.code,b.lang,t,"chatgpt");
+    }
+  } 
+  // Claude 模式
+  else if (conv.chat_messages) {
+    for (const msg of conv.chat_messages) {
+       if (msg.sender !== "assistant") continue;
+       const text = msg.text || "";
+       const t = new Date(msg.created_at || msg.updated_at || 0).getTime() / 1000;
+       
+       for (const b of fences(text)) push(b.code, b.lang, t, "claude");
+       
+       const artRegex = /<antArtifact[^>]*>([\s\S]*?)<\/antArtifact>/gi;
+       let mArt;
+       while((mArt = artRegex.exec(text)) !== null) push(mArt[1], "jsx", t, "claude");
+    }
+  }
+  found.sort((a,b)=>a.t-b.t);
+  return found;
+}
+
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function makeZip(files){
+  const enc=new TextEncoder(); const chunks=[]; const central=[]; let offset=0;
+  for(const f of files){
+    const nameB=enc.encode(f.name); const crc=crc32(f.data);
+    const lh=new Uint8Array(30+nameB.length); const dv=new DataView(lh.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true); dv.setUint16(6,0x0800,true);
+    dv.setUint16(8,0,true); dv.setUint16(10,0,true); dv.setUint16(12,0x21,true);
+    dv.setUint32(14,crc,true); dv.setUint32(18,f.data.length,true); dv.setUint32(22,f.data.length,true);
+    dv.setUint16(26,nameB.length,true); dv.setUint16(28,0,true); lh.set(nameB,30);
+    chunks.push(lh,f.data);
+    const ch=new Uint8Array(46+nameB.length); const cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true); cv.setUint16(10,0,true); cv.setUint16(12,0,true);
+    cv.setUint16(14,0x21,true); cv.setUint32(16,crc,true);
+    cv.setUint32(20,f.data.length,true); cv.setUint32(24,f.data.length,true);
+    cv.setUint16(28,nameB.length,true); cv.setUint32(42,offset,true); ch.set(nameB,46);
+    central.push(ch); offset+=lh.length+f.data.length;
+  }
+  let cdSize=0; for(const c of central) cdSize+=c.length;
+  const end=new Uint8Array(22); const ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
+  ev.setUint32(12,cdSize,true); ev.setUint32(16,offset,true);
+  return new Blob([...chunks,...central,end],{type:"application/zip"});
+}
+
+$("pick").onclick=()=>$("file").click();
+dz.onclick=e=>{ if(e.target===dz||e.target.tagName==="H2"||e.target.tagName==="P") $("file").click(); };
+$("file").onchange=e=>{ if(e.target.files[0]) start(e.target.files[0]); };
+["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("hot");}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("hot");}));
+dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) start(f); });
+
+function fail(msg){
+  $("err").innerHTML='<div class="err">'+msg+"</div>";
+  $("sonar").classList.remove("on"); dz.style.display="";
+}
+const fmtMB=n=>(n/1048576).toFixed(1)+" MB";
+function fmtDate(ts){
+  if(!ts) return "时间不详";
+  const d=new Date(ts*1000);
+  return d.getFullYear()+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0");
+}
+
+async function start(file){
+  $("err").innerHTML=""; dz.style.display="none";
+  $("sonar").classList.add("on"); $("deck").classList.remove("on");
+  gauge.querySelectorAll(".tick,.lbl").forEach(n=>n.remove());
+
+  const t0=Date.now();
+  let nconv=0, nhtml=0, ncode=0, bad=0;
+  const all=[];
+
+  if (file.name.endsWith(".html") || file.name.endsWith(".htm")) {
+    $("note").innerHTML = "探测到 <b>Gemini HTML</b> 档案，启动暴力反转义与代码捕获引擎...";
+    const text = await file.text();
+    const unescaped = text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/<br\s*\/?>/gi, "\n");
+    const blocks = fences(unescaped);
+    
+    blocks.forEach((b, i) => {
+      const full = isFullHtml(b.code, b.lang, "gemini");
+      let clean = b.code, raw = "", origName = "Gemini_代码块_" + (i+1);
+      if(full){
+        const st = stripWrapper(b.code);
+        if(st){ raw = b.code; clean = st.html; origName = originalName(st.shell) || origName; }
+      }
+      all.push({
+        code: clean, raw: raw, origName: origName, truncated: false, bytes: clean.length, lang: full ? "html" : (b.lang || "txt"),
+        t: Date.now() / 1000, source: "gemini", full: full, title: full ? htmlTitle(clean) : "", conv: "Gemini 深度对弈记录", convTime: Date.now() / 1000
+      });
+      if (full) {
+        nhtml++;
+        const tk = document.createElement("div"); tk.className = "tick"; tk.style.top = (Math.random() * 100).toFixed(2) + "%"; gauge.appendChild(tk);
+      } else ncode++;
+    });
+    nconv = 1;
+    $("pct").textContent = "100"; $("mb").textContent = fmtMB(file.size);
+    $("nconv").textContent = nconv;
+    $("nhtml").textContent = nhtml;
+    $("ncode").textContent = ncode;
+    cursor.style.top = "100%";
+  } else {
+    // JSON 分支 (ChatGPT / Claude)
+    const total=file.size;
+    let head;
+    try{ head=new Uint8Array(await file.slice(0,Math.min(total,8*1024*1024)).arrayBuffer()); }
+    catch(e){ return fail("无法读取文件："+e.message); }
+
+    const start0=findArrayStart(head);
+    if(start0<0) return fail("不是标准的 JSON 数组格式，打捞失败。");
+
+    const sp=new Splitter();
+    const dec=new TextDecoder("utf-8");
+    let pending=new Uint8Array(0), pendingBase=start0;
+    const lastTickAt={v:-99};
+
+    for(let pos=start0; pos<total && !sp.done; pos+=CHUNK){
+      let chunk;
+      try{ chunk=new Uint8Array(await file.slice(pos,Math.min(pos+CHUNK,total)).arrayBuffer()); }
+      catch(e){ return fail("读取中断："+e.message); }
+
+      const merged=new Uint8Array(pending.length+chunk.length);
+      merged.set(pending); merged.set(chunk,pending.length);
+      pending=merged;
+
+      const ranges=[];
+      sp.feed(chunk,pos,ranges);
+
+      let since=0;
+      for(const [s,e] of ranges){
+        nconv++;
+        if(++since>=40){ since=0; await new Promise(r=>setTimeout(r,0)); }
+        let conv=null;
+        try{ conv=JSON.parse(dec.decode(pending.subarray(s-pendingBase,e-pendingBase))); }
+        catch(err){ bad++; continue; }
+        const got=extractFromConv(conv);
+        if(!got.length) continue;
+        const convTitle=(conv.title||conv.name||"未命名对话").slice(0,90);
+        const convTime=conv.create_time||conv.update_time||conv.created_at||0;
+        for(const g of got){
+          g.conv=convTitle; g.convTime=convTime; g.pos=s/total;
+          all.push(g);
+          if(g.full){
+            nhtml++;
+            if(g.pos-lastTickAt.v>0.006){
+              lastTickAt.v=g.pos;
+              const tk=document.createElement("div"); tk.className="tick"; tk.style.top=(g.pos*100).toFixed(2)+"%"; gauge.appendChild(tk);
+            }
+          } else ncode++;
+        }
+      }
+      const keepFrom = sp.objStart>=0 ? sp.objStart : (pos+chunk.length);
+      pending=pending.slice(keepFrom-pendingBase); pendingBase=keepFrom;
+
+      const done=Math.min(pos+chunk.length,total); const p=done/total;
+      $("pct").textContent=(p*100).toFixed(0); $("mb").textContent=fmtMB(done);
+      $("nconv").textContent=nconv; $("nhtml").textContent=nhtml; $("ncode").textContent=ncode;
+      cursor.style.top=(p*100).toFixed(2)+"%";
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+
+  // 渲染最终状态
+  const secs=((Date.now()-t0)/1000).toFixed(0);
+  $("note").innerHTML = `打捞完毕，耗时 ${secs} 秒。开箱 <b>${nconv}</b> 段记录，捕获 <b>${nhtml}</b> 份网页/组件，杂项代码 ${ncode} 段。`;
+  $("note").querySelectorAll("b").forEach(b=>b.style.color="var(--brass)");
+
+  group(all);
+  render();
+  $("deck").classList.add("on");
+}
+
+function group(all){
+  const map=new Map();
+  for(const it of all){
+    const key = it.title ? "T:"+it.title : (it.full ? "C:"+it.conv+"|html" : "C:"+it.conv+"|"+it.lang);
+    if(!map.has(key)) map.set(key,{key,title:it.title,conv:it.conv,lang:it.lang,full:it.full,vers:[]});
+    const g=map.get(key);
+    g.vers.push(it);
+    if(it.full) g.full=true;
+  }
+  GROUPS=[...map.values()];
+  for(const g of GROUPS){
+    g.vers.sort((a,b)=>(a.t||a.convTime)-(b.t||b.convTime));
+    g.last=g.vers[g.vers.length-1];
+    g.name=g.title||g.conv;
+    g.origName=(g.vers.find(v=>v.origName)||{}).origName||"";
+  }
+  GROUPS.sort((a,b)=>{
+    if(a.full!==b.full) return a.full?-1:1;
+    return (b.last.t||b.last.convTime)-(a.last.t||a.last.convTime);
+  });
+}
+
+function safeName(s){ return (s||"未命名").replace(/[\\\/:*?"<>|\u0000-\u001F]/g,"_").replace(/\s+/g," ").trim().slice(0,70); }
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function visible(){
+  const q=$("q").value.trim().toLowerCase();
+  return GROUPS.filter(g=>{
+    if(FILTER==="html"&&!g.full) return false;
+    if(!q) return true;
+    if(g.name.toLowerCase().includes(q) || g.conv.toLowerCase().includes(q)) return true;
+    return g.vers.some(v=>v.code.toLowerCase().includes(q));
+  });
+}
+
+function render(){
+  const list=$("list"); const gs=visible(); VIS=gs;
+  $("count").textContent = gs.length ? gs.length+" 件 · 共 "+gs.reduce((s,g)=>s+g.vers.length,0)+" 个版本" : "";
+  $("zip").disabled = !gs.length;
+  if(!gs.length){ list.innerHTML='<div class="empty">这里没有。换个词搜搜看。</div>'; return; }
+  list.innerHTML = gs.map((g,i)=>{
+    const v=g.last;
+    return '<div class="item" data-i="'+i+'">'
+      + '<div class="head">'
+      +   '<span class="name">'+esc(g.name)+(g.title?"":' <em>（无标题，用对话名代替）</em>')+'</span>'
+      +   '<span class="badge'+(g.full?" html":"")+'">'+esc(g.full?"网页/组件":v.lang.toUpperCase())+'</span>'
+      +   (g.vers.length>1?'<span class="badge">'+g.vers.length+' 版</span>':'')
+      +   (v.source==="canvas"?'<span class="badge">CANVAS</span>':'')
+      + '</div>'
+      + '<div class="meta">'
+      +   '<span>'+esc(g.conv)+'</span>'
+      +   '<span>'+fmtDate(v.t||v.convTime)+'</span>'
+      +   '<span>'+(v.bytes/1024).toFixed(1)+' KB</span>'
+      +   (v.truncated?'<span style="color:var(--brass)">正文过长，只留前 400KB</span>':'')
+      +   (g.origName?'<span style="color:var(--verdigris)">原名 '+esc(g.origName)+'</span>':'')
+      + '</div>'
+      + '<div class="ops">'
+      +   (g.full?'<button data-a="open">浏览器内预览</button>':'')
+      +   '<button data-a="dl">下载</button>'
+      +   '<button data-a="peek">看代码</button>'
+      +   '<button data-a="copy">复制</button>'
+      +   (g.vers.length>1?'<button data-a="vers">全部 '+g.vers.length+' 版</button>':'')
+      + '</div>'
+      + '<div class="vers" data-vers>'+g.vers.map((x,j)=>
+          '<div class="v"><span>第 '+(j+1)+' 版</span><span>'+fmtDate(x.t||x.convTime)+'</span>'
+          +'<span>'+(x.bytes/1024).toFixed(1)+' KB</span>'
+          +'<button data-a="dlv" data-j="'+j+'">下载这版</button>'
+          +(x.full?'<button data-a="openv" data-j="'+j+'">预览这版</button>':'')+'</div>').join("")
+      + '</div></div>';
+  }).join("");
+}
+
+$("list").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-a]"); if(!btn) return;
+  const item=e.target.closest(".item"); const g=VIS[+item.dataset.i];
+  const a=btn.dataset.a; const j=btn.dataset.j!==undefined?+btn.dataset.j:null;
+  const v = j!==null ? g.vers[j] : g.last;
+  const base = g.origName ? g.origName.replace(/\.html?$/i,"") : safeName(g.name);
+  const fname = base+(j!==null?"_v"+(j+1):"")+(v.full?".html":"."+(v.lang==="txt"?"txt":v.lang));
+
+  if(a==="open"||a==="openv"){
+    const url=URL.createObjectURL(new Blob([v.code],{type:"text/html;charset=utf-8"}));
+    window.open(url,"_blank"); setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+  else if(a==="dl"||a==="dlv"){
+    const url=URL.createObjectURL(new Blob([v.code],{type:"text/plain;charset=utf-8"}));
+    const link=document.createElement("a"); link.href=url; link.download=fname; link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }
+  else if(a==="peek"){
+    let pre=item.querySelector("pre");
+    if(pre){ pre.remove(); btn.textContent="看代码"; }
+    else{ pre=document.createElement("pre"); pre.textContent=v.code; item.appendChild(pre); btn.textContent="收起"; }
+  }
+  else if(a==="copy"){
+    navigator.clipboard.writeText(v.code).then(
+      ()=>{btn.textContent="已复制";setTimeout(()=>btn.textContent="复制",1600);},
+      ()=>{btn.textContent="复制失败";setTimeout(()=>btn.textContent="复制",1600);}
+    );
+  }
+  else if(a==="vers"){ item.querySelector("[data-vers]").classList.toggle("on"); }
+});
+
+$("mdlist").onclick=()=>{
+  const gs=VIS; if(!gs.length) return;
+  const lines=["# 打捞清单","","共 "+gs.length+" 件，"+gs.reduce((s,g)=>s+g.vers.length,0)+" 个版本。",""];
+  gs.forEach((g,i)=>{
+    const v=g.last; lines.push("## "+(i+1)+". "+g.name); lines.push("- 来自对话："+g.conv);
+    lines.push("- 最后一版："+fmtDate(v.t||v.convTime)+" · "+(v.bytes/1024).toFixed(1)+" KB · 共 "+g.vers.length+" 版");
+    if(g.origName) lines.push("- 当年的文件名："+g.origName);
+    if(v.source==="canvas") lines.push("- 出处：Canvas"); lines.push("");
+  });
+  const url=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/markdown;charset=utf-8"}));
+  const link=document.createElement("a"); link.href=url; link.download="打捞清单.md"; link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+};
+
+$("q").addEventListener("input",render);
+$("fHtml").onclick=()=>{FILTER="html";$("fHtml").classList.add("sel");$("fAll").classList.remove("sel");render();};
+$("fAll").onclick=()=>{FILTER="all";$("fAll").classList.add("sel");$("fHtml").classList.remove("sel");render();};
+
+$("zip").onclick=()=>{
+  const gs=VIS; if(!gs.length) return;
+  const enc=new TextEncoder(); const used=new Set();
+  const files=gs.map(g=>{
+    const v=g.last;
+    let base=g.origName?safeName(g.origName.replace(/\.html?$/i,"")):safeName(g.name);
+    let name=base+(v.full?".html":"."+(v.lang==="txt"?"txt":v.lang));
+    let k=2; while(used.has(name)){ name=base+"_"+k+(v.full?".html":".txt"); k++; }
+    used.add(name); return {name,data:enc.encode(v.code)};
+  });
+  const blob=makeZip(files); const url=URL.createObjectURL(blob);
+  const link=document.createElement("a"); link.href=url; link.download="三核打捞机_最终版.zip"; link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),8000);
+};
+</script>
+</body>
+</html>
