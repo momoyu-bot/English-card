@@ -1,0 +1,51 @@
+# 每次 push 之后自动重新生成首页清单。
+#
+# 为什么要有这个：首页不再在打开时去问 GitHub 有哪些网页，清单是写死在
+# index.html 里的。写死的东西会过期——除非有人每次加页面都记得手动更新。
+# 这个工作流就是替代"记得"这件事：加了页面、删了页面、改了显示名，
+# push 上来之后它自己把清单重算一遍。
+#
+# 注意：用 GITHUB_TOKEN 推送不会再次触发工作流，所以不会无限循环。
+
+name: 重新生成首页清单
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.html'
+      - 'tools/build_index.py'
+      - '.github/workflows/build-index.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-index
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 生成清单
+        run: python3 tools/build_index.py
+
+      - name: 有变化就提交回去
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "index.html 无变化，不提交"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "自动更新首页清单"
+          git push
