@@ -92,6 +92,7 @@ DISPLAY_NAME = {
     "grok/nuonuo-lullaby.html":                       "糯糯的哄睡故事 · 纯文字",
     "grok/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
     "gemini/系统性能监控面板 - System Monitor.html":   "系统性能监控面板 · gemini 版",
+    "gemini/gemini误判user意图.html":                  "Deep Archive · 误判",
 }
 
 # 二级分类：按「什么时候会点开」切。
@@ -170,6 +171,7 @@ CATEGORY = {
     'gemini/Unsigned 雾中驿站.html': ['哄睡'],
     'gemini/Widget Shell V2.html': ['盲盒'],
     'gemini/friends-listening-sop.html': ['盲盒'],
+    'gemini/gemini误判user意图.html': ['盲盒'],
     'gemini/gemini哄睡.html': ['哄睡'],
     'gemini/mo.exe 赛博老赖纪念卡.html': ['赛博购物车'],
     'gemini/root@production-server.html': ['障眼法'],

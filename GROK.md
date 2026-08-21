@@ -24,7 +24,9 @@ Grok 从 CC 会话上限处接着做。首页视觉改回米白（`cc2c7ad` 那�
 - 一个文件可以进两档。现在双属只有 3 个：
   `Catch The Dreams`、`好梦通行证`、`晚安捕梦`。
 - `claude/宝的摸鱼小屋.html` 的 U+00A0 缩进已换成普通空格，竖排修好了。
-- `女仆小螃蟹 Tamagotchi 小机.html` 已从 `claude/` 挪到 `grok/`，文件里有出处注释。
+- `gemini/gemini误判user意图.html`（Deep Archive）已入仓，进 gemini → 盲盒。
+  她在给总页找 vibe，gemini 做成深海哄睡。和 Grok 第五轮同一类误判。
+  这页本身不是给总页用的模板。
 - 清单仍由 `tools/build_index.py` 生成。分类只改 `CATEGORY` 表，不要手改
   `<!-- LIST:BEGIN -->` 到 `<!-- LIST:END -->`。
 - 标题「宝的英语打卡小页面」、页脚「慢慢来，一天一张就够了」没动，也请继续别动。
