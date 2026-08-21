@@ -87,8 +87,8 @@ Grok 把首页改成今晚见的夜色（暖褐底、宋体、发条金）。她
 
 ## 还没做、但不是现在必须
 
-- **JSX → 独立 HTML**：Chat 提过两页（Clawd 的书房、Mogotchi）。
-  这份对话里源码没送来，仓库里也没有 `.jsx`。没源码就先搁着。
+- **JSX → 独立 HTML**：已完成。`claude/Mogotchi.html`、`claude/Clawd的书房.html`，进小游戏。
+  存档改 localStorage。Clawd 喂话在公开页没有密钥，用本地短句。
 - **分类微调**：表是按文件名猜的。她若说某页放错，只改 `CATEGORY`。
 - **没有新的打捞/导入任务。**
 

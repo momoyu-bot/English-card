@@ -93,6 +93,8 @@ DISPLAY_NAME = {
     "grok/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
     "gemini/系统性能监控面板 - System Monitor.html":   "系统性能监控面板 · gemini 版",
     "gemini/gemini误判user意图.html":                  "Deep Archive · 误判",
+    "claude/Mogotchi.html":                            "Mogotchi",
+    "claude/Clawd的书房.html":                         "Clawd 的书房",
 }
 
 # 二级分类：按「什么时候会点开」切。
@@ -107,6 +109,8 @@ SUBFOLDER_CAT = {
 }
 
 CATEGORY = {
+    'claude/Clawd的书房.html': ['小游戏'],
+    'claude/Mogotchi.html': ['小游戏'],
     'claude/Copilot 的小鸡饲养观察页.html': ['小游戏'],
     'claude/Grok LLM Inference Cost Simulator.html': ['障眼法'],
     'claude/The Night Train.html': ['哄睡'],
