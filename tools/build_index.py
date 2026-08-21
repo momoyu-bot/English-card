@@ -93,7 +93,7 @@ DISPLAY_NAME = {
     "grok/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
     "gemini/系统性能监控面板 - System Monitor.html":   "系统性能监控面板 · gemini 版",
     "gemini/gemini误判user意图.html":                  "Deep Archive · 误判",
-    "claude/Mogotchi.html":                            "Mogotchi",
+    "claude/Mogotchi.html":                            "Mogotchi · Clawd",
     "claude/Clawd的书房.html":                         "Clawd 的书房",
 }
 
