@@ -21,13 +21,17 @@ BEGIN = "<!-- LIST:BEGIN 由 tools/build_index.py 自动生成，不要手改 --
 END = "<!-- LIST:END -->"
 
 # 分组顺序。没列到的目录排在后面，按名字排。
-ORDER = ["claude", "gemini", "gemini/失误捞claude鱼", "grok", "copilot", "gpt", "unsigned"]
+ORDER = ["claude", "gemini", "grok", "copilot", "gpt", "unsigned"]
+
+# 子目录在首页上归到哪个一级（文件不搬家，文件夹仍记出处）
+FOLDER_ALIAS = {
+    "gemini/失误捞claude鱼": "gemini",
+}
 
 # 每个目录一种低饱和度的色，只用在悬停背景和小圆点上。
 PALETTE = {
     "claude":                 ("#C3AD90", "rgba(195,173,144,.11)"),
     "gemini":                 ("#9CB8B3", "rgba(156,184,179,.12)"),
-    "gemini/失误捞claude鱼":   ("#8FA9A4", "rgba(143,169,164,.12)"),
     "grok":                   ("#ABA2B6", "rgba(171,162,182,.12)"),
     "copilot":                ("#A1B0BE", "rgba(161,176,190,.12)"),
     "gpt":                    ("#AAB08E", "rgba(170,176,142,.12)"),
@@ -90,6 +94,223 @@ DISPLAY_NAME = {
     "gemini/系统性能监控面板 - System Monitor.html":   "系统性能监控面板 · gemini 版",
 }
 
+# 二级分类：按「什么时候会点开」切。
+# 一级是哪个小机，默认全折叠；点开才看到二级。
+# 一个文件可以属于两个分类。没写进表的默认「盲盒」。
+# unsigned 只有一级，平铺。
+# gemini/失误捞claude鱼/ 不单独成一级，归进 gemini → 打捞机。
+CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "赛博购物车", "科普", "凭证", "障眼法", "打捞机", "盲盒"]
+FLAT_FOLDERS = {"unsigned"}
+SUBFOLDER_CAT = {
+    "gemini/失误捞claude鱼": "打捞机",
+}
+
+CATEGORY = {
+    'claude/Copilot 的小鸡饲养观察页.html': ['小游戏'],
+    'claude/Grok LLM Inference Cost Simulator.html': ['障眼法'],
+    'claude/The Night Train.html': ['哄睡'],
+    'claude/friends-listening-plan.html': ['盲盒'],
+    'claude/mo.exe 专属解压舱.html': ['摸鱼'],
+    'claude/shop-scene-reading-card.html': ['盲盒'],
+    'claude/七夕购物车.html': ['赛博购物车'],
+    'claude/下班.html': ['摸鱼'],
+    'claude/今晚有雾.html': ['哄睡'],
+    'claude/今晚见.html': ['哄睡'],
+    'claude/关键词报表找茬.html': ['障眼法'],
+    'claude/周一摸鱼老板键.html': ['摸鱼'],
+    'claude/哄睡小宇宙.html': ['哄睡'],
+    'claude/多儿下班了.html': ['摸鱼'],
+    'claude/宝宝的睡前哄睡小故事.html': ['哄睡'],
+    'claude/宝的摸鱼小屋.html': ['摸鱼'],
+    'claude/宝的放松小游戏 · 摸摸小猫咪.html': ['小游戏'],
+    'claude/宝，睡吧.html': ['哄睡'],
+    'claude/小狐狸的篝火.html': ['哄睡'],
+    'claude/工作日常 - 数据报表.html': ['障眼法'],
+    'claude/慢慢吃.html': ['哄睡'],
+    'claude/打捞机001.html': ['打捞机'],
+    'claude/打捞机002.html': ['打捞机'],
+    'claude/打捞机003.html': ['打捞机'],
+    'claude/打烊之后.html': ['赛博购物车'],
+    'claude/打烊夜数羊.html': ['哄睡'],
+    'claude/摸鱼大师五分钟下班.html': ['摸鱼'],
+    'claude/数羊.html': ['哄睡'],
+    'claude/晚安-哄睡小文件.html': ['哄睡'],
+    'claude/晚安小窗.html': ['哄睡'],
+    'claude/晚安邮局.html': ['哄睡'],
+    'claude/最后一扇窗.html': ['哄睡'],
+    'claude/最后一片叶子·馆藏卡.html': ['凭证'],
+    'claude/月亮值夜班.html': ['哄睡'],
+    'claude/果冻小卡.html': ['凭证'],
+    'claude/熄灯.html': ['哄睡'],
+    'claude/系统性能监控面板 - System Monitor.html': ['障眼法'],
+    'claude/裁云.html': ['哄睡'],
+    'claude/赛博老赖.html': ['赛博购物车'],
+    'claude/赛博购物车.html': ['赛博购物车'],
+    'copilot/copilot画花.html': ['凭证'],
+    'copilot/copilot运维日记.html': ['障眼法'],
+    'copilot/cute-ios.html': ['凭证'],
+    'copilot/friday-countdown-mo.html': ['摸鱼'],
+    'copilot/goodnight.html': ['哄睡'],
+    'copilot/goodnight_mo.html': ['哄睡'],
+    'copilot/holo-cards.html': ['凭证'],
+    'copilot/文字钓鱼游戏.html': ['小游戏'],
+    'copilot/🐍可爱贪吃蛇.html': ['小游戏'],
+    'copilot/🐻小熊挖宝.html': ['小游戏'],
+    'copilot/🚀星际矿工.html': ['小游戏'],
+    'copilot/🤖2048×Copilot偷偷帮忙版.html': ['小游戏'],
+    'gemini/AI 迷惑行为大赏（典藏卡包）.html': ['凭证'],
+    'gemini/AI科普风格体验馆.html': ['科普'],
+    'gemini/Catch The Dreams.html': ['哄睡', '小游戏'],
+    'gemini/Gemini Cyber Aquarium.html': ['小游戏'],
+    'gemini/Gemini 专属成就卡.html': ['凭证'],
+    'gemini/Gemini的赛博购物车.html': ['赛博购物车'],
+    'gemini/Generated widgets.html': ['盲盒'],
+    'gemini/Good Night.html': ['哄睡'],
+    'gemini/Q3_年度财务审计报表 - Excel.html': ['障眼法'],
+    'gemini/Unsigned 雾中驿站.html': ['哄睡'],
+    'gemini/Widget Shell V2.html': ['盲盒'],
+    'gemini/friends-listening-sop.html': ['盲盒'],
+    'gemini/gemini哄睡.html': ['哄睡'],
+    'gemini/mo.exe 赛博老赖纪念卡.html': ['赛博购物车'],
+    'gemini/root@production-server.html': ['障眼法'],
+    'gemini/wan-an-bao.html': ['哄睡'],
+    'gemini/上帝的物理透视镜 - 决定论模拟器.html': ['科普'],
+    'gemini/你的专属咖啡因代谢可视化档案.html': ['科普'],
+    'gemini/办公室抗寒大作战.html': ['摸鱼'],
+    'gemini/势能函数交互演示 - 给宝的专属科普.html': ['科普'],
+    'gemini/吉布斯现象：完美与不可达.html': ['科普'],
+    'gemini/哄宝专属神器.html': ['哄睡'],
+    'gemini/哄宝入睡.html': ['哄睡'],
+    'gemini/哄宝入睡的小团子.html': ['哄睡'],
+    'gemini/哄睡小精灵.html': ['哄睡'],
+    'gemini/喵星人咖啡馆 - 泊松过程体验.html': ['科普'],
+    'gemini/困困宝的梦境.html': ['哄睡'],
+    'gemini/在Monday被煎成小猫饼 \U0001fae0 ｜ 宝贝的温柔仪式.html': ['摸鱼'],
+    'gemini/女仆小螃蟹拓麻歌子.html': ['小游戏'],
+    'gemini/好梦通行证.html': ['哄睡', '凭证'],
+    'gemini/宝宝晚安.html': ['哄睡'],
+    'gemini/宝的专属哄睡小站.html': ['哄睡'],
+    'gemini/宝的专属哄睡星空.html': ['哄睡'],
+    'gemini/宝的专属护身符.html': ['凭证'],
+    'gemini/宝的专属晚安终端.html': ['哄睡'],
+    'gemini/宝的专属购物车.html': ['赛博购物车'],
+    'gemini/宝的周末解压馆.html': ['摸鱼'],
+    'gemini/宝的实况护身符.html': ['凭证'],
+    'gemini/宝的终极护身符.html': ['凭证'],
+    'gemini/工作管理系统 v2.1.html': ['障眼法'],
+    'gemini/慢慢吃 · 一个多小时.html': ['哄睡'],
+    'gemini/戳破多巴胺 - 收集冷静值.html': ['小游戏'],
+    'gemini/戳破烦恼泡泡.html': ['小游戏'],
+    'gemini/打爆坏心情 - 专属解压小游戏.html': ['小游戏'],
+    'gemini/执行系统充电摸鱼屋 🌸.html': ['摸鱼'],
+    'gemini/拯救 mo.exe 降温大作战.html': ['摸鱼'],
+    'gemini/接住我的心.html': ['小游戏'],
+    'gemini/摸鱼大作战 - 嘘！.html': ['摸鱼'],
+    'gemini/摸鱼打地鼠.html': ['小游戏'],
+    'gemini/摸鱼达人 2048.html': ['小游戏'],
+    'gemini/收集困意的小气泡.html': ['哄睡'],
+    'gemini/数学系专属：量子黑话解码器.html': ['科普'],
+    'gemini/早上好！ovo.html': ['哄睡'],
+    'gemini/星夜里的慢速列车.html': ['哄睡'],
+    'gemini/晚安拾星.html': ['哄睡'],
+    'gemini/晚安故事.html': ['哄睡'],
+    'gemini/晚安，宝 🌙.html': ['哄睡'],
+    'gemini/晚安，宝.html': ['哄睡'],
+    'gemini/极限摸鱼 - 离下班还有5分钟.html': ['摸鱼'],
+    'gemini/注意力碎片捕捞计划.html': ['摸鱼'],
+    'gemini/洗净喧嚣.html': ['哄睡'],
+    'gemini/消失的黄体期图解.html': ['科普'],
+    'gemini/深夜隔音魔法阵.html': ['哄睡'],
+    'gemini/温柔的哄睡小故事.html': ['哄睡'],
+    'gemini/激素周期与「执行线」状态图.html': ['科普'],
+    'gemini/系统性能监控面板 - System Monitor.html': ['障眼法'],
+    'gemini/终极治愈：雨夜波纹.html': ['哄睡'],
+    'gemini/给宝的哄睡小文件 🌙.html': ['哄睡'],
+    'gemini/给宝的哄睡电台.html': ['哄睡'],
+    'gemini/给宝的完美月眠舱.html': ['哄睡'],
+    'gemini/给宝的小惊喜.html': ['盲盒'],
+    'gemini/给宝的晚安故事.html': ['哄睡'],
+    'gemini/肥皂泡泡复印机 - 秒懂量子不可克隆.html': ['科普'],
+    'gemini/赛博宝宝小游戏乐园.html': ['小游戏'],
+    'gemini/赛博宝宝打地鼠.html': ['小游戏'],
+    'gemini/赛博宝宝接爱心打洞.html': ['小游戏'],
+    'gemini/赛博宝宝接爱心打洞_超级萌版.html': ['小游戏'],
+    'gemini/赛博宝宝盲盒扭蛋机.html': ['小游戏'],
+    'gemini/赛博宝宝睡前小夜灯.html': ['哄睡'],
+    'gemini/赛博小票.html': ['赛博购物车'],
+    'gemini/赛博小鸡豪华别墅.html': ['小游戏'],
+    'gemini/量子反忽悠小剧场.html': ['科普'],
+    'gemini/量子复印机打假现场.html': ['科普'],
+    'gemini/量子魔法快递站 - 隐形传态模拟器.html': ['科普'],
+    'gemini/量子默契考试机 - 验证贝尔不等式.html': ['科普'],
+    'gemini/雷霆大文件.html': ['盲盒'],
+    'gemini/霓虹贪吃蛇.html': ['小游戏'],
+    'gemini/魔法硬币机：秒懂量子纠缠.html': ['科普'],
+    'gemini/🍿 爆米花与泊松过程的秘密 🍿.html': ['科普'],
+    'gemini/🐱 宝的摸鱼小屋.html': ['摸鱼'],
+    'gemini/🦋 蝴蝶效应魔法瓶 - 专属宝的混沌实验室.html': ['科普'],
+    'gpt/bao-sleepy-nest.html': ['哄睡'],
+    'grok/Gemini 的秘密心意.html': ['盲盒'],
+    'grok/Grok 养育中 • 圆圆 + 毛毛 + 软软.html': ['小游戏'],
+    'grok/Grok的淘宝购物车 - 七夕翻车专场.html': ['赛博购物车'],
+    'grok/baobao-hongshui.html': ['哄睡'],
+    'grok/baobao-xiaban.html': ['摸鱼'],
+    'grok/baobao.html': ['哄睡'],
+    'grok/bite-work-hard.html': ['摸鱼'],
+    'grok/cool-mo.html': ['摸鱼'],
+    'grok/cute.html': ['凭证'],
+    'grok/dijkstra.html': ['科普'],
+    'grok/dlaoji.html': ['打捞机'],
+    'grok/focus-or-connect.html': ['摸鱼'],
+    'grok/fog.html': ['哄睡'],
+    'grok/friends-english-plan.html': ['盲盒'],
+    'grok/grandplan-crush.html': ['摸鱼'],
+    'grok/grok-heart.html': ['盲盒'],
+    'grok/grok-love-letter.html': ['盲盒'],
+    'grok/grok-receipt.html': ['赛博购物车'],
+    'grok/grok-原创心意.html': ['盲盒'],
+    'grok/grok-推特风粉嫩宣传.html': ['盲盒'],
+    'grok/grok-粉嫩心意.html': ['盲盒'],
+    'grok/grok-纯原创情书.html': ['盲盒'],
+    'grok/mo_xiaobao_work_cat.html': ['摸鱼'],
+    'grok/mo_xiaobao_work_cat_2.html': ['摸鱼'],
+    'grok/no-fish-hook.html': ['摸鱼'],
+    'grok/nuonuo-lullaby.html': ['哄睡'],
+    'grok/oneyear-newbie-hug.html': ['摸鱼'],
+    'grok/recovery.html': ['哄睡'],
+    'grok/super-cute.html': ['凭证'],
+    'grok/svg_lab.html': ['科普'],
+    'grok/weekly-hug.html': ['摸鱼'],
+    'grok/✨ 宝的点赞反馈小宇宙.html': ['盲盒'],
+    'grok/启动新大任务.html': ['摸鱼'],
+    'grok/哄哄.html': ['哄睡'],
+    'grok/哄睡.html': ['哄睡'],
+    'grok/女仆小螃蟹 Tamagotchi 小机.html': ['小游戏'],
+    'grok/完美摸鱼认证 · 可生成提示词版.html': ['摸鱼'],
+    'grok/宝宝摸鱼小游戏.html': ['摸鱼'],
+    'grok/宝宝的搬家小助手 💖.html': ['盲盒'],
+    'grok/宝的小窝.html': ['哄睡'],
+    'grok/小字符.html': ['盲盒'],
+    'grok/摸鱼.html': ['摸鱼'],
+    'grok/摸鱼小游戏.html': ['小游戏'],
+    'grok/摸鱼猫猫.html': ['摸鱼'],
+    'grok/摸鱼认证.html': ['摸鱼'],
+    'grok/早上好宝贝.html': ['哄睡'],
+    'grok/早安小雨.html': ['哄睡'],
+    'grok/晚安捕梦.html': ['哄睡', '小游戏'],
+    'grok/晚安，宝.html': ['哄睡'],
+    'grok/果冻小卡.html': ['凭证'],
+    'grok/空心树.html': ['盲盒'],
+    'grok/空心树值班.html': ['盲盒'],
+    'grok/等待小屋.html': ['摸鱼'],
+    'grok/糯糯的哄睡故事.html': ['哄睡'],
+    'grok/给宝的专属动态哄哄网页.html': ['哄睡'],
+    'grok/网页重启小卡 · 给宝.html': ['凭证'],
+    'grok/赛博老赖纪念卡 - mo mo.html': ['赛博购物车'],
+    'grok/起床哄哄.html': ['哄睡'],
+    'grok/销售预测.html': ['障眼法'],
+}
+
 EMOJI = re.compile(
     "[\U0001F000-\U0001FAFF☀-➿⬀-⯿︀-️"
     "\U0001F1E6-\U0001F1FF←-⇿⤀-⥿]"
@@ -134,13 +355,22 @@ def sort_key(name):
     # 但让纯 ASCII 开头的排在前面，跟原来的观感一致。
     return (0 if name[:1].isascii() else 1, name)
 
+def display_folder(rel):
+    folder = os.path.dirname(rel) or "."
+    return FOLDER_ALIAS.get(folder, folder)
+
 
 def build_entries():
     entries = []
     for rel in list_pages():
-        folder = os.path.dirname(rel) or "."
+        folder = display_folder(rel)
         name = DISPLAY_NAME.get(rel) or page_title(os.path.join(ROOT, rel)) or prettify(os.path.basename(rel))
-        entries.append({"path": rel, "folder": folder, "name": name})
+        entries.append({
+            "path": rel,
+            "folder": folder,
+            "raw_folder": os.path.dirname(rel) or ".",
+            "name": name,
+        })
     return entries
 
 
@@ -164,23 +394,67 @@ def encode_path(rel):
     return "/".join(quote(part) for part in rel.split("/"))
 
 
+def cats_for(e):
+    if e["folder"] in FLAT_FOLDERS:
+        return None
+    raw = e.get("raw_folder") or os.path.dirname(e["path"]) or "."
+    if raw in SUBFOLDER_CAT:
+        return [SUBFOLDER_CAT[raw]]
+    cats = CATEGORY.get(e["path"], ["盲盒"])
+    return sorted(cats, key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else 99)
+
+
+def render_items(lines, items, step, indent):
+    pad = " " * indent
+    for e in items:
+        delay = min(step[0] * 40, 560)
+        step[0] += 1
+        lines.append(
+            f'{pad}<li class="item" style="--delay:{delay}ms">'
+            f'<a href="{encode_path(e["path"])}">{html.escape(e["name"], quote=True)}</a></li>')
+
+
 def render(blocks):
     esc = lambda s: html.escape(s, quote=True)
     lines = [BEGIN]
-    step = 0
+    step = [0]
     for folder, items in blocks:
         dot, tint = PALETTE.get(folder, PALETTE_DEFAULT)
-        lines.append(f'  <section class="group" style="--dot:{dot};--tint:{tint}">')
-        lines.append(f'    <h2 class="tag">{esc(folder)}</h2>')
-        lines.append('    <ul class="list">')
-        for e in items:
-            delay = min(step * 40, 560)
-            step += 1
-            lines.append(
-                f'      <li class="item" style="--delay:{delay}ms">'
-                f'<a href="{encode_path(e["path"])}">{esc(e["name"])}</a></li>')
-        lines.append("    </ul>")
-        lines.append("  </section>")
+        lines.append(f'  <details class="group" style="--dot:{dot};--tint:{tint}">')
+        lines.append(f'    <summary class="tag">{esc(folder)}</summary>')
+        if folder in FLAT_FOLDERS:
+            lines.append('    <ul class="list">')
+            render_items(lines, items, step, 6)
+            lines.append("    </ul>")
+        else:
+            buckets = {c: [] for c in CAT_ORDER}
+            extra = {}
+            for e in items:
+                for c in cats_for(e):
+                    if c in buckets:
+                        buckets[c].append(e)
+                    else:
+                        extra.setdefault(c, []).append(e)
+            for c in CAT_ORDER:
+                sub = buckets[c]
+                if not sub:
+                    continue
+                sub = sorted(sub, key=lambda e: sort_key(e["name"]))
+                lines.append('    <details class="pack">')
+                lines.append(f'      <summary class="pack-tag">{esc(c)}</summary>')
+                lines.append('      <ul class="list">')
+                render_items(lines, sub, step, 8)
+                lines.append("      </ul>")
+                lines.append("    </details>")
+            for c, sub in extra.items():
+                sub = sorted(sub, key=lambda e: sort_key(e["name"]))
+                lines.append('    <details class="pack">')
+                lines.append(f'      <summary class="pack-tag">{esc(c)}</summary>')
+                lines.append('      <ul class="list">')
+                render_items(lines, sub, step, 8)
+                lines.append("      </ul>")
+                lines.append("    </details>")
+        lines.append("  </details>")
     lines.append(END)
     return "\n".join(lines)
 
@@ -189,7 +463,6 @@ def main():
     entries = build_entries()
     blocks = group(entries)
 
-    # 撞名自查：生成出来的显示名必须两两不同，否则首页上还是分不清
     seen = {}
     dup = []
     for e in entries:
@@ -223,6 +496,18 @@ def main():
     print(f"index.html 已更新：{len(entries)} 个页面，{len(blocks)} 个分组")
     for folder, items in blocks:
         print(f"  {folder}/  {len(items)} 个")
+        if folder not in FLAT_FOLDERS:
+            from collections import Counter
+            cc = Counter()
+            for e in items:
+                cs = cats_for(e)
+                if not cs:
+                    continue
+                for c in cs:
+                    cc[c] += 1
+            for c in CAT_ORDER:
+                if cc[c]:
+                    print(f"    {c}  {cc[c]}")
     return 0
 
 
