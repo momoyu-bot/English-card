@@ -306,6 +306,7 @@ CATEGORY = {
     'grok/晚安捕梦.html': ['哄睡', '小游戏'],
     'grok/晚安，宝.html': ['哄睡'],
     'grok/果冻小卡.html': ['凭证'],
+    'grok/今晚的赛博旅游.html': ['凭证'],
     'grok/空心树.html': ['盲盒'],
     'grok/空心树值班.html': ['盲盒'],
     'grok/等待小屋.html': ['摸鱼'],
