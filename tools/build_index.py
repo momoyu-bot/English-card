@@ -157,7 +157,7 @@ CATEGORY = {
     'copilot/cute-ios.html': ['凭证'],
     'copilot/friday-countdown-mo.html': ['摸鱼'],
     'copilot/goodnight.html': ['哄睡'],
-    'copilot/goodnight_mo.html': ['摸鱼'],
+    'copilot/goodnight_mo.html': ['哄睡'],
     'copilot/holo-cards.html': ['凭证'],
     'copilot/文字钓鱼游戏.html': ['小游戏'],
     'copilot/🐍可爱贪吃蛇.html': ['小游戏'],
