@@ -87,7 +87,7 @@ DISPLAY_NAME = {
     "copilot/cute-ios.html":  "超萌小页面（copilot 版）",
     "grok/super-cute.html":   "超萌小页面（grok 版）",
 
-    "claude/慢慢吃.html":                             "慢慢吃 · 无倍速",
+    "claude/慢慢吃.html":                             "慢慢吃 · 半倍速",
     "claude/果冻小卡.html":                           "果冻小卡 · 原始版",
     "grok/nuonuo-lullaby.html":                       "糯糯的哄睡故事 · 纯文字",
     "grok/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
@@ -170,6 +170,7 @@ CATEGORY = {
     'gemini/Gemini Cyber Aquarium.html': ['小游戏'],
     'gemini/Gemini 专属成就卡.html': ['凭证'],
     'gemini/Gemini的赛博购物车.html': ['赛博购物车'],
+    'gemini/Gemini的私密云端购物车.html': ['赛博购物车'],
     'gemini/Generated widgets.html': ['盲盒'],
     'gemini/Good Night.html': ['哄睡'],
     'gemini/Q3_年度财务审计报表 - Excel.html': ['障眼法'],
@@ -321,7 +322,7 @@ CATEGORY = {
 }
 
 EMOJI = re.compile(
-    "[\U0001F000-\U0001FAFF☀-➿⬀-⯿︀-️"
+    "[\U0001F000-\U0001FAFF☀-➿⬀-◿︀-️"
     "\U0001F1E6-\U0001F1FF←-⇿⤀-⥿]"
 )
 
