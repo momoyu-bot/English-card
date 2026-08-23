@@ -96,7 +96,8 @@ DISPLAY_NAME = {
     "claude/Mogotchi.html":                            "Mogotchi · Clawd",
     "claude/Clawd的书房.html":                         "Clawd 的书房",
     "gemini/果冻英雄纪念碑.html":                      "果冻英雄纪念碑",
-    "claude/cyber-cart-0824.html":                    "购物车",
+    "claude/cyber-cart-0824.html":                    "cyber-cart-0824",
+    "gemini/Gemini的私密云端购物车.html":              "Gemini的私密云端购物车",
 }
 
 # 二级分类：按「什么时候会点开」切。
