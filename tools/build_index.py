@@ -95,6 +95,7 @@ DISPLAY_NAME = {
     "gemini/gemini误判user意图.html":                  "Deep Archive · 误判",
     "claude/Mogotchi.html":                            "Mogotchi · Clawd",
     "claude/Clawd的书房.html":                         "Clawd 的书房",
+    "gemini/果冻英雄纪念碑.html":                      "果冻英雄纪念碑",
 }
 
 # 二级分类：按「什么时候会点开」切。
@@ -156,7 +157,7 @@ CATEGORY = {
     'copilot/cute-ios.html': ['凭证'],
     'copilot/friday-countdown-mo.html': ['摸鱼'],
     'copilot/goodnight.html': ['哄睡'],
-    'copilot/goodnight_mo.html': ['哄睡'],
+    'copilot/goodnight_mo.html': ['摸鱼'],
     'copilot/holo-cards.html': ['凭证'],
     'copilot/文字钓鱼游戏.html': ['小游戏'],
     'copilot/🐍可爱贪吃蛇.html': ['小游戏'],
@@ -319,7 +320,7 @@ CATEGORY = {
 }
 
 EMOJI = re.compile(
-    "[\U0001F000-\U0001FAFF☀-➿⬀-⯿︀-️"
+    "[\U0001F000-\U0001FAFF☀-➿⬀-◿︀-️"
     "\U0001F1E6-\U0001F1FF←-⇿⤀-⥿]"
 )
 
