@@ -324,9 +324,14 @@ CATEGORY = {
     'grok/销售预测.html': ['障眼法'],
 }
 
+# 用更安全的范围，避免 Python 3.14 的 bad character range 错误
 EMOJI = re.compile(
-    "[\U0001F000-\U0001FAFF☀-➿⬀-◿︀-️"
-    "\U0001F1E6-\U0001F1FF←-⇿⤀-⥿]"
+    "[\U0001F000-\U0001FAFF"
+    "\U0001F1E6-\U0001F1FF"
+    "☀-➿"
+    "←-⇿"
+    "⤀-⥿"
+    "︀-️]"
 )
 
 
