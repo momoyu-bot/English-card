@@ -98,6 +98,7 @@ DISPLAY_NAME = {
     "gemini/果冻英雄纪念碑.html":                      "果冻英雄纪念碑",
     "claude/cyber-cart-0824.html":                    "cyber-cart-0824",
     "gemini/Gemini的私密云端购物车.html":              "Gemini的私密云端购物车",
+    "claude/rusty-lake-checklist.html":               "Rusty Lake checklist",
 }
 
 # 二级分类：按「什么时候会点开」切。
@@ -155,6 +156,7 @@ CATEGORY = {
     'claude/赛博老赖.html': ['赛博购物车'],
     'claude/赛博购物车.html': ['赛博购物车'],
     'claude/cyber-cart-0824.html': ['赛博购物车'],
+    'claude/rusty-lake-checklist.html': ['小游戏'],
     'copilot/copilot画花.html': ['凭证'],
     'copilot/copilot运维日记.html': ['障眼法'],
     'copilot/cute-ios.html': ['凭证'],
