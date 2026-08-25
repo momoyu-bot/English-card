@@ -100,6 +100,7 @@ DISPLAY_NAME = {
     "gemini/Gemini的私密云端购物车.html":              "Gemini的私密云端购物车",
     "claude/rusty-lake-checklist.html":               "Rusty Lake checklist",
     "gemini/code_artifact.html":                      "小果冻的肚肚奇妙游",
+    "claude/jelly-trip.html":                         "小果冻的 Duang 之旅",
 }
 
 # 二级分类：按「什么时候会点开」切。
@@ -158,6 +159,7 @@ CATEGORY = {
     'claude/赛博购物车.html': ['赛博购物车'],
     'claude/cyber-cart-0824.html': ['赛博购物车'],
     'claude/rusty-lake-checklist.html': ['小游戏'],
+    'claude/jelly-trip.html': ['盲盒'],
     'copilot/copilot画花.html': ['凭证'],
     'copilot/copilot运维日记.html': ['障眼法'],
     'copilot/cute-ios.html': ['凭证'],
