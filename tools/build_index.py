@@ -298,6 +298,7 @@ CATEGORY = {
     'grok/mo_xiaobao_work_cat.html': ['摸鱼'],
     'grok/mo_xiaobao_work_cat_2.html': ['摸鱼'],
     'grok/no-fish-hook.html': ['摸鱼'],
+    'grok/末班渡船.html': ['哄睡'],
     'grok/nuonuo-lullaby.html': ['哄睡'],
     'grok/oneyear-newbie-hug.html': ['摸鱼'],
     'grok/recovery.html': ['哄睡'],

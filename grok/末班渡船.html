@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>末班渡船</title>
+<style>
+  :root {
+    --bg: #0b1018;
+    --fg: #e6dcc8;
+    --muted: #8e8678;
+    --subtle: #5c564c;
+    --accent: #c8ccd4;
+    --border: rgba(230, 220, 200, .12);
+    --lantern: #e8c48a;
+    --water: #1c3344;
+    --wood: #1a140e;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei",
+      system-ui, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", "Songti SC", serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  button:not(:disabled) { cursor: pointer; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px 10px;
+  }
+  .kicker {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: .14em;
+    color: var(--muted);
+  }
+  .en-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    letter-spacing: .12em;
+  }
+  .en-btn.on {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: transparent;
+  }
+  .window {
+    position: relative;
+    margin: 0 16px;
+    min-height: 36vh;
+    flex: 1;
+    overflow: hidden;
+    border: 10px solid var(--wood);
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 2px #3a2e22, inset 0 0 48px rgba(0,0,0,.28);
+  }
+  .stage { position: absolute; inset: 0; }
+  .sky {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #070b12 0%, #10192a 38%, #1b2c40 62%, #24384a 66%, var(--water) 67%);
+  }
+  .star {
+    position: absolute;
+    width: 2px; height: 2px;
+    border-radius: 50%;
+    background: #eef2f8;
+    opacity: .55;
+  }
+  .star.bright { width: 3px; height: 3px; opacity: .9; box-shadow: 0 0 6px 1px rgba(238,242,248,.45); }
+  .moon {
+    position: absolute; top: 12%; right: 18%;
+    width: 72px; height: 72px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 32%, #f4efe4 0%, #d9d0be 55%, #b7b09e 100%);
+    box-shadow: 0 0 40px 12px rgba(232,220,196,.22), 0 0 90px 28px rgba(180,196,220,.12);
+    transition: transform .7s ease, opacity .7s ease;
+  }
+  .moon-wash {
+    position: absolute; top: 67%; left: 50%;
+    width: 14%; height: 30%;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(232,220,196,.28), transparent);
+    filter: blur(8px);
+    opacity: .45;
+    pointer-events: none;
+    transition: opacity .7s ease, width .7s ease;
+  }
+  .hills-far, .hills-near {
+    position: absolute; left: 0; right: 0; bottom: 34%;
+    pointer-events: none;
+  }
+  .hills-far {
+    height: 22%;
+    background: #152030;
+    clip-path: polygon(0% 80%, 7% 62%, 14% 70%, 24% 48%, 36% 64%, 48% 42%, 58% 58%, 70% 40%, 82% 56%, 92% 46%, 100% 58%, 100% 100%, 0% 100%);
+  }
+  .hills-near {
+    height: 16%;
+    background: #0d1622;
+    clip-path: polygon(0% 100%, 0% 58%, 10% 48%, 18% 62%, 30% 44%, 44% 66%, 58% 50%, 72% 64%, 86% 52%, 100% 68%, 100% 100%);
+  }
+  .water {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 35%;
+    background: linear-gradient(180deg, #2a4d62 0%, #1c3a4e 28%, #163040 62%, #102430 100%);
+    overflow: hidden;
+  }
+  .sheen {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(180deg, transparent 0 11px, rgba(210,228,236,.07) 11px 13px);
+    animation: drift 9s linear infinite;
+  }
+  .ripple {
+    position: absolute; left: -10%; right: -10%; height: 2px;
+    background: rgba(210,224,232,.18);
+    animation: slide 14s linear infinite;
+  }
+  .ripple:nth-child(2) { top: 22%; }
+  .ripple:nth-child(3) { top: 48%; opacity: .7; animation-direction: reverse; }
+  .ripple:nth-child(4) { top: 74%; opacity: .45; animation-duration: 18s; }
+  .pier {
+    position: absolute; bottom: 32%; left: 0; width: 30%; height: 7px;
+    background: #1c1610;
+    transform: skewX(-14deg);
+    box-shadow: 0 10px 0 #12100c;
+    transition: opacity .7s ease;
+  }
+  .lantern-post {
+    position: absolute; bottom: 33%; left: 16%; width: 3px; height: 20%;
+    background: #1a140e;
+    transition: opacity .7s ease, transform .7s ease;
+  }
+  .lantern {
+    position: absolute; bottom: 50%; left: 16%;
+    width: 16px; height: 22px;
+    transform: translateX(-6px);
+    border-radius: 3px 3px 5px 5px;
+    background: radial-gradient(circle at 50% 40%, #f7e7bc 0%, #e0b25c 62%, #8a5a28 100%);
+    box-shadow: 0 0 18px 6px rgba(232,196,138,.5), 0 0 48px 16px rgba(232,196,138,.2);
+    animation: breathe 3.6s ease-in-out infinite;
+    transition: opacity .7s ease, transform .7s ease;
+  }
+  .village {
+    position: absolute; bottom: 34.5%; right: 10%;
+    height: 13%; width: 42%;
+    display: flex; align-items: flex-end; gap: 8px;
+    opacity: 0;
+    transition: opacity .8s ease;
+  }
+  .house {
+    position: relative;
+    width: 18%; height: 70%;
+    background: #0c121a;
+  }
+  .house:nth-child(2) { height: 92%; width: 22%; }
+  .house:nth-child(3) { height: 64%; width: 16%; }
+  .house:nth-child(4) { height: 80%; width: 20%; }
+  .house::before {
+    content: "";
+    position: absolute; left: -12%; right: -12%; top: -22%; height: 28%;
+    background: #0a1016;
+    clip-path: polygon(0 100%, 50% 0, 100% 100%);
+  }
+  .win {
+    position: absolute; width: 22%; height: 22%;
+    top: 42%; left: 38%;
+    background: #1a2430;
+  }
+  .house.lit .win {
+    background: var(--lantern);
+    box-shadow: 0 0 10px 3px rgba(232,196,138,.45);
+  }
+  .far-lamp {
+    position: absolute; bottom: 36%; right: 22%;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--lantern);
+    box-shadow: 0 0 10px 4px rgba(232,196,138,.55), 0 0 28px 10px rgba(232,196,138,.2);
+    opacity: .3;
+    transition: opacity .9s ease, transform .9s ease;
+  }
+  .prop { position: absolute; color: #0b1018; opacity: 0; transition: opacity .8s ease; pointer-events: none; }
+  .cat { bottom: 34%; left: 24%; width: 32px; height: 24px; }
+  .fox { bottom: 34.5%; right: 16%; width: 52px; height: 30px; }
+  .oar {
+    bottom: 24%; left: 38%; width: 90px; height: 8px;
+    background: #1a140e; border-radius: 999px;
+    transform: rotate(-12deg); transform-origin: 0 50%;
+    animation: dip 5.5s ease-in-out infinite;
+  }
+  .reeds { position: absolute; left: 0; right: 0; bottom: 34%; height: 18%; opacity: 0; transition: opacity .8s ease; pointer-events: none; }
+  .reed {
+    position: absolute; bottom: 0; width: 2px; background: #0c141c;
+    transform-origin: 50% 100%;
+    animation: sway 4.8s ease-in-out infinite;
+  }
+  .papers { position: absolute; left: 0; right: 0; bottom: 8%; height: 22%; opacity: 0; transition: opacity .8s ease; pointer-events: none; }
+  .paper {
+    position: absolute; width: 22px; height: 14px;
+    background: #d8d0c2; opacity: .72; border-radius: 1px;
+    animation: float 12s ease-in-out infinite;
+  }
+  .paper:nth-child(1) { left: 18%; top: 20%; transform: rotate(-12deg); }
+  .paper:nth-child(2) { left: 46%; top: 55%; width: 18px; height: 12px; animation-direction: reverse; }
+  .paper:nth-child(3) { left: 68%; top: 30%; width: 16px; height: 11px; animation-duration: 16s; }
+  .user-letter {
+    position: absolute; left: 8%; bottom: 14%;
+    min-width: 72px; max-width: 160px;
+    padding: 6px 8px;
+    background: #d8d0c2; color: #3a342c;
+    font-size: 10px; line-height: 1.35;
+    border-radius: 1px;
+    opacity: 0;
+  }
+  .user-letter.sail { animation: sail 7s ease-in forwards; }
+  .glass {
+    position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(125deg, rgba(255,255,255,.07) 0%, transparent 28%, transparent 62%, rgba(255,255,255,.03) 100%);
+  }
+  .vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    box-shadow: inset 0 0 80px 24px rgba(8,10,16,.55);
+    transition: box-shadow .9s ease;
+  }
+  [data-scene="plank"] .lantern, [data-scene="plank"] .lantern-post { transform: scale(1.15); left: 22%; }
+  [data-scene="river"] .cat, [data-scene="river"] .oar { opacity: 1; }
+  [data-scene="village"] .village { opacity: 1; }
+  [data-scene="village"] .far-lamp { opacity: 0; }
+  [data-scene="reeds"] .reeds, [data-scene="reeds"] .fox { opacity: 1; }
+  [data-scene="letters"] .papers { opacity: 1; }
+  [data-scene="moonwash"] .moon { transform: scale(1.35) translate(-8px, 6px); }
+  [data-scene="moonwash"] .moon-wash { opacity: .95; width: 22%; }
+  [data-scene="shore"] .village { opacity: 1; }
+  [data-scene="shore"] .far-lamp, [data-scene="sleep"] .far-lamp { opacity: 1; transform: scale(1.6); right: 18%; }
+  [data-scene="sleep"] .moon { opacity: .45; transform: scale(.86) translateY(10px); }
+  [data-scene="sleep"] .vignette { box-shadow: inset 0 0 120px 50px rgba(6,8,12,.82); }
+  [data-scene="river"] .pier, [data-scene="village"] .pier,
+  [data-scene="reeds"] .pier, [data-scene="letters"] .pier,
+  [data-scene="moonwash"] .pier, [data-scene="shore"] .pier,
+  [data-scene="sleep"] .pier,
+  [data-scene="river"] .lantern, [data-scene="village"] .lantern,
+  [data-scene="reeds"] .lantern, [data-scene="letters"] .lantern,
+  [data-scene="moonwash"] .lantern, [data-scene="shore"] .lantern,
+  [data-scene="sleep"] .lantern,
+  [data-scene="river"] .lantern-post, [data-scene="village"] .lantern-post,
+  [data-scene="reeds"] .lantern-post, [data-scene="letters"] .lantern-post,
+  [data-scene="moonwash"] .lantern-post, [data-scene="shore"] .lantern-post,
+  [data-scene="sleep"] .lantern-post { opacity: 0; }
+  .panel { max-width: 36em; margin: 0 auto; padding: 16px 20px 20px; }
+  h1 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: clamp(1.8rem, 6vw, 2.6rem);
+    font-weight: 500;
+    letter-spacing: .04em;
+  }
+  .title-en {
+    display: none;
+    margin: 8px 0 0;
+    font-family: var(--serif);
+    font-size: 1.1rem;
+    font-style: italic;
+    color: var(--muted);
+  }
+  .body { margin: 18px 0 0; font-size: 17px; line-height: 1.75; }
+  .en-note {
+    display: none;
+    margin: 8px 0 0;
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+    font-family: var(--serif);
+    font-size: 14px;
+    font-style: italic;
+    line-height: 1.65;
+    color: var(--muted);
+  }
+  body.en-on .en-note, body.en-on .title-en { display: block; }
+  .beat { margin-top: 16px; }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-top: 20px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--bg);
+    font: inherit;
+    font-size: 16px;
+  }
+  .ghost {
+    min-height: 44px;
+    margin: 20px 0 0 8px;
+    padding: 0 14px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 16px;
+  }
+  .field {
+    display: block;
+    width: 100%;
+    height: 44px;
+    margin-top: 16px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #121821;
+    color: var(--fg);
+    font: inherit;
+    font-size: 16px;
+  }
+  .field::placeholder { color: var(--subtle); }
+  .dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 20px;
+    padding: 0;
+    list-style: none;
+  }
+  .dots li {
+    width: 16px; height: 4px;
+    border-radius: 99px;
+    background: rgba(230,220,200,.14);
+  }
+  .dots li.on { background: rgba(200,204,212,.8); }
+  .enter { animation: in .5s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes in {
+    from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+    to { opacity: 1; transform: none; filter: none; }
+  }
+  @keyframes drift { to { background-position: 0 80px; } }
+  @keyframes slide { from { transform: translateX(-6%); } to { transform: translateX(6%); } }
+  @keyframes breathe { 50% { filter: brightness(1.12); } }
+  @keyframes dip {
+    50% { transform: rotate(-22deg) translateY(6px); }
+  }
+  @keyframes sway { 50% { transform: rotate(3deg); } }
+  @keyframes float {
+    50% { transform: translateX(18px) rotate(6deg); }
+  }
+  @keyframes sail {
+    0% { left: 8%; opacity: 0; transform: rotate(-8deg) translateY(8px); }
+    12% { opacity: .92; }
+    100% { left: 78%; opacity: 0; transform: rotate(10deg) translateY(-6px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sheen, .ripple, .lantern, .oar, .reed, .paper, .enter, .user-letter.sail { animation: none; }
+    .enter { opacity: 1; transform: none; filter: none; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <p class="kicker">末班渡船</p>
+    <button type="button" class="en-btn" id="enBtn" aria-pressed="false">EN</button>
+  </header>
+
+  <div class="window" id="win" data-scene="dock">
+    <div class="stage">
+      <div class="sky"></div>
+      <div id="stars"></div>
+      <div class="moon"></div>
+      <div class="moon-wash"></div>
+      <div class="hills-far"></div>
+      <div class="hills-near"></div>
+      <div class="village" aria-hidden="true">
+        <span class="house"><span class="win"></span></span>
+        <span class="house lit"><span class="win"></span></span>
+        <span class="house"><span class="win"></span></span>
+        <span class="house"><span class="win"></span></span>
+      </div>
+      <div class="reeds" id="reeds" aria-hidden="true"></div>
+      <svg class="prop fox" viewBox="0 0 52 30" aria-hidden="true"><path fill="currentColor" d="M8 26c1.5-9 12-16 24-13 3 .8 6 1 9-5l-1 8c6 3 11 7 12 10H8z"/><path fill="currentColor" d="M4 24c-2 0-3 1.2-3 2h8c0-1.4-2-2-5-2z"/><circle cx="22" cy="16" r="1.1" fill="#1c3344"/></svg>
+      <div class="far-lamp"></div>
+      <div class="water">
+        <div class="sheen"></div>
+        <span class="ripple"></span>
+        <span class="ripple"></span>
+        <span class="ripple"></span>
+        <div class="papers" aria-hidden="true"><span class="paper"></span><span class="paper"></span><span class="paper"></span></div>
+        <div class="user-letter" id="sailLetter"></div>
+      </div>
+      <div class="pier"></div>
+      <div class="lantern-post"></div>
+      <div class="lantern"></div>
+      <svg class="prop cat" viewBox="0 0 32 24" aria-hidden="true"><path fill="currentColor" d="M7 22c-1.5-6 3-12 10-12 6 0 11 5 10 12H7z"/><path fill="currentColor" d="M11 10 8 3l5 5M21 10l3-7-1 8"/><circle cx="14.5" cy="14" r="1" fill="#1c3344"/><circle cx="20" cy="14" r="1" fill="#1c3344"/><path fill="currentColor" d="M26 20c3 0 5 1.4 5 2.4H24c0-1.2 1-2.4 2-2.4z"/></svg>
+      <div class="prop oar"></div>
+      <div class="glass"></div>
+      <div class="vignette"></div>
+    </div>
+  </div>
+
+  <section class="panel" id="panel"></section>
+  <ol class="dots" id="dots" aria-label="进度"></ol>
+
+<script>
+(function () {
+  var COVER = {
+    title: "末班渡船",
+    titleEn: "The Last Ferry",
+    zh: "河对岸有灯。今晚还有一个空位。",
+    en: "A lamp waits on the far bank. There is one seat left tonight.",
+    action: "上船",
+    actionEn: "Come aboard",
+    scene: "dock"
+  };
+  var BEATS = [
+    { scene: "plank", zh: ["渡口没有钟。船来的时候，灯先到。", "你踏上木板。它轻轻晃了一下，像认出你。"], en: ["The landing has no clock. When the boat comes, the lamp arrives first.", "You step onto the plank. It sways a little, as if it knows you."], action: "继续", actionEn: "Go on" },
+    { scene: "river", zh: ["船夫不说话。他把桨放进水里，水也不说话。", "岸上那只猫朝你眨了一下眼，算作送行。"], en: ["The ferryman does not speak. He sets the oar in the water, and the water does not speak either.", "On the bank a cat blinks once. That will do for goodbye."], action: "继续", actionEn: "Go on" },
+    { scene: "village", zh: ["村子已经睡了。窗是暗的，只有一家还亮着。", "也许是谁忘了关。也许是谁还在等。"], en: ["The village is already asleep. The windows are dark, except for one.", "Someone forgot to put it out. Or someone is still waiting."], action: "继续", actionEn: "Go on" },
+    { scene: "reeds", zh: ["芦苇里站着一只狐狸。它没有跑。", "它看着船过去，像看一件与它无关、却并不讨厌的事。"], en: ["A fox stands in the reeds. It does not run.", "It watches the boat go by — a thing that is not its business, and is not unwelcome."], action: "继续", actionEn: "Go on" },
+    { scene: "letters", zh: ["水面上漂着几封没有署名的信。", "白天写完、夜里又不想寄的话，自己找到了河。"], en: ["A few unsigned letters drift on the water.", "Words finished by day, unsent by night, found the river on their own."], action: "继续", actionEn: "Go on" },
+    { scene: "moonwash", zh: ["月亮把光铺在水上，像在洗衣。", "洗掉一天里那些稍微重了一点的部分。"], en: ["The moon lays its light across the water, as if washing clothes.", "It rinses the parts of the day that grew a little too heavy."], action: "继续", actionEn: "Go on" },
+    { scene: "shore", zh: ["对岸近了。灯还在。", "你发现，自己的眼皮也近了。"], en: ["The far bank is close. The lamp is still there.", "You notice your eyelids have come close as well."], action: "靠岸", actionEn: "Come in" },
+    { scene: "sleep", zh: ["船停了。你没有下船。", "船夫把一件看不见的毯子盖过来。", "河继续流。你继续走——往更里面。"], en: ["The boat stops. You do not get off.", "The ferryman draws an unseen blanket over you.", "The river keeps going. So do you — further in."], action: "往里走", actionEn: "Further in" }
+  ];
+  var END = {
+    zh: "这一岸，可以放下了。",
+    en: "This bank can be set down now.",
+    letter: "若有一句不想寄出的话，可以写在水上。",
+    letterEn: "If a sentence does not wish to be sent, it may rest on the water.",
+    drop: "放下", dropEn: "Let it go",
+    skip: "不必了", skipEn: "Not tonight",
+    replay: "再坐一次", replayEn: "Sit once more"
+  };
+
+  var phase = "cover";
+  var index = 0;
+  var showEn = false;
+  var sailing = false;
+  var panel = document.getElementById("panel");
+  var win = document.getElementById("win");
+  var dots = document.getElementById("dots");
+  var enBtn = document.getElementById("enBtn");
+  var sailEl = document.getElementById("sailLetter");
+
+  (function stars() {
+    var html = "";
+    var pts = [[6,10],[12,28,1],[18,8],[23,36],[29,16],[34,42],[41,12,1],[47,31],[53,7],[58,22],[64,38,1],[70,14],[76,27],[82,9],[87,33],[91,18,1],[8,48],[96,41],[3,22],[38,4],[72,46],[15,41]];
+    for (var i = 0; i < pts.length; i++) {
+      html += '<span class="star' + (pts[i][2] ? ' bright' : '') + '" style="left:' + pts[i][0] + '%;top:' + pts[i][1] + '%"></span>';
+    }
+    document.getElementById("stars").innerHTML = html;
+  })();
+  (function reeds() {
+    var lefts = [4,8,11,15,19,23,28,33,38,72,76,81,86,90,94];
+    var html = "";
+    for (var i = 0; i < lefts.length; i++) {
+      html += '<span class="reed" style="left:' + lefts[i] + '%;height:' + (55 + (i * 17) % 40) + '%;animation-delay:' + ((i % 5) * 0.35) + 's"></span>';
+    }
+    document.getElementById("reeds").innerHTML = html;
+  })();
+
+  try { showEn = localStorage.getItem("last-ferry-en") === "1"; } catch (e) {}
+  enBtn.classList.toggle("on", showEn);
+  enBtn.setAttribute("aria-pressed", showEn ? "true" : "false");
+  document.body.classList.toggle("en-on", showEn);
+  enBtn.addEventListener("click", function () {
+    showEn = !showEn;
+    document.body.classList.toggle("en-on", showEn);
+    enBtn.classList.toggle("on", showEn);
+    enBtn.setAttribute("aria-pressed", showEn ? "true" : "false");
+    try { localStorage.setItem("last-ferry-en", showEn ? "1" : "0"); } catch (e) {}
+    draw();
+  });
+
+  function setScene(s) { win.setAttribute("data-scene", s); }
+
+  function note(t) { return '<p class="en-note enter">' + t + "</p>"; }
+
+  function cta(label, id) {
+    return '<button type="button" class="cta" id="' + id + '">' + label + "</button>";
+  }
+
+  function drawDots() {
+    var n = phase === "cover" ? 0 : phase === "reading" ? index + 1 : BEATS.length;
+    var html = "";
+    for (var i = 0; i < BEATS.length; i++) html += '<li' + (i < n ? ' class="on"' : "") + "></li>";
+    dots.innerHTML = html;
+  }
+
+  function draw() {
+    var html = "";
+    if (phase === "cover") {
+      setScene("dock");
+      html = '<h1 class="enter">' + COVER.title + "</h1>" +
+        '<p class="title-en enter">' + COVER.titleEn + "</p>" +
+        '<p class="body enter">' + COVER.zh + "</p>" + note(COVER.en) +
+        cta(showEn ? COVER.actionEn : COVER.action, "go");
+    } else if (phase === "reading") {
+      var b = BEATS[index];
+      setScene(b.scene);
+      for (var i = 0; i < b.zh.length; i++) {
+        html += '<div class="beat"><p class="body enter">' + b.zh[i] + "</p>" +
+          (b.en[i] ? note(b.en[i]) : "") + "</div>";
+      }
+      html += cta(showEn ? b.actionEn : b.action, "go");
+    } else if (phase === "letter") {
+      setScene("letters");
+      html = '<p class="body enter">' + END.letter + "</p>" + note(END.letterEn) +
+        '<input class="field" id="letter" maxlength="42" placeholder="' + (showEn ? "a sentence, unsent" : "一句就好") + '"' + (sailing ? " disabled" : "") + ">" +
+        cta(showEn ? END.dropEn : END.drop, "drop") +
+        '<button type="button" class="ghost" id="skip"' + (sailing ? " disabled" : "") + ">" + (showEn ? END.skipEn : END.skip) + "</button>";
+    } else {
+      setScene("sleep");
+      html = '<h1 class="enter">晚安。</h1>' +
+        '<p class="title-en enter">Good night.</p>' +
+        '<p class="body enter">' + END.zh + "</p>" + note(END.en) +
+        cta(showEn ? END.replayEn : END.replay, "replay");
+    }
+    panel.innerHTML = html;
+    drawDots();
+    bind();
+  }
+
+  function advance() {
+    if (phase === "cover") { phase = "reading"; index = 0; }
+    else if (phase === "reading") {
+      if (index < BEATS.length - 1) index++;
+      else phase = "letter";
+    }
+    draw();
+  }
+
+  function bind() {
+    var go = document.getElementById("go");
+    if (go) go.addEventListener("click", advance);
+    var drop = document.getElementById("drop");
+    if (drop) drop.addEventListener("click", dropLetter);
+    var skip = document.getElementById("skip");
+    if (skip) skip.addEventListener("click", function () { phase = "end"; draw(); });
+    var replay = document.getElementById("replay");
+    if (replay) replay.addEventListener("click", function () {
+      phase = "cover"; index = 0; sailing = false; sailEl.className = "user-letter"; draw();
+    });
+    var input = document.getElementById("letter");
+    if (input) input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); dropLetter(); }
+    });
+  }
+
+  function dropLetter() {
+    var input = document.getElementById("letter");
+    var text = input ? input.value.trim().slice(0, 42) : "";
+    if (text) {
+      try { localStorage.setItem("last-ferry-letter", text); } catch (e) {}
+      sailing = true;
+      sailEl.textContent = text;
+      sailEl.className = "user-letter sail";
+      draw();
+      setTimeout(function () {
+        sailing = false;
+        sailEl.className = "user-letter";
+        phase = "end";
+        draw();
+      }, 7200);
+    } else {
+      phase = "end";
+      draw();
+    }
+  }
+
+  panel.addEventListener("click", function (e) {
+    if (phase !== "cover" && phase !== "reading") return;
+    if (e.target.closest("button, input, a")) return;
+    advance();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== " " && e.key !== "Enter" && e.key !== "ArrowRight") return;
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "BUTTON" || tag === "TEXTAREA") return;
+    if (phase === "cover" || phase === "reading") { e.preventDefault(); advance(); }
+  });
+
+  draw();
+})();
+</script>
+<!-- 2026-08-25 从 Grok 对话里放进 grok/：末班渡船，夜里的窗景故事。 -->
+</body>
+</html>
