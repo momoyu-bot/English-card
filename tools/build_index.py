@@ -102,7 +102,8 @@ DISPLAY_NAME = {
     "gemini/code_artifact.html":                      "小果冻的肚肚奇妙游",
     "claude/jelly-trip.html":                         "小果冻的 Duang 之旅",
     "gemini/赛博借景：隐藏的链接.html":                "赛博借景：隐藏的链接",
-    "claude/hidden-in-html.html":                     "藏东西的六个地方",
+    "claude/hidden-in-html-v1.html":                  "藏东西的六个地方 · v1",
+    "claude/hidden-in-html-v2.html":                  "藏东西的六个地方 · v2",
 }
 
 # 二级分类：按「什么时候会点开」切。
@@ -162,7 +163,8 @@ CATEGORY = {
     'claude/cyber-cart-0824.html': ['赛博购物车'],
     'claude/rusty-lake-checklist.html': ['小游戏'],
     'claude/jelly-trip.html': ['盲盒'],
-    'claude/hidden-in-html.html': ['科普'],
+    'claude/hidden-in-html-v1.html': ['科普'],
+    'claude/hidden-in-html-v2.html': ['科普'],
     'copilot/copilot画花.html': ['凭证'],
     'copilot/copilot运维日记.html': ['障眼法'],
     'copilot/cute-ios.html': ['凭证'],
