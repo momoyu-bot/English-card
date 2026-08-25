@@ -101,6 +101,7 @@ DISPLAY_NAME = {
     "claude/rusty-lake-checklist.html":               "Rusty Lake checklist",
     "gemini/code_artifact.html":                      "小果冻的肚肚奇妙游",
     "claude/jelly-trip.html":                         "小果冻的 Duang 之旅",
+    "gemini/赛博借景：隐藏的链接.html":                "赛博借景：隐藏的链接",
 }
 
 # 二级分类：按「什么时候会点开」切。
@@ -266,6 +267,7 @@ CATEGORY = {
     'gemini/🐱 宝的摸鱼小屋.html': ['摸鱼'],
     'gemini/🦋 蝴蝶效应魔法瓶 - 专属宝的混沌实验室.html': ['科普'],
     'gemini/code_artifact.html': ['盲盒'],
+    'gemini/赛博借景：隐藏的链接.html': ['盲盒'],
     'gpt/bao-sleepy-nest.html': ['哄睡'],
     'grok/Gemini 的秘密心意.html': ['盲盒'],
     'grok/Grok 养育中 • 圆圆 + 毛毛 + 软软.html': ['小游戏'],
