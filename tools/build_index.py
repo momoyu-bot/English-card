@@ -60,6 +60,10 @@ DISPLAY_NAME = {
     "gemini/失误捞claude鱼/gemini失误捞claude鱼008.html": "三核打捞机 v8",
     "gemini/失误捞claude鱼/gemini失误捞claude鱼009.html": "三核打捞机 v9 · 最终版",
 
+    # 打捞机 · gemini 主线两版（原标题一模一样，不加后缀首页会把文件名露出来）
+    "gemini/gemini打捞机v11含svg.html": "Gemini 专属打捞机 v11",
+    "gemini/gemini打捞机v12.html":      "Gemini 专属打捞机 v12",
+
     # 打捞机 · 另外三个分支
     "claude/打捞机001.html": "打捞机 · ChatGPT 版 v1",
     "claude/打捞机002.html": "打捞机 · ChatGPT 版 v2",
@@ -86,6 +90,12 @@ DISPLAY_NAME = {
     #   首页会去掉表情符号，去掉之后就一模一样了）
     "copilot/cute-ios.html":  "超萌小页面（copilot 版）",
     "grok/super-cute.html":   "超萌小页面（grok 版）",
+
+    # 这四个文件里没写标题，不给名字首页就只能显示文件名
+    "claude/cosmic_catch_restored.svg":                "UFO 抓小羊 · 出土重建版",
+    "claude/gemini_card_revived.svg":                  "赛博降维成就卡 · 复活版",
+    "claude/hamiltonian_snake_safety_margin_demo.html":"贪吃蛇为什么不会撞到自己",
+    "claude/friday_moyu_recharge_game.html":           "周五摸鱼充电小游戏",
 
     "claude/晚安-哄睡小文件.html":                    "晚安（Sonnet5）",
     "claude/慢慢吃.html":                             "慢慢吃 · 半倍速",
@@ -193,6 +203,8 @@ CATEGORY = {
     'claude/夜航船.html': ['哄睡'],
     'claude/晚安小夜灯-月亮在呼吸.html': ['哄睡'],
     'claude/friday_moyu_recharge_game.html': ['摸鱼'],
+    'claude/ai_tenement_literature_card.svg': ['失灵博物馆'],
+    'claude/夜班的东西们.html': ['哄睡'],
     'copilot/copilot画花.html': ['凭证'],
     'copilot/copilot运维日记.html': ['障眼法'],
     'copilot/cute-ios.html': ['凭证'],
@@ -220,6 +232,7 @@ CATEGORY = {
     'gemini/friends-listening-sop.html': ['盲盒'],
     'gemini/gemini误判user意图.html': ['盲盒'],
     'gemini/gemini打捞机v11含svg.html': ['打捞机'],
+    'gemini/gemini打捞机v12.html': ['打捞机'],
     'gemini/gemini哄睡.html': ['哄睡'],
     'gemini/mo.exe 赛博老赖纪念卡.html': ['赛博购物车'],
     'gemini/root@production-server.html': ['障眼法'],
