@@ -355,7 +355,7 @@ def clean(text):
 
 
 def prettify(filename):
-    return clean(re.sub(r"\.html?$", "", filename, flags=re.I).replace("-", " ").replace("_", " "))
+    return clean(re.sub(r"\.(html?|svg)$", "", filename, flags=re.I).replace("-", " ").replace("_", " "))
 
 
 def page_title(path):
@@ -369,7 +369,7 @@ def page_title(path):
 
 def list_pages():
     out = subprocess.run(
-        ["git", "-c", "core.quotepath=false", "ls-files", "*.html"],
+        ["git", "-c", "core.quotepath=false", "ls-files", "*.html", "*.svg"],
         cwd=ROOT, capture_output=True, text=True, check=True).stdout
     pages = []
     for rel in out.split("\n"):

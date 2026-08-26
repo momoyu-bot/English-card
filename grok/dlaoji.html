@@ -98,6 +98,8 @@
   .item .name em{font-style:normal;color:var(--silt)}
   .item .badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:2px 7px;border-radius:2px;
     border:1px solid var(--edge);color:var(--silt)}
+  .item .badge.html{border-color:var(--verdigris);color:var(--verdigris)}
+  .item .badge.svg{border-color:var(--verdigris);color:var(--verdigris)}
   .item .badge.jsx{border-color:var(--brass);color:var(--brass)}
   .item .yousaid{margin-top:8px;font-size:14.5px;color:var(--foam);line-height:1.65;max-width:68ch}
   .item .meta{margin-top:6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);
@@ -150,11 +152,11 @@
     <h2>把 prod-grok-backend.json 拖进来</h2>
     <p>就是那个最大的 JSON（一百多 MB 也没关系）。点下面按钮，从你电脑里选这个文件。</p>
     <button class="pick" id="pick">选择文件</button>
-    <input type="file" id="file" accept=".json,.html,.htm" hidden>
+    <input type="file" id="file" accept=".json,.html,.htm,.svg" hidden>
     <div class="hintlist">
-      <div><b>捞什么</b>　完整 HTML，以及 JSX/TSX 这种沙盒里能玩、带不走的「明珠」</div>
+      <div><b>捞什么</b>　完整网页、独立的 SVG 小卡，以及 JSX/TSX 这种沙盒里能玩、带不走的「明珠」</div>
       <div><b>怎么认</b>　不看 Grok 的英文标题。每件旁边写的是你当时说的中文</div>
-      <div><b>拿走</b>　单件下载，或把当前列表打包成 zip。HTML 能直接打开；JSX 标出来等人转成网页</div>
+      <div><b>拿走</b>　单件下载，或把当前列表打包成 zip。网页和 SVG 能直接打开；JSX 标出来等人转成网页</div>
     </div>
   </div>
 
@@ -168,7 +170,7 @@
       <div class="row">
         <div class="cell"><span>已读</span><strong id="mb">0</strong></div>
         <div class="cell"><span>开箱对话</span><strong id="nconv">0</strong></div>
-        <div class="cell"><span>捞到网页</span><strong id="nhtml">0</strong></div>
+        <div class="cell"><span>能打开的</span><strong id="nhtml">0</strong></div>
         <div class="cell"><span>明珠 JSX</span><strong id="njsx">0</strong></div>
         <div class="cell"><span>其他代码</span><strong id="ncode">0</strong></div>
       </div>
@@ -181,7 +183,7 @@
     <div class="toolbar">
       <input type="search" id="q" placeholder="搜你说过的中文、作品名，或代码里的一句话">
       <div class="seg">
-        <button id="fHtml" class="sel">只看网页</button>
+        <button id="fHtml" class="sel">只看能打开的</button>
         <button id="fJsx">只看明珠</button>
         <button id="fAll">全部代码</button>
       </div>
@@ -259,6 +261,17 @@ function fences(text){
   return out;
 }
 function isFullHtml(code){ return /<!doctype\s+html|<html[\s>]/i.test(code); }
+function isSvg(code){
+  if(typeof code!=="string") return false;
+  if(isFullHtml(code)) return false;
+  const t=code.trim();
+  const m=t.match(/<svg[\s>]/i);
+  if(!m) return false;
+  if(!/<\/svg>/i.test(t)) return false;
+  const head=t.slice(0,m.index);
+  if(/<(div|body|html|head|p|section|article|span|style|script)[\s>]/i.test(head)) return false;
+  return true;
+}
 function htmlTitle(code){
   const m=code.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if(!m) return "";
@@ -297,11 +310,22 @@ function stripWrapper(code){
   if(!head.trim()&&!tail.trim()) return null;   // 本来就是干净的 HTML
   return {html:code.slice(s0,end), shell:head+"\n"+tail};
 }
+function stripSvgWrapper(code){
+  const m=code.match(/<svg[\s>]/i);
+  if(!m) return null;
+  const s0=m.index;
+  const e0=code.toLowerCase().lastIndexOf("</svg>");
+  if(e0<0) return null;
+  const end=e0+6;
+  const head=code.slice(0,s0), tail=code.slice(end);
+  if(!head.trim()&&!tail.trim()) return null;
+  return {svg:code.slice(s0,end), shell:head+"\n"+tail};
+}
 // 壳里往往带着当年 GPT 给它起的文件名
 function originalName(shell){
-  let m=shell.match(/["'`]([^"'`\n]{1,200}\.html?)["'`]/i);
+  let m=shell.match(/["'`]([^"'`\n]{1,200}\.(?:html?|svg))["'`]/i);
   let p=m?m[1]:"";
-  if(!p){ m=shell.match(/([A-Za-z0-9_\-.]{2,60}\.html?)\b/); p=m?m[1]:""; }
+  if(!p){ m=shell.match(/([A-Za-z0-9_\-.]{2,80}\.(?:html?|svg))\b/i); p=m?m[1]:""; }
   if(!p) return "";
   p=p.split(/[\/\\]/).pop();
   return (p&&p.length<=70)?p:"";
@@ -334,35 +358,43 @@ function extractFromConv(conv){
     if(typeof code!=="string") return;
     if(code.trim().length<40) return;
     const full=isFullHtml(code);
-    const jsx=!full && isJsx(code,lang);
+    const svg=!full && (isSvg(code) || /^(svg|image\/svg\+xml)$/i.test(lang||""));
+    const jsx=!full && !svg && isJsx(code,lang);
     let clean=code, raw="", origName="";
     if(full){
       const st=stripWrapper(code);
       if(st){ raw=code.length>MAX_KEEP?code.slice(0,MAX_KEEP):code; clean=st.html; origName=originalName(st.shell); }
+    }else if(svg){
+      const st=stripSvgWrapper(code);
+      if(st){ raw=code.length>MAX_KEEP?code.slice(0,MAX_KEEP):code; clean=st.svg; origName=originalName(st.shell); }
     }
     found.push({
       code: clean.length>MAX_KEEP ? clean.slice(0,MAX_KEEP) : clean,
       raw, origName,
       truncated: clean.length>MAX_KEEP,
       bytes: clean.length,
-      lang: full?"html":(jsx?(lang&&/jsx|tsx/.test(lang)?lang:"jsx"):(lang||"txt")),
-      kind: full?"html":(jsx?"jsx":"code"),
-      t: t||0, source, full, jsx,
-      title: full?htmlTitle(clean):""
+      lang: full?"html":svg?"svg":(jsx?(lang&&/jsx|tsx/.test(lang)?lang:"jsx"):(lang||"txt")),
+      kind: full?"html":svg?"svg":(jsx?"jsx":"code"),
+      t: t||0, source, full, jsx, svg,
+      title: full?htmlTitle(clean):(svg?htmlTitle(clean):"")
     });
   };
   const harvestText=(text,t,source)=>{
     if(!text) return;
-    if(isFullHtml(text.trim())){ push(text.trim(),"html",t,source); return; }
+    const trimmed=text.trim();
+    if(isFullHtml(trimmed)){ push(trimmed,"html",t,source); return; }
+    if(isSvg(trimmed)){ push(trimmed,"svg",t,source); return; }
     const blocks=fences(text);
     if(blocks.length){ for(const b of blocks) push(b.code,b.lang,t,source); return; }
-    if(/<(div|svg|canvas|style|script)[\s>]/i.test(text)&&text.length>200) push(text,"html",t,source);
+    if(/<(div|svg|canvas|style|script)[\s>]/i.test(text)&&text.length>200){
+      push(text, isSvg(text)?"svg":"html", t, source);
+    }
   };
   const noteUser=(text)=>{
     if(typeof text!=="string") return;
     const t=text.trim();
     if(t.length<2) return;
-    if(isFullHtml(t) || t.indexOf("```")===0) return;
+    if(isFullHtml(t) || isSvg(t) || t.indexOf("```")===0) return;
     userTexts.push(t);
   };
 
@@ -500,7 +532,7 @@ async function start(file){
   const sp=new Splitter();
   const dec=new TextDecoder("utf-8");
   let pending=new Uint8Array(0), pendingBase=start0;
-  let nconv=0, nhtml=0, njsx=0, ncode=0, bad=0;
+  let nconv=0, nhtml=0, nsvg=0, njsx=0, ncode=0, bad=0;
   const all=[];
   const lastTickAt={v:-99};
 
@@ -539,6 +571,14 @@ async function start(file){
             tk.className="tick"; tk.style.top=(g.pos*100).toFixed(2)+"%";
             gauge.appendChild(tk);
           }
+        } else if(g.svg){
+          nsvg++;
+          if(g.pos-lastTickAt.v>0.006){
+            lastTickAt.v=g.pos;
+            const tk=document.createElement("div");
+            tk.className="tick"; tk.style.top=(g.pos*100).toFixed(2)+"%";
+            gauge.appendChild(tk);
+          }
         } else if(g.jsx) njsx++;
         else ncode++;
       }
@@ -551,13 +591,13 @@ async function start(file){
     const p=done/total;
     $("pct").textContent=(p*100).toFixed(0);
     $("mb").textContent=fmtMB(done);
-    $("nconv").textContent=nconv; $("nhtml").textContent=nhtml; $("njsx").textContent=njsx; $("ncode").textContent=ncode;
+    $("nconv").textContent=nconv; $("nhtml").textContent=nhtml+nsvg; $("njsx").textContent=njsx; $("ncode").textContent=ncode;
     cursor.style.top=(p*100).toFixed(2)+"%";
     await new Promise(r=>setTimeout(r,0));
   }
 
-  if(nhtml===0){
-    $("note").textContent="结构里没捞到完整网页，改用原文扫描再试一次。";
+  if(nhtml===0 && nsvg===0){
+    $("note").textContent="结构里没捞到完整网页或 SVG，改用原文扫描再试一次。";
     const re=/<!DOCTYPE\s+html|<html[\s>]/gi;
     let carry="";
     for(let pos=0; pos<total; pos+=CHUNK){
@@ -575,11 +615,26 @@ async function start(file){
           .replace(/\\u003c/gi,"<").replace(/\\u003e/gi,">")
           .replace(/\\n/g,"\n").replace(/\\t/g,"\t").replace(/\\"/g,'"').replace(/\\\//g,"/").replace(/\\\\/g,"\\");
         const got=extractFromConv({responses:[{response:{sender:"assistant",message:code}}]});
-        for(const g of got){ g.conv="原始扫描"; g.convTime=0; all.push(g); if(g.full) nhtml++; else if(g.jsx) njsx++; else ncode++; }
+        for(const g of got){ g.conv="原始扫描"; g.convTime=0; all.push(g); if(g.full) nhtml++; else if(g.svg) nsvg++; else if(g.jsx) njsx++; else ncode++; }
         re.lastIndex=start+endRel+7;
       }
+      const reSvg=/<svg[\s>]/gi;
+      reSvg.lastIndex=0;
+      while((m=reSvg.exec(buf))!==null){
+        const start=m.index;
+        const lower=buf.slice(start).toLowerCase();
+        const endRel=lower.indexOf("</svg>");
+        if(endRel<0) continue;
+        let code=buf.slice(start, start+endRel+6)
+          .replace(/\\u003c/gi,"<").replace(/\\u003e/gi,">")
+          .replace(/\\n/g,"\n").replace(/\\t/g,"\t").replace(/\\"/g,'"').replace(/\\\//g,"/").replace(/\\\\/g,"\\");
+        if(isFullHtml(code)) continue;
+        const got=extractFromConv({responses:[{response:{sender:"assistant",message:code}}]});
+        for(const g of got){ g.conv="原始扫描"; g.convTime=0; all.push(g); if(g.full) nhtml++; else if(g.svg) nsvg++; else if(g.jsx) njsx++; else ncode++; }
+        reSvg.lastIndex=start+endRel+6;
+      }
       carry=buf.slice(Math.max(0, buf.length-80000));
-      $("nhtml").textContent=nhtml; $("njsx").textContent=njsx; $("ncode").textContent=ncode;
+      $("nhtml").textContent=nhtml+nsvg; $("njsx").textContent=njsx; $("ncode").textContent=ncode;
       await new Promise(r=>setTimeout(r,0));
     }
   }
@@ -593,12 +648,13 @@ async function start(file){
   });
 
   const secs=((Date.now()-t0)/1000).toFixed(0);
-  $("note").innerHTML = (nhtml||njsx)
+  $("note").innerHTML = (nhtml||nsvg||njsx)
     ? "捞完了，用了 "+secs+" 秒。共开箱 <b>"+nconv+"</b> 段对话，捞到 <b>"+nhtml+"</b> 份完整网页"
+      + (nsvg?"、<b>"+nsvg+"</b> 张 SVG 小卡":"")
       + (njsx?"、<b>"+njsx+"</b> 颗明珠（JSX/TSX）":"")
       + (ncode?"、另有 "+ncode+" 段其他代码":"")
       + (bad?"（有 "+bad+" 段没读通，已跳过）":"") + "。列表上的名字优先用你说过的中文，不看英文小标题。"
-    : "扫完了，"+nconv+" 段对话里没有找到完整的 HTML。把上面切到「只看明珠」或「全部代码」看看有没有 JSX。";
+    : "扫完了，"+nconv+" 段对话里没有找到完整的网页或 SVG。把上面切到「只看明珠」或「全部代码」看看有没有 JSX。";
   $("note").querySelectorAll("b").forEach(b=>b.style.color="var(--brass)");
 
   group(all);
@@ -611,12 +667,14 @@ function group(all){
   const map=new Map();
   for(const it of all){
     const key = it.title ? "T:"+it.title
-              : (it.full ? "C:"+it.conv+"|html"
-                : (it.jsx ? "C:"+it.conv+"|jsx" : "C:"+it.conv+"|"+it.lang));
-    if(!map.has(key)) map.set(key,{key,title:it.title,conv:it.conv,lang:it.lang,full:it.full,jsx:!!it.jsx,youSaid:it.youSaid||"",vers:[]});
+              : (it.svg ? "C:"+it.conv+"|svg"
+                : (it.full ? "C:"+it.conv+"|html"
+                  : (it.jsx ? "C:"+it.conv+"|jsx" : "C:"+it.conv+"|"+it.lang)));
+    if(!map.has(key)) map.set(key,{key,title:it.title,conv:it.conv,lang:it.lang,full:it.full,svg:!!it.svg,jsx:!!it.jsx,youSaid:it.youSaid||"",vers:[]});
     const g=map.get(key);
     g.vers.push(it);
     if(it.full) g.full=true;
+    if(it.svg) g.svg=true;
     if(it.jsx) g.jsx=true;
     if(it.youSaid && !g.youSaid) g.youSaid=it.youSaid;
   }
@@ -632,7 +690,8 @@ function group(all){
     g.origName=(g.vers.find(v=>v.origName)||{}).origName||"";
   }
   GROUPS.sort((a,b)=>{
-    if(a.full!==b.full) return a.full?-1:1;
+    const openable=!!(a.full||a.svg), openableB=!!(b.full||b.svg);
+    if(openable!==openableB) return openable?-1:1;
     if(a.jsx!==b.jsx) return a.jsx?-1:1;
     return (b.last.t||b.last.convTime)-(a.last.t||a.last.convTime);
   });
@@ -644,10 +703,21 @@ function safeName(s){
 }
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
+function saveExt(v){
+  if(v.svg || v.lang==="svg") return ".svg";
+  if(v.full) return ".html";
+  if(v.jsx) return ".jsx";
+  const lang=v.lang||"txt";
+  return "."+(lang==="txt"?"txt":lang);
+}
+function openType(v){
+  return (v.svg || v.lang==="svg") ? "image/svg+xml;charset=utf-8" : "text/html;charset=utf-8";
+}
+
 function visible(){
   const q=$("q").value.trim().toLowerCase();
   return GROUPS.filter(g=>{
-    if(FILTER==="html"&&!g.full) return false;
+    if(FILTER==="html"&&!(g.full||g.svg)) return false;
     if(FILTER==="jsx"&&!g.jsx) return false;
     if(!q) return true;
     if(g.name.toLowerCase().includes(q)) return true;
@@ -671,7 +741,7 @@ function render(){
     return '<div class="item" data-i="'+i+'">'
       + '<div class="head">'
       +   '<span class="name">'+esc(g.name)+(g.title?"":(g.youSaid?'':' <em>（无标题，用对话名代替）</em>'))+'</span>'
-      +   '<span class="badge'+(g.full?" html":g.jsx?" jsx":"")+'">'+esc(g.full?"HTML":(g.jsx?"JSX 明珠":v.lang.toUpperCase()))+'</span>'
+      +   '<span class="badge'+(g.svg?" svg":g.full?" html":g.jsx?" jsx":"")+'">'+esc(g.svg?"SVG":g.full?"HTML":(g.jsx?"JSX 明珠":v.lang.toUpperCase()))+'</span>'
       +   (g.vers.length>1?'<span class="badge">'+g.vers.length+' 版</span>':'')
       +   (v.source==="canvas"?'<span class="badge">CANVAS</span>':'')
       + '</div>'
@@ -685,7 +755,7 @@ function render(){
       +   (v.raw?'<span>外面原本包着'+(v.source==="tool"?" python":"别的字")+'，已剥出</span>':'')
       + '</div>'
       + '<div class="ops">'
-      +   (g.full?'<button data-a="open">打开看看</button>':'')
+      +   ((g.full||g.svg)?'<button data-a="open">打开看看</button>':'')
       +   '<button data-a="dl">下载</button>'
       +   '<button data-a="peek">看代码</button>'
       +   (v.raw?'<button data-a="rawpeek">看剥壳前</button>':'')
@@ -696,7 +766,7 @@ function render(){
           '<div class="v"><span>第 '+(j+1)+' 版</span><span>'+fmtDate(x.t||x.convTime)+'</span>'
           +'<span>'+(x.bytes/1024).toFixed(1)+' KB</span>'
           +'<button data-a="dlv" data-j="'+j+'">下载这版</button>'
-          +(x.full?'<button data-a="openv" data-j="'+j+'">打开这版</button>':'')+'</div>').join("")
+          +(x.full||x.svg?'<button data-a="openv" data-j="'+j+'">打开这版</button>':'')+'</div>').join("")
       + '</div>'
       + '</div>';
   }).join("");
@@ -707,11 +777,11 @@ $("list").addEventListener("click",e=>{
   const item=e.target.closest(".item"); const g=VIS[+item.dataset.i];
   const a=btn.dataset.a; const j=btn.dataset.j!==undefined?+btn.dataset.j:null;
   const v = j!==null ? g.vers[j] : g.last;
-  const base = g.origName ? g.origName.replace(/\.html?$/i,"") : safeName(g.name);
-  const fname = base+(j!==null?"_v"+(j+1):"")+(v.full?".html":"."+(v.jsx?"jsx":(v.lang==="txt"?"txt":v.lang)));
+  const base = g.origName ? g.origName.replace(/\.(html?|svg)$/i,"") : safeName(g.name);
+  const fname = base+(j!==null?"_v"+(j+1):"")+saveExt(v);
 
   if(a==="open"||a==="openv"){
-    const url=URL.createObjectURL(new Blob([v.code],{type:"text/html;charset=utf-8"}));
+    const url=URL.createObjectURL(new Blob([v.code],{type:openType(v)}));
     window.open(url,"_blank"); setTimeout(()=>URL.revokeObjectURL(url),60000);
   }
   else if(a==="dl"||a==="dlv"){
@@ -753,6 +823,7 @@ $("mdlist").onclick=()=>{
     lines.push("- 来自对话："+g.conv);
     lines.push("- 最后一版："+fmtDate(v.t||v.convTime)+" · "+(v.bytes/1024).toFixed(1)+" KB · 共 "+g.vers.length+" 版");
     if(g.origName) lines.push("- 当年的文件名："+g.origName);
+    if(g.svg) lines.push("- 类型：SVG 小卡");
     if(g.jsx) lines.push("- 类型：JSX 明珠（还不是网页，需要转成 HTML）");
     if(v.source==="canvas") lines.push("- 出处：Canvas");
     lines.push("");
@@ -772,9 +843,9 @@ $("zip").onclick=()=>{
   const enc=new TextEncoder(); const used=new Set();
   const files=gs.map(g=>{
     const v=g.last;
-    let base=g.origName?safeName(g.origName.replace(/\.html?$/i,"")):safeName(g.name);
-    let name=base+(v.full?".html":"."+(g.jsx||v.jsx?"jsx":(v.lang==="txt"?"txt":v.lang)));
-    let k=2; while(used.has(name)){ name=base+"_"+k+(v.full?".html":".txt"); k++; }
+    let base=g.origName?safeName(g.origName.replace(/\.(html?|svg)$/i,"")):safeName(g.name);
+    let name=base+saveExt(v);
+    let k=2; while(used.has(name)){ name=base+"_"+k+saveExt(v); k++; }
     used.add(name);
     return {name,data:enc.encode(v.code)};
   });

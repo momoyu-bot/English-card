@@ -45,7 +45,7 @@
 python3 - <<'PY'
 import subprocess, hashlib, collections, pathlib
 files = [f for f in subprocess.run(
-    ['git','-c','core.quotepath=false','ls-files','*.html'],
+    ['git','-c','core.quotepath=false','ls-files','*.html','*.svg'],
     capture_output=True, text=True).stdout.split('\n') if f]
 seen = collections.defaultdict(list)
 for f in files:
@@ -65,7 +65,7 @@ PY
 
 1. **`<br>` 有没有被吃掉。**有几份副本里 `<br>` 被替换成了普通换行，
    而 HTML 里普通换行等于空格——换行效果直接消失。
-2. **粘贴残留。**导入后确认文件以 `<!DOCTYPE` 开头、以 `</html>` 结尾。
+2. **粘贴残留。**导入后确认网页以 `<!DOCTYPE` 开头、以 `</html>` 结尾；SVG 以 `<svg` 或 `<?xml` 开头、以 `</svg>` 结尾。
 3. **不间断空格（U+00A0）。**`claude/宝的摸鱼小屋.html` 曾经把缩进全写成
    U+00A0。CSS 不认它当空白，整页变成一条竖排。比对：
    `python3 -c "print(open('某文件.html','rb').read().count(bytes([0xc2,0xa0])))"`
@@ -82,7 +82,7 @@ PY
   只想检查是否过期：`python3 tools/build_index.py --check`。
 - 首页现在是纯 HTML，打开时**不发任何网络请求**——断网能看，
   GitHub 挂了也能看。二级分类用原生 `<details>`/`<summary>`，不写 JS。
-- 目录层级不限，`目录/子目录/文件.html` 也会被列出来。
+- 目录层级不限，`目录/子目录/文件.html` 和 `.svg` 都会被列出来。
 
 ### 两个页面标题撞车了怎么办
 
