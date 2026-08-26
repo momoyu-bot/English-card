@@ -391,6 +391,46 @@ def display_folder(rel):
     return FOLDER_ALIAS.get(folder, folder)
 
 
+def _variants(e, by_folder):
+    """撞名了要加什么后缀，从好看的往难看的排。"""
+    base = e["name"]
+    if by_folder:
+        yield f"{base}（{e['raw_folder'].split('/')[0]} 版）"
+    yield f"{base}（{os.path.splitext(os.path.basename(e['path']))[0]}）"
+    n = 2
+    while True:
+        yield f"{base} · {n}"
+        n += 1
+
+
+def dedupe_names(entries):
+    """两个页面在首页上显示成同一个名字，就自动加后缀分开，并且把撞车的报出来。
+
+    以前这里是直接报错退出、拒绝生成的。结果是首页不更新，还发一封
+    看不懂的失败邮件——而改名、拆版本这些事的中间那一两个提交里
+    出现重名是很正常的，下一个提交就没了。不值得为它红一次。
+    现在照常生成，只是把撞车的名字打出来，提醒去 DISPLAY_NAME 补正式的。
+    """
+    groups = {}
+    for e in entries:
+        groups.setdefault(e["name"], []).append(e)
+
+    taken = {n for n, g in groups.items() if len(g) == 1}
+    clashes = []
+    for name in sorted(n for n, g in groups.items() if len(g) > 1):
+        members = groups[name]
+        folders = {e["raw_folder"].split("/")[0] for e in members}
+        by_folder = len(folders) == len(members)   # 各在各的目录，用目录名区分最好看
+        for e in members:
+            for cand in _variants(e, by_folder):
+                if cand not in taken:
+                    break
+            taken.add(cand)
+            e["name"] = cand
+        clashes.append((name, [(e["path"], e["name"]) for e in members]))
+    return clashes
+
+
 def build_entries():
     entries = []
     for rel in list_pages():
@@ -492,19 +532,21 @@ def render(blocks):
 
 def main():
     entries = build_entries()
+    clashes = dedupe_names(entries)
     blocks = group(entries)
 
-    seen = {}
-    dup = []
-    for e in entries:
-        if e["name"] in seen:
-            dup.append((e["name"], seen[e["name"]], e["path"]))
-        seen[e["name"]] = e["path"]
-    if dup:
-        print("显示名还有撞车，请在 DISPLAY_NAME 里补上：", file=sys.stderr)
-        for name, a, b in dup:
-            print(f"  「{name}」\n      {a}\n      {b}", file=sys.stderr)
-        return 2
+    if clashes:
+        report = ["显示名撞车了，已经自动加后缀分开。想要好看的名字，去 DISPLAY_NAME 里补一行："]
+        for name, members in clashes:
+            report.append(f"  「{name}」")
+            for path, final in members:
+                report.append(f"      {path}  →  {final}")
+        text = "\n".join(report)
+        print(text, file=sys.stderr)
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as fh:
+                fh.write("### 显示名撞车（已自动加后缀，首页照常更新）\n\n```\n" + text + "\n```\n")
 
     src = open(INDEX, encoding="utf-8").read()
     if BEGIN not in src or END not in src:
