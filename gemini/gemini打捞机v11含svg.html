@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gemini 专属打捞机</title>
+<style>
+  :root{
+    --abyss:#08161E;
+    --deep:#0E2733;
+    --water:#143845;
+    --edge:#1F4E5C;
+    --foam:#E9E3D3;
+    --silt:#7C949D;
+    --brass:#C9A227;
+    --verdigris:#5FA8A0;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background: radial-gradient(120% 80% at 50% -10%, #17414F 0%, var(--deep) 38%, var(--abyss) 100%) fixed;
+    color:var(--foam); font-family:var(--sans); font-size:15px; line-height:1.7; min-height:100vh;
+  }
+  a{color:var(--verdigris)}
+  button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 26px 90px}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    padding-bottom:18px;border-bottom:1px solid var(--edge)}
+  .brand h1{margin:0;font-size:30px;letter-spacing:.24em;font-weight:600;text-indent:.24em}
+  .brand p{margin:7px 0 0;color:var(--silt);font-size:13px;letter-spacing:.04em}
+  .privacy{font-family:var(--mono);font-size:11px;color:var(--verdigris);
+    border:1px solid var(--edge);border-radius:2px;padding:7px 11px;letter-spacing:.06em;white-space:nowrap}
+
+  .dropzone{margin-top:44px;border:1px dashed var(--edge);border-radius:3px;
+    padding:70px 30px;text-align:center;transition:border-color .18s, background .18s;background:rgba(20,56,69,.28)}
+  .dropzone.hot{border-color:var(--brass);background:rgba(201,162,39,.07)}
+  .dropzone h2{margin:0 0 10px;font-size:19px;font-weight:500;letter-spacing:.06em}
+  .dropzone p{margin:0;color:var(--silt);font-size:13px}
+  .dropzone .pick{margin-top:24px;background:none;border:1px solid var(--brass);color:var(--brass);
+    padding:10px 26px;border-radius:2px;font-family:var(--mono);font-size:12px;letter-spacing:.16em}
+  .dropzone .pick:hover{background:var(--brass);color:var(--abyss)}
+
+  #sonar{display:none;margin-top:40px;grid-template-columns:74px 1fr;gap:30px}
+  #sonar.on{display:grid}
+  .gauge{position:relative;border-left:1px solid var(--edge);height:340px}
+  .gauge .tick{position:absolute;left:-1px;width:14px;height:1px;background:var(--verdigris);opacity:.85}
+  .gauge .tick.svg{background:var(--brass);width:18px;z-index:2}
+  .gauge .cursor{position:absolute;left:-5px;width:9px;height:9px;border-radius:50%;
+    background:var(--brass);transform:translateY(-4px);box-shadow:0 0 0 4px rgba(201,162,39,.18)}
+  .readout{font-family:var(--mono)}
+  .readout .big{font-size:44px;letter-spacing:.02em;color:var(--brass);line-height:1.1}
+  .readout .row{display:flex;gap:34px;flex-wrap:wrap;margin-top:22px}
+  .readout .cell span{display:block;font-size:10px;color:var(--silt);letter-spacing:.18em}
+  .readout .cell strong{font-size:22px;font-weight:500}
+  .readout .note{margin-top:26px;font-family:var(--sans);font-size:13px;color:var(--silt);max-width:52ch}
+
+  #deck{display:none}
+  #deck.on{display:block}
+  .toolbar{margin-top:38px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    padding-bottom:16px;border-bottom:1px solid var(--edge)}
+  .toolbar input[type=search]{flex:1;min-width:210px;background:rgba(8,22,30,.6);border:1px solid var(--edge);
+    color:var(--foam);padding:10px 13px;border-radius:2px;font-family:var(--sans);font-size:14px}
+  .seg{display:flex;border:1px solid var(--edge);border-radius:2px;overflow:hidden}
+  .seg button{background:none;border:0;padding:9px 15px;font-family:var(--mono);font-size:11.5px;
+    color:var(--silt);letter-spacing:.1em}
+  .seg button.sel{background:var(--edge);color:var(--foam)}
+  .act{background:none;border:1px solid var(--brass);color:var(--brass);padding:9px 16px;border-radius:2px;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em}
+  .act:hover{background:var(--brass);color:var(--abyss)}
+  .act[disabled]{opacity:.35;cursor:default}
+
+  .count{margin:20px 0 6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);letter-spacing:.1em}
+  .item{border-bottom:1px solid rgba(31,78,92,.55);padding:17px 2px}
+  .item .head{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  .item .name{font-size:17px;font-weight:500;letter-spacing:.02em}
+  .item .badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:2px 7px;border-radius:2px;
+    border:1px solid var(--edge);color:var(--silt)}
+  .item .badge.html{border-color:var(--verdigris);color:var(--verdigris)}
+  .item .badge.svg{border-color:#D28E5D;color:#D28E5D}
+  .item .meta{margin-top:6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);display:flex;gap:18px;flex-wrap:wrap}
+  .item .ops{margin-top:12px;display:flex;gap:9px;flex-wrap:wrap}
+  .item .ops button{background:none;border:1px solid var(--edge);color:var(--silt);padding:6px 13px;
+    border-radius:2px;font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+  .item .ops button:hover{border-color:var(--foam);color:var(--foam)}
+  .item pre{margin:12px 0 0;background:rgba(8,22,30,.62);border:1px solid var(--edge);border-radius:2px;
+    padding:13px 15px;overflow:auto;max-height:280px;font-family:var(--mono);font-size:12px;
+    color:#BFD3D8;line-height:1.65;white-space:pre-wrap;word-break:break-all}
+  
+  .err{margin-top:26px;border:1px solid #8A4B3C;background:rgba(138,75,60,.14);padding:15px 18px;
+    border-radius:2px;font-size:13.5px;color:#F0C9BE}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Gemini 专属打捞机</h1>
+      <p>去除了所有冗杂解析，专为 Google Takeout HTML 档案打造，SVG 也能完美升舱</p>
+    </div>
+    <div class="privacy">纯本地解析 · 眨眼即达</div>
+  </header>
+
+  <div class="dropzone" id="dz">
+    <h2>把「我的活动记录.html」拖进来</h2>
+    <p>专治各种 &lt;br&gt; 换行符与转义乱码。所有 HTML 和 SVG 都会被奉为座上宾。</p>
+    <button class="pick" id="pick">选择文件</button>
+    <input type="file" id="file" accept=".html,.htm" hidden>
+  </div>
+
+  <div id="sonar">
+    <div class="gauge" id="gauge"><div class="cursor" id="cursor" style="top:0"></div></div>
+    <div class="readout">
+      <div class="big"><span id="pct">0</span><small>%</small></div>
+      <div class="row">
+        <div class="cell"><span>已吞噬</span><strong id="mb">0</strong></div>
+        <div class="cell"><span>捞到网页(HTML)</span><strong id="nhtml">0</strong></div>
+        <div class="cell"><span>捞到矢量图(SVG)</span><strong id="nsvg">0</strong></div>
+        <div class="cell"><span>杂项代码</span><strong id="ncode">0</strong></div>
+      </div>
+      <div class="note" id="note">正在解析你的赛博走私记录...</div>
+    </div>
+  </div>
+
+  <div id="deck">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="搜标题或代码片段...">
+      <div class="seg">
+        <button id="fVip" class="sel">只看网页与SVG</button>
+        <button id="fAll">全部代码</button>
+      </div>
+      <button class="act" id="zip">打包最终版</button>
+    </div>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </div>
+  <div id="err"></div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const dz=$("dz"), gauge=$("gauge"), cursor=$("cursor");
+let GROUPS=[], VIS=[], FILTER="vip";
+
+$("pick").onclick=()=>$("file").click();
+dz.onclick=e=>{ if(e.target===dz||e.target.tagName==="H2"||e.target.tagName==="P") $("file").click(); };
+$("file").onchange=e=>{ if(e.target.files[0]) processGeminiFile(e.target.files[0]); };
+["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("hot");}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("hot");}));
+dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) processGeminiFile(f); });
+
+function fail(msg){
+  $("err").innerHTML='<div class="err">'+msg+"</div>";
+  $("sonar").classList.remove("on"); dz.style.display="";
+}
+function safeName(s){ return (s||"未命名").replace(/[\\\/:*?"<>|\u0000-\u001F]/g,"_").replace(/\s+/g," ").trim().slice(0,70); }
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+const FENCE = /(^|\n)[ \t]*(`{3,}|~{3,})[ \t]*([A-Za-z0-9_+#.-]*)[ \t]*\n([\s\S]*?)\n?[ \t]*\2[ \t]*(?=\n|$)/g;
+const RAW_SVG = /<svg[\s>][\s\S]*?<\/svg>/gi; // 兜底：抓取没有套在代码块里的裸奔 SVG
+
+function analyzeCode(code, rawLang) {
+  const lowerCode = code.toLowerCase();
+  let type = "txt", ext = ".txt", isVip = false, title = "";
+
+  // 1. 最高优先级：SVG 矢量图
+  if (lowerCode.includes("<svg") && lowerCode.includes("</svg>")) {
+    type = "svg"; ext = ".svg"; isVip = true;
+    const tm = code.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    if(tm) title = tm[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,120);
+  } 
+  // 2. 次高优先级：HTML 网页
+  else if (lowerCode.includes("<!doctype html") || lowerCode.includes("<html")) {
+    type = "html"; ext = ".html"; isVip = true;
+    const tm = code.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    if(tm) title = tm[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,120);
+  } 
+  // 3. 杂项代码
+  else if (rawLang) {
+    type = rawLang; ext = "." + rawLang;
+  }
+
+  return { type, ext, isVip, title };
+}
+
+async function processGeminiFile(file) {
+  $("err").innerHTML=""; dz.style.display="none";
+  $("sonar").classList.add("on"); $("deck").classList.remove("on");
+  gauge.querySelectorAll(".tick").forEach(n=>n.remove());
+
+  $("note").innerHTML = "启动大口径抽水泵，正在进行暴力反转义...";
+  const text = await file.text();
+
+  // 核心：处理 Google Takeout 那丧心病狂的转义
+  const unescaped = text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
+  const all = [];
+  let nhtml = 0, nsvg = 0, ncode = 0;
+  
+  // 收集所有代码块
+  const blocks = [];
+  let m;
+  FENCE.lastIndex = 0;
+  while((m = FENCE.exec(unescaped)) !== null) {
+    blocks.push({ lang: (m[3]||"").toLowerCase(), code: m[4] });
+  }
+
+  // 兜底：如果有些 SVG 没写在代码块里，被散养在外面了，强行抓出来
+  let mSvg;
+  while((mSvg = RAW_SVG.exec(unescaped)) !== null) {
+    // 简单查重，如果已经在 blocks 里了就跳过
+    if(!blocks.some(b => b.code.includes(mSvg[0]))) {
+      blocks.push({ lang: "svg", code: mSvg[0] });
+    }
+  }
+
+  blocks.forEach((b, i) => {
+    if (b.code.trim().length < 20) return;
+    const info = analyzeCode(b.code, b.lang);
+    
+    all.push({
+      code: b.code,
+      type: info.type,
+      ext: info.ext,
+      isVip: info.isVip,
+      title: info.title,
+      name: info.title || `Gemini_打捞件_${i+1}`,
+      bytes: b.code.length
+    });
+
+    if (info.type === "svg") {
+      nsvg++;
+      const tk = document.createElement("div"); tk.className = "tick svg"; tk.style.top = (Math.random() * 100).toFixed(2) + "%"; gauge.appendChild(tk);
+    } else if (info.type === "html") {
+      nhtml++;
+      const tk = document.createElement("div"); tk.className = "tick"; tk.style.top = (Math.random() * 100).toFixed(2) + "%"; gauge.appendChild(tk);
+    } else {
+      ncode++;
+    }
+  });
+
+  $("pct").textContent = "100";
+  $("mb").textContent = (file.size / 1048576).toFixed(1) + " MB";
+  $("nhtml").textContent = nhtml;
+  $("nsvg").textContent = nsvg;
+  $("ncode").textContent = ncode;
+  cursor.style.top = "100%";
+
+  $("note").innerHTML = `打捞完毕！成功解救 <b>${nsvg}</b> 份 SVG 博物馆小卡，<b>${nhtml}</b> 份 HTML 网页，以及 ${ncode} 段杂项代码。`;
+  $("note").querySelectorAll("b").forEach(b=>b.style.color="var(--brass)");
+
+  // 因为不用聚合多版本了，直接平铺
+  GROUPS = all;
+  render();
+  $("deck").classList.add("on");
+}
+
+function visible(){
+  const q=$("q").value.trim().toLowerCase();
+  return GROUPS.filter(g=>{
+    if(FILTER==="vip" && !g.isVip) return false;
+    if(!q) return true;
+    return g.name.toLowerCase().includes(q) || g.code.toLowerCase().includes(q);
+  });
+}
+
+function render(){
+  const list=$("list"); const gs=visible(); VIS=gs;
+  $("count").textContent = gs.length ? `共展示 ${gs.length} 件物品` : "";
+  $("zip").disabled = !gs.length;
+  if(!gs.length){ list.innerHTML='<div class="empty">空空如也，换个词或切到「全部代码」看看。</div>'; return; }
+  
+  list.innerHTML = gs.map((g,i)=>{
+    const badgeClass = g.type === "svg" ? "svg" : (g.type === "html" ? "html" : "");
+    return `<div class="item" data-i="${i}">
+      <div class="head">
+        <span class="name">${esc(g.name)}${g.title?"":' <em>（无标题）</em>'}</span>
+        <span class="badge ${badgeClass}">${esc(g.type.toUpperCase())}</span>
+      </div>
+      <div class="meta">
+        <span>${(g.bytes/1024).toFixed(1)} KB</span>
+        <span>后缀: ${g.ext}</span>
+      </div>
+      <div class="ops">
+        ${g.isVip ? '<button data-a="open">浏览器内预览</button>' : ''}
+        <button data-a="dl">单件下载</button>
+        <button data-a="peek">看代码</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+$("list").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-a]"); if(!btn) return;
+  const item=e.target.closest(".item"); const g=VIS[+item.dataset.i];
+  const a=btn.dataset.a;
+  const fname = safeName(g.name) + g.ext;
+
+  if(a==="open"){
+    const mime = g.type === "svg" ? "image/svg+xml" : "text/html";
+    const url=URL.createObjectURL(new Blob([g.code],{type:mime+";charset=utf-8"}));
+    window.open(url,"_blank"); setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+  else if(a==="dl"){
+    const url=URL.createObjectURL(new Blob([g.code],{type:"text/plain;charset=utf-8"}));
+    const link=document.createElement("a"); link.href=url; link.download=fname; link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }
+  else if(a==="peek"){
+    let pre=item.querySelector("pre");
+    if(pre){ pre.remove(); btn.textContent="看代码"; }
+    else{ pre=document.createElement("pre"); pre.textContent=g.code; item.appendChild(pre); btn.textContent="收起"; }
+  }
+});
+
+$("q").addEventListener("input",render);
+$("fVip").onclick=()=>{FILTER="vip";$("fVip").classList.add("sel");$("fAll").classList.remove("sel");render();};
+$("fAll").onclick=()=>{FILTER="all";$("fAll").classList.add("sel");$("fVip").classList.remove("sel");render();};
+
+// ZIP 打包 (极速无压缩存储模式 CRC32)
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+
+$("zip").onclick=()=>{
+  const gs=VIS; if(!gs.length) return;
+  const enc=new TextEncoder(); const used=new Set();
+  const files=gs.map(g=>{
+    let name = safeName(g.name) + g.ext;
+    let k=2; while(used.has(name)){ name = safeName(g.name) + "_" + k + g.ext; k++; }
+    used.add(name); return {name, data:enc.encode(g.code)};
+  });
+
+  const chunks=[]; const central=[]; let offset=0;
+  for(const f of files){
+    const nameB=enc.encode(f.name); const crc=crc32(f.data);
+    const lh=new Uint8Array(30+nameB.length); const dv=new DataView(lh.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true); dv.setUint16(6,0x0800,true);
+    dv.setUint16(14,crc,true); dv.setUint32(18,f.data.length,true); dv.setUint32(22,f.data.length,true);
+    dv.setUint16(26,nameB.length,true); lh.set(nameB,30);
+    chunks.push(lh,f.data);
+    const ch=new Uint8Array(46+nameB.length); const cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true); cv.setUint32(16,crc,true);
+    cv.setUint32(20,f.data.length,true); cv.setUint32(24,f.data.length,true);
+    cv.setUint16(28,nameB.length,true); cv.setUint32(42,offset,true); ch.set(nameB,46);
+    central.push(ch); offset+=lh.length+f.data.length;
+  }
+  let cdSize=0; for(const c of central) cdSize+=c.length;
+  const end=new Uint8Array(22); const ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
+  ev.setUint32(12,cdSize,true); ev.setUint32(16,offset,true);
+  
+  const blob = new Blob([...chunks,...central,end],{type:"application/zip"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a"); link.href=url; link.download="Gemini_失灵博物馆_打包.zip"; link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),8000);
+};
+</script>
+</body>
+</html>
