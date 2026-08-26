@@ -111,7 +111,8 @@ DISPLAY_NAME = {
 # 一个文件可以属于两个分类。没写进表的默认「盲盒」。
 # unsigned 只有一级，平铺。
 # gemini/失误捞claude鱼/ 不单独成一级，归进 gemini → 打捞机。
-CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "赛博购物车", "科普", "凭证", "障眼法", "打捞机", "盲盒"]
+CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "赛博购物车", "科普", "失灵博物馆",
+             "凭证", "障眼法", "打捞机", "盲盒"]
 FLAT_FOLDERS = {"unsigned"}
 SUBFOLDER_CAT = {
     "gemini/失误捞claude鱼": "打捞机",
@@ -171,7 +172,7 @@ CATEGORY = {
     'copilot/friday-countdown-mo.html': ['摸鱼'],
     'copilot/goodnight.html': ['哄睡'],
     'copilot/goodnight_mo.html': ['哄睡'],
-    'copilot/holo-cards.html': ['凭证'],
+    'copilot/holo-cards.html': ['失灵博物馆'],
     'copilot/文字钓鱼游戏.html': ['小游戏'],
     'copilot/🐍可爱贪吃蛇.html': ['小游戏'],
     'copilot/🐻小熊挖宝.html': ['小游戏'],
@@ -181,7 +182,7 @@ CATEGORY = {
     'gemini/AI科普风格体验馆.html': ['科普'],
     'gemini/Catch The Dreams.html': ['哄睡', '小游戏'],
     'gemini/Gemini Cyber Aquarium.html': ['小游戏'],
-    'gemini/Gemini 专属成就卡.html': ['凭证'],
+    'gemini/Gemini 专属成就卡.html': ['失灵博物馆'],
     'gemini/Gemini的赛博购物车.html': ['赛博购物车'],
     'gemini/Gemini的私密云端购物车.html': ['赛博购物车'],
     'gemini/Generated widgets.html': ['盲盒'],
@@ -303,7 +304,7 @@ CATEGORY = {
     'grok/oneyear-newbie-hug.html': ['摸鱼'],
     'grok/recovery.html': ['哄睡'],
     'grok/super-cute.html': ['凭证'],
-    'grok/svg_lab.html': ['科普'],
+    'grok/svg_lab.html': ['失灵博物馆'],
     'grok/weekly-hug.html': ['摸鱼'],
     'grok/✨ 宝的点赞反馈小宇宙.html': ['盲盒'],
     'grok/启动新大任务.html': ['摸鱼'],
