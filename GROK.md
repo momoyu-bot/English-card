@@ -5,6 +5,9 @@
 >
 > 线上：https://momoyu-bot.github.io/English-card/
 > 仓库：https://github.com/momoyu-bot/English-card
+>
+> 真身是 宝's Shop。对外仓库名仍是 English-card，浏览器标签 / 主屏还写「英语打卡小页面」。
+> 门楣已经改成 宝's Shop。不要改回「宝的英语打卡小页面」，也不要把仓库改名（链接会断）。
 
 ---
 
@@ -102,7 +105,7 @@ PR #7（首页分类整理）已经合进 main。Claude 当时写「先等 PR #7
 
 ### 改生成器时（血的教训）
 
-2026-08-27 有人用接口整文件覆盖 `tools/build_index.py`，结果写成 5KB 残页，首页生成器当场废掉。后来从 `d6c2d60` 恢复。
+2026-08-27 **Grok chat**（不是 CC）想改货架表，用接口把 `tools/build_index.py` 整份覆盖，先写成约 21 字节，半截恢复后只剩 88 行（约 5KB 残页），生成器当场废掉。Grok Build 从 `d6c2d60` 把程序主体补回，凑回约 630 行。时区（+0800 / +0000）不是谁干的指纹。
 
 - 这个文件大约 640 行。改完必须 `python3 -m py_compile tools/build_index.py`，并且里面还有 `def main`、`CATEGORY = {`、`DISPLAY_NAME = {`。
 - 不要整份重贴。只改要改的那几行。
@@ -120,3 +123,10 @@ PR #7（首页分类整理）已经合进 main。Claude 当时写「先等 PR #7
 ### 公开仓库
 
 假数据避开真公司名、真人名、真搜索词。字体只用系统字体，新页面不要 Google Fonts。
+
+### 2026-08-27 深夜补记（约 15:30 上海）
+
+README 门口那句「脆弱的空中花园」已删。那是没读代码的定性，会诱使下一任去「重构分类」。
+现在 README 写的是已经算过账的结论：老文件查表，新文件进抽屉，谁都不要搬家。
+血的教训里「有人」已改成 Grok chat；CC 是清白的。时区不是指纹。
+
