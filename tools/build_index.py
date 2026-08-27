@@ -205,6 +205,9 @@ CATEGORY = {
     'claude/friday_moyu_recharge_game.html': ['摸鱼'],
     'claude/ai_tenement_literature_card.svg': ['失灵博物馆'],
     'claude/夜班的东西们.html': ['哄睡'],
+
+    # 2026-08-27 新做的
+    'claude/小水母.html': ['哄睡'],
     'copilot/copilot画花.html': ['凭证'],
     'copilot/copilot运维日记.html': ['障眼法'],
     'copilot/cute-ios.html': ['凭证'],
