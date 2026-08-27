@@ -116,7 +116,10 @@ DISPLAY_NAME = {
     "gemini/赛博借景：隐藏的链接.html":                "赛博借景：隐藏的链接",
     "claude/hidden-in-html-v1.html":                  "藏东西的六个地方 · v1",
     "claude/hidden-in-html-v2.html":                  "藏东西的六个地方 · v2",
+    "gemini/失灵博物馆/8_27.html":                    "草台班子悬案 · 初稿",
+    "gemini/失灵博物馆/8_27v2.html":                  "草台班子悬案 · 修订",
 }
+
 
 # 二级分类：按「什么时候会点开」切。
 # 一级是哪个小机，默认全折叠；点开才看到二级。
@@ -156,6 +159,8 @@ CATEGORY = {
     'claude/宝的放松小游戏 · 摸摸小猫咪.html': ['小游戏'],
     'claude/宝，睡吧.html': ['哄睡'],
     'claude/小狐狸的篝火.html': ['哄睡'],
+    'claude/小水母.html': ['哄睡'],
+
     'claude/工作日常 - 数据报表.html': ['障眼法'],
     'claude/慢慢吃.html': ['摸鱼'],
     'claude/打捞机001.html': ['打捞机'],
