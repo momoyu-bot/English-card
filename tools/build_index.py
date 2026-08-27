@@ -24,6 +24,7 @@ END = "<!-- LIST:END -->"
 ORDER = ["claude", "gemini", "grok", "copilot", "gpt", "unsigned"]
 
 # 子目录在首页上归到哪个一级（文件不搬家，文件夹仍记出处）
+# 2026-08-27：model/货架名/文件.html 也一律归到 model，不要让「grok/哄睡」自己开一扇门。
 FOLDER_ALIAS = {
     "gemini/失误捞claude鱼": "gemini",
 }
@@ -119,9 +120,14 @@ DISPLAY_NAME = {
 
 # 二级分类：按「什么时候会点开」切。
 # 一级是哪个小机，默认全折叠；点开才看到二级。
-# 一个文件可以属于两个分类。没写进表的默认「盲盒」。
+# 一个文件可以属于两个分类（只对平铺在 model 根下、写进这张表的文件有效）。
+# 没写进表、又没放进货架子目录的，默认「盲盒」。
 # unsigned 只有一级，平铺。
 # gemini/失误捞claude鱼/ 不单独成一级，归进 gemini → 打捞机。
+#
+# 2026-08-27 起多一条：文件如果在「小机/货架名/」下面
+# （货架名必须是 CAT_ORDER 里的，比如 grok/哄睡/xx.html），
+# 货架名就是分类，不用再登记到这张表。老文件继续平铺 + 查表，不要搬。
 CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "赛博购物车", "科普", "失灵博物馆",
              "凭证", "障眼法", "打捞机", "盲盒"]
 FLAT_FOLDERS = {"unsigned"}
@@ -430,7 +436,12 @@ def sort_key(name):
 
 def display_folder(rel):
     folder = os.path.dirname(rel) or "."
-    return FOLDER_ALIAS.get(folder, folder)
+    if folder in FOLDER_ALIAS:
+        return FOLDER_ALIAS[folder]
+    top = folder.split("/")[0]
+    if top in ORDER:
+        return top
+    return folder
 
 
 def _variants(e, by_folder):
@@ -513,6 +524,10 @@ def cats_for(e):
     raw = e.get("raw_folder") or os.path.dirname(e["path"]) or "."
     if raw in SUBFOLDER_CAT:
         return [SUBFOLDER_CAT[raw]]
+    # 物理货架：claude/哄睡/xx.html → 分类就是「哄睡」
+    parts = e["path"].replace("\\", "/").split("/")
+    if len(parts) >= 3 and parts[1] in CAT_ORDER:
+        return [parts[1]]
     cats = CATEGORY.get(e["path"], ["盲盒"])
     return sorted(cats, key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else 99)
 
