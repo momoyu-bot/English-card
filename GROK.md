@@ -58,6 +58,24 @@ GitHub 手机 App 上传很别扭。用 Safari 打开上面的链接，如果页
 
 ## 给下一个 Grok / CC
 
+### 2026-08-28 上午：主屏漏字（Grok Build，已落地，不要拆）
+
+宝把首页加到了 iPhone 主屏幕。诊断页（`tools/diag.html`）黑面板实测：
+
+- 全屏模式：是（standalone）
+- safe-top 现在 / 滑动中最小 / 最大：全程 **0.0 / 0.0 / 0.0**
+- 盖纸实际顶边：0.0px
+- innerH / visualV：812 / 812
+
+也就是：`apple-mobile-web-app-capable` 已经打开，页面确实是全屏，但 `env(safe-area-inset-top)` 仍然是 0。`body::before` 那块盖纸高度为 0，条目从系统时间/电量底下穿过去。这不是滚动中安全区塌了，是主屏里它从来就没给过值。
+
+首页现在：`html.standalone` 把 `--safe-top` 兜底成 `max(47px, env(...))`，列表放进状态栏下面的滚动容器（诊断页的 B 方案）。Safari（不是主屏）原样不动。
+
+不要删 `apple-mobile-web-app-capable`，也不要以为加上它 env 就会 magically 有值。不要把 `--safe-top: env(...)` 的 47px 兜底拆掉。`tools/diag.html` 是一次性诊断页，不要挂进首页清单（它在 `tools/` 下，生成器会跳过）。
+
+iOS 主屏图标会缓存旧 HTML。改完让她**删掉主屏那个「英」重新加一次**，否则她看到的还是旧页。
+
+
 ### 2026-08-28 夜：货架换序、改名、对齐（Grok Build 交 CC）
 
 宝说「全改」，两轮都落地了。她接下来要让 CC 整理仓库。先读完这一节再动手。
