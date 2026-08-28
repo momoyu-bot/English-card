@@ -3,12 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- 这两行是「从主屏图标打开时进全屏」的开关。缺了它，iOS 不进 standalone，
-     env(safe-area-inset-top) 恒等于 0——下面那套 --safe-top 的安全区逻辑全部塌成 0，
-     body::before 那块盖状态栏的纸高度为 0，吸顶的 .tag 也贴到最顶上，
-     滚动的内容会从系统的时间/信号/电量底下穿过去。不要删。 -->
+<!-- 从主屏图标打开时进全屏。只要「添加到主屏幕」，不要删。
+     但进了全屏 env(safe-area-inset-top) 仍然是 0——2026-08-28 诊断页实测：
+     safe-top 全程 0.0 / 0.0，innerH = visualV = 812，盖纸高度 0。
+     挡住漏字的不是这两行，是下面 html.standalone 的 47px 兜底 + 裁切容器。 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>
+/* 必须在首屏绘制前打上 class。display-mode 媒体查询单独不够，
+   老 iOS 只认 navigator.standalone。 */
+if (navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)) {
+  document.documentElement.classList.add('standalone');
+}
+</script>
 <title>英语打卡小页面</title>
 <style>
   :root{
@@ -31,7 +40,8 @@
     --bar2:34px;
     --gutter:30px;
     /* iPhone 加到主屏后是全屏的，顶上这块归系统的时间/信号/电量。
-       所有吸顶的东西都要从这条线以下开始，不能压上去。 */
+       所有吸顶的东西都要从这条线以下开始，不能压上去。
+       注意：主屏打开时 env() 实测恒为 0，真正的高度在 html.standalone 里兜底。 */
     --safe-top:env(safe-area-inset-top,0px);
   }
 
@@ -242,6 +252,40 @@
   @media (prefers-reduced-motion:reduce){
     .item a{transition:none;}
   }
+
+  /* 2026-08-28 诊断（主屏图标打开、standalone=是）：
+     safe-top 现在 0.0px，滑动中最小/最大 0.0 / 0.0，盖纸顶边 0.0px。
+     env(safe-area-inset-top) 在主屏全屏里不给值，盖纸高度为 0，
+     条目从系统时间/电量底下穿过去。Safari 里 env 有值，这套不碰。
+
+     主屏：47px 兜底（真值更大就用真值），列表放进状态栏下面的滚动容器，
+     字物理上进不去。吸顶牌子的 top 改成相对这个容器，所以从 0 起算。 */
+  @media (display-mode: standalone) {
+    :root { --safe-top: max(47px, env(safe-area-inset-top, 0px)); }
+  }
+  html.standalone {
+    --safe-top: max(47px, env(safe-area-inset-top, 0px));
+    height: 100%;
+    overflow: hidden;
+  }
+  html.standalone body {
+    height: 100%;
+    overflow: hidden;
+    padding-top: 0;
+  }
+  html.standalone main {
+    position: fixed;
+    top: var(--safe-top);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+  html.standalone .tag { top: 0; }
+  html.standalone .pack-tag { top: var(--bar1); }
 </style>
 </head>
 <body>
@@ -295,9 +339,10 @@
 
   3.5) 顶部压缩可以，但不能压进状态栏。
      她是「添加到主屏」的全屏模式打开的，顶上那条归系统的时间/信号/电量。
-     所有吸顶的 top 都要加上 --safe-top，不能写 0；
-     还要有一块 position:fixed 的不透明纸盖住那条，
-     否则滚动的字会从系统图标底下透出来，糊成一片。
+     2026-08-28 诊断页实测：主屏里 env(safe-area-inset-top) 恒为 0，
+     只靠 body::before 盖纸不够（高度也是 0）。
+     主屏必须走 html.standalone：--safe-top 兜底 47px，列表裁在状态栏下面。
+     Safari（不是主屏）继续用 env，不要给它加 47px。
      2026-08-21 就踩过：门楣从 156px 压到 48px，压是对的，但压上去了。
 
   4) 字体只能用系统字体。她 2026-08-21 定死的规矩，对所有页面有效：
