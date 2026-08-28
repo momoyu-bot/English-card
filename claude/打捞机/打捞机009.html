@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打捞机 · Claude v9（认内容不认名字）</title>
+<style>
+  :root{
+    --abyss:#08161E;
+    --deep:#0E2733;
+    --water:#143845;
+    --edge:#1F4E5C;
+    --foam:#E9E3D3;
+    --silt:#7C949D;
+    --lamp:#E8703A;          /* 探照灯：这台机器的信号色 */
+    --lamp-dim:rgba(232,112,58,.14);
+    --verdigris:#5FA8A0;
+    --rust:#B4543C;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(120% 80% at 50% -10%, #17414F 0%, var(--deep) 38%, var(--abyss) 100%) fixed;
+    color:var(--foam);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.7;
+    min-height:100vh;
+  }
+  a{color:var(--verdigris)}
+  button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+  code{font-family:var(--mono);font-size:.92em}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 26px 90px}
+
+
+  /* ---- v7：航海图 ---- */
+  #chart{display:none;margin:16px 0 0}
+  #chart.on{display:block}
+  .chBody{display:none;padding:16px 4px 4px}
+  #chart.open .chBody{display:block}
+  #chart.open .dgHead .arw{transform:rotate(90deg)}
+  .chBar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+  .chBar .seg{display:flex;border:1px solid var(--edge);border-radius:8px;overflow:hidden}
+  .chBar .seg button{background:transparent;border:0;padding:7px 13px;font-size:13px;color:var(--silt)}
+  .chBar .seg button.sel{background:var(--lamp-dim);color:var(--lamp)}
+  .chBar .act{background:transparent;border:1px solid var(--lamp);color:var(--lamp);
+    border-radius:8px;padding:7px 14px;font-size:13px}
+  .chBar input{flex:1;min-width:180px;background:rgba(8,22,30,.55);border:1px solid var(--edge);
+    border-radius:8px;padding:8px 12px;color:var(--foam);font-family:inherit;font-size:13px}
+  .chScroll{max-height:560px;overflow:auto;border:1px solid var(--edge);border-radius:10px}
+  .chDay{position:sticky;top:0;background:#0C2029;border-bottom:1px solid var(--edge);
+    padding:8px 14px;font-family:var(--mono);font-size:12px;color:var(--lamp);letter-spacing:.08em;z-index:2}
+  .chRow{display:flex;align-items:baseline;gap:10px;padding:9px 14px;
+    border-bottom:1px solid rgba(31,78,92,.4);font-size:13px}
+  .chRow:last-child{border-bottom:none}
+  .chRow.hot{background:rgba(232,112,58,.07)}
+  .chRow a{color:var(--foam);text-decoration:none;border-bottom:1px solid rgba(95,168,160,.45);
+    flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chRow a:hover{color:var(--verdigris)}
+  .chRow .noid{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--silt)}
+  .chNum{font-family:var(--mono);font-size:11.5px;color:var(--silt);white-space:nowrap}
+  .chNum b{color:var(--foam);font-weight:600}
+  .chNum i{font-style:normal;color:var(--lamp);font-weight:600}
+  .chHint{font-size:11.5px;color:var(--lamp);background:var(--lamp-dim);
+    border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .chGhost{font-size:11.5px;color:var(--verdigris);border:1px solid rgba(95,168,160,.5);
+    border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .chGname{font-family:var(--mono);font-size:12px;color:var(--foam);
+    min-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chEmpty{padding:16px;color:var(--silt);font-size:13px}
+
+  /* ---- v5：漏网诊断 ---- */
+  #diag{display:none;margin:20px 0 0}
+  #diag.on{display:block}
+  .dgHead{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+    background:rgba(20,56,69,.5);border:1px solid var(--edge);border-radius:12px;
+    padding:13px 17px;transition:background .16s}
+  .dgHead:hover{background:rgba(20,56,69,.85)}
+  .dgHead .cap{font-size:14.5px;font-weight:600;letter-spacing:.02em}
+  .dgHead .sm{font-size:12.5px;color:var(--silt);font-weight:400}
+  .dgHead .arw{margin-left:auto;color:var(--silt);font-size:12px;transition:transform .18s}
+  #diag.open .dgHead .arw{transform:rotate(90deg)}
+  .dgBody{display:none;padding:18px 4px 4px}
+  #diag.open .dgBody{display:block}
+  .dgGrid{margin-bottom:18px}
+  .dgRowGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:9px}
+  .dgCell{background:rgba(8,22,30,.55);border:1px solid rgba(31,78,92,.6);border-radius:10px;padding:11px 13px}
+  .dgCell b{display:block;font-family:var(--mono);font-size:20px;font-weight:600;line-height:1.25;color:var(--foam)}
+  .dgCell span{display:block;font-size:11.5px;color:var(--silt);margin-top:2px}
+  .dgCell.hot b{color:var(--lamp)}
+  .dgNote{font-size:13px;color:var(--silt);line-height:1.85;margin:0 0 16px;
+    border-left:2px solid var(--edge);padding-left:13px}
+  .dgNote b{color:var(--foam);font-weight:600}
+  .dgSub{font-size:13px;font-weight:600;letter-spacing:.03em;color:var(--foam);margin:20px 0 9px}
+  .dgSub.first{margin-top:0}
+  .dgTags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+  .dgTag{font-family:var(--mono);font-size:11.5px;background:rgba(31,78,92,.45);
+    border:1px solid rgba(31,78,92,.9);border-radius:999px;padding:3px 10px;color:var(--foam)}
+  .dgTag i{font-style:normal;color:var(--silt)}
+  .dgList{max-height:340px;overflow:auto;border:1px solid var(--edge);border-radius:10px}
+  .dgRow{display:block;padding:9px 13px;border-bottom:1px solid rgba(31,78,92,.45);font-size:12.5px}
+  .dgRow:last-child{border-bottom:none}
+  .dgRow .w{color:var(--lamp);font-family:var(--mono);font-size:11.5px}
+  .dgRow .h{display:block;font-family:var(--mono);color:var(--silt);font-size:11.5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .dgTag.hot{border-color:rgba(232,112,58,.8);color:var(--lamp);background:var(--lamp-dim)}
+  .dgDet{margin:8px 0 0;font-size:12px;color:var(--silt)}
+  .dgDet summary{cursor:pointer;padding:4px 0}
+  .dgDet pre{background:rgba(8,22,30,.6);border:1px solid var(--edge);border-radius:8px;
+    padding:10px 12px;overflow:auto;max-height:220px;font-family:var(--mono);font-size:11px;
+    color:#BFD3D8;white-space:pre-wrap}
+  .dgEmpty{padding:14px;font-size:13px;color:var(--silt)}
+
+  /* ---- 抬头 ---- */
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    padding-bottom:18px;border-bottom:1px solid var(--edge)}
+  .brand h1{margin:0;font-size:30px;letter-spacing:.34em;font-weight:600;text-indent:.34em}
+  .brand .sub{margin:7px 0 0;color:var(--silt);font-size:13px;letter-spacing:.04em}
+  .brand .hull{display:inline-block;margin-left:2px;font-family:var(--mono);font-size:10px;
+    color:var(--lamp);border:1px solid var(--lamp);border-radius:2px;padding:1px 6px;
+    letter-spacing:.14em;vertical-align:6px}
+  .privacy{font-family:var(--mono);font-size:11px;color:var(--verdigris);
+    border:1px solid var(--edge);border-radius:2px;padding:7px 11px;letter-spacing:.06em;white-space:nowrap}
+
+  /* ---- 投放区 ---- */
+  .dropzone{margin-top:44px;border:1px dashed var(--edge);border-radius:3px;
+    padding:66px 30px;text-align:center;transition:border-color .18s, background .18s;background:rgba(20,56,69,.28)}
+  .dropzone.hot{border-color:var(--lamp);background:var(--lamp-dim)}
+  .dropzone h2{margin:0 0 10px;font-size:19px;font-weight:500;letter-spacing:.06em}
+  .dropzone .lead{margin:0;color:var(--silt);font-size:13px}
+  .dropzone .pick{margin-top:24px;background:none;border:1px solid var(--lamp);color:var(--lamp);
+    padding:10px 26px;border-radius:2px;font-family:var(--mono);font-size:12px;letter-spacing:.16em}
+  .dropzone .pick:hover{background:var(--lamp);color:var(--abyss)}
+  .hintlist{margin:30px auto 0;max-width:660px;text-align:left;font-size:12.5px;color:var(--silt);
+    font-family:var(--mono);line-height:2}
+  .hintlist b{color:var(--foam);font-weight:500;display:inline-block;min-width:5.2em}
+
+  /* ---- 下潜仪表 ---- */
+  #sonar{display:none;margin-top:40px;grid-template-columns:74px 1fr;gap:30px}
+  #sonar.on{display:grid}
+  .gauge{position:relative;border-left:1px solid var(--edge);height:340px}
+  .gauge .tick{position:absolute;left:-1px;width:14px;height:1px;background:var(--verdigris);opacity:.85}
+  .gauge .cursor{position:absolute;left:-5px;width:9px;height:9px;border-radius:50%;
+    background:var(--lamp);transform:translateY(-4px);box-shadow:0 0 0 4px var(--lamp-dim)}
+  .gauge .lbl{position:absolute;left:20px;font-family:var(--mono);font-size:10px;color:var(--silt);
+    transform:translateY(-.6em);letter-spacing:.08em}
+  .readout{font-family:var(--mono)}
+  .readout .big{font-size:44px;letter-spacing:.02em;color:var(--lamp);line-height:1.1}
+  .readout .big small{font-size:15px;color:var(--silt);letter-spacing:.1em;margin-left:8px}
+  .readout .row{display:flex;gap:34px;flex-wrap:wrap;margin-top:22px}
+  .readout .cell span{display:block;font-size:10px;color:var(--silt);letter-spacing:.18em}
+  .readout .cell strong{font-size:22px;font-weight:500}
+  .readout .note{margin-top:26px;font-family:var(--sans);font-size:13px;color:var(--silt);max-width:54ch}
+  /* 捞完了就把仪表收成一行，别占着地方 */
+  #sonar.done{grid-template-columns:1fr;margin-top:30px}
+  #sonar.done .gauge,#sonar.done .big{display:none}
+  #sonar.done .row{margin-top:0;gap:28px}
+  #sonar.done .cell strong{font-size:17px}
+  #sonar.done .note{margin-top:13px}
+
+  /* ---- 结果 ---- */
+  #deck{display:none}
+  #deck.on{display:block}
+  .toolbar{margin-top:38px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    padding-bottom:16px;border-bottom:1px solid var(--edge)}
+  .toolbar input[type=search]{flex:1;min-width:210px;background:rgba(8,22,30,.6);border:1px solid var(--edge);
+    color:var(--foam);padding:10px 13px;border-radius:2px;font-family:var(--sans);font-size:14px}
+  .toolbar input[type=search]::placeholder{color:#5C737C}
+  .seg{display:flex;border:1px solid var(--edge);border-radius:2px;overflow:hidden}
+  .seg button{background:none;border:0;padding:9px 15px;font-family:var(--mono);font-size:11.5px;
+    color:var(--silt);letter-spacing:.1em}
+  .seg button.sel{background:var(--edge);color:var(--foam)}
+  .act{background:none;border:1px solid var(--lamp);color:var(--lamp);padding:9px 16px;border-radius:2px;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em}
+  .act:hover{background:var(--lamp);color:var(--abyss)}
+  .act[disabled]{opacity:.35;cursor:default}
+  .act[disabled]:hover{background:none;color:var(--lamp)}
+
+  .count{margin:20px 0 6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);letter-spacing:.1em}
+
+  .item{border-bottom:1px solid rgba(31,78,92,.55);padding:19px 2px}
+  .item .head{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+  .item .name{font-size:17px;font-weight:500;letter-spacing:.02em}
+  .item .name em{font-style:normal;color:var(--silt)}
+  .badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:2px 7px;border-radius:2px;
+    border:1px solid var(--edge);color:var(--silt);white-space:nowrap}
+  .badge.html{border-color:var(--verdigris);color:var(--verdigris)}
+  .badge.layers{border-color:var(--lamp);color:var(--lamp)}
+  .badge.hurt{border-color:var(--rust);color:#E4A091}
+  .item .meta{margin-top:6px;font-family:var(--mono);font-size:11.5px;color:var(--silt);
+    display:flex;gap:18px;flex-wrap:wrap}
+
+  /* ---- 签名：版本地层 ---- */
+  .strata{margin-top:14px;display:flex;align-items:flex-end;gap:2px;height:46px;
+    border-bottom:1px solid var(--edge);padding-bottom:0;
+    width:max-content;max-width:100%}
+  .strata .lay{width:20px;flex:0 0 auto;min-width:4px;background:rgba(95,168,160,.32);position:relative;
+    border:0;padding:0;border-radius:1px 1px 0 0;transition:background .14s}
+  .strata .lay:hover{background:var(--verdigris)}
+  .strata .lay.sel{background:var(--lamp)}
+  .strata .lay.bad{background:repeating-linear-gradient(45deg,rgba(180,84,60,.55) 0 4px,rgba(180,84,60,.2) 4px 8px)}
+  .strata .lay.snap{box-shadow:inset 0 0 0 1px var(--rust)}
+  .strata-cap{margin-top:7px;font-family:var(--mono);font-size:11px;color:var(--silt);
+    display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .strata-cap .now{color:var(--foam)}
+
+  .item .ops{margin-top:13px;display:flex;gap:9px;flex-wrap:wrap}
+  .item .ops button{background:none;border:1px solid var(--edge);color:var(--silt);padding:6px 13px;
+    border-radius:2px;font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+  .item .ops button:hover{border-color:var(--foam);color:var(--foam)}
+  .item pre{margin:12px 0 0;background:rgba(8,22,30,.62);border:1px solid var(--edge);border-radius:2px;
+    padding:13px 15px;overflow:auto;max-height:300px;font-family:var(--mono);font-size:12px;
+    color:#BFD3D8;line-height:1.65;white-space:pre-wrap;word-break:break-all;display:none}
+  .item pre.on{display:block}
+
+  .badge.mine{border-color:rgba(95,168,160,.7);color:var(--verdigris)}
+  .badge.frag{border-color:rgba(232,112,58,.55);color:var(--lamp)}
+  .badge.coat{border-color:rgba(232,112,58,.85);color:var(--lamp);background:var(--lamp-dim)}
+  .badge.anim{border-color:rgba(95,168,160,.55);color:var(--verdigris)}
+  .badge.react{border-color:rgba(124,148,157,.7);color:var(--silt)}
+  .badge.tool{border-color:rgba(232,112,58,.8);color:var(--lamp);background:var(--lamp-dim)}
+  .coatsw{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--silt);
+    border:1px solid var(--edge);border-radius:8px;padding:6px 11px;cursor:pointer;white-space:nowrap}
+  .coatsw input{accent-color:var(--lamp);margin:0}
+  .coatsw:hover{color:var(--foam)}
+  .empty{padding:56px 0;text-align:center;color:var(--silt);font-size:14px}
+  .err{margin-top:26px;border:1px solid #8A4B3C;background:rgba(138,75,60,.14);padding:15px 18px;
+    border-radius:2px;font-size:13.5px;color:#F0C9BE}
+  .err b{color:#FFD9CE}
+
+  /* ---- 体检 ---- */
+  #vet{display:none;margin-top:34px;border:1px solid var(--edge);border-radius:3px;padding:22px 24px;
+    background:rgba(20,56,69,.32)}
+  #vet.on{display:block}
+  #vet h3{margin:0 0 4px;font-size:16px;font-weight:500;letter-spacing:.06em}
+  #vet .said{margin:0 0 18px;color:var(--silt);font-size:13px}
+  #vet table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  #vet td{padding:7px 10px 7px 0;border-bottom:1px solid rgba(31,78,92,.5);vertical-align:top}
+  #vet td:first-child{color:var(--silt);white-space:nowrap;width:9em;letter-spacing:.06em}
+  #vet pre{margin:16px 0 0;background:rgba(8,22,30,.62);border:1px solid var(--edge);padding:12px 14px;
+    border-radius:2px;overflow:auto;max-height:240px;font-family:var(--mono);font-size:11.5px;
+    color:#BFD3D8;white-space:pre-wrap;word-break:break-all}
+
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--edge);
+    font-family:var(--mono);font-size:11px;color:#4E656E;letter-spacing:.12em;text-align:center}
+
+  @media (max-width:640px){
+    .wrap{padding:24px 16px 60px}
+    .brand h1{font-size:23px;letter-spacing:.24em;text-indent:.24em}
+    #sonar.on{grid-template-columns:1fr}
+    .gauge{display:none}
+    .readout .big{font-size:34px}
+    .hintlist b{display:block;min-width:0}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;animation:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <h1>打捞机</h1>
+      <div class="sub">从 Claude 的导出记录里，把做过的小文件一件件捞回来<span class="hull">深水型 · v9</span></div>
+    </div>
+    <div class="privacy">文件不上传 · 全部在本机浏览器内完成</div>
+  </header>
+
+  <div class="dropzone" id="dz">
+    <h2>把导出的 zip 或 conversations.json 拖进来</h2>
+    <p class="lead">zip 不用先解压，会自己找到里面的 conversations.json。几百 MB 也接得住，按块读。</p>
+    <button class="pick" id="pick">选择文件</button>
+    <input type="file" id="file" accept=".json,.zip" hidden>
+    <div class="hintlist">
+      <div><b>捞什么</b>作品（artifact）、正文里的网页 / SVG / 网页片段（有没有 ``` 围栏都算）、你上传的附件，以及<b>你自己贴进对话的</b>小文件</div>
+      <div><b>看得见漏没漏</b>捞完给一张诊断单：这份记录里出现过什么、收进来多少、有什么是看见了却没收的——不用靠猜</div>
+      <div><b>还原</b>一件作品改过多少次，就顺着每一次改动重演一遍，默认给你最后那一版</div>
+      <div><b>看得见</b>每件作品下面有一条地层，一层就是一次改动，点哪层看哪一版</div>
+      <div><b>拿走</b>单件下载，或把所有最终版打包成一个 zip</div>
+    </div>
+  </div>
+
+  <div id="sonar">
+    <div class="gauge" id="gauge">
+      <div class="cursor" id="cursor" style="top:0"></div>
+    </div>
+    <div class="readout">
+      <div class="big"><span id="pct">0</span><small>%</small></div>
+      <div class="row">
+        <div class="cell"><span>已读</span><strong id="mb">0</strong></div>
+        <div class="cell"><span>开箱对话</span><strong id="nconv">0</strong></div>
+        <div class="cell"><span>捞到作品</span><strong id="nart">0</strong></div>
+        <div class="cell"><span>重演改动</span><strong id="nver">0</strong></div>
+      </div>
+      <div class="note" id="note">正在下潜。左边这条是深度轴，每捞到一件作品就在对应位置刻一道——记录是按时间排的，所以刻痕密的地方，就是你和它做东西做得最凶的那段日子。</div>
+    </div>
+  </div>
+
+  <div id="vet">
+    <h3 id="vetTitle">这份文件里没有对话</h3>
+    <p class="said" id="vetSaid"></p>
+    <table id="vetTable"></table>
+    <pre id="vetDump"></pre>
+  </div>
+
+  <div id="diag">
+    <button class="dgHead" id="dgToggle">
+      <span class="cap">漏网诊断</span>
+      <span class="sm" id="dgSum"></span>
+      <span class="arw">›</span>
+    </button>
+    <div class="dgBody">
+      <div class="dgGrid" id="dgGrid"></div>
+      <p class="dgNote" id="dgNote"></p>
+      <div id="dgTools"></div>
+      <div id="dgBlocks"></div>
+      <div id="dgLangWrap"></div>
+      <div id="dgSkipWrap"></div>
+    </div>
+  </div>
+
+  <div id="chart">
+    <button class="dgHead" id="chToggle">
+      <span class="cap">航海图</span>
+      <span class="sm" id="chSum"></span>
+      <span class="arw">›</span>
+    </button>
+    <div class="chBody">
+      <p class="dgNote" id="chNote"></p>
+      <div class="chBar">
+        <div class="seg">
+          <button id="chHot" class="sel">值得去看一眼的</button>
+          <button id="chAll">全部对话</button>
+        </div>
+        <input type="search" id="chQ" placeholder="搜对话标题（试试「模拟器」「理解」「科普」）">
+        <button class="act" id="chMd">导出这张图</button>
+      </div>
+      <div class="chScroll" id="chList"></div>
+      <div id="ghostWrap"></div>
+    </div>
+  </div>
+
+  <div id="deck">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="搜作品名、对话标题，或代码里的一句话">
+      <div class="seg">
+        <button id="fHtml" class="sel">只看能开的</button>
+        <button id="fAll">全部</button>
+      </div>
+      <label class="coatsw"><input type="checkbox" id="coatsw" checked><span>配外套</span></label>
+      <button class="act" id="zip">打包最终版</button>
+      <button class="act" id="mdlist">导出清单</button>
+    </div>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </div>
+
+  <div id="err"></div>
+
+  <footer>捞上来的东西记得晒一晒再收起来</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ==================================================================
+   1. ZIP：不解压，直接从压缩包里把 conversations.json 流出来
+   ================================================================== */
+async function bytesAt(file, off, len){
+  return new Uint8Array(await file.slice(off, off+len).arrayBuffer());
+}
+function dv(u8){ return new DataView(u8.buffer, u8.byteOffset, u8.byteLength); }
+
+// 从 zip 尾部找中央目录，列出所有条目
+async function zipList(file){
+  const tailLen = Math.min(file.size, 66000);
+  const tail = await bytesAt(file, file.size - tailLen, tailLen);
+  let eocd = -1;
+  for(let i=tail.length-22;i>=0;i--){
+    if(tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x05&&tail[i+3]===0x06){ eocd=i; break; }
+  }
+  if(eocd<0) return null;
+  const v = dv(tail);
+  let count  = v.getUint16(eocd+10, true);
+  let cdSize = v.getUint32(eocd+12, true);
+  let cdOff  = v.getUint32(eocd+16, true);
+
+  // zip64：字段被打满 0xFFFFFFFF 时去后面的 zip64 记录里拿真值
+  if(cdOff===0xFFFFFFFF || cdSize===0xFFFFFFFF || count===0xFFFF){
+    for(let i=eocd-20;i>=0;i--){
+      if(tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x06&&tail[i+3]===0x07){
+        const z64off = Number(v.getBigUint64(i+8, true));
+        const z = await bytesAt(file, z64off, 56); const zv = dv(z);
+        if(z[0]===0x50&&z[1]===0x4b&&z[2]===0x06&&z[3]===0x06){
+          count  = Number(zv.getBigUint64(32, true));
+          cdSize = Number(zv.getBigUint64(40, true));
+          cdOff  = Number(zv.getBigUint64(48, true));
+        }
+        break;
+      }
+    }
+  }
+  const cd = await bytesAt(file, cdOff, cdSize);
+  const c = dv(cd);
+  const dec = new TextDecoder("utf-8");
+  const out = []; let p = 0;
+  for(let i=0;i<count && p+46<=cd.length;i++){
+    if(c.getUint32(p, true)!==0x02014b50) break;
+    const method  = c.getUint16(p+10, true);
+    const csize   = c.getUint32(p+20, true);
+    const usize   = c.getUint32(p+24, true);
+    const nlen    = c.getUint16(p+28, true);
+    const elen    = c.getUint16(p+30, true);
+    const clen    = c.getUint16(p+32, true);
+    let   lho     = c.getUint32(p+42, true);
+    const name    = dec.decode(cd.subarray(p+46, p+46+nlen));
+    // 需要时从 extra 里补 zip64 的真实偏移
+    if(lho===0xFFFFFFFF){
+      let e = p+46+nlen; const eEnd = e+elen;
+      while(e+4<=eEnd){
+        const tag = c.getUint16(e, true), sz = c.getUint16(e+2, true);
+        if(tag===0x0001){
+          let q = e+4;
+          if(usize===0xFFFFFFFF) q+=8;
+          if(csize===0xFFFFFFFF) q+=8;
+          lho = Number(c.getBigUint64(q, true));
+          break;
+        }
+        e += 4+sz;
+      }
+    }
+    out.push({name, method, csize, usize, lho});
+    p += 46+nlen+elen+clen;
+  }
+  return out;
+}
+
+// 拿到某个条目的数据流（deflate 的用浏览器自带解压器，边解边给）
+async function zipStream(file, ent){
+  const lh = await bytesAt(file, ent.lho, 30);
+  const l  = dv(lh);
+  if(l.getUint32(0,true)!==0x04034b50) throw new Error("压缩包里这一段的头不对");
+  const nlen = l.getUint16(26,true), elen = l.getUint16(28,true);
+  const start = ent.lho + 30 + nlen + elen;
+  const raw = file.slice(start, start + ent.csize);
+  if(ent.method===0) return {stream: raw.stream(), size: ent.usize};
+  if(ent.method!==8) throw new Error("压缩包用了不认识的压缩方式（method "+ent.method+"），先手动解压再拖进来");
+  if(typeof DecompressionStream==="undefined")
+    throw new Error("这个浏览器不会当场解压 zip。把 zip 解开，拖里面的 conversations.json 进来就行");
+  return {stream: raw.stream().pipeThrough(new DecompressionStream("deflate-raw")), size: ent.usize};
+}
+
+/* ==================================================================
+   2. 字节层面切分顶层数组元素（几百 MB 也不用整份读进内存）
+   ================================================================== */
+class Splitter{
+  constructor(){ this.depth=0; this.inStr=false; this.esc=false; this.objStart=-1; this.done=false; }
+  feed(bytes, base, out){
+    const n=bytes.length;
+    for(let i=0;i<n;i++){
+      const c=bytes[i];
+      if(this.inStr){
+        if(this.esc) this.esc=false;
+        else if(c===0x5C) this.esc=true;
+        else if(c===0x22) this.inStr=false;
+        continue;
+      }
+      if(c===0x22){ this.inStr=true; continue; }
+      if(c===0x7B||c===0x5B){
+        if(this.depth===0) this.objStart=base+i;
+        this.depth++;
+      }else if(c===0x7D||c===0x5D){
+        this.depth--;
+        if(this.depth===0&&this.objStart>=0){ out.push([this.objStart, base+i+1]); this.objStart=-1; }
+        else if(this.depth<0){ this.done=true; return; }
+      }
+    }
+  }
+}
+function findArrayStart(head){
+  for(let i=0;i<head.length;i++){
+    const c=head[i];
+    if(c===0x5B) return i+1;                       // [ → 顶层就是对话数组
+    if(c===0x7B) return i;                         // { → 整份是一个对象
+    if(c!==0x20&&c!==0x0A&&c!==0x0D&&c!==0x09) return -1;
+  }
+  return -1;
+}
+
+/* ==================================================================
+   3. 认得 Claude 的作品：create / update / rewrite 一层层重演
+   ================================================================== */
+const FENCE=/(^|\n)[ \t]*(`{3,}|~{3,})[ \t]*([A-Za-z0-9_+#.-]*)[ \t]*\n([\s\S]*?)\n?[ \t]*\2[ \t]*(?=\n|$)/g;
+function fences(text){
+  const out=[]; let m; FENCE.lastIndex=0;
+  while((m=FENCE.exec(text))!==null) out.push({lang:(m[3]||"").toLowerCase(), code:m[4]});
+  return out;
+}
+const ART_TAG=/<antArtifact\b([^>]*)>([\s\S]*?)<\/antArtifact>/gi;
+// v4：正文里裸奔的 <svg>…</svg>（导出把 artifact 剥成纯文本时就长这样）
+// 用配对扫描而不是非贪婪正则——卡面里嵌一个小徽章 <svg> 是常见写法，
+// 非贪婪会在内层那个 </svg> 就把卡剪断，捞上来半张。
+function scanSvgs(text){
+  const out=[];
+  const open=/<svg\b[^>]*>/gi;
+  let m;
+  while((m=open.exec(text))!==null){
+    if(/\/>$/.test(m[0])) continue;          // 自闭合的空 <svg/>，跳过
+    const start=m.index;
+    const tag=/<svg\b[^>]*>|<\/svg\s*>/gi;
+    tag.lastIndex=open.lastIndex;
+    let depth=1, t, closed=false;
+    while((t=tag.exec(text))!==null){
+      if(t[0].charAt(1)==="/") depth--;
+      else if(!/\/>$/.test(t[0])) depth++;
+      if(depth===0){
+        out.push(text.slice(start, tag.lastIndex));
+        open.lastIndex=tag.lastIndex;         // 从外层收尾处接着找下一张
+        closed=true;
+        break;
+      }
+    }
+    if(!closed) break;                        // 剩下的没闭合，别硬捞
+  }
+  return out;
+}
+// v5：正文里裸奔的完整网页。v4 只给 SVG 做了这件事，HTML 没做——
+// 导出把 artifact 剥成纯文本时，HTML 和 SVG 是一样的下场：没有围栏、没有语言标记。
+// <html> 不会自己套自己，所以不用像 SVG 那样数层数，找到收尾就行。
+function scanHtmls(text){
+  const out=[];
+  const open=/<!doctype\s+html[^>]*>|<html\b[^>]*>/gi;
+  let m;
+  while((m=open.exec(text))!==null){
+    const start=m.index;
+    const close=/<\/html\s*>/gi;
+    close.lastIndex=open.lastIndex;
+    const c=close.exec(text);
+    if(!c) break;                       // 后面没收尾了，别硬捞半页
+    out.push(text.slice(start, close.lastIndex));
+    open.lastIndex=close.lastIndex;     // 越过整页，避免 doctype 后面那个 <html> 被再捞一次
+  }
+  return out;
+}
+
+// v5：小到不带 <html> 外壳的网页片段。宝那些"很小的内置的 html"就卡在这——
+// 它们没有 <!doctype>，isFullHtml 认不出，围栏又常常没写语言标记，于是两头不着。
+// 判据放宽成"确实是一堆标签"：至少三个网页常见标签，且有闭合。
+// v7：原来卡 40 字符，一个最小可用的 SVG 差不多正好压线，容易误杀。降到 24。
+const MINLEN=24;
+const MARKUP_TAGS=/<\/?(div|span|section|article|main|header|footer|nav|button|input|label|form|style|script|body|table|thead|tbody|tr|td|th|ul|ol|li|p|h[1-6]|canvas|img|a|iframe|video|audio|select|option|textarea|figure|details|summary|dialog|template)\b/gi;
+// v7：React / JSX 得先摘出去。它里面也是 <div><h2><button>，
+// 光看标签数会被当成网页片段，然后包壳、穿外套、存成 .html——那个文件是打不开的。
+// 你说过 Claude 爱写 jsx（多半是想留住状态），所以单独认一类：
+// 认出来就存 .jsx、不包壳、不穿外套，界面上直说它要编译才能跑。
+function looksLikeReact(code){
+  const h=code.slice(0,6000);
+  let hit=0;
+  if(/\bfrom\s+['"]react['"]|\brequire\(\s*['"]react['"]/.test(h)) hit+=2;
+  if(/\bexport\s+default\s+(function|class|\(|[A-Z])/.test(h)) hit++;
+  if(/\buse(State|Effect|Ref|Memo|Callback|Reducer)\s*\(/.test(h)) hit+=2;
+  if(/className\s*=\s*[{"']/.test(h)) hit++;
+  if(/^\s*import\s+.+\s+from\s+['"]/m.test(h)) hit++;
+  return hit>=2;
+}
+function looksLikeMarkup(code){
+  const head=code.slice(0,8000);
+  if(!/<[a-z][a-z0-9-]*[\s>\/]/i.test(head)) return false;
+  if(!/<\/[a-z][a-z0-9-]*\s*>/i.test(head)) return false;   // 一个闭合标签都没有，多半不是页面
+  MARKUP_TAGS.lastIndex=0;
+  const hits=(head.match(MARKUP_TAGS)||[]).length;
+  return hits>=3;
+}
+
+// v5：去重用的指纹。v4 拿原文直接比对，换行符从 CRLF 变成 LF、尾巴多个空行，
+// 指纹就对不上——同一份东西会被当成两件。（这个坑仓库整理时已经踩过一次。）
+function fp(s){
+  return String(s).replace(/\r\n/g,"\n").replace(/[ \t]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
+}
+
+// v5：诊断台账。前四版都是盲改——我改完不知道对没对，宝跑完只看见结果、
+// 看不见"有什么被看见了却没收进来"。这个桶就是为了让漏网可见。
+// v7：航海图。
+// 事实摆在这：这份导出里 artifact 一个都没有，93% 的围栏连语言标记都没写——
+// 也就是说"这坨到底是不是小文件"只能靠猜内容，而猜就一定会有猜错的。
+// 所以换个打法：捞不准没关系，但**标位置可以做到零漏**。
+// 只要那条消息里有代码块，就把它的日期、对话名、直达链接记下来，
+// 你顺着去翻原对话自己下载——大海捞针变成按图索骥。
+let CHART=[];
+// v8：标题里的线索。artifact 内容不在导出里，所以判断"这条对话里做没做小文件"
+// 只剩标题这一个信号了——好在你给对话起的名字往往就是那个东西本身
+//（「量子纠缠交互模拟器」「用爆米花理解泊松过程」）。
+const TITLE_HINTS=[
+  [/模拟器|可视化|演示|交互|沙盒|demo|viz|visuali|simulator|playground|sandbox/i, "像个可交互的东西"],
+  [/科普|理解|讲讲|说说|原理|机制|为什么|怎么回事|到底(是|在)|是什么|什么是|入门|扫盲|干嘛|是啥/i, "像科普"],
+  [/小游戏|摸鱼|game|玩法|闯关|上班前|下班前/i, "像小游戏"],
+  [/卡片|海报|徽章|贺卡|card|badge|poster/i, "像张卡"],
+  [/哄睡|睡前|晚安|数羊|入睡/i, "像哄睡的"],
+  [/网页|页面|html|svg|jsx|组件|小工具|小文件|面板|看板|仪表/i, "标题里就写着"],
+  [/生成器|计算器|工具|转换|统计|图表|时间轴|清单/i, "像个小工具"]
+];
+function titleHint(name){
+  for(const [re,label] of TITLE_HINTS) if(re.test(name)) return label;
+  return "";
+}
+const DIAG={
+  conv:0, msg:0, msgA:0, msgU:0,
+  tMin:0, tMax:0,
+  tools:{},                // v9：tool_use 到底叫什么名字——上一版就栽在这
+  toolFields:{},           // v9：每种工具的 input 有哪些字段
+  blockTypes:{},           // v8：导出到底保留了哪几种消息块——一眼看穿它剥掉了什么
+  ghosts:[],               // v8：有名字没内容的文件（Claude 交付过、导出只记了一笔）          // 这份记录覆盖到哪天——最容易被忽略的一个前提
+  artifact:0, fence:0, bareSvg:0, bareHtml:0, upload:0, antTag:0,
+  tooShort:0, dupe:0, mine:0,
+  skipped:[],            // 看见了但没收：{lang, why, head, conv}
+  langs:{}               // 围栏语言分布
+};
+function resetDiag(){
+  DIAG.conv=DIAG.msg=DIAG.msgA=DIAG.msgU=0;
+  DIAG.tMin=DIAG.tMax=0;
+  DIAG.blockTypes={}; DIAG.ghosts=[];
+  DIAG.tools={}; DIAG.toolFields={};
+  DIAG.artifact=DIAG.fence=DIAG.bareSvg=DIAG.bareHtml=DIAG.upload=DIAG.antTag=0;
+  DIAG.tooShort=DIAG.dupe=DIAG.mine=0;
+  DIAG.skipped=[]; DIAG.langs={};
+  CHART=[];
+}
+function noteSkip(lang, why, code, conv, uuid, t){
+  if(DIAG.skipped.length>1200) return;
+  DIAG.skipped.push({
+    lang: lang||"（没写语言）", why,
+    head: String(code).replace(/\s+/g," ").trim().slice(0,140),
+    bytes: code.length, conv: conv||"", uuid: uuid||"", t: t||0
+  });
+}
+// 对话直达链接。导出里对话 id 的字段名各版本不太一样，都试一遍。
+function convUuid(conv){
+  return String(conv && (conv.uuid || conv.conversation_id || conv.id || "") || "");
+}
+function convUrl(u){ return u ? ("https://claude.ai/chat/"+u) : ""; }
+
+// v5：把已经被别的路径认领过的区域（``` 围栏、<antArtifact>）涂成空白，
+// 再去扫"裸奔"的内容。否则围栏里的东西会被裸扫再捞一遍——去重虽然兜得住，
+// 但诊断面板上"裸网页"的数字就成了假的，而这张诊断单存在的意义就是不骗人。
+function maskCovered(text){
+  let out=text;
+  const blank=m=>m.replace(/[^\n]/g," ");
+  FENCE.lastIndex=0; ART_TAG.lastIndex=0;
+  out=out.replace(FENCE, blank);
+  out=out.replace(ART_TAG, blank);
+  return out;
+}
+function attr(s,k){ const m=s.match(new RegExp(k+'\\s*=\\s*"([^"]*)"','i')); return m?m[1]:""; }
+
+function isFullHtml(code){ return /<!doctype\s+html|<html[\s>]/i.test(code); }
+// v4：SVG 的免检通行证——原来只有 HTML 有，SVG 没有，所以 SVG 一条路断了就全没了
+function isFullSvg(code){ return /<svg[\s>][\s\S]*<\/svg>/i.test(code); }
+function svgTitle(code){
+  const m=code.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if(m){ const v=m[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim(); if(v) return v.slice(0,120); }
+  const t=code.match(/<text[^>]*>([\s\S]*?)<\/text>/i);
+  if(t){ const v=t[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim(); if(v) return v.slice(0,120); }
+  return "";
+}
+// v5：网页片段没有 <title>，全叫"回复里的网页片段"的话捞回来也认不出谁是谁。
+// 照着 svgTitle 的路子退一层：先 <title>，再 <h1>~<h6>，最后第一段有字的文本。
+// React 组件名当标题
+function reactTitle(code){
+  let m=code.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/);
+  if(m) return m[1];
+  m=code.match(/(?:function|const)\s+([A-Z][A-Za-z0-9_]*)\s*[=(]/);
+  if(m) return m[1];
+  m=code.match(/<h[1-6][^>]*>([^<{]{2,40})</);
+  if(m) return m[1].trim();
+  return "";
+}
+function fragTitle(code){
+  const t=htmlTitle(code); if(t) return t;
+  const h=code.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
+  if(h){ const v=h[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim(); if(v) return v.slice(0,120); }
+  const p=code.match(/>([^<>]{4,60})</);
+  if(p){ const v=p[1].replace(/\s+/g," ").trim(); if(v) return v.slice(0,120); }
+  return "";
+}
+// v5：片段存下来是会乱码的——它没有 <meta charset>，双击打开中文全是问号。
+// 所以下载/打开时给它包一层最小外壳。原文一个字不动，只是套上去；
+// 界面上会标「已加外壳」，看代码时看到的仍是原样。
+function wrapFrag(code, title, coat){
+  return '<!DOCTYPE html>\n<html lang="zh">\n<head>\n<meta charset="utf-8">\n'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">\n'+
+    '<title>'+String(title||"").replace(/[<>&]/g,"")+'</title>\n'+(coat||"")+'</head>\n<body>\n'+
+    code+'\n</body>\n</html>\n';
+}
+function _wrapFragOld(code, title){
+  return '<!DOCTYPE html>\n<html lang="zh">\n<head>\n<meta charset="utf-8">\n'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">\n'+
+    '<title>'+String(title||"").replace(/[<>&]/g,"")+'</title>\n</head>\n<body>\n'+
+    code+'\n</body>\n</html>\n';
+}
+
+/* ==================================================================
+   v6：外套间
+   内嵌小组件在对话框里好看，是因为它在穿聊天界面的衣服——那层界面
+   偷偷借给它一整套颜色变量、圆角、图标字体和宽度，源码里一个都没写。
+   存成单独 HTML 丢上 Pages，衣服全没了：格子背景变「未定义」→ 透明
+   → 九宫格等于隐形。这里就是给它配一件能自己出门的衣服。
+
+   ★ 最要命的一条：不是所有"没定义的变量"都该补。
+   哄睡那批（今晚见 / 月亮值夜班 / 数羊 / 小狐狸的篝火）也用了一堆
+   没静态定义的变量，但那些是页面自己用 JS 在运行时塞进去的随机值
+   （每颗星星闪的快慢都不一样）。给它们补上固定兜底，动画当场被写死。
+   所以下面要先把「JS 自己会设的」摘出去，剩下的才是真的没穿衣服。
+   ================================================================== */
+
+// 用了 var(--x) 且没写兜底的
+const CSSVAR_USE=/var\(\s*(--[A-Za-z0-9_-]+)\s*([,)])/g;
+// 静态定义 --x: …
+const CSSVAR_DEF=/(--[A-Za-z0-9_-]+)\s*:/g;
+// JS 运行时自己设的：setProperty('--x') / style="--x:…" / 模板串里拼的
+const CSSVAR_DYN=/setProperty\(\s*['"`](--[A-Za-z0-9_-]+)|style\s*=\s*["'][^"']*?(--[A-Za-z0-9_-]+)\s*:|['"`]\s*(--[A-Za-z0-9_-]+)\s*:\s*\$\{/g;
+const TABLER_USE=/\bti\s+ti-[a-z0-9-]+|@tabler\/icons|tabler-icons/;
+
+// Claude 对话框那套（暖白纸感 + 那个橙）。值是照着界面本来的调子定的，
+// 不是另挑一套审美——目的就是让它出门后尽量还是原来的样子。
+const COAT_CLAUDE={
+  "--surface-1":"#FFFFFF", "--surface-2":"#F5F4EE", "--surface-3":"#EDEBE3",
+  "--text-primary":"#1F1E1D", "--text-secondary":"#5C5A54", "--text-muted":"#8A867E",
+  "--text-accent":"#C15F3C", "--bg-accent":"#FBF0EB", "--border-accent":"#E8C7B6",
+  "--border":"#E5E2DA", "--border-strong":"#CFCBC1",
+  "--text-danger":"#A93B2C", "--bg-danger":"#FBEAE6",
+  "--text-success":"#2F6B4F", "--bg-success":"#E9F3EE",
+  "--text-warning":"#8A5A12", "--bg-warning":"#FBF1DF",
+  "--radius":"10px", "--radius-sm":"6px", "--radius-lg":"16px",
+  "--font-mono":'ui-monospace,"SF Mono",Menlo,Consolas,monospace',
+  "--font-sans":'-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Segoe UI",sans-serif'
+};
+// Gemini 那套是 Material 的命名，完全另一个体系
+const COAT_GEMINI={
+  "--color-scheme":"light", "--divider":"#E1E2E6",
+  "--on-surface-emphasis":"#1B1B1F", "--on-surface":"#1B1B1F",
+  "--on-surface-variant":"#46464F", "--on-secondary-container":"#1D192B",
+  "--surface-container-de-emphasis":"#F3F3F7", "--surface-container":"#EFEDF1",
+  "--secondary-container":"#E8DEF8", "--outline":"#77767F", "--tag-accent":"#5B5891"
+};
+const COAT_ALL=Object.assign({}, COAT_GEMINI, COAT_CLAUDE);
+
+// 这件衣服上到底缺哪几颗扣子
+function auditNaked(code){
+  const used=new Set(), def=new Set(), dyn=new Set();
+  let m;
+  CSSVAR_USE.lastIndex=0;
+  while((m=CSSVAR_USE.exec(code))!==null){ if(m[2]!==",") used.add(m[1]); }
+  CSSVAR_DEF.lastIndex=0;
+  while((m=CSSVAR_DEF.exec(code))!==null) def.add(m[1]);
+  CSSVAR_DYN.lastIndex=0;
+  while((m=CSSVAR_DYN.exec(code))!==null){ const g=m[1]||m[2]||m[3]; if(g) dyn.add(g); }
+
+  const missing=[], animated=[], unknown=[];
+  used.forEach(v=>{
+    if(def.has(v)) return;
+    if(dyn.has(v)){ animated.push(v); return; }   // ← 它自己会设，千万别碰
+    missing.push(v);
+    if(!COAT_ALL[v]) unknown.push(v);
+  });
+  return {
+    missing: missing.sort(), animated: animated.sort(), unknown: unknown.sort(),
+    tabler: TABLER_USE.test(code),
+    naked: missing.length>0 || TABLER_USE.test(code)
+  };
+}
+
+// 缝一件外套：只补真缺的那几颗扣子，认不出的给个看得见的保守值
+// （宁可配色不完美，也不要变成透明——透明就等于整页隐形，那是最糟的结果）
+function makeCoat(a){
+  if(!a.naked) return "";
+  const lines=[];
+  for(const v of a.missing){
+    const val=COAT_ALL[v];
+    lines.push("  "+v+": "+(val || (/color|text|on-|ink/.test(v) ? "#3A3A38"
+              : /bg|surface|container|fill/.test(v) ? "#F5F4EE"
+              : /border|line|outline|divider/.test(v) ? "#E2DFD8"
+              : /radius/.test(v) ? "10px" : "inherit"))+";");
+  }
+  let css="/* —— 打捞机 v6 给它配的外套：这些变量原本是聊天界面借的 —— */\n:root{\n"+
+          lines.join("\n")+"\n}\n"+
+          "html,body{background:#FAF9F5;color:#1F1E1D;"+
+          "font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Segoe UI',sans-serif;}\n"+
+          "body{max-width:860px;margin:0 auto;padding:26px 18px;}\n"+
+          "button{font-family:inherit;color:inherit;}\n";
+  let head="";
+  if(a.tabler){
+    head='<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">\n';
+  }
+  return head+"<style>\n"+css+"</style>\n";
+}
+
+// 把外套穿上：塞进 <head>，让它排在页面自己的样式前面，
+// 这样页面只要自己写了同名的，仍然盖过外套——外套只在真空位上生效。
+function wearCoat(code, a){
+  const coat=makeCoat(a);
+  if(!coat) return code;
+  const iHead=code.search(/<head[^>]*>/i);
+  if(iHead>=0){
+    const end=code.indexOf(">", iHead)+1;
+    const iMeta=code.search(/<meta[^>]*charset[^>]*>/i);
+    const at = (iMeta>=0 && iMeta<code.indexOf("</head>")) ? code.indexOf(">", iMeta)+1 : end;
+    return code.slice(0,at)+"\n"+coat+code.slice(at);
+  }
+  const iHtml=code.search(/<html[^>]*>/i);
+  if(iHtml>=0){
+    const end=code.indexOf(">", iHtml)+1;
+    return code.slice(0,end)+"\n<head>\n<meta charset=\"utf-8\">\n"+coat+"</head>\n"+code.slice(end);
+  }
+  return coat+code;   // 片段：wrapFrag 会再包壳
+}
+
+function htmlTitle(code){
+  const m=code.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if(!m) return "";
+  return m[1].replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,120);
+}
+function parseTime(x){
+  if(typeof x==="number") return x>3e10 ? x/1000 : x;
+  if(typeof x==="string"){ const t=Date.parse(x); if(!isNaN(t)) return t/1000; }
+  return 0;
+}
+
+// artifact 的类型 → 能不能直接打开 / 存成什么后缀
+const KIND={
+  "text/html":               {ext:"html", open:true,  label:"网页"},
+  "image/svg+xml":           {ext:"svg",  open:true,  label:"SVG"},
+  "text/markdown":           {ext:"md",   open:false, label:"文稿"},
+  "application/vnd.ant.react":   {ext:"jsx", open:false, label:"React"},
+  "application/vnd.ant.code":    {ext:"txt", open:false, label:"代码"},
+  "application/vnd.ant.mermaid": {ext:"mmd", open:false, label:"图"}
+};
+function kindOf(type, code){
+  if(KIND[type]) return KIND[type];
+  if(isFullHtml(code||"")) return KIND["text/html"];
+  if(isFullSvg(code||"")) return KIND["image/svg+xml"];   // v4
+  return {ext:"txt", open:false, label:type ? String(type).split("/").pop().slice(0,14) : "文本"};
+}
+const LANG_EXT={html:"html",svg:"svg",jsx:"jsx",js:"js",javascript:"js",css:"css",
+  python:"py",py:"py",json:"json",md:"md",markdown:"md",mermaid:"mmd",xml:"xml",sql:"sql"};
+
+// update 只给了 old_str / new_str，得在上一版的正文上原地替换
+function applyUpdate(cur, oldS, newS){
+  if(typeof oldS!=="string" || typeof newS!=="string") return {text:cur, ok:false};
+  const i = cur.indexOf(oldS);
+  if(i<0) return {text:cur, ok:false};
+  return {text: cur.slice(0,i)+newS+cur.slice(i+oldS.length), ok:true};
+}
+
+const MAX_KEEP = 900*1024;
+
+function extractFromConv(conv){
+  const msgs = conv && conv.chat_messages;
+  if(!Array.isArray(msgs)) return [];
+
+  const works = new Map();   // artifact id → 作品
+  const retired = [];        // 同名被推倒重做时，上一份收在这
+  const loose = [];          // 围栏 / antArtifact / 附件，各自独立成件
+
+  const newWork = (id,title,type,t)=>({
+    id, title:title||"", type:type||"", t, tEnd:t,
+    versions:[], from:"artifact", broken:0
+  });
+
+  DIAG.conv++;
+  // 拍个快照，等这条对话处理完拿差值——就不用去改下面每一个埋点了
+  const snap={fence:DIAG.fence, svg:DIAG.bareSvg, html:DIAG.bareHtml,
+              up:DIAG.upload, skip:DIAG.skipped.length, short:DIAG.tooShort,
+              ghost:DIAG.ghosts.length};
+  const cUuid=convUuid(conv);
+  for(const msg of msgs){
+    DIAG.msg++;
+    const t = parseTime(msg.created_at || msg.updated_at);
+    if(t>0){ if(!DIAG.tMin||t<DIAG.tMin) DIAG.tMin=t; if(t>DIAG.tMax) DIAG.tMax=t; }
+    const who = String(msg.sender||"").toLowerCase();
+
+    // 3a. 你当年上传进对话的文件
+    const atts = [].concat(msg.attachments||[], msg.files||[]);
+    for(const a of atts){
+      if(!a) continue;
+      const body = a.extracted_content;
+      const nm = String(a.file_name || a.name || a.title || "");
+      // v8：内容不在导出里、只留了个名字的——官方说明写得明白：
+      // "导出只记录这些文件存在过，不包含内容"。名字本身就是线索，别丢。
+      if(typeof body!=="string" || body.trim().length<MINLEN){
+        if(nm && /\.(html?|svg|jsx?|tsx?|css|md|py|json)$/i.test(nm)){
+          DIAG.ghosts.push({name:nm, conv:conv.name||"", uuid:cUuid,
+                            t:t, who:(String(msg.sender||"").toLowerCase()==="assistant")?"claude":"你"});
+        }
+        continue;
+      }
+      if(!/\.(html?|svg|jsx?|css|md)$/i.test(nm) && !isFullHtml(body) && !isFullSvg(body) && !looksLikeMarkup(body)) continue;
+      DIAG.upload++;
+      loose.push({
+        title: nm || htmlTitle(body) || "上传的文件",
+        type: isFullHtml(body) ? "text/html" : (isFullSvg(body) ? "image/svg+xml" : ""),
+        t, from:"upload",
+        versions:[{t, text:body, ok:true, cmd:"上传"}]
+      });
+    }
+
+    // v5：原来这里是 `if(who!=="assistant") continue;`——你自己发的消息只取附件，
+    // 正文完全不看。但你把别家 AI 写的小文件贴进对话来问，正文就是它唯一的落点
+    // （仓库里那个 grok 写的「宝的摸鱼小屋」就是这么进来的）。现在改成：
+    // 你的消息也扫，但只收完整网页和 SVG，普通代码块不收，免得把提问贴的片段全捞上来。
+    const mine = (who!=="assistant");
+    if(mine) DIAG.msgU++; else DIAG.msgA++;
+
+    // 3b. 正主：content[] 里的 tool_use → artifacts
+    const blocks = Array.isArray(msg.content) ? msg.content : [];
+    for(const b of blocks){ if(b&&b.type) DIAG.blockTypes[b.type]=(DIAG.blockTypes[b.type]||0)+1; }
+    let sawArtifact = false;
+    for(const b of (mine?[]:blocks)){
+      if(!b || b.type!=="tool_use") continue;
+      const inp = b.input;
+      if(!inp || typeof inp!=="object") continue;
+      const name = String(b.name || b.tool_name || b.tool || "").toLowerCase();
+      const cmd  = String(inp.command||"").toLowerCase();
+
+      // v9 诊断：把工具名和它的字段名记下来。上一版就是死在"只认叫 artifacts 的"，
+      // 结果 3715 个 tool_use 一个都没通过，诊断显示 0，我还以为记录里没有。
+      DIAG.tools[name||"(没名字)"]=(DIAG.tools[name||"(没名字)"]||0)+1;
+      const fk=name||"(没名字)";
+      if(!DIAG.toolFields[fk]) DIAG.toolFields[fk]={};
+      for(const k of Object.keys(inp)){
+        const v=inp[k];
+        const tag=(typeof v==="string") ? (v.length>200?"长文本":"短") : (typeof v);
+        DIAG.toolFields[fk][k+":"+tag]=(DIAG.toolFields[fk][k+":"+tag]||0)+1;
+      }
+
+      // ★ v9 正主：不认名字，认内容形状。
+      // 任何工具的 input 里，只要有个够长的字符串字段长得像网页/SVG/React，就当文件收。
+      // 工具会改名、字段会换、新工具会冒出来——但一份 HTML 长什么样是不会变的。
+      const claimed=new Set(["id","command","title","type","identifier","language","filename","name"]);
+      for(const k of Object.keys(inp)){
+        const v=inp[k];
+        if(typeof v!=="string" || v.trim().length<MINLEN) continue;
+        if(k==="old_str") continue;                    // 改动的旧片段，不是成品
+        if(cmd==="create"||cmd==="rewrite"||cmd==="update"){
+          if(k==="content"||k==="new_str") continue;   // 交给下面的版本重演路径
+        }
+        const full=isFullHtml(v), svgv=!full&&isFullSvg(v);
+        const rea=!full&&!svgv&&looksLikeReact(v);
+        const frg=!full&&!svgv&&!rea&&looksLikeMarkup(v);
+        if(!full&&!svgv&&!rea&&!frg) continue;
+        DIAG.toolCaught=(DIAG.toolCaught||0)+1;
+        loose.push({
+          title: String(inp.title||inp.name||inp.filename||"") ||
+                 (full?(htmlTitle(v)||"工具做出来的网页")
+                  :svgv?(svgTitle(v)||"工具做出来的 SVG")
+                  :rea?(reactTitle(v)||"React 组件")
+                  :(fragTitle(v)||"工具做出来的片段")),
+          type: (full||frg)?"text/html":(svgv?"image/svg+xml":(rea?"application/vnd.ant.react":"")),
+          t, from:"tool", tool:name, field:k,
+          isFrag:frg, isReact:rea,
+          versions:[{t, text:v, ok:true, cmd:"工具 "+(name||"?")+" · "+k}]
+        });
+      }
+
+      const isArt = name==="artifacts" || name.indexOf("artifact")>=0 ||
+                    (!!inp.id && (cmd==="create"||cmd==="update"||cmd==="rewrite"));
+      if(!isArt) continue;
+      sawArtifact = true; DIAG.artifact++;
+
+      const key = String(inp.id || inp.identifier || ("_"+works.size));
+      let w = works.get(key);
+
+      if(cmd==="create" || !w){
+        if(typeof inp.content!=="string") continue;
+        // 同一个名字被推倒重做过：先把上一份收进箱底，别让它被盖掉
+        if(w && w.versions.length) retired.push(w);
+        w = newWork(key, inp.title, inp.type, t);
+        w.versions.push({t, text:inp.content, ok:true, cmd:"新建"});
+        works.set(key, w);
+      }else if(cmd==="rewrite"){
+        if(typeof inp.content!=="string") continue;
+        if(inp.title) w.title=inp.title;
+        if(inp.type)  w.type=inp.type;
+        w.versions.push({t, text:inp.content, ok:true, cmd:"重写"});
+      }else if(cmd==="update"){
+        const prev = w.versions.length ? w.versions[w.versions.length-1].text : "";
+        const r = applyUpdate(prev, inp.old_str, inp.new_str);
+        if(!r.ok) w.broken++;
+        w.versions.push({t, text:r.text, ok:r.ok, cmd:"改动"});
+      }else{
+        continue;
+      }
+      w.tEnd = t;
+    }
+
+    // 3c. 老对话：<antArtifact> 直接写在正文里
+    // msg.text 通常就是 content 里各 text 块拼起来的，两边都扫会捞出双份
+    // v5：不再只认 type==="text"。导出里正文有时挂在别的块型上（thinking、
+    // 或新版格式里换了名字），只要那个块带着字符串 text 就一起扫。
+    const texts = [];
+    for(const b of blocks){
+      if(!b || typeof b.text!=="string" || !b.text) continue;
+      if(b.type==="tool_use" || b.type==="tool_result") continue;
+      texts.push(b.text);
+    }
+    if(!texts.length && typeof msg.text==="string" && msg.text) texts.push(msg.text);
+
+    for(const raw of (mine?[]:texts)){
+      ART_TAG.lastIndex=0; let m;
+      while((m=ART_TAG.exec(raw))!==null){
+        const a = m[1], body = m[2];
+        if(body.trim().length<MINLEN) continue;
+        DIAG.antTag++;
+        loose.push({
+          title: attr(a,"title") || htmlTitle(body) || attr(a,"identifier"),
+          type:  attr(a,"type"),
+          t, from:"artifact",
+          versions:[{t, text:body, ok:true, cmd:"新建"}]
+        });
+      }
+    }
+
+    // 3d. 正文里的网页 / SVG / 代码块
+    //
+    // ★ v5 的正主修复。这里前后错了两版：
+    //   v3 写的是 `if(sawArtifact) continue;`——这条消息里只要出现过任何一个 artifact，
+    //      整段正文的代码块就全部跳过。宝那些直接写在正文 ``` 里的小 html 全被连坐。
+    //   v4 改成"有 artifact 时正文只补捞 SVG"——只给 SVG 开了口子，HTML 照旧被跳，
+    //      所以对那批小 html 一样无效。
+    //   两版都在"要不要跳过正文"上打补丁，其实根本不用跳：底下本来就有一道按内容
+    //      去重（v5 已换成归一化指纹），同一份东西被 artifact 和正文各捞一次，那里会合并。
+    //   所以 v5 直接全扫，重复交给去重管。宁可多捞了再去重，不要少捞了不知道。
+    const convName = conv.name || "";
+    for(const raw of texts){
+      for(const f of fences(raw)){
+        DIAG.fence++;
+        const lang=f.lang||"（没写语言）";
+        DIAG.langs[lang]=(DIAG.langs[lang]||0)+1;
+        const code=f.code;
+        if(code.trim().length<MINLEN){ DIAG.tooShort++;
+          if(code.trim().length>=12) noteSkip(f.lang, "太短，没当成文件", code, convName, cUuid, t);
+          continue; }
+
+        const full = isFullHtml(code);
+        const svg  = !full && isFullSvg(code);
+        // v5 新增：不带 <html> 外壳的网页片段。围栏写了 html/xml/vue/jsx 的固然算，
+        // 什么都没写但明显是一堆标签的也算——宝的"很小的内置的 html"多半长这样。
+        const jsx = !full && !svg && looksLikeReact(code);
+        const frag = !full && !svg && !jsx && (
+          /^(html|xml|vue|svelte|htm)$/.test(f.lang) ||
+          (!f.lang || f.lang==="code" || f.lang==="text" || f.lang==="plaintext") && looksLikeMarkup(code)
+        );
+        const known = !!LANG_EXT[f.lang];
+
+        if(mine && !full && !svg && !frag && !jsx) continue;   // 你发的消息只收成品
+        if(!full && !svg && !frag && !jsx && !known){
+          noteSkip(f.lang, "既不是网页也不是认得的语言", code, convName, cUuid, t);
+          continue;
+        }
+        if(mine) DIAG.mine++;
+        loose.push({
+          title: full ? (htmlTitle(code)||"回复里的网页")
+               : svg  ? (svgTitle(code)||"回复里的 SVG")
+               : jsx  ? (reactTitle(code)||"React 组件")
+               : frag ? (fragTitle(code)||"回复里的网页片段")
+               : ("代码片段 ."+(LANG_EXT[f.lang]||"txt")),
+          type: (full||frag) ? "text/html"
+              : svg ? "image/svg+xml"
+              : jsx ? "application/vnd.ant.react" : "",
+          lang: jsx ? "jsx" : f.lang, t, from: mine?"mine":"fence", mine,
+          isFrag: frag, isReact: jsx,
+          versions:[{t, text:code, ok:true, cmd: mine?"你贴在对话里的":"写在回复里"}]
+        });
+      }
+    }
+
+    // 3e. 连围栏都没有、光溜溜躺在正文里的 <svg>…</svg> 和整页 HTML
+    // v4 只做了 SVG 这一半，v5 补上 HTML 那一半。
+    for(const raw0 of texts){
+      const raw=maskCovered(raw0);
+      for(const body of scanSvgs(raw)){
+        DIAG.bareSvg++;
+        if(body.trim().length<MINLEN){ DIAG.tooShort++; continue; }
+        if(mine) DIAG.mine++;
+        loose.push({
+          title: svgTitle(body) || "回复里的 SVG",
+          type:  "image/svg+xml",
+          t, from: mine?"mine":"svg", mine,
+          versions:[{t, text:body, ok:true, cmd: mine?"你贴在对话里的":"裸写在回复里"}]
+        });
+      }
+      for(const body of scanHtmls(raw)){
+        DIAG.bareHtml++;
+        if(body.trim().length<MINLEN){ DIAG.tooShort++; continue; }
+        if(mine) DIAG.mine++;
+        loose.push({
+          title: htmlTitle(body) || "回复里的网页",
+          type:  "text/html",
+          t, from: mine?"mine":"html", mine,
+          versions:[{t, text:body, ok:true, cmd: mine?"你贴在对话里的":"裸写在回复里"}]
+        });
+      }
+    }
+  }
+
+  // 同一段正文可能被不同路径各捞一次，按内容去重（作品优先，兜底的让位）
+  // v5：指纹去重。原来是拿原文一字不差地比，换行符或尾部空白差一点就当成两件。
+  // 现在统一 CRLF、去掉行尾空白再比，同一份东西不管从哪条路捞上来都只留一件。
+  const seenBody=new Set();
+  for(const w of [...works.values(), ...retired]){
+    const last=w.versions[w.versions.length-1];
+    if(last) seenBody.add(fp(last.text));
+  }
+  const keptLoose=[];
+  for(const w of loose){
+    const key=fp(w.versions[0].text);
+    if(seenBody.has(key)){ DIAG.dupe++; continue; }
+    seenBody.add(key); keptLoose.push(w);
+  }
+
+  const all = [...works.values(), ...retired, ...keptLoose];
+  for(const w of all){
+    for(const v of w.versions){
+      if(v.text.length>MAX_KEEP){ v.text=v.text.slice(0,MAX_KEEP); v.cut=true; }
+    }
+    // 一次改动没对上，后面依赖它的都会跟着断——真正要告诉人的是「断在哪一版」
+    w.firstBad = w.versions.findIndex(v=>!v.ok);
+    const last = w.versions[w.versions.length-1];
+    if(!last){ w.dead=true; continue; }
+    const k = kindOf(w.type, last.text);
+    if(!w.type && w.lang && LANG_EXT[w.lang]) k.ext = LANG_EXT[w.lang];
+    w.ext=k.ext; w.openable=k.open; w.kindLabel=k.label;
+    if(!w.title) w.title = htmlTitle(last.text) || "没名字的";
+    // v6：体检——这件是不是在穿聊天界面的衣服
+    w.audit = (w.ext==="html" && !w.isReact) ? auditNaked(last.text) : null;
+    w.bytes = last.text.length;
+    w.conv = conv.name || "没名字的对话";
+    w.convAt = parseTime(conv.created_at);
+    w.tEnd = w.tEnd || w.t;
+  }
+  const mine_=all.filter(w=>!w.dead).sort((a,b)=>a.t-b.t);
+  // 结账：这条对话里出现过多少候选、最后收了几件、还剩多少没收
+  const seenN=(DIAG.fence-snap.fence)+(DIAG.bareSvg-snap.svg)+
+              (DIAG.bareHtml-snap.html)+(DIAG.upload-snap.up);
+  const skipN=DIAG.skipped.length-snap.skip;
+  const shortN=DIAG.tooShort-snap.short;
+  const ghostN=DIAG.ghosts.length-snap.ghost;
+  // v8：所有对话都进图，不再只收"有代码块的"。
+  // 因为 artifact 的内容压根不在导出里——"这条对话有没有代码块"根本
+  // 判断不了"这条对话里有没有小文件"。既然判断不了，就全列出来让她自己看。
+  {
+    let tA=0, tB=0;
+    for(const w of mine_){ if(!tA||w.t<tA) tA=w.t; if(w.tEnd>tB) tB=w.tEnd; }
+    if(!tB) tB=parseTime(conv.updated_at||conv.created_at);
+    CHART.push({
+      uuid:cUuid, name:conv.name||"没名字的对话",
+      t: tB || parseTime(conv.created_at),
+      seen:seenN, got:mine_.length, skip:skipN, short:shortN, ghost:ghostN,
+      fence:DIAG.fence-snap.fence, up:DIAG.upload-snap.up,
+      hint: titleHint(conv.name||"")
+    });
+  }
+  return mine_;
+}
+
+/* ==================================================================
+   4. store-only ZIP 打包
+   ================================================================== */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function makeZip(files){
+  const enc=new TextEncoder(); const chunks=[]; const central=[]; let offset=0;
+  for(const f of files){
+    const nameB=enc.encode(f.name); const crc=crc32(f.data);
+    const lh=new Uint8Array(30+nameB.length); const d=new DataView(lh.buffer);
+    d.setUint32(0,0x04034b50,true); d.setUint16(4,20,true); d.setUint16(6,0x0800,true);
+    d.setUint16(8,0,true); d.setUint16(10,0,true); d.setUint16(12,0x21,true);
+    d.setUint32(14,crc,true); d.setUint32(18,f.data.length,true); d.setUint32(22,f.data.length,true);
+    d.setUint16(26,nameB.length,true); d.setUint16(28,0,true); lh.set(nameB,30);
+    chunks.push(lh,f.data);
+    const ch=new Uint8Array(46+nameB.length); const cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true); cv.setUint16(10,0,true); cv.setUint16(12,0,true);
+    cv.setUint16(14,0x21,true); cv.setUint32(16,crc,true);
+    cv.setUint32(20,f.data.length,true); cv.setUint32(24,f.data.length,true);
+    cv.setUint16(28,nameB.length,true); cv.setUint32(42,offset,true); ch.set(nameB,46);
+    central.push(ch); offset+=lh.length+f.data.length;
+  }
+  let cdSize=0; for(const c of central) cdSize+=c.length;
+  const end=new Uint8Array(22); const ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
+  ev.setUint32(12,cdSize,true); ev.setUint32(16,offset,true);
+  return new Blob([...chunks,...central,end],{type:"application/zip"});
+}
+
+/* ==================================================================
+   5. 主流程
+   ================================================================== */
+const $=id=>document.getElementById(id);
+let WORKS=[], VIS=[], FILTER="html", COAT=true;   // COAT：给裸奔的页面配外套，默认穿
+// 自检用：把状态挂出去，方便端到端测试直接读
+window.__salvage=()=>({works:WORKS,diag:DIAG});
+const dz=$("dz"), gauge=$("gauge");
+
+$("pick").onclick=()=>$("file").click();
+dz.onclick=e=>{ if(e.target===dz||e.target.tagName==="H2"||e.target.classList.contains("lead")) $("file").click(); };
+$("file").onchange=e=>{ if(e.target.files[0]) start(e.target.files[0]); };
+["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("hot");}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("hot");}));
+dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) start(f); });
+
+function fail(msg){
+  $("err").innerHTML='<div class="err">'+msg+"</div>";
+  $("sonar").classList.remove("on");
+  dz.style.display="";
+}
+const fmtMB=n=>(n/1048576).toFixed(1)+" MB";
+const fmtKB=n=>n<1024?n+" B":(n/1024).toFixed(1)+" KB";
+function fmtDate(ts){
+  if(!ts) return "时间不详";
+  const d=new Date(ts*1000);
+  return d.getFullYear()+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0");
+}
+function stamp(ts){
+  if(!ts) return "00000000";
+  const d=new Date(ts*1000);
+  return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
+}
+function safeName(s){
+  return String(s).replace(/[\/\\:*?"<>|\n\r\t]/g,"_").replace(/\s+/g," ").trim().slice(0,60) || "无题";
+}
+
+/* ---- 体检：拖进来的不是对话记录时，说清楚它到底是什么 ---- */
+async function vetFile(file, text){
+  $("sonar").classList.remove("on");
+  const V=$("vet"); V.classList.add("on");
+  const rows=[], dump=$("vetDump");
+  let parsed=null, note="";
+  try{ parsed=JSON.parse(text); }catch(e){ note="这份文件不是合法的 JSON："+e.message; }
+
+  rows.push(["文件名", file.name]);
+  rows.push(["大小", fmtKB(file.size)]);
+
+  if(parsed && typeof parsed==="object"){
+    const isArr=Array.isArray(parsed);
+    rows.push(["顶层是", isArr ? ("数组，"+parsed.length+" 项") : "对象"]);
+    if(isArr){
+      rows.push(["里面有对话吗", parsed.length===0 ? "空的，一条都没有" : "有 "+parsed.length+" 条，但结构对不上"]);
+      if(parsed.length) rows.push(["第一项的字段", Object.keys(parsed[0]).join("、")]);
+    }else{
+      const ks=Object.keys(parsed);
+      rows.push(["有这些字段", ks.join("、") || "（空对象）"]);
+      for(const k of ks.slice(0,8)){
+        const v=parsed[k];
+        rows.push(["　"+k, Array.isArray(v) ? ("数组，"+v.length+" 项")
+          : (v&&typeof v==="object") ? "对象" : String(v).slice(0,80)]);
+      }
+    }
+  }
+
+  const looksUsers = parsed && (Array.isArray(parsed)
+    ? parsed.some(x=>x&&x.email_address)
+    : !!parsed.email_address);
+  if(looksUsers){
+    $("vetTitle").textContent="这份是账号信息，不是对话记录";
+    note="导出包里 users.json 长这样。真正装着聊天的是同一个包里的 conversations.json —— 这次的导出里大概根本没生成它。";
+  }else if(parsed && Array.isArray(parsed) && parsed.length===0){
+    $("vetTitle").textContent="这是一份空的对话记录";
+    note="文件本身没坏，但里面一条对话都没有。导出那头出问题了，不是你下载错了。";
+  }else if(file.size < 20000){
+    $("vetTitle").textContent="这份文件太小了，装不下对话";
+    note=note || "一份正常的 Claude 导出，光 conversations.json 就是几十 MB 起。这个体量说明导出那一侧没把内容写进来。";
+  }else{
+    $("vetTitle").textContent="这份文件里没找到对话";
+    note=note || "认不出结构。如果你手上还有别的导出文件，换那个试试。";
+  }
+  $("vetSaid").textContent=note;
+  $("vetTable").innerHTML=rows.map(r=>"<tr><td>"+r[0]+"</td><td>"+String(r[1]).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+"</td></tr>").join("");
+  dump.textContent=text.slice(0,1200)+(text.length>1200?"\n…":"");
+  dz.style.display="";
+}
+
+async function start(file){
+  $("err").innerHTML=""; $("vet").classList.remove("on"); dz.style.display="none";
+  $("sonar").classList.add("on"); $("sonar").classList.remove("done"); $("deck").classList.remove("on");
+  gauge.querySelectorAll(".tick,.lbl").forEach(n=>n.remove());
+  WORKS=[]; resetDiag();
+
+  let stream=null, total=file.size, srcNote="";
+
+  // zip：先把 conversations.json 找出来
+  if(/\.zip$/i.test(file.name)){
+    let list=null;
+    try{ list=await zipList(file); }
+    catch(e){ return fail("这个 zip 读不动：<code>"+e.message+"</code>"); }
+    if(!list) return fail("这个文件的结尾不像 zip。要是你已经解压过了，直接拖里面的 <code>conversations.json</code> 进来。");
+    const hit = list.find(e=>/(^|\/)conversations\.json$/i.test(e.name))
+             || list.find(e=>/conversations.*\.json$/i.test(e.name));
+    if(!hit){
+      const names=list.filter(e=>!e.name.endsWith("/")).map(e=>e.name).slice(0,12).join("、");
+      return fail("这个 zip 里没有 <code>conversations.json</code>。它装的是：<br><code>"+
+        (names||"（空的）")+"</code>");
+    }
+    try{
+      const s=await zipStream(file, hit);
+      stream=s.stream; total=s.size||hit.usize||file.size;
+      srcNote="从 zip 里直接读 "+hit.name+"，没有解压到硬盘。";
+    }catch(e){ return fail(e.message); }
+  }else{
+    // 小文件先体检：2 KB 的 json 不该被当成对话记录硬啃
+    if(file.size < 200000){
+      const text=await file.text();
+      const head=text.replace(/^\uFEFF/,"").trimStart();
+      if(!(head.startsWith("[")&&/"chat_messages"/.test(text))) return vetFile(file, text);
+    }
+    stream=file.stream();
+  }
+
+  const reader=stream.getReader();
+  const sp=new Splitter(), dec=new TextDecoder("utf-8");
+  let pending=new Uint8Array(0), pendingBase=0, read=0, started=false;
+  let nconv=0, nart=0, nver=0;
+  const lastTickAt={v:-99};
+  const t0=Date.now();
+
+  const paint=()=>{
+    const pct = total ? Math.min(100, Math.round(read/total*100)) : 0;
+    $("pct").textContent=pct; $("mb").textContent=fmtMB(read);
+    $("nconv").textContent=nconv; $("nart").textContent=nart; $("nver").textContent=nver;
+    $("cursor").style.top=(pct/100*340)+"px";
+    if(nart&&pct-lastTickAt.v>=1.4){
+      lastTickAt.v=pct;
+      const tk=document.createElement("div"); tk.className="tick"; tk.style.top=(pct/100*340)+"px";
+      gauge.appendChild(tk);
+    }
+  };
+
+  try{
+    for(;;){
+      const {done, value} = await reader.read();
+      if(done) break;
+      read += value.length;
+
+      let bytes=value, base=read-value.length;
+      if(!started){
+        // 跳过开头的空白和那个 '['
+        const s=findArrayStart(bytes);
+        if(s<0){ reader.cancel(); return fail("这份文件的开头不像 Claude 的对话记录。导出包里要找的是 <code>conversations.json</code>。"); }
+        bytes=bytes.subarray(s); base+=s; started=true; pendingBase=base;
+      }
+
+      const merged=new Uint8Array(pending.length+bytes.length);
+      merged.set(pending); merged.set(bytes, pending.length);
+      pending=merged;
+
+      const ranges=[];
+      sp.feed(bytes, base, ranges);
+
+      let consumed=0;
+      for(const [a,b] of ranges){
+        const chunk=pending.subarray(a-pendingBase, b-pendingBase);
+        try{
+          const conv=JSON.parse(dec.decode(chunk));
+          nconv++;
+          const got=extractFromConv(conv);
+          for(const w of got){ nart++; nver+=w.versions.length; WORKS.push(w); }
+        }catch(e){ /* 单条对话崩了不影响整趟 */ }
+        consumed=b-pendingBase;
+      }
+      if(consumed>0){ pending=pending.slice(consumed); pendingBase+=consumed; }
+      paint();
+      if(sp.done) break;
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }catch(e){
+    return fail("读到第 "+fmtMB(read)+" 处断了：<code>"+e.message+"</code>");
+  }
+  read=total; paint();
+
+  if(!WORKS.length){
+    $("sonar").classList.remove("on");
+    renderDiag(); $("diag").classList.add("open");
+    return fail("这份记录读完了（"+nconv+" 条对话），但一件作品都没捞到。"+
+      (nconv===0?"　文件结构对不上，确认一下是不是 conversations.json。":"　如果你确定做过东西，把这句告诉我，我看看是哪层没剥开。"));
+  }
+
+  WORKS.sort((a,b)=>b.tEnd-a.tEnd);
+  WORKS.forEach((w,i)=>{ w.idx=i; w.cur=w.versions.length-1; });
+  $("note").textContent=(srcNote?srcNote+" ":"")+"捞完了，用了 "+((Date.now()-t0)/1000).toFixed(1)+" 秒。下面按最后一次改动的时间排，最近的在上面。";
+  $("sonar").classList.add("done");
+  $("deck").classList.add("on");
+  renderDiag();
+  renderChart();
+  render();
+}
+
+
+/* ==================================================================
+   6.5 v5：漏网诊断
+   前四版都是盲改——我改完不知道对没对，宝跑完只看见结果、看不见
+   "有什么被看见了却没收进来"。这一块就是把那层看不见的东西摊开。
+   ================================================================== */
+function renderDiag(){
+  const D=DIAG;
+  const kept=WORKS.length;
+  const html=WORKS.filter(w=>w.ext==="html").length;
+  const svg =WORKS.filter(w=>w.ext==="svg").length;
+  const mine=WORKS.filter(w=>w.mine).length;
+
+  const seen=[
+    ["对话", D.conv, 0], ["消息", D.msg, 0],
+    ["作品块 artifact", D.artifact, 0], ["围栏代码块 ```", D.fence, 0],
+    ["裸 SVG（无围栏）", D.bareSvg, D.bareSvg>0], ["裸网页（无围栏）", D.bareHtml, D.bareHtml>0],
+    ["你上传的附件", D.upload, 0], ["老式 antArtifact", D.antTag, 0]
+  ];
+  const got=[
+    ["捞到，共", kept, 1], ["其中网页", html, 0], ["其中 SVG", svg, svg>0],
+    ["从你的消息里", mine, mine>0], ["重复合并掉", D.dupe, 0],
+    ["太短跳过", D.tooShort, 0], ["看见了没收", D.skipped.length, D.skipped.length>0]
+  ];
+  const cellHtml=arr=>arr.map(c=>
+    '<div class="dgCell'+(c[2]?' hot':'')+'"><b>'+c[1]+'</b><span>'+esc(c[0])+'</span></div>').join("");
+  $("dgGrid").innerHTML=
+    '<div class="dgSub first">这份记录里出现过什么</div><div class="dgRowGrid">'+cellHtml(seen)+'</div>'+
+    '<div class="dgSub">最后收进来了什么</div><div class="dgRowGrid">'+cellHtml(got)+'</div>';
+
+  $("dgSum").textContent="共 "+kept+" 件　·　看见没收 "+D.skipped.length+" 处　·　重复合并 "+D.dupe+" 处";
+
+  const notes=[];
+  // 这份记录覆盖到哪天。最容易被忽略的一个前提：小文件是导出之后才做的，
+  // 那它压根不在这份文件里，机器再灵也捞不着——先让记录自己把日期说出来。
+  if(D.tMax){
+    const days=Math.floor((Date.now()/1000-D.tMax)/86400);
+    let line='<b>这份记录覆盖 '+fmtDate(D.tMin)+' 到 '+fmtDate(D.tMax)+'</b>';
+    if(days>=3) line+='——也就是说，'+fmtDate(D.tMax)+'<b>之后</b>做的东西不在这份文件里，'+
+      '不是没捞到，是压根没进来。要那批得重新导一份新的（这份距今 '+days+' 天）。';
+    notes.push(line);
+  }
+  notes.push("这一栏是给你自己核对用的——<b>出现过什么、收了什么，两边差在哪</b>，都摊在上面。");
+  if(D.artifact===0 && D.fence>0){
+    notes.push("<b>这份导出里一个 artifact 块都没有</b>，小文件全被剥成了正文里的代码块。"+
+      "这是官方导出格式的常态，不是出错。");
+  }
+  if(D.bareHtml>0 || D.bareSvg>0){
+    notes.push("有 <b>"+(D.bareHtml+D.bareSvg)+"</b> 处是连 ``` 围栏都没有、光溜溜写在正文里的——"+
+      "v4 只捞这里的 SVG，网页那一半是 v5 才补上的。");
+  }
+  if(mine>0){
+    notes.push("有 <b>"+mine+"</b> 件是从<b>你自己发的消息</b>里捞的（你把别家 AI 写的小文件贴进来问的那些）。"+
+      "v4 完全不看你的消息，这批一件都捞不到。");
+  }
+  if(D.skipped.length>0){
+    notes.push("下面「看见了没收」那张单子请扫一眼：<b>如果里面有你认得的小文件，就是还漏着</b>，"+
+      "把那一行发给我，我照着再开一版。");
+  }else{
+    notes.push("这次<b>没有任何东西是看见了却没收的</b>——该收的都收了。");
+  }
+  $("dgNote").innerHTML=notes.join("<br>");
+
+  // v8：导出到底保留了哪几种消息块。artifact 走的是 tool_use，
+  // 这一栏里没有它，就说明内容压根没进这份文件——比任何推测都直接。
+  // v9：工具名分布。这张表放最前面，因为 v8 就是死在这——
+  // 当时只认叫 "artifacts" 的工具，3715 个 tool_use 一个都没通过，
+  // 计数显示 0，我就误判成"记录里没有"。现在把名字全摊开。
+  const tls=Object.entries(D.tools||{}).sort((a,b)=>b[1]-a[1]);
+  const tot=tls.reduce((a,x)=>a+x[1],0);
+  $("dgTools").innerHTML = tls.length
+    ? '<div class="dgSub first">Claude 调用过哪些工具（共 '+tot+' 次）</div>'+
+      '<div class="dgTags">'+tls.map(([k,v])=>
+        '<span class="dgTag'+(/artifact|widget|visual|file|canvas|code|write/i.test(k)?' hot':'')+
+        '">'+esc(k)+' <i>'+v+'</i></span>').join("")+'</div>'+
+      '<p class="dgNote">橙色的是<b>可能在做小文件</b>的工具。'+
+      (D.toolCaught
+        ? '这一版从工具里直接捞到 <b>'+D.toolCaught+'</b> 件——不看工具叫什么名字，'+
+          '只看它吐出来的东西<b>长不长得像一份网页</b>。'
+        : '这一版没能从工具里捞到东西。<b>把这张表截图发我</b>，我照着名字改。')+'</p>'+
+      '<details class="dgDet"><summary>每种工具的参数长什么样（给我看的，你不用管）</summary><pre>'+
+      esc(Object.entries(D.toolFields||{}).map(([k,v])=>
+        k+"\n    "+Object.keys(v).join("  ")).join("\n"))+'</pre></details>'
+    : "";
+
+  const bts=Object.entries(D.blockTypes||{}).sort((a,b)=>b[1]-a[1]);
+  const hasTool=bts.some(([k])=>/tool_use/.test(k));
+  $("dgBlocks").innerHTML = bts.length
+    ? '<div class="dgSub">这份导出保留了哪几种消息块</div><div class="dgTags">'+
+      bts.map(([k,v])=>'<span class="dgTag">'+esc(k)+' <i>'+v+'</i></span>').join("")+'</div>'+
+      '<p class="dgNote">'+(hasTool
+        ? "有 <b>tool_use</b> 块——<b>作品内容就在这份文件里</b>。（v8 曾经在这儿说"+
+          "「没有、是官方不给导」，那是错的：块一直都在，是当时的解析器只认叫 artifacts 的"+
+          "工具，把它们全扔了，于是上面那个计数显示 0，我就误判了。）"
+        : "没有 <b>tool_use</b> 块，作品内容确实不在这份文件里，只能回原对话下载。")+'</p>'
+    : "";
+
+  const langs=Object.entries(D.langs).sort((a,b)=>b[1]-a[1]);
+  $("dgLangWrap").innerHTML = langs.length
+    ? '<div class="dgSub">围栏上写的语言标记</div><div class="dgTags">'+
+      langs.map(([k,v])=>'<span class="dgTag">'+esc(k)+' <i>'+v+'</i></span>').join("")+'</div>'
+    : "";
+
+  $("dgSkipWrap").innerHTML = D.skipped.length
+    ? '<div class="dgSub">看见了，但没收（'+D.skipped.length+' 处）</div><div class="dgList">'+
+      D.skipped.map(x=>'<div class="dgRow"><span class="w">'+esc(x.lang)+'　'+x.bytes+' 字　'+
+        esc(x.why)+'</span><span class="h">'+esc(x.head)+'</span></div>').join("")+'</div>'
+    : '<div class="dgSub">看见了，但没收</div><div class="dgList"><div class="dgEmpty">一处都没有。</div></div>';
+
+  $("diag").classList.add("on");
+}
+
+/* ==================================================================
+   6.6 v7：航海图
+   捞不准就别硬捞——把位置标出来，让她自己顺着去翻原对话。
+   标位置这件事可以做到零漏：只要那条消息里有代码块，就记一笔。
+   ================================================================== */
+let CH_FILTER="hot";
+function suspicious(c){
+  // 值得去看一眼的：标题像做过东西 / 有只留下名字的文件 / 有没敢收的候选
+  return !!c.hint || c.ghost>0 || (c.skip+c.short)>0;
+}
+function chartRows(){
+  const q=$("chQ").value.trim().toLowerCase();
+  return CHART
+    .filter(c=>CH_FILTER!=="hot" || suspicious(c))
+    .filter(c=>!q || c.name.toLowerCase().includes(q))
+    .sort((a,b)=>b.t-a.t);
+}
+function renderChart(){
+  if(!CHART.length){ return; }
+  const rows=chartRows();
+  const hot=CHART.filter(suspicious).length;
+  const ghosts=DIAG.ghosts.length;
+  $("chSum").textContent=CHART.length+" 个对话　·　"+hot+" 个值得去看一眼"+
+    (ghosts?("　·　"+ghosts+" 个文件只剩名字"):"");
+
+  const noArt = DIAG.artifact===0 && !Object.keys(DIAG.tools||{}).length && DIAG.conv>20;
+  $("chNote").innerHTML=
+    (noArt
+      ? "<b>这份记录里没有任何工具调用</b>，作品内容确实不在文件里，只能回原对话下载。<br>"
+      : "")+
+    "既然「有没有代码块」判断不了「有没有做过小文件」，那就<b>全部列出来</b>："+
+    "下面是这份导出里的每一个对话，按日期倒序，点标题直接跳回去。"+
+    "橙色标签是<b>从标题看出来的线索</b>，「只剩名字」是导出记了一笔但没内容的文件——"+
+    "那两列都是该去点开看看的信号。";
+
+  if(!rows.length){ $("chList").innerHTML='<div class="chEmpty">这一格是空的。</div>'; return; }
+
+  let out="", lastDay="";
+  for(const c of rows){
+    const day=fmtDate(c.t);
+    if(day!==lastDay){ out+='<div class="chDay">'+esc(day)+'</div>'; lastDay=day; }
+    const miss=c.skip+c.short;
+    const title=c.uuid
+      ? '<a href="'+convUrl(c.uuid)+'" target="_blank" rel="noopener">'+esc(c.name)+'</a>'
+      : '<span class="noid">'+esc(c.name)+'（没 id，去 Claude 里搜标题）</span>';
+    const bits=[];
+    if(c.hint)   bits.push('<span class="chHint">'+esc(c.hint)+'</span>');
+    if(c.ghost)  bits.push('<span class="chGhost">'+c.ghost+' 个只剩名字</span>');
+    if(c.got)    bits.push('<span class="chNum">捞到 <b>'+c.got+'</b></span>');
+    if(miss)     bits.push('<span class="chNum">没敢收 <i>'+miss+'</i></span>');
+    out+='<div class="chRow'+(suspicious(c)?' hot':'')+'">'+title+bits.join("")+'</div>';
+  }
+  $("chList").innerHTML=out;
+
+  // 只剩名字的那批：文件名本身就是最硬的线索，直接列出来
+  const g=DIAG.ghosts.filter(x=>x.who==="claude");
+  $("ghostWrap").innerHTML = g.length
+    ? '<div class="dgSub">只剩名字的文件（'+g.length+' 个）</div>'+
+      '<p class="dgNote">导出记了一笔"这个文件存在过"，但没带内容。'+
+      '<b>名字和对话都在这，点进去就能下载原件。</b></p>'+
+      '<div class="chScroll">'+g.sort((a,b)=>b.t-a.t).map(x=>
+        '<div class="chRow hot"><span class="chGname">'+esc(x.name)+'</span>'+
+        (x.uuid?'<a href="'+convUrl(x.uuid)+'" target="_blank" rel="noopener">'+esc(x.conv||"去这条对话")+'</a>'
+               :'<span class="noid">'+esc(x.conv)+'</span>')+
+        '<span class="chNum">'+fmtDate(x.t)+'</span></div>').join("")+'</div>'
+    : "";
+  $("chart").classList.add("on");
+}
+function chartMd(){
+  const rows=chartRows();
+  let md="# 打捞航海图\n\n"+
+    "导出覆盖 "+fmtDate(DIAG.tMin)+" 到 "+fmtDate(DIAG.tMax)+
+    "　·　"+DIAG.conv+" 个对话　·　自动捞到 "+WORKS.length+" 件\n\n"+
+    (DIAG.artifact===0 && DIAG.conv>20
+      ? "> artifact 面板里的东西不包含在这份导出里（官方行为）。\n"+
+        "> 那些 Code · JSX / Code · HTML 只能回原对话点 Download。\n"+
+        "> 这张表就是用来一条条翻的。\n\n" : "")+
+    "点标题回原对话。括号里是从标题看出的线索。\n\n";
+  const gh=DIAG.ghosts.filter(x=>x.who==="claude");
+  if(gh.length){
+    md+="## 只剩名字的文件（"+gh.length+" 个）\n\n";
+    for(const x of gh.sort((a,b)=>b.t-a.t))
+      md+="- `"+x.name+"`　— "+(x.uuid?("["+String(x.conv).replace(/[\[\]]/g,"")+"]("+convUrl(x.uuid)+")"):x.conv)+
+          "　"+fmtDate(x.t)+"\n";
+    md+="\n---\n";
+  }
+  let lastDay="";
+  for(const c of rows){
+    const day=fmtDate(c.t);
+    if(day!==lastDay){ md+="\n## "+day+"\n\n"; lastDay=day; }
+    const miss=c.skip+c.short;
+    const tags=[];
+    if(c.hint)  tags.push(c.hint);
+    if(c.ghost) tags.push("**"+c.ghost+" 个只剩名字**");
+    if(c.got)   tags.push("已捞 "+c.got);
+    if(miss)    tags.push("没敢收 "+miss);
+    md+="- "+(c.uuid?("["+c.name.replace(/[\[\]]/g,"")+"]("+convUrl(c.uuid)+")"):c.name)+
+        (tags.length?("　— "+tags.join("，")):"")+"\n";
+  }
+  return md;
+}
+
+/* ==================================================================
+   6. 渲染
+   ================================================================== */
+// v6：一件东西最后交出去长什么样，只在这里决定一次
+// —— 片段包壳（不然中文乱码）、裸奔的穿外套（不然出门就废）、其余原样不动
+function deliverable(w, v){
+  v = v || w.versions[w.cur!=null?w.cur:w.versions.length-1];
+  if(w.isReact) return v.text;     // React 原样交出去：它要编译才能跑，包壳只会骗人
+  const need = COAT && w.audit && w.audit.naked;
+  if(w.isFrag) return wrapFrag(v.text, w.title, need ? makeCoat(w.audit) : "");
+  return need ? wearCoat(v.text, w.audit) : v.text;
+}
+
+function esc(s){ return String(s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c])); }
+
+document.addEventListener("click", e=>{
+  if(e.target.closest("#dgToggle")) $("diag").classList.toggle("open");
+  if(e.target.closest("#chToggle")) $("chart").classList.toggle("open");
+});
+
+function render(){
+  const q=$("q").value.trim().toLowerCase();
+  VIS=WORKS.filter(w=>{
+    if(FILTER==="html" && !w.openable) return false;
+    if(!q) return true;
+    if(w.title.toLowerCase().includes(q)) return true;
+    if(w.conv.toLowerCase().includes(q)) return true;
+    return w.versions[w.cur].text.toLowerCase().includes(q);
+  });
+
+  const nOpen=WORKS.filter(w=>w.openable).length;
+  const nEdit=WORKS.reduce((s,w)=>s+Math.max(0,w.versions.length-1),0);
+  $("count").textContent="显示 "+VIS.length+" 件　·　共捞到 "+WORKS.length+" 件，其中 "+nOpen+
+    " 件能直接打开　·　一路重演了 "+nEdit+" 次改动";
+
+  if(!VIS.length){ $("list").innerHTML='<div class="empty">这一格里没有东西。换个词，或者切到「全部」。</div>'; return; }
+
+  $("list").innerHTML=VIS.map(w=>{
+    const v=w.versions[w.cur], n=w.versions.length;
+    const badges=[
+      '<span class="badge '+(w.openable?"html":"")+'">'+esc(w.kindLabel)+'</span>',
+      n>1 ? '<span class="badge layers">'+n+' 版</span>' : "",
+      w.firstBad>0 ? '<span class="badge hurt">第 '+(w.firstBad+1)+' 版起对不上</span>' : "",
+      w.from==="upload" ? '<span class="badge">你上传的</span>' : "",
+      w.from==="tool" ? '<span class="badge tool" title="从 Claude 的工具调用里直接捞出来的（工具 '+esc(w.tool||"?")+'，字段 '+esc(w.field||"?")+'）。v9 之前这条路是断的。">工具里捞的</span>' : "",
+      w.mine ? '<span class="badge mine">你贴进对话的</span>' : "",
+      (w.audit && w.audit.naked) ? '<span class="badge coat" title="这一件原本靠聊天界面借它样式（缺 '+w.audit.missing.length+' 个变量'+(w.audit.tabler?' + 图标字体':'')+'）。单独打开会掉色甚至隐形，已给它配了一件能自己出门的。原文一个字不动，看代码看到的还是原样。">穿了别人衣服 · 已配外套</span>' : "",
+      (w.audit && w.audit.animated.length) ? '<span class="badge anim" title="它还有 '+w.audit.animated.length+' 个变量是自己用 JS 在运行时塞的（'+w.audit.animated.join("、")+'），那是动画的随机参数，外套一个都没碰。">动画参数已避开</span>' : "",
+      w.isReact ? '<span class="badge react" title="这是 React / JSX 源码，浏览器直接打不开，要先编译。存成 .jsx 原样保管，没给它包壳也没穿外套——包了只会让你以为它能开。">React · 要编译才能跑</span>' : "",
+      w.isFrag ? '<span class="badge frag" title="这是一段没有 &lt;html&gt; 外壳的片段。原文不动，下载和打开时自动包一层带 charset 的壳，不然中文会乱码。">片段 · 已加外壳</span>' : "",
+      (w.from==="html"||w.from==="svg") ? '<span class="badge">没围栏，裸写在正文里</span>' : ""
+    ].join("");
+
+    // 地层：一层一次改动，高度看那一版有多大
+    let strata="";
+    if(n>1){
+      const sizes=w.versions.map(x=>x.text.length);
+      const lo=Math.min(...sizes), hi=Math.max(...sizes), span=hi-lo;
+      const wid=n>24?6:n>12?11:20;                      // 改得越多，层越细，整条越密
+      strata='<div class="strata" role="group" aria-label="版本地层">'+
+        w.versions.map((x,i)=>{
+          const h = span ? 14+Math.round((x.text.length-lo)/span*32) : 30;
+          return '<button class="lay'+(i===w.cur?" sel":"")+(x.ok?"":" bad")+(i===w.firstBad?" snap":"")+
+            '" style="height:'+h+'px;width:'+wid+'px" data-i="'+w.idx+'" data-v="'+i+'" title="第 '+(i+1)+' 版 · '+
+            x.cmd+' · '+fmtDate(x.t)+' · '+fmtKB(x.text.length)+(x.ok?"":" · 这次改动没对上")+'"></button>';
+        }).join("")+"</div>"+
+        '<div class="strata-cap"><span class="now">正在看第 '+(w.cur+1)+' / '+n+' 版 · '+v.cmd+' · '+fmtKB(v.text.length)+'</span>'+
+        '<span>'+(w.firstBad>0
+          ? '第 '+w.firstBad+' 版之前是完整的，往后是断的'
+          : '左边最早 → 右边最后')+'</span></div>';
+    }
+
+    return '<div class="item">'+
+      '<div class="head"><span class="name">'+esc(w.title)+'</span>'+badges+'</div>'+
+      '<div class="meta"><span>来自「'+esc(w.conv)+'」</span><span>'+fmtDate(w.tEnd)+'</span><span>'+fmtKB(v.text.length)+(v.cut?" · 已截断":"")+'</span></div>'+
+      strata+
+      '<div class="ops">'+
+        (w.openable?'<button data-act="open" data-i="'+w.idx+'">打开看看</button>':"")+
+        '<button data-act="dl" data-i="'+w.idx+'">下载这一版</button>'+
+        '<button data-act="src" data-i="'+w.idx+'">看代码</button>'+
+      "</div>"+
+      '<pre id="src'+w.idx+'"></pre>'+
+    "</div>";
+  }).join("");
+}
+
+$("list").addEventListener("click", e=>{
+  const lay=e.target.closest(".lay");
+  if(lay){
+    const w=WORKS[+lay.dataset.i]; w.cur=+lay.dataset.v; render(); return;
+  }
+  const b=e.target.closest("button[data-act]");
+  if(!b) return;
+  const w=WORKS[+b.dataset.i], v=w.versions[w.cur];
+  const fname=stamp(v.t)+"-"+safeName(w.title)+"."+w.ext;
+
+  const payload = deliverable(w, v);
+
+  if(b.dataset.act==="open"){
+    const type=w.ext==="svg"?"image/svg+xml":"text/html";
+    const url=URL.createObjectURL(new Blob([payload],{type:type+";charset=utf-8"}));
+    window.open(url,"_blank","noopener");
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }else if(b.dataset.act==="dl"){
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([payload],{type:"text/plain;charset=utf-8"}));
+    a.download=fname; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),30000);
+  }else{
+    const pre=$("src"+w.idx);
+    if(pre.classList.contains("on")){ pre.classList.remove("on"); b.textContent="看代码"; }
+    else{ pre.textContent=v.text; pre.classList.add("on"); b.textContent="收起代码"; }
+  }
+});
+
+$("chHot").onclick=()=>{CH_FILTER="hot";$("chHot").classList.add("sel");$("chAll").classList.remove("sel");renderChart();};
+$("chAll").onclick=()=>{CH_FILTER="all";$("chAll").classList.add("sel");$("chHot").classList.remove("sel");renderChart();};
+$("chQ").addEventListener("input", renderChart);
+$("chMd").onclick=()=>{
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([chartMd()],{type:"text/markdown;charset=utf-8"}));
+  a.download="打捞航海图-"+stamp(Date.now()/1000)+".md"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),30000);
+};
+$("coatsw").onchange=e=>{ COAT=e.target.checked; render(); };
+$("q").addEventListener("input", render);
+$("fHtml").onclick=()=>{FILTER="html";$("fHtml").classList.add("sel");$("fAll").classList.remove("sel");render();};
+$("fAll").onclick =()=>{FILTER="all"; $("fAll").classList.add("sel"); $("fHtml").classList.remove("sel");render();};
+
+$("zip").onclick=()=>{
+  const enc=new TextEncoder(), seen=new Map(), files=[];
+  for(const w of (FILTER==="html"?WORKS.filter(x=>x.openable):WORKS)){
+    const v=w.versions[w.versions.length-1];
+    let nm=stamp(v.t)+"-"+safeName(w.title)+"."+w.ext;
+    const c=(seen.get(nm)||0)+1; seen.set(nm,c);
+    if(c>1) nm=nm.replace(/(\.[^.]+)$/, "-"+c+"$1");
+    files.push({name:nm, data:enc.encode(deliverable(w, v))});
+  }
+  if(!files.length) return;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(makeZip(files));
+  a.download="捞上来的-"+stamp(Date.now()/1000)+".zip"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+};
+
+$("mdlist").onclick=()=>{
+  const lines=["# 捞上来的清单","","共 "+WORKS.length+" 件。",""];
+  for(const w of WORKS){
+    lines.push("- **"+w.title+"** ｜ "+w.kindLabel+" ｜ "+w.versions.length+" 版 ｜ "+
+      fmtDate(w.tEnd)+" ｜ 来自「"+w.conv+"」"+(w.firstBad>0?" ｜ 第 "+(w.firstBad+1)+" 版起对不上":""));
+  }
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/markdown;charset=utf-8"}));
+  a.download="捞鱼清单.md"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),30000);
+};
+</script>
+</body>
+</html>
