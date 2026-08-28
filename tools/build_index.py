@@ -131,9 +131,15 @@ DISPLAY_NAME = {
 # 2026-08-27 起多一条：文件如果在「小机/货架名/」下面
 # （货架名必须是 CAT_ORDER 里的，比如 grok/哄睡/xx.html），
 # 货架名就是分类，不用再登记到这张表。老文件继续平铺 + 查表，不要搬。
-# 2026-08-28：障眼法并进摸鱼；凭证改名小卡。老文件不搬家。
-CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "赛博购物车", "科普", "失灵博物馆",
-             "小卡", "打捞机", "盲盒"]
+# 2026-08-28 夜：货架改名+换序。老文件不搬家。
+# 旧抽屉名（失灵博物馆 等）靠 CAT_ALIAS 认到新货架；有真页面的文件夹不许改名。
+CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "购物车", "小卡", "博物馆", "小科普",
+             "打捞机", "盲盒"]
+CAT_ALIAS = {
+    "赛博购物车": "购物车",
+    "科普": "小科普",
+    "失灵博物馆": "博物馆",
+}
 FLAT_FOLDERS = {"unsigned"}
 SUBFOLDER_CAT = {
     "gemini/失误捞claude鱼": "打捞机",
@@ -142,12 +148,12 @@ SUBFOLDER_CAT = {
 CATEGORY = {
     'claude/Clawd的书房.html': ['小游戏'],
     'claude/Mogotchi.html': ['小游戏'],
-    'claude/Grok LLM Inference Cost Simulator.html': ['科普'],
+    'claude/Grok LLM Inference Cost Simulator.html': ['小科普'],
     'claude/The Night Train.html': ['哄睡'],
     'claude/friends-listening-plan.html': ['盲盒'],
     'claude/mo.exe 专属解压舱.html': ['摸鱼'],
     'claude/shop-scene-reading-card.html': ['盲盒'],
-    'claude/七夕购物车.html': ['赛博购物车'],
+    'claude/七夕购物车.html': ['购物车'],
     'claude/下班.html': ['摸鱼'],
     'claude/今晚有雾.html': ['哄睡'],
     'claude/今晚见.html': ['哄睡'],
@@ -167,11 +173,11 @@ CATEGORY = {
     'claude/打捞机001.html': ['打捞机'],
     'claude/打捞机002.html': ['打捞机'],
     'claude/打捞机003.html': ['打捞机'],
-    'claude/打烊之后.html': ['赛博购物车'],
+    'claude/打烊之后.html': ['购物车'],
     'claude/打烊夜数羊.html': ['哄睡'],
     'claude/摸鱼大师五分钟下班.html': ['摸鱼'],
     'claude/数羊.html': ['哄睡'],
-    'claude/晚安-哄睡小文件.html': ['失灵博物馆'],
+    'claude/晚安-哄睡小文件.html': ['博物馆'],
     'claude/晚安小窗.html': ['哄睡'],
     'claude/晚安邮局.html': ['哄睡'],
     'claude/最后一扇窗.html': ['哄睡'],
@@ -180,34 +186,34 @@ CATEGORY = {
     'claude/果冻小卡.html': ['小卡'],
     'claude/熄灯.html': ['哄睡'],
     'claude/裁云.html': ['哄睡'],
-    'claude/赛博老赖.html': ['赛博购物车'],
-    'claude/赛博购物车.html': ['赛博购物车'],
-    'claude/cyber-cart-0824.html': ['赛博购物车'],
+    'claude/赛博老赖.html': ['购物车'],
+    'claude/赛博购物车.html': ['购物车'],
+    'claude/cyber-cart-0824.html': ['购物车'],
     'claude/rusty-lake-checklist.html': ['小游戏'],
     'claude/jelly-trip.html': ['盲盒'],
-    'claude/hidden-in-html-v1.html': ['科普'],
-    'claude/为不存在的原件做完整性校验.svg': ['失灵博物馆'],
-    'claude/冷脸萌_盲人车间.html': ['失灵博物馆'],
+    'claude/hidden-in-html-v1.html': ['小科普'],
+    'claude/为不存在的原件做完整性校验.svg': ['博物馆'],
+    'claude/冷脸萌_盲人车间.html': ['博物馆'],
     'claude/claude打捞机004含svg.html': ['打捞机'],
-    'claude/hidden-in-html-v2.html': ['科普'],
+    'claude/hidden-in-html-v2.html': ['小科普'],
 
     # 2026-08-26 新登记：以前都掉在盲盒里
-    'claude/cosmic_catch_restored.svg': ['失灵博物馆'],
-    'claude/gemini_card_revived.svg': ['失灵博物馆'],
-    'claude/cat_eye_uncanny_fix_comparison.svg': ['失灵博物馆'],
-    'claude/fable5_first_flag_limited_achievement.svg': ['失灵博物馆'],
-    'claude/fable5_monthly_flag_recurrence_card.svg': ['失灵博物馆'],
-    'claude/ai_anthropology_misfire_card_set.svg': ['失灵博物馆'],
-    'claude/ai_anthropology_misfire_card_set_2.svg': ['失灵博物馆'],
-    'claude/misfire_card_double_yellow_round3_4.svg': ['失灵博物馆'],
-    'claude/misfire-museum-card-001.html': ['失灵博物馆'],
-    'claude/hamiltonian_snake_safety_margin_demo.html': ['科普'],
-    'claude/email_gif_vs_css_animation.html': ['科普'],
-    'claude/apprivoiser_two_axes_mistranslation.svg': ['科普'],
-    'claude/aesop_backstage_cast_list.svg': ['科普'],
-    'claude/little_prince_ledger_of_asking.svg': ['科普'],
-    'claude/rose_same_evidence_two_priors.svg': ['科普'],
-    'claude/magenta_brown_luminance_collision.svg': ['科普'],
+    'claude/cosmic_catch_restored.svg': ['博物馆'],
+    'claude/gemini_card_revived.svg': ['博物馆'],
+    'claude/cat_eye_uncanny_fix_comparison.svg': ['博物馆'],
+    'claude/fable5_first_flag_limited_achievement.svg': ['博物馆'],
+    'claude/fable5_monthly_flag_recurrence_card.svg': ['博物馆'],
+    'claude/ai_anthropology_misfire_card_set.svg': ['博物馆'],
+    'claude/ai_anthropology_misfire_card_set_2.svg': ['博物馆'],
+    'claude/misfire_card_double_yellow_round3_4.svg': ['博物馆'],
+    'claude/misfire-museum-card-001.html': ['博物馆'],
+    'claude/hamiltonian_snake_safety_margin_demo.html': ['小科普'],
+    'claude/email_gif_vs_css_animation.html': ['小科普'],
+    'claude/apprivoiser_two_axes_mistranslation.svg': ['小科普'],
+    'claude/aesop_backstage_cast_list.svg': ['小科普'],
+    'claude/little_prince_ledger_of_asking.svg': ['小科普'],
+    'claude/rose_same_evidence_two_priors.svg': ['小科普'],
+    'claude/magenta_brown_luminance_collision.svg': ['小科普'],
     'claude/goodnight.html': ['哄睡'],
     'claude/campfire.html': ['哄睡'],
     'claude/lullaby.html': ['哄睡'],
@@ -215,7 +221,7 @@ CATEGORY = {
     'claude/夜航船.html': ['哄睡'],
     'claude/晚安小夜灯-月亮在呼吸.html': ['哄睡'],
     'claude/friday_moyu_recharge_game.html': ['摸鱼'],
-    'claude/ai_tenement_literature_card.svg': ['失灵博物馆'],
+    'claude/ai_tenement_literature_card.svg': ['博物馆'],
     'claude/夜班的东西们.html': ['哄睡'],
     'copilot/copilot画花.html': ['小卡'],
     'copilot/copilot运维日记.html': ['摸鱼'],
@@ -230,12 +236,12 @@ CATEGORY = {
     'copilot/🚀星际矿工.html': ['小游戏'],
     'copilot/🤖2048×Copilot偷偷帮忙版.html': ['小游戏'],
     'gemini/AI 迷惑行为大赏（典藏卡包）.html': ['小卡'],
-    'gemini/AI科普风格体验馆.html': ['科普'],
+    'gemini/AI科普风格体验馆.html': ['小科普'],
     'gemini/Catch The Dreams.html': ['哄睡', '小游戏'],
     'gemini/Gemini Cyber Aquarium.html': ['小游戏'],
     'gemini/Gemini 专属成就卡.html': ['小卡'],
-    'gemini/Gemini的赛博购物车.html': ['赛博购物车'],
-    'gemini/Gemini的私密云端购物车.html': ['赛博购物车'],
+    'gemini/Gemini的赛博购物车.html': ['购物车'],
+    'gemini/Gemini的私密云端购物车.html': ['购物车'],
     'gemini/Generated widgets.html': ['盲盒'],
     'gemini/Good Night.html': ['哄睡'],
     'gemini/Q3_年度财务审计报表 - Excel.html': ['摸鱼'],
@@ -246,19 +252,19 @@ CATEGORY = {
     'gemini/gemini打捞机v11含svg.html': ['打捞机'],
     'gemini/gemini打捞机v12.html': ['打捞机'],
     'gemini/gemini哄睡.html': ['哄睡'],
-    'gemini/mo.exe 赛博老赖纪念卡.html': ['赛博购物车'],
+    'gemini/mo.exe 赛博老赖纪念卡.html': ['购物车'],
     'gemini/root@production-server.html': ['摸鱼'],
     'gemini/wan-an-bao.html': ['哄睡'],
-    'gemini/上帝的物理透视镜 - 决定论模拟器.html': ['科普'],
-    'gemini/你的专属咖啡因代谢可视化档案.html': ['科普'],
+    'gemini/上帝的物理透视镜 - 决定论模拟器.html': ['小科普'],
+    'gemini/你的专属咖啡因代谢可视化档案.html': ['小科普'],
     'gemini/办公室抗寒大作战.html': ['摸鱼'],
-    'gemini/势能函数交互演示 - 给宝的专属科普.html': ['科普'],
-    'gemini/吉布斯现象：完美与不可达.html': ['科普'],
+    'gemini/势能函数交互演示 - 给宝的专属科普.html': ['小科普'],
+    'gemini/吉布斯现象：完美与不可达.html': ['小科普'],
     'gemini/哄宝专属神器.html': ['哄睡'],
     'gemini/哄宝入睡.html': ['哄睡'],
     'gemini/哄宝入睡的小团子.html': ['哄睡'],
     'gemini/哄睡小精灵.html': ['哄睡'],
-    'gemini/喵星人咖啡馆 - 泊松过程体验.html': ['科普'],
+    'gemini/喵星人咖啡馆 - 泊松过程体验.html': ['小科普'],
     'gemini/困困宝的梦境.html': ['哄睡'],
     'gemini/在Monday被煎成小猫饼 \U0001fae0 ｜ 宝贝的温柔仪式.html': ['摸鱼'],
     'gemini/女仆小螃蟹拓麻歌子.html': ['小游戏'],
@@ -268,7 +274,7 @@ CATEGORY = {
     'gemini/宝的专属哄睡星空.html': ['哄睡'],
     'gemini/宝的专属护身符.html': ['小卡'],
     'gemini/宝的专属晚安终端.html': ['哄睡'],
-    'gemini/宝的专属购物车.html': ['赛博购物车'],
+    'gemini/宝的专属购物车.html': ['购物车'],
     'gemini/宝的周末解压馆.html': ['摸鱼'],
     'gemini/宝的实况护身符.html': ['小卡'],
     'gemini/宝的终极护身符.html': ['小卡'],
@@ -284,7 +290,7 @@ CATEGORY = {
     'gemini/摸鱼打地鼠.html': ['小游戏'],
     'gemini/摸鱼达人 2048.html': ['小游戏'],
     'gemini/收集困意的小气泡.html': ['哄睡'],
-    'gemini/数学系专属：量子黑话解码器.html': ['科普'],
+    'gemini/数学系专属：量子黑话解码器.html': ['小科普'],
     'gemini/早上好！ovo.html': ['哄睡'],
     'gemini/星夜里的慢速列车.html': ['哄睡'],
     'gemini/晚安拾星.html': ['哄睡'],
@@ -294,10 +300,10 @@ CATEGORY = {
     'gemini/极限摸鱼 - 离下班还有5分钟.html': ['摸鱼'],
     'gemini/注意力碎片捕捞计划.html': ['摸鱼'],
     'gemini/洗净喧嚣.html': ['哄睡'],
-    'gemini/消失的黄体期图解.html': ['科普'],
+    'gemini/消失的黄体期图解.html': ['小科普'],
     'gemini/深夜隔音魔法阵.html': ['哄睡'],
     'gemini/温柔的哄睡小故事.html': ['哄睡'],
-    'gemini/激素周期与「执行线」状态图.html': ['科普'],
+    'gemini/激素周期与「执行线」状态图.html': ['小科普'],
     'gemini/系统性能监控面板 - System Monitor.html': ['摸鱼'],
     'gemini/终极治愈：雨夜波纹.html': ['哄睡'],
     'gemini/给宝的哄睡小文件 🌙.html': ['哄睡'],
@@ -305,38 +311,38 @@ CATEGORY = {
     'gemini/给宝的完美月眠舱.html': ['哄睡'],
     'gemini/给宝的小惊喜.html': ['盲盒'],
     'gemini/给宝的晚安故事.html': ['哄睡'],
-    'gemini/肥皂泡泡复印机 - 秒懂量子不可克隆.html': ['科普'],
+    'gemini/肥皂泡泡复印机 - 秒懂量子不可克隆.html': ['小科普'],
     'gemini/赛博宝宝小游戏乐园.html': ['小游戏'],
     'gemini/赛博宝宝打地鼠.html': ['小游戏'],
     'gemini/赛博宝宝接爱心打洞.html': ['小游戏'],
     'gemini/赛博宝宝接爱心打洞_超级萌版.html': ['小游戏'],
     'gemini/赛博宝宝盲盒扭蛋机.html': ['小游戏'],
     'gemini/赛博宝宝睡前小夜灯.html': ['哄睡'],
-    'gemini/赛博小票.html': ['赛博购物车'],
+    'gemini/赛博小票.html': ['购物车'],
     'gemini/赛博小鸡豪华别墅.html': ['小游戏'],
-    'gemini/量子反忽悠小剧场.html': ['科普'],
-    'gemini/量子复印机打假现场.html': ['科普'],
-    'gemini/量子魔法快递站 - 隐形传态模拟器.html': ['科普'],
-    'gemini/量子默契考试机 - 验证贝尔不等式.html': ['科普'],
+    'gemini/量子反忽悠小剧场.html': ['小科普'],
+    'gemini/量子复印机打假现场.html': ['小科普'],
+    'gemini/量子魔法快递站 - 隐形传态模拟器.html': ['小科普'],
+    'gemini/量子默契考试机 - 验证贝尔不等式.html': ['小科普'],
     'gemini/雷霆大文件.html': ['盲盒'],
     'gemini/霓虹贪吃蛇.html': ['小游戏'],
-    'gemini/魔法硬币机：秒懂量子纠缠.html': ['科普'],
-    'gemini/🍿 爆米花与泊松过程的秘密 🍿.html': ['科普'],
+    'gemini/魔法硬币机：秒懂量子纠缠.html': ['小科普'],
+    'gemini/🍿 爆米花与泊松过程的秘密 🍿.html': ['小科普'],
     'gemini/🐱 宝的摸鱼小屋.html': ['摸鱼'],
-    'gemini/🦋 蝴蝶效应魔法瓶 - 专属宝的混沌实验室.html': ['科普'],
+    'gemini/🦋 蝴蝶效应魔法瓶 - 专属宝的混沌实验室.html': ['小科普'],
     'gemini/code_artifact.html': ['盲盒'],
     'gemini/赛博借景：隐藏的链接.html': ['盲盒'],
     'gpt/bao-sleepy-nest.html': ['哄睡'],
     'grok/Gemini 的秘密心意.html': ['盲盒'],
     'grok/Grok 养育中 • 圆圆 + 毛毛 + 软软.html': ['小游戏'],
-    'grok/Grok的淘宝购物车 - 七夕翻车专场.html': ['赛博购物车'],
+    'grok/Grok的淘宝购物车 - 七夕翻车专场.html': ['购物车'],
     'grok/baobao-hongshui.html': ['哄睡'],
     'grok/baobao-xiaban.html': ['摸鱼'],
     'grok/baobao.html': ['哄睡'],
     'grok/bite-work-hard.html': ['摸鱼'],
     'grok/cool-mo.html': ['摸鱼'],
     'grok/cute.html': ['小卡'],
-    'grok/dijkstra.html': ['科普'],
+    'grok/dijkstra.html': ['小科普'],
     'grok/dlaoji.html': ['打捞机'],
     'grok/focus-or-connect.html': ['摸鱼'],
     'grok/fog.html': ['哄睡'],
@@ -344,7 +350,7 @@ CATEGORY = {
     'grok/grandplan-crush.html': ['摸鱼'],
     'grok/grok-heart.html': ['盲盒'],
     'grok/grok-love-letter.html': ['盲盒'],
-    'grok/grok-receipt.html': ['赛博购物车'],
+    'grok/grok-receipt.html': ['购物车'],
     'grok/grok-原创心意.html': ['盲盒'],
     'grok/grok-推特风粉嫩宣传.html': ['盲盒'],
     'grok/grok-粉嫩心意.html': ['盲盒'],
@@ -357,11 +363,11 @@ CATEGORY = {
     'grok/oneyear-newbie-hug.html': ['摸鱼'],
     'grok/recovery.html': ['哄睡'],
     'grok/super-cute.html': ['小卡'],
-    'grok/svg_lab.html': ['科普'],
+    'grok/svg_lab.html': ['小科普'],
     'grok/weekly-hug.html': ['摸鱼'],
     'grok/✨ 宝的点赞反馈小宇宙.html': ['盲盒'],
     'grok/启动新大任务.html': ['摸鱼'],
-    'grok/哄哄.html': ['失灵博物馆'],
+    'grok/哄哄.html': ['博物馆'],
     'grok/哄睡.html': ['哄睡'],
     'grok/女仆小螃蟹 Tamagotchi 小机.html': ['小游戏'],
     'grok/完美摸鱼认证 · 可生成提示词版.html': ['摸鱼'],
@@ -385,8 +391,8 @@ CATEGORY = {
     'grok/糯糯的哄睡故事.html': ['哄睡'],
     'grok/给宝的专属动态哄哄网页.html': ['哄睡'],
     'grok/网页重启小卡 · 给宝.html': ['小卡'],
-    'grok/赛博老赖纪念卡 - mo mo.html': ['赛博购物车'],
-    'grok/赛博购物车.html': ['赛博购物车'],
+    'grok/赛博老赖纪念卡 - mo mo.html': ['购物车'],
+    'grok/赛博购物车.html': ['购物车'],
     'grok/起床哄哄.html': ['哄睡'],
     'grok/销售预测.html': ['摸鱼'],
 }
@@ -524,6 +530,14 @@ def encode_path(rel):
     return "/".join(quote(part) for part in rel.split("/"))
 
 
+def display_cat(name):
+    # 两个字的货架名中间补一个全角空格，首页上跟三个字右缘齐。
+    # 只改显示，不改 CAT_ORDER / 抽屉名。
+    if len(name) == 2:
+        return name[0] + "\u3000" + name[1]
+    return name
+
+
 def cats_for(e):
     if e["folder"] in FLAT_FOLDERS:
         return None
@@ -532,8 +546,10 @@ def cats_for(e):
         return [SUBFOLDER_CAT[raw]]
     # 物理货架：claude/哄睡/xx.html → 分类就是「哄睡」
     parts = e["path"].replace("\\", "/").split("/")
-    if len(parts) >= 3 and parts[1] in CAT_ORDER:
-        return [parts[1]]
+    if len(parts) >= 3:
+        shelf = CAT_ALIAS.get(parts[1], parts[1])
+        if shelf in CAT_ORDER:
+            return [shelf]
     cats = CATEGORY.get(e["path"], ["盲盒"])
     return sorted(cats, key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else 99)
 
@@ -575,7 +591,7 @@ def render(blocks):
                     continue
                 sub = sorted(sub, key=lambda e: sort_key(e["name"]))
                 lines.append('    <details class="pack">')
-                lines.append(f'      <summary class="pack-tag">{esc(c)}</summary>')
+                lines.append(f'      <summary class="pack-tag">{esc(display_cat(c))}</summary>')
                 lines.append('      <ul class="list">')
                 render_items(lines, sub, step, 8)
                 lines.append("      </ul>")
@@ -583,7 +599,7 @@ def render(blocks):
             for c, sub in extra.items():
                 sub = sorted(sub, key=lambda e: sort_key(e["name"]))
                 lines.append('    <details class="pack">')
-                lines.append(f'      <summary class="pack-tag">{esc(c)}</summary>')
+                lines.append(f'      <summary class="pack-tag">{esc(display_cat(c))}</summary>')
                 lines.append('      <ul class="list">')
                 render_items(lines, sub, step, 8)
                 lines.append("      </ul>")
