@@ -553,12 +553,20 @@ def cats_for(e):
 
 
 def render_items(lines, items, step, indent):
+    """条目只写名字和链接，不带任何动画参数。
+
+    2026-08-28：以前每个 li 上都挂一个 style="--delay:NNNms"，配合 CSS 里
+    .item{opacity:0; animation:rise ... forwards} 做逐条淡入。问题是条目的
+    起点是「完全看不见」——名字能不能显示，取决于那段动画有没有跑完。
+    全站三百多条，iPhone 上 Safari 跑不完，会有一批永远卡在半透明：同一堆
+    里有的名字深、有的名字灰，看起来像被吸顶的牌子盖住了。
+    现在条目一开始就是实的，不依赖动画。step 保留只是为了不动调用方。
+    """
     pad = " " * indent
     for e in items:
-        delay = min(step[0] * 40, 560)
         step[0] += 1
         lines.append(
-            f'{pad}<li class="item" style="--delay:{delay}ms">'
+            f'{pad}<li class="item">'
             f'<a href="{encode_path(e["path"])}">{html.escape(e["name"], quote=True)}</a></li>')
 
 
