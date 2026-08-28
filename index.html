@@ -868,22 +868,28 @@
     return;
   }
 
-  /* 先把真实件数写进去，再让它从小往上跑一下。
-     这个顺序不能反：万一 rAF 不跑或者中途停了，页面上留下的也是对的数，
-     不会永远显示一个偏小的件数。末尾再兜一次底。 */
+  /* 件数从小往上跑一下，纯装饰。
+     但显示对不对不能挂在这段动画跑没跑完上——rAF 停了、掉帧了、被系统
+     暂停了，页面上就会永远留着一个偏小的数。所以加一道闸：时间一到就落到
+     真实件数，并且把闸关上，之后任何迟到的一帧都不许再改写它。 */
   box.innerHTML = '第 <b></b> 件';
   var out = box.querySelector('b');
   out.textContent = total;
-  var from = Math.max(0, total - 24), t0 = null, dur = 640;
+
+  var from = Math.max(0, total - 24), t0 = null, dur = 640, settled = false;
+  function settle(){ settled = true; out.textContent = total; }
+
   out.textContent = from;
   requestAnimationFrame(function step(t){
+    if (settled) return;
     if (t0 === null) t0 = t;
     var p = Math.min(1, (t - t0) / dur);
+    if (p >= 1) { settle(); return; }
     p = 1 - Math.pow(1 - p, 3);
     out.textContent = Math.round(from + (total - from) * p);
-    if (p < 1) requestAnimationFrame(step);
+    requestAnimationFrame(step);
   });
-  setTimeout(function(){ out.textContent = total; }, dur + 400);
+  setTimeout(settle, dur + 400);
 })();
 </script>
 
