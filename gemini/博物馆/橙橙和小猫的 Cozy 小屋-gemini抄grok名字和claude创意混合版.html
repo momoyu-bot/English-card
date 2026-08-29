@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>橙橙和小猫的 Cozy 小屋</title>
+    <!-- 引入 React, ReactDOM 和 Babel 以便在浏览器中直接运行 JSX -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Tailwind CSS 进行样式排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #F5EBE0; font-family: sans-serif; }
+        /* 移除点击高亮，让操作体验更丝滑 */
+        * { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 像素画生成引擎 ---
+        // 通过定义字符矩阵来绘制像素画，告别粗糙的几何图形
+        const PixelSprite = ({ matrix, colorMap, pixelSize = 4, className = "" }) => {
+            const rows = matrix.length;
+            const cols = Math.max(...matrix.map(r => r.length));
+            
+            return (
+                <svg 
+                    width={cols * pixelSize} 
+                    height={rows * pixelSize} 
+                    className={className}
+                    style={{ shapeRendering: 'crispEdges' }}
+                >
+                    {matrix.map((row, y) => 
+                        row.split('').map((char, x) => {
+                            if (char === ' ' || !colorMap[char]) return null;
+                            return (
+                                <rect 
+                                    key={`${x}-${y}`} 
+                                    x={x * pixelSize} 
+                                    y={y * pixelSize} 
+                                    width={pixelSize} 
+                                    height={pixelSize} 
+                                    fill={colorMap[char]} 
+                                />
+                            );
+                        })
+                    )}
+                </svg>
+            );
+        };
+
+        // --- 调色板与像素图纸 ---
+        const PALETTE = {
+            O: '#F4A261', // 螃蟹橙
+            W: '#FFFFFF', // 眼白
+            B: '#264653', // 黑色/眼睛
+            C: '#FDF0D5', // 小猫奶白
+            E: '#E9D8A6', // 小猫阴影/耳朵
+            '-': '#264653', // 闭眼
+            R: '#E76F51', // 腮红/爱心
+            L: '#2A9D8F', // 盆栽绿
+            T: '#8A5A44', // 花盆棕
+            Y: '#E9C46A', // 星星/太阳
+        };
+
+        const CRAB_IDLE = [
+            "  O     O  ",
+            "  OOOOOOO  ",
+            " OWBOOOBWO ",
+            " OOROOOROO ",
+            " OOOOOOOOO ",
+            "  OOOOOOO  ",
+            " O O   O O ",
+        ];
+
+        const CRAB_HAPPY = [
+            "  O  R  O  ",
+            "  OOOOOOO  ",
+            " OW-OOO-WO ",
+            " OOROOOROO ",
+            " OOOOOOOOO ",
+            "  OOOOOOO  ",
+            " O O   O O ",
+        ];
+
+        const CAT_SLEEP = [
+            " E   E     ",
+            " CCCCC     ",
+            " C-CCC-C   ",
+            " CCCCCCC CC",
+            "  CCCCCCC  ",
+        ];
+
+        const CAT_AWAKE = [
+            " E   E     ",
+            " CCCCC     ",
+            " CBCCCBC   ",
+            " CCCCCCC CC",
+            "  CCCCCCC  ",
+        ];
+
+        const PLANT = [
+            "  LLLL  ",
+            " LLLLLL ",
+            " LLLLLL ",
+            "  LLLL  ",
+            "   TT   ",
+            "  TTTT  ",
+            "  TTTT  "
+        ];
+
+        const HEART = [
+            " R R ",
+            "RRRRR",
+            " RRR ",
+            "  R  "
+        ];
+
+        function App() {
+            const [scene, setScene] = useState('day'); // 'day', 'night', 'nap'
+            const [crabState, setCrabState] = useState('idle'); // 'idle', 'happy', 'play'
+            const [ballPos, setBallPos] = useState(-50);
+            const [statusText, setStatusText] = useState("阳光明媚，新的一天开始啦！");
+            const [isZzz, setIsZzz] = useState(false);
+
+            // 场景配置
+            const sceneConfig = {
+                day: {
+                    bg: 'bg-[#DCCCA3]', // 墙壁
+                    floor: 'bg-[#B09E80]',
+                    window: 'bg-[#89C2D9]',
+                    light: 'bg-[#FFFDF7] opacity-20',
+                    celestial: 'bg-[#F4A261]', // 太阳
+                    cat: CAT_AWAKE,
+                    text: "白天 | 阳光明媚，新的一天开始啦！"
+                },
+                night: {
+                    bg: 'bg-[#4A535C]',
+                    floor: 'bg-[#31373D]',
+                    window: 'bg-[#2A303C]',
+                    light: 'bg-[#F4A261] opacity-10',
+                    celestial: 'bg-[#FDF0D5]', // 月亮
+                    cat: CAT_AWAKE,
+                    text: "夜晚 | 夜幕降临，屋子里静悄悄的。"
+                },
+                nap: {
+                    bg: 'bg-[#8C7A6B]',
+                    floor: 'bg-[#5C4F46]',
+                    window: 'bg-[#4A535C]',
+                    light: 'bg-[#F4A261] opacity-30',
+                    celestial: 'bg-[#E9C46A]', // 黄昏/暖阳
+                    cat: CAT_SLEEP,
+                    text: "打盹中 | 温暖的光，小猫做着甜甜的梦"
+                }
+            };
+
+            const currentScene = sceneConfig[scene];
+
+            // 打盹时的小猫 Zzz 动画
+            useEffect(() => {
+                if (scene === 'nap') {
+                    const interval = setInterval(() => setIsZzz(prev => !prev), 1000);
+                    return () => clearInterval(interval);
+                } else {
+                    setIsZzz(false);
+                }
+            }, [scene]);
+
+            // 互动：摸摸
+            const handlePet = () => {
+                setCrabState('happy');
+                setStatusText("橙橙很开心，吐了个爱心泡泡 💕");
+                setTimeout(() => {
+                    setCrabState('idle');
+                    setStatusText(currentScene.text);
+                }, 2000);
+            };
+
+            // 互动：扔球
+            const handleThrow = () => {
+                if (crabState === 'play') return;
+                setCrabState('play');
+                setStatusText("你扔出了小皮球！⚽");
+                
+                // 模拟球滚动的简单动画
+                setBallPos(20);
+                setTimeout(() => setBallPos(120), 200);
+                setTimeout(() => setBallPos(180), 400);
+                setTimeout(() => {
+                    setCrabState('happy');
+                    setStatusText("橙橙接住了球，超开心！");
+                    setTimeout(() => {
+                        setBallPos(-50);
+                        setCrabState('idle');
+                        setStatusText(currentScene.text);
+                    }, 1500);
+                }, 600);
+            };
+
+            // 互动：切换场景
+            const changeScene = (newScene) => {
+                setScene(newScene);
+                setStatusText(sceneConfig[newScene].text);
+            };
+
+            return (
+                <div className="min-h-screen bg-[#F5EBE0] text-[#5A4D41] font-sans flex flex-col items-center py-6 px-4 selection:bg-[#F4A261] selection:text-white">
+                    
+                    {/* 头部 */}
+                    <header className="w-full max-w-md text-center mb-4">
+                        <h1 className="text-2xl font-bold tracking-wider mb-2 flex items-center justify-center gap-2">
+                            <span>🦀</span> 
+                            <span className="text-[#E76F51]">橙橙的 <span className="font-mono bg-[#E76F51] text-white px-1 rounded-sm">COZY</span> 小屋</span> 
+                            <span>🐱</span>
+                        </h1>
+                        <p className="text-sm opacity-70 tracking-widest">像素小螃蟹 × 小猫日常</p>
+                    </header>
+
+                    {/* 游戏机主体 */}
+                    <div className="w-full max-w-md bg-[#FFFDF7] p-4 rounded-3xl shadow-xl border-4 border-[#5A4D41]">
+                        
+                        {/* 屏幕区域 (Canvas 替代) */}
+                        <div className={`relative w-full aspect-[4/3] rounded-lg overflow-hidden border-4 border-[#5A4D41] transition-colors duration-1000 ${currentScene.bg}`}>
+                            
+                            {/* 窗户 */}
+                            <div className={`absolute top-6 right-8 w-24 h-24 border-4 border-[#5A4D41] ${currentScene.window} grid grid-cols-2 grid-rows-2 transition-colors duration-1000`}>
+                                <div className="border-r-4 border-b-4 border-[#5A4D41]"></div>
+                                <div className="border-b-4 border-[#5A4D41]"></div>
+                                <div className="border-r-4 border-[#5A4D41]"></div>
+                                <div></div>
+                                {/* 太阳/月亮 */}
+                                <div className={`absolute w-8 h-8 rounded-full top-3 right-3 transition-colors duration-1000 ${currentScene.celestial}`}></div>
+                            </div>
+
+                            {/* 落地灯柱与灯罩 (简易版) */}
+                            <div className="absolute left-10 top-16 flex flex-col items-center">
+                                <div className="w-12 h-6 bg-[#E9C46A] border-4 border-[#5A4D41] rounded-t-full"></div>
+                                <div className="w-2 h-20 bg-[#5A4D41]"></div>
+                            </div>
+
+                            {/* 灯光光晕 */}
+                            <div className={`absolute left-0 top-20 w-64 h-64 rounded-full blur-2xl transition-opacity duration-1000 ${currentScene.light} pointer-events-none`}></div>
+
+                            {/* 地板 */}
+                            <div className={`absolute bottom-0 w-full h-1/3 border-t-4 border-[#5A4D41] ${currentScene.floor} transition-colors duration-1000`}>
+                                {/* 地板纹理线条 */}
+                                <div className="w-full h-[2px] bg-[#5A4D41] opacity-20 mt-4"></div>
+                                <div className="w-full h-[2px] bg-[#5A4D41] opacity-20 mt-4"></div>
+                            </div>
+
+                            {/* 盆栽 (右下角) */}
+                            <div className="absolute bottom-1/3 right-8 translate-y-2">
+                               <PixelSprite matrix={PLANT} colorMap={PALETTE} pixelSize={6} />
+                            </div>
+
+                            {/* 小猫 */}
+                            <div className="absolute bottom-1/3 right-32 translate-y-1">
+                                <PixelSprite matrix={currentScene.cat} colorMap={PALETTE} pixelSize={6} />
+                                {/* 打盹 Zzz 动画 */}
+                                {scene === 'nap' && (
+                                    <div className="absolute -top-8 -right-4 font-mono font-bold text-[#F4A261] flex flex-col items-end leading-none">
+                                        <span className={`text-sm transition-opacity duration-500 ${isZzz ? 'opacity-100' : 'opacity-0'}`}>z</span>
+                                        <span className={`text-base transition-opacity duration-500 delay-150 ${isZzz ? 'opacity-100' : 'opacity-0'}`}>Z</span>
+                                        <span className={`text-xl transition-opacity duration-500 delay-300 ${isZzz ? 'opacity-100' : 'opacity-0'}`}>Z</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 橙橙 (小螃蟹) */}
+                            <div className="absolute bottom-1/3 left-16 translate-y-3 transition-transform duration-300 ease-in-out">
+                                {crabState === 'happy' && (
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 animate-bounce">
+                                        <PixelSprite matrix={HEART} colorMap={PALETTE} pixelSize={4} />
+                                    </div>
+                                )}
+                                <PixelSprite 
+                                    matrix={crabState === 'happy' ? CRAB_HAPPY : CRAB_IDLE} 
+                                    colorMap={PALETTE} 
+                                    pixelSize={6} 
+                                    className={crabState === 'play' ? 'translate-x-12' : ''}
+                                />
+                            </div>
+
+                            {/* 玩具球 */}
+                            <div 
+                                className="absolute bottom-1/3 left-0 w-5 h-5 bg-white border-2 border-black rounded-full overflow-hidden transition-all duration-300 ease-linear"
+                                style={{ transform: `translate(${ballPos}px, 10px)`, opacity: ballPos > -50 ? 1 : 0 }}
+                            >
+                                {/* 足球花纹 */}
+                                <div className="absolute top-1 left-1 w-2 h-2 bg-black rounded-sm"></div>
+                            </div>
+                        </div>
+
+                        {/* 状态栏 */}
+                        <div className="mt-4 bg-[#FFFDF7] border-4 border-[#5A4D41] rounded-lg p-3 text-center font-bold text-sm">
+                            {statusText}
+                        </div>
+
+                        {/* 控制面板 */}
+                        <div className="mt-4 flex flex-col gap-3">
+                            
+                            {/* 场景控制组 */}
+                            <div className="flex gap-2 justify-center">
+                                <button onClick={() => changeScene('day')} className="flex-1 py-2 bg-[#E9C46A] border-4 border-b-[6px] border-[#5A4D41] rounded-lg font-bold text-sm active:border-b-4 active:translate-y-[2px] transition-all flex items-center justify-center gap-1">
+                                    ☀️ 白天
+                                </button>
+                                <button onClick={() => changeScene('night')} className="flex-1 py-2 bg-[#2A9D8F] text-white border-4 border-b-[6px] border-[#5A4D41] rounded-lg font-bold text-sm active:border-b-4 active:translate-y-[2px] transition-all flex items-center justify-center gap-1">
+                                    🌙 夜晚
+                                </button>
+                                <button onClick={() => changeScene('nap')} className="flex-1 py-2 bg-[#8C7A6B] text-white border-4 border-b-[6px] border-[#5A4D41] rounded-lg font-bold text-sm active:border-b-4 active:translate-y-[2px] transition-all flex items-center justify-center gap-1">
+                                    😴 打盹
+                                </button>
+                            </div>
+
+                            {/* 互动控制组 */}
+                            <div className="flex gap-2 justify-center">
+                                <button onClick={handlePet} className="w-1/2 py-3 bg-[#E76F51] text-white border-4 border-b-[6px] border-[#5A4D41] rounded-lg font-bold active:border-b-4 active:translate-y-[2px] transition-all flex items-center justify-center gap-2">
+                                    💕 摸摸橙橙
+                                </button>
+                                <button onClick={handleThrow} className="w-1/2 py-3 bg-[#F4A261] text-[#5A4D41] border-4 border-b-[6px] border-[#5A4D41] rounded-lg font-bold active:border-b-4 active:translate-y-[2px] transition-all flex items-center justify-center gap-2">
+                                    ⚽ 扔球
+                                </button>
+                            </div>
+                            
+                        </div>
+                    </div>
+
+                    <footer className="mt-8 text-center text-xs opacity-60 font-bold leading-relaxed">
+                        <p>复刻你喜欢的那种温暖像素风</p>
+                        <p>随时切换场景，点击橙橙会有爱心哦 💖</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
