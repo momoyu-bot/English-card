@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>点赞之后，它去了哪儿</title>
+<style>
+  :root{
+    --bg0:#0a0e1f; --bg1:#131a35;
+    --ink:#e9ecf7; --ink-dim:#8a93b5; --ink-faint:#5a6280;
+    --line:#3d5a8a; --line-lit:#7aa6e0;
+    --warm:#f4c87a; --warm-lit:#ffc06a; --warm-deep:#c9924a;
+    --glass:rgba(22,30,58,.62); --edge:rgba(122,166,224,.22);
+    --good:#7fd6a8; --bad:#e08a8a;
+    --mono:ui-monospace,"SF Mono",Menlo,"Roboto Mono",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(120% 80% at 12% -10%, #1a2350 0%, transparent 55%),
+      radial-gradient(120% 90% at 95% 110%, #20183a 0%, transparent 50%),
+      linear-gradient(160deg,var(--bg0),var(--bg1));
+    color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    min-height:100vh;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding:26px 18px 60px;
+  }
+  .wrap{max-width:860px;margin:0 auto;}
+
+  /* ---- header ---- */
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:.32em;
+    text-transform:uppercase; color:var(--warm); opacity:.85; margin:0 0 10px;
+  }
+  h1{
+    font-size:clamp(28px,7vw,46px); font-weight:800; letter-spacing:-.02em;
+    margin:0 0 12px; line-height:1.05;
+  }
+  .sub{color:var(--ink-dim); font-size:15px; max-width:60ch; margin:0;}
+
+  /* ---- panel base ---- */
+  .panel{
+    background:var(--glass); border:1px solid var(--edge);
+    border-radius:18px; padding:18px; margin-top:22px;
+    backdrop-filter:blur(8px);
+  }
+  .panel-label{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--ink-dim); margin:0 0 14px;
+  }
+
+  /* ---- model picker ---- */
+  .models{display:flex; gap:8px; flex-wrap:wrap;}
+  .chip{
+    font:inherit; font-size:13.5px; cursor:pointer;
+    background:rgba(255,255,255,.03); color:var(--ink-dim);
+    border:1px solid var(--edge); border-radius:999px;
+    padding:7px 15px; transition:.18s;
+  }
+  .chip:hover{color:var(--ink); border-color:var(--line-lit);}
+  .chip.on{
+    background:linear-gradient(180deg,rgba(244,200,122,.18),rgba(244,200,122,.06));
+    color:var(--warm); border-color:var(--warm-deep);
+  }
+  .chip:focus-visible{outline:2px solid var(--warm-lit); outline-offset:2px;}
+
+  /* ---- chat stage ---- */
+  .stage{margin-top:14px;}
+  .bubble{
+    background:rgba(255,255,255,.05); border:1px solid var(--edge);
+    border-radius:4px 16px 16px 16px; padding:13px 16px; font-size:14.5px;
+    max-width:80%; color:var(--ink);
+  }
+  .bubble .who{
+    font-family:var(--mono); font-size:10px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--ink-dim); display:block; margin-bottom:5px;
+  }
+
+  /* feedback controls */
+  .fb{margin-top:12px;}
+  .fb-minimal{display:flex; gap:6px; align-items:center;}
+  .fb-note{font-size:12px; color:var(--ink-faint); margin-left:6px;}
+  .thumb{
+    font:inherit; font-size:17px; cursor:pointer; line-height:1;
+    background:rgba(255,255,255,.04); border:1px solid var(--edge);
+    border-radius:9px; padding:8px 12px; transition:.16s; color:var(--ink-dim);
+  }
+  .thumb:hover{transform:translateY(-1px); border-color:var(--line-lit); color:var(--ink);}
+  .thumb:active{transform:translateY(0);}
+  .thumb:focus-visible{outline:2px solid var(--warm-lit); outline-offset:2px;}
+  .thumb.up:hover{border-color:var(--good); color:var(--good);}
+  .thumb.down:hover{border-color:var(--bad); color:var(--bad);}
+
+  /* claude's full panel */
+  .fb-full{
+    margin-top:12px; border:1px dashed var(--edge); border-radius:13px;
+    padding:14px; background:rgba(255,255,255,.02);
+    max-height:0; opacity:0; overflow:hidden;
+    transition:max-height .35s ease, opacity .3s, padding .35s, margin .35s;
+    padding-top:0; padding-bottom:0; margin-top:0;
+  }
+  .fb-full.open{max-height:340px; opacity:1; padding-top:14px; padding-bottom:14px; margin-top:12px;}
+  .fb-full .ttl{font-size:13px; color:var(--ink); margin:0 0 10px; font-weight:600;}
+  .reasons{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:11px;}
+  .reason{
+    font:inherit; font-size:12.5px; cursor:pointer; color:var(--ink-dim);
+    background:rgba(255,255,255,.03); border:1px solid var(--edge);
+    border-radius:8px; padding:5px 11px; transition:.15s;
+  }
+  .reason:hover{color:var(--ink); border-color:var(--line-lit);}
+  .reason.sel{background:rgba(122,166,224,.16); color:var(--ink); border-color:var(--line-lit);}
+  .fake-input{
+    width:100%; border:1px solid var(--edge); border-radius:9px;
+    background:rgba(0,0,0,.18); color:var(--ink-dim); font:inherit; font-size:13px;
+    padding:9px 12px; margin-bottom:11px; resize:none; min-height:46px;
+  }
+  .fake-input:focus{outline:none; border-color:var(--line-lit); color:var(--ink);}
+  .submit{
+    font:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+    background:linear-gradient(180deg,var(--warm),var(--warm-deep));
+    color:#241803; border:none; border-radius:9px; padding:9px 18px; transition:.16s;
+  }
+  .submit:hover{filter:brightness(1.07); transform:translateY(-1px);}
+  .submit:focus-visible{outline:2px solid #fff; outline-offset:2px;}
+
+  /* ---- packaging manifest ---- */
+  .manifest{
+    margin-top:18px; max-height:0; opacity:0; overflow:hidden;
+    transition:max-height .4s ease, opacity .35s;
+  }
+  .manifest.show{max-height:420px; opacity:1;}
+  .manifest h3{
+    font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--warm); margin:0 0 12px; display:flex; align-items:center; gap:8px;
+  }
+  .mani-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .mani{
+    font-size:13px; padding:9px 12px; border-radius:10px;
+    background:rgba(255,255,255,.03); border:1px solid var(--edge);
+    display:flex; gap:9px; align-items:flex-start;
+  }
+  .mani .mk{font-family:var(--mono); font-weight:700; flex-shrink:0; line-height:1.5;}
+  .mani.in .mk{color:var(--good);}
+  .mani.out{opacity:.55;}
+  .mani.out .mk{color:var(--bad);}
+  .mani .tx{color:var(--ink-dim);}
+  .mani.in .tx{color:var(--ink);}
+  .delink{
+    grid-column:1/-1; font-size:12.5px; color:var(--ink-dim);
+    padding:9px 12px; border-radius:10px; margin-top:2px;
+    background:linear-gradient(90deg,rgba(244,200,122,.1),transparent);
+    border:1px solid rgba(244,200,122,.2);
+  }
+  .delink b{color:var(--warm);}
+
+  /* ---- conveyor line ---- */
+  .belt-wrap{margin-top:26px; position:relative;}
+  .belt-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px;}
+  .belt-head .lbl{font-family:var(--mono); font-size:10.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim);}
+  .belt-head .status{font-family:var(--mono); font-size:11px; color:var(--warm); opacity:.8;}
+
+  .belt{
+    position:relative; display:flex; justify-content:space-between; gap:6px;
+    padding:0 4px;
+  }
+  /* the moving packet */
+  #packet{
+    position:absolute; top:0; left:0; width:30px; height:30px; z-index:5;
+    border-radius:8px; opacity:0; pointer-events:none;
+    background:radial-gradient(circle at 35% 30%, var(--warm-lit), var(--warm-deep));
+    box-shadow:0 0 0 1px rgba(255,200,110,.5), 0 0 18px 4px rgba(255,180,90,.55);
+    transition:transform 1.05s cubic-bezier(.5,.05,.3,1), opacity .3s;
+    display:grid; place-items:center; font-size:14px;
+  }
+  #packet.live{opacity:1; animation:breathe 2.2s ease-in-out infinite;}
+  @keyframes breathe{50%{box-shadow:0 0 0 1px rgba(255,200,110,.7), 0 0 26px 8px rgba(255,180,90,.7);}}
+
+  .station{
+    flex:1; min-width:0; position:relative; z-index:2;
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+  }
+  .dot{
+    width:34px; height:34px; border-radius:50%;
+    background:rgba(255,255,255,.04); border:1.5px solid var(--line);
+    display:grid; place-items:center; font-size:15px; transition:.4s;
+    position:relative; z-index:3;
+  }
+  .station .no{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.15em; color:var(--ink-faint);
+    margin-top:9px; transition:.3s;
+  }
+  .station .nm{font-size:11.5px; color:var(--ink-dim); margin-top:3px; line-height:1.3; transition:.3s; padding:0 2px;}
+  .station.lit .dot{
+    border-color:var(--warm); background:rgba(244,200,122,.16);
+    box-shadow:0 0 16px 2px rgba(255,180,90,.4);
+  }
+  .station.lit .no{color:var(--warm);}
+  .station.lit .nm{color:var(--ink);}
+  .station.done .dot{border-color:var(--line-lit); background:rgba(122,166,224,.1);}
+
+  /* connecting rail */
+  .rail{
+    position:absolute; top:17px; left:6%; right:6%; height:2px; z-index:1;
+    background:repeating-linear-gradient(90deg,var(--line) 0 7px,transparent 7px 14px);
+    opacity:.6;
+  }
+  .rail-fill{
+    position:absolute; top:17px; left:6%; height:2px; z-index:1; width:0;
+    background:linear-gradient(90deg,var(--warm-deep),var(--warm-lit));
+    box-shadow:0 0 8px rgba(255,180,90,.6); transition:width 1.05s cubic-bezier(.5,.05,.3,1);
+  }
+
+  /* station detail card */
+  .detail{
+    margin-top:20px; min-height:78px;
+    background:rgba(255,255,255,.03); border:1px solid var(--edge); border-radius:14px;
+    padding:16px; transition:.3s;
+  }
+  .detail .d-no{font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--warm); text-transform:uppercase;}
+  .detail .d-ttl{font-size:16px; font-weight:700; margin:6px 0 7px;}
+  .detail .d-tx{font-size:13.5px; color:var(--ink-dim); margin:0;}
+  .detail.idle .d-ttl,.detail.idle .d-no{color:var(--ink-faint);}
+  .detail.idle .d-tx{color:var(--ink-faint);}
+  .detail.human{border-color:var(--good); box-shadow:0 0 0 1px rgba(127,214,168,.2) inset;}
+  .detail.human .d-no{color:var(--good);}
+
+  /* ---- truth footer ---- */
+  .truth{
+    margin-top:24px; display:flex; gap:13px; align-items:flex-start;
+    font-size:13px; color:var(--ink-dim);
+    padding:15px 17px; border-radius:14px;
+    background:linear-gradient(100deg,rgba(244,200,122,.09),rgba(244,200,122,.02));
+    border:1px solid rgba(244,200,122,.22);
+  }
+  .truth .ic{font-size:18px; flex-shrink:0; line-height:1.4;}
+  .truth b{color:var(--warm);}
+
+  .replay{
+    margin-top:18px; display:inline-flex; align-items:center; gap:7px;
+    font:inherit; font-size:13px; cursor:pointer; color:var(--ink-dim);
+    background:rgba(255,255,255,.03); border:1px solid var(--edge);
+    border-radius:10px; padding:8px 15px; transition:.16s;
+  }
+  .replay:hover{color:var(--ink); border-color:var(--line-lit);}
+  .replay:focus-visible{outline:2px solid var(--warm-lit); outline-offset:2px;}
+
+  .foot-note{margin-top:22px; font-size:11.5px; color:var(--ink-faint); line-height:1.6;}
+  .foot-note a{color:var(--ink-dim);}
+
+  /* ---- responsive: belt goes vertical ---- */
+  @media(max-width:560px){
+    .mani-grid{grid-template-columns:1fr;}
+    .belt{flex-direction:column; gap:0; padding-left:8px;}
+    .station{flex-direction:row; align-items:flex-start; text-align:left; gap:13px; padding:11px 0;}
+    .station .meta-v{padding-top:5px;}
+    .station .no{margin-top:0;}
+    .station .nm{margin-top:2px;}
+    .rail{left:24px; top:11%; bottom:11%; width:2px; height:auto;
+      background:repeating-linear-gradient(180deg,var(--line) 0 7px,transparent 7px 14px);}
+    .rail-fill{left:24px; top:11%; width:2px; height:0; background:linear-gradient(180deg,var(--warm-deep),var(--warm-lit));}
+    .bubble{max-width:100%;}
+  }
+
+  @media(prefers-reduced-motion:reduce){
+    *{transition-duration:.01ms !important; animation:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">反馈数据流向 · 控制台</p>
+  <h1>点赞之后，<br>它去了哪儿</h1>
+  <p class="sub">选一个模型，按下那个拇指。看你的反馈被装成一个发光的小包裹，沿着分拣线一站一站流走——每一站，都告诉你它正在被怎么处理。</p>
+
+  <!-- MODEL PICKER -->
+  <div class="panel">
+    <p class="panel-label">① 你在跟谁说话</p>
+    <div class="models" id="models">
+      <button class="chip on" data-m="claude">Claude</button>
+      <button class="chip" data-m="grok">Grok</button>
+      <button class="chip" data-m="gemini">Gemini</button>
+      <button class="chip" data-m="gpt">GPT</button>
+      <button class="chip" data-m="copilot">Copilot</button>
+    </div>
+
+    <!-- CHAT STAGE -->
+    <div class="stage">
+      <div class="bubble">
+        <span class="who">回复</span>
+        嗯，这个问题可以从三个层面拆开看……（此处省略一段它刚才说的话）
+      </div>
+
+      <div class="fb">
+        <div class="fb-minimal">
+          <button class="thumb up" id="thumbUp" aria-label="有用">👍</button>
+          <button class="thumb down" id="thumbDown" aria-label="没用">👎</button>
+          <span class="fb-note" id="fbNote">一个小拇指，按下去就走。</span>
+        </div>
+
+        <!-- claude's one-stop panel -->
+        <div class="fb-full" id="fbFull">
+          <p class="ttl">想多说两句吗？（可选）</p>
+          <div class="reasons" id="reasons">
+            <button class="reason" data-r="不够准确">不够准确</button>
+            <button class="reason" data-r="太长了">太长了</button>
+            <button class="reason" data-r="帮到我了">帮到我了</button>
+            <button class="reason" data-r="语气不对">语气不对</button>
+          </div>
+          <textarea class="fake-input" id="fakeInput" placeholder="补充说明…（这段也会一起被打包）"></textarea>
+          <button class="submit" id="submitFb">提交反馈</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PACKAGING MANIFEST -->
+  <div class="manifest" id="manifest">
+    <div class="panel" style="margin-top:0;">
+      <h3>📦 这一包，装了什么</h3>
+      <div class="mani-grid">
+        <div class="mani in"><span class="mk">✓</span><span class="tx">整段对话内容（不是你点的那一句，是整段）</span></div>
+        <div class="mani in"><span class="mk">✓</span><span class="tx">你的自定义 style</span></div>
+        <div class="mani in"><span class="mk">✓</span><span class="tx">对话偏好 / 模型设置</span></div>
+        <div class="mani in"><span class="mk">✓</span><span class="tx">时间戳 · 模型版本</span></div>
+        <div class="mani out"><span class="mk">✗</span><span class="tx">connector 原始内容（除非你复制进了对话里）</span></div>
+        <div class="mani out"><span class="mk">✗</span><span class="tx">你和别处对话的内容（不与本条合并）</span></div>
+        <div class="delink">出发前先做一件事：<b>把你的 email、用户 ID 摘掉</b>——这一包认的是内容，不认人。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONVEYOR -->
+  <div class="belt-wrap" id="beltWrap" style="display:none;">
+    <div class="belt-head">
+      <span class="lbl">② 它流过谁的手</span>
+      <span class="status" id="beltStatus">待发车</span>
+    </div>
+
+    <div class="belt" id="belt">
+      <div class="rail"></div>
+      <div class="rail-fill" id="railFill"></div>
+      <div id="packet">✦</div>
+
+      <div class="station" data-i="0">
+        <div class="dot">📦</div>
+        <div class="meta-v"><div class="no">01</div><div class="nm">打包 · 解链</div></div>
+      </div>
+      <div class="station" data-i="1">
+        <div class="dot">🏷️</div>
+        <div class="meta-v"><div class="no">02</div><div class="nm">自动分类</div></div>
+      </div>
+      <div class="station" data-i="2">
+        <div class="dot">🎲</div>
+        <div class="meta-v"><div class="no">03</div><div class="nm">采样分流</div></div>
+      </div>
+      <div class="station" data-i="3">
+        <div class="dot">👁️</div>
+        <div class="meta-v"><div class="no">04</div><div class="nm">人工抽查</div></div>
+      </div>
+      <div class="station" data-i="4">
+        <div class="dot">🗄️</div>
+        <div class="meta-v"><div class="no">05</div><div class="nm">信号池</div></div>
+      </div>
+    </div>
+
+    <div class="detail idle" id="detail">
+      <div class="d-no">待发车</div>
+      <div class="d-ttl">按下拇指，看它上路</div>
+      <p class="d-tx">提交之后，包裹会从你这儿出发，依次经过下面五站。点亮的那一站，就是它此刻所在的位置。</p>
+    </div>
+
+    <button class="replay" id="replay" style="display:none;">↻ 再发一次</button>
+  </div>
+
+  <!-- TRUTH -->
+  <div class="truth">
+    <span class="ic">💡</span>
+    <div>
+      你那个二选一——"小模型打分还是人工抽查"——其实<b>两个都有，各管一段</b>：小模型管<b>量</b>（在第②站给海量反馈分类、过滤、聚合），真人管<b>质</b>（在第④站看被抽出来的样本）。而你的赞本身就是人类信号，没人会再派模型去给它打分——那等于把唯一值钱的东西又交给机器估一遍。<br><br>
+      还有一件对你有用的：这条线<b>绕过你的训练开关</b>。就算你关了"Help improve Claude"，普通对话 30 天删掉、不进训练，但只要你点了这个拇指，这一包照样存最长 5 年。所以——含敏感运营信息的那段对话，点之前心里过一秒。
+    </div>
+  </div>
+
+  <p class="foot-note">
+    机制说明基于 Anthropic 官方隐私中心公开条款（thumbs up/down 反馈会存储整段相关对话、解链用户 ID、保留约 5 年）。<br>
+    第②③④站的"分类→采样→人工"是行业通用的反馈处理分层；各家内部实现不透明，方向一致但细节无法逐一确认。这是一个示意控制台，不是任何一家的真实后台。
+  </p>
+
+</div>
+
+<script>
+(function(){
+  var model = "claude";
+  var fbFullOpen = false;
+
+  var stationData = [
+    {no:"01", ttl:"打包 · 解链身份", human:false,
+     tx:"整段对话连同你的 style、偏好、模型设置一起装箱，然后把你的 email 和用户 ID 摘掉——内容留下，身份抹去。"},
+    {no:"02", ttl:"自动分类（机器管量）", human:false,
+     tx:"分类器 / 小模型在这儿给海量反馈贴标签：这条是关于准确度的？格式的？语气的？顺手过滤掉垃圾、做聚合统计。注意——它分类的是反馈，不是给你的赞打分。"},
+    {no:"03", ttl:"采样分流", human:false,
+     tx:"绝大多数反馈只汇进统计数字里，沉默地变成趋势。只有一小撮被随机抽出来，送去下一站让真人看。"},
+    {no:"04", ttl:"人工抽查 · 标注（真人管质）", human:true,
+     tx:"被抽中的样本，由真人审查、标注。你的赞之所以珍贵，正是因为它是个真人按的——这一站把它的价值兑现出来。"},
+    {no:"05", ttl:"训练 / 评估信号池", human:false,
+     tx:"处理过的信号汇入池子，可能用于研究、评估、训练后续模型，最长存放约 5 年。然后——它就成了某个未来版本身上一道极淡的痕迹。"}
+  ];
+
+  var els = {
+    models: document.getElementById("models"),
+    fbNote: document.getElementById("fbNote"),
+    fbFull: document.getElementById("fbFull"),
+    thumbUp: document.getElementById("thumbUp"),
+    thumbDown: document.getElementById("thumbDown"),
+    submitFb: document.getElementById("submitFb"),
+    reasons: document.getElementById("reasons"),
+    manifest: document.getElementById("manifest"),
+    beltWrap: document.getElementById("beltWrap"),
+    belt: document.getElementById("belt"),
+    packet: document.getElementById("packet"),
+    railFill: document.getElementById("railFill"),
+    detail: document.getElementById("detail"),
+    beltStatus: document.getElementById("beltStatus"),
+    replay: document.getElementById("replay")
+  };
+  var stations = Array.prototype.slice.call(els.belt.querySelectorAll(".station"));
+
+  var noteText = {
+    claude:  "Claude 这套：点踩还会弹原因、能附说明。一条龙。",
+    grok:    "Grok 这边就一个小拇指，按下去直接走。",
+    gemini:  "Gemini 也是极简俩拇指——但后端不一定简。",
+    gpt:     "GPT 同款小框框，UI 简，打包未必简。",
+    copilot: "Copilot 也是轻量反馈，背后的河大同小异。"
+  };
+
+  // ---- model switching ----
+  els.models.addEventListener("click", function(e){
+    var btn = e.target.closest(".chip"); if(!btn) return;
+    model = btn.dataset.m;
+    els.models.querySelectorAll(".chip").forEach(function(c){c.classList.toggle("on", c===btn);});
+    els.fbNote.textContent = noteText[model];
+    // claude shows note about one-stop; others minimal. reset open panel
+    closeFull();
+  });
+
+  function openFull(){
+    els.fbFull.classList.add("open"); fbFullOpen = true;
+  }
+  function closeFull(){
+    els.fbFull.classList.remove("open"); fbFullOpen = false;
+    els.reasons.querySelectorAll(".reason").forEach(function(r){r.classList.remove("sel");});
+  }
+
+  // reason chips toggle
+  els.reasons.addEventListener("click", function(e){
+    var r = e.target.closest(".reason"); if(!r) return;
+    r.classList.toggle("sel");
+  });
+
+  // ---- thumb behaviour: claude opens panel first, others fire直接 ----
+  function onThumb(){
+    if(model === "claude" && !fbFullOpen){
+      openFull();
+      els.fbFull.scrollIntoView({behavior:"smooth", block:"nearest"});
+    } else {
+      fire();
+    }
+  }
+  els.thumbUp.addEventListener("click", onThumb);
+  els.thumbDown.addEventListener("click", onThumb);
+  els.submitFb.addEventListener("click", function(){ fire(); });
+  els.replay.addEventListener("click", function(){ fire(); });
+
+  var running = false;
+
+  function fire(){
+    if(running) return;
+    running = true;
+    closeFull();
+
+    // reveal manifest + belt
+    els.manifest.classList.add("show");
+    els.beltWrap.style.display = "block";
+    els.replay.style.display = "none";
+
+    // reset stations
+    stations.forEach(function(s){s.classList.remove("lit","done");});
+    els.detail.className = "detail idle";
+    els.beltStatus.textContent = "装箱中…";
+
+    // launch packet
+    els.packet.classList.add("live");
+    setTimeout(function(){
+      runSequence();
+    }, 420);
+  }
+
+  function stationCenter(st){
+    var beltBox = els.belt.getBoundingClientRect();
+    var dot = st.querySelector(".dot");
+    var dBox = dot.getBoundingClientRect();
+    return {
+      x: dBox.left - beltBox.left + dBox.width/2 - els.packet.offsetWidth/2,
+      y: dBox.top - beltBox.top + dBox.height/2 - els.packet.offsetHeight/2
+    };
+  }
+
+  function moveTo(idx, cb){
+    var c = stationCenter(stations[idx]);
+    els.packet.style.transform = "translate(" + c.x + "px," + c.y + "px)";
+    // fill rail
+    var isVertical = window.innerWidth <= 560;
+    var frac = idx/(stations.length-1);
+    if(isVertical){
+      els.railFill.style.height = (frac*78) + "%";
+      els.railFill.style.width = "2px";
+    } else {
+      els.railFill.style.width = (frac*88) + "%";
+      els.railFill.style.height = "2px";
+    }
+    setTimeout(cb, 1080);
+  }
+
+  function showDetail(idx){
+    var d = stationData[idx];
+    els.detail.className = "detail" + (d.human ? " human" : "");
+    els.detail.innerHTML =
+      '<div class="d-no">STATION ' + d.no + '</div>' +
+      '<div class="d-ttl">' + d.ttl + '</div>' +
+      '<p class="d-tx">' + d.tx + '</p>';
+  }
+
+  function runSequence(){
+    var i = 0;
+    // place packet at start (station 0) instantly without transition flash
+    var c0 = stationCenter(stations[0]);
+    els.packet.style.transition = "none";
+    els.packet.style.transform = "translate(" + c0.x + "px," + c0.y + "px)";
+    void els.packet.offsetWidth;
+    els.packet.style.transition = "";
+
+    function step(){
+      if(i >= stations.length){
+        finish(); return;
+      }
+      els.beltStatus.textContent = "STATION " + stationData[i].no + " / 05";
+      moveTo(i, function(){
+        if(i>0) stations[i-1].classList.remove("lit");
+        if(i>0) stations[i-1].classList.add("done");
+        stations[i].classList.add("lit");
+        showDetail(i);
+        i++;
+        setTimeout(step, 900);
+      });
+    }
+    step();
+  }
+
+  function finish(){
+    els.beltStatus.textContent = "已入池 · 存约 5 年";
+    stations[stations.length-1].classList.add("done");
+    els.packet.classList.remove("live");
+    els.packet.style.opacity = "0";
+    els.replay.style.display = "inline-flex";
+    running = false;
+  }
+
+  // reposition packet if it's parked and window resizes
+  window.addEventListener("resize", function(){
+    if(running) return;
+    var lit = stations.filter(function(s){return s.classList.contains("lit");})[0];
+    // nothing parked to reposition when idle; packet hidden
+  });
+
+})();
+</script>
+</body>
+</html>
