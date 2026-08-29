@@ -1,0 +1,385 @@
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+
+// ── 暖色"爆米花实验台"配色 ──
+const C = {
+  bg1: "#FFF7EC",
+  bg2: "#FFEAD2",
+  ink: "#3A2A1E",
+  sub: "#9A8472",
+  faint: "#D9C4AE",
+  card: "#FFFFFF",
+  pop: "#F5A623",     // 爆米花金黄
+  popEdge: "#E07B12", // 南瓜橙描边
+  theory: "#C0432A",  // 理论曲线·焦糖红
+  rail: "#EAD9C4",
+};
+
+const WIN = 8;   // 时间轴可见窗口（秒）
+const BIN_W = 1; // 计数窗口长度（秒）
+
+// 指数间隔采样： -ln(U)/λ
+const sampleGap = (lam) => -Math.log(1 - Math.random()) / lam;
+
+// easeOutBack，给爆米花一个回弹
+function easeOutBack(p) {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+}
+// 基于事件时刻的稳定伪随机（让爆米花在轨道上有高低层次）
+const seeded = (t) => {
+  const x = Math.sin(t * 99.73) * 43758.5453;
+  return x - Math.floor(x);
+};
+const factorial = (n) => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
+
+export default function PoissonPopcorn() {
+  const [lambda, setLambda] = useState(3);
+  const [running, setRunning] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [events, setEvents] = useState([]);
+  const [now, setNow] = useState(0);
+
+  const rafRef = useRef();
+  const lastTs = useRef(0);
+  const nowRef = useRef(0);
+  const eventsRef = useRef([]);
+  const nextRef = useRef(sampleGap(3));
+  const lambdaRef = useRef(3);
+  const speedRef = useRef(1);
+
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+
+  const resetData = useCallback((lam) => {
+    eventsRef.current = [];
+    setEvents([]);
+    nowRef.current = 0;
+    setNow(0);
+    nextRef.current = sampleGap(lam);
+  }, []);
+
+  const onLambda = (v) => {
+    setLambda(v);
+    lambdaRef.current = v;
+    resetData(v); // 速率变了 = 换了一锅，重新统计
+  };
+
+  // 动画循环
+  useEffect(() => {
+    if (!running) return;
+    lastTs.current = performance.now();
+    let active = true;
+    const loop = (ts) => {
+      if (!active) return;
+      const dt = Math.min((ts - lastTs.current) / 1000, 0.1) * speedRef.current;
+      lastTs.current = ts;
+      const n = nowRef.current + dt;
+      let changed = false;
+      while (nextRef.current <= n) {
+        eventsRef.current.push(nextRef.current);
+        nextRef.current += sampleGap(lambdaRef.current);
+        changed = true;
+      }
+      nowRef.current = n;
+      setNow(n);
+      if (changed) setEvents(eventsRef.current.slice());
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { active = false; cancelAnimationFrame(rafRef.current); };
+  }, [running]);
+
+  // ── 派生统计 ──
+  const stats = useMemo(() => {
+    const ev = events;
+    const intervals = [];
+    let prev = 0;
+    for (const t of ev) { intervals.push(t - prev); prev = t; }
+
+    const maxX = 5 / lambda;
+    const nb = 18;
+    const bw = maxX / nb;
+    const ibins = new Array(nb).fill(0);
+    for (const d of intervals) {
+      let bi = Math.floor(d / bw);
+      if (bi >= nb) bi = nb - 1; if (bi < 0) bi = 0;
+      ibins[bi]++;
+    }
+    const total = intervals.length;
+    const idens = ibins.map((c) => (total > 0 ? c / (total * bw) : 0));
+    const meanGap = total > 0 ? intervals.reduce((a, b) => a + b, 0) / total : 0;
+
+    const completed = Math.max(Math.floor(now / BIN_W), 0);
+    const winCounts = new Array(completed).fill(0);
+    for (const t of ev) {
+      const wi = Math.floor(t / BIN_W);
+      if (wi < completed) winCounts[wi]++;
+    }
+    const freq = {};
+    let kmax = 0;
+    for (const c of winCounts) { freq[c] = (freq[c] || 0) + 1; if (c > kmax) kmax = c; }
+    const totW = winCounts.length;
+    const meanC = totW > 0 ? winCounts.reduce((a, b) => a + b, 0) / totW : 0;
+    const varC = totW > 0 ? winCounts.reduce((a, b) => a + (b - meanC) ** 2, 0) / totW : 0;
+
+    return { intervals, maxX, bw, nb, idens, meanGap, total, freq, kmax, totW, meanC, varC };
+  }, [events, lambda, Math.floor(now)]);
+
+  // ── 时间轴上可见的爆米花 ──
+  const visible = [];
+  const left = now - WIN;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const t = events[i];
+    if (t < left) break;
+    if (t <= now) visible.push(t);
+  }
+
+  const lambdaPct = ((lambda - 1) / (8 - 1)) * 100;
+
+  return (
+    <div style={{
+      minHeight: "100%", background: `linear-gradient(160deg, ${C.bg1}, ${C.bg2})`,
+      padding: "18px 14px 28px", boxSizing: "border-box",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: C.ink,
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        .pp-mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+        .pp-card{animation:ppUp .5s cubic-bezier(.2,.7,.3,1) both;}
+        @keyframes ppUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+        .pp-range{-webkit-appearance:none;appearance:none;height:8px;border-radius:99px;outline:none;
+          background:linear-gradient(90deg,${C.pop} 0%,${C.pop} var(--p),${C.rail} var(--p),${C.rail} 100%);}
+        .pp-range::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;
+          background:#fff;border:3px solid ${C.popEdge};box-shadow:0 2px 6px rgba(224,123,18,.4);cursor:pointer;}
+        .pp-range::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;
+          border:3px solid ${C.popEdge};box-shadow:0 2px 6px rgba(224,123,18,.4);cursor:pointer;}
+        .pp-btn{border:none;border-radius:14px;padding:11px 0;font-size:15px;font-weight:600;cursor:pointer;
+          transition:transform .12s ease, filter .12s ease;}
+        .pp-btn:active{transform:scale(.96);}
+        .pp-seg{border:1.5px solid ${C.faint};background:#fff;border-radius:11px;padding:8px 0;font-size:13px;
+          font-weight:600;cursor:pointer;color:${C.sub};transition:all .12s ease;}
+      `}</style>
+
+      <div style={{ maxWidth: 460, margin: "0 auto" }}>
+        {/* 标题 */}
+        <div className="pp-card" style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-.01em" }}>🍿 泊松爆米花锅</div>
+          <div style={{ fontSize: 13.5, color: C.sub, marginTop: 4, lineHeight: 1.5 }}>
+            一颗颗随机蹦，节奏却稳。看抽象怎么长成形状。
+          </div>
+        </div>
+
+        {/* 控制台 */}
+        <div className="pp-card pp-card" style={card()}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>速率 λ</span>
+            <span className="pp-mono" style={{ fontSize: 13, color: C.sub }}>
+              平均每秒 <b className="pp-mono" style={{ color: C.popEdge, fontSize: 16 }}>{lambda.toFixed(1)}</b> 颗
+            </span>
+          </div>
+          <input type="range" min={1} max={8} step={0.5} value={lambda}
+            onChange={(e) => onLambda(parseFloat(e.target.value))}
+            className="pp-range" style={{ width: "100%", marginTop: 12, "--p": `${lambdaPct}%` }} />
+
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button className="pp-btn" onClick={() => setRunning((r) => !r)}
+              style={{ flex: 2, background: running ? "#F0D9BE" : C.pop, color: running ? C.ink : "#fff" }}>
+              {running ? "⏸ 暂停" : "▶ 开始爆"}
+            </button>
+            <button className="pp-btn" onClick={() => { setRunning(false); resetData(lambda); }}
+              style={{ flex: 1, background: "#fff", color: C.sub, border: `1.5px solid ${C.faint}` }}>
+              ↺ 重置
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
+            {[1, 4, 16].map((s) => (
+              <button key={s} className="pp-seg" onClick={() => setSpeed(s)}
+                style={speed === s ? { borderColor: C.popEdge, color: C.popEdge, background: "#FFF3E2", flex: 1 } : { flex: 1 }}>
+                {s}× 速度
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 9, lineHeight: 1.5 }}>
+            1× 看一颗颗蹦的随机感 · 16× 飞速把下面两张图喂出来
+          </div>
+        </div>
+
+        {/* 时间轴 */}
+        <div className="pp-card" style={card()}>
+          <div style={rowHead()}>
+            <span style={headLabel()}>① 时间轴 · 它们在随机蹦</span>
+            <span className="pp-mono" style={{ fontSize: 12.5, color: C.sub }}>
+              共 <b style={{ color: C.popEdge }}>{events.length}</b> 颗 · t={now.toFixed(1)}s
+            </span>
+          </div>
+          <Timeline visible={visible} now={now} />
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 8, lineHeight: 1.5 }}>
+            忽密忽疏 = 随机性；整体节奏稳定 = λ。没有谁和谁商量。
+          </div>
+        </div>
+
+        {/* 间隔 → 指数 */}
+        <div className="pp-card" style={card()}>
+          <div style={rowHead()}>
+            <span style={headLabel()}>② 两颗之间等多久 → 指数分布</span>
+          </div>
+          <GapHist stats={stats} lambda={lambda} />
+          <div style={readout()}>
+            <Stat label="实测平均间隔" value={stats.meanGap > 0 ? stats.meanGap.toFixed(3) + " s" : "—"} />
+            <Stat label="理论 1/λ" value={(1 / lambda).toFixed(3) + " s"} hi />
+          </div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 8, lineHeight: 1.55 }}>
+            最左边永远最高——"刚等一下下就蹦"最常见。这正是<b style={{ color: C.theory }}>无记忆性</b>的样子：每一刻它都最想立刻再来一颗。
+          </div>
+        </div>
+
+        {/* 计数 → 泊松 */}
+        <div className="pp-card" style={card()}>
+          <div style={rowHead()}>
+            <span style={headLabel()}>③ 每 1 秒蹦几颗 → 泊松分布</span>
+            <span className="pp-mono" style={{ fontSize: 12, color: C.sub }}>{stats.totW} 个窗口</span>
+          </div>
+          <CountHist stats={stats} lambda={lambda} />
+          <div style={readout()}>
+            <Stat label="实测均值" value={stats.totW > 0 ? stats.meanC.toFixed(2) : "—"} />
+            <Stat label="实测方差" value={stats.totW > 0 ? stats.varC.toFixed(2) : "—"} />
+            <Stat label="理论 λ" value={lambda.toFixed(2)} hi />
+          </div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 8, lineHeight: 1.55 }}>
+            盯住<b style={{ color: C.theory }}>均值 ≈ 方差 ≈ λ</b> 这个指纹。把 λ 拉到 8，小山会往右挪、变胖——偷偷在趋近正态。
+          </div>
+        </div>
+
+        <div style={{ textAlign: "center", fontSize: 12, color: C.sub, marginTop: 18, lineHeight: 1.6 }}>
+          调到 λ=1 看稀稀拉拉，调到 λ=8 看热闹 🍿<br />同一锅，三种看法
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 时间轴 ──
+function Timeline({ visible, now }) {
+  const W = 320, H = 92, mid = 50;
+  const left = now - WIN;
+  const ticks = [];
+  for (let s = Math.ceil(left); s <= now; s++) ticks.push(s);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      <line x1={0} y1={mid + 22} x2={W} y2={mid + 22} stroke={C.rail} strokeWidth={2} />
+      {ticks.map((s) => {
+        const x = ((s - left) / WIN) * W;
+        return <g key={s}>
+          <line x1={x} y1={mid + 18} x2={x} y2={mid + 26} stroke={C.faint} strokeWidth={1.5} />
+          <text x={x} y={mid + 40} fontSize="9" fill={C.sub} textAnchor="middle" className="pp-mono">{s}s</text>
+        </g>;
+      })}
+      {visible.map((t) => {
+        const x = ((t - left) / WIN) * W;
+        const age = now - t;
+        const p = Math.min(age / 0.35, 1);
+        const sc = age < 0.35 ? Math.max(easeOutBack(p), 0) : 1;
+        const yOff = (seeded(t) - 0.5) * 34;
+        const r = 6.5 * sc;
+        const fresh = age < 0.5;
+        return <g key={t.toFixed(5)}>
+          {fresh && <circle cx={x} cy={mid + yOff} r={r + 5 * (1 - p)} fill={C.pop} opacity={0.25 * (1 - p)} />}
+          <circle cx={x} cy={mid + yOff} r={r} fill={C.pop} stroke={C.popEdge} strokeWidth={1.4} />
+          <circle cx={x - r * 0.3} cy={mid + yOff - r * 0.3} r={r * 0.28} fill="#FFE9C7" />
+        </g>;
+      })}
+      <text x={W - 2} y={12} fontSize="9" fill={C.sub} textAnchor="end" className="pp-mono">现在 →</text>
+    </svg>
+  );
+}
+
+// ── 间隔直方图 + 指数曲线 ──
+function GapHist({ stats, lambda }) {
+  const W = 320, H = 150, pl = 30, pr = 8, pt = 10, pb = 22;
+  const { idens, nb, bw, maxX } = stats;
+  const yMax = Math.max(...idens, lambda) * 1.12 || 1;
+  const iw = (W - pl - pr) / nb;
+  const px = (x) => pl + (x / maxX) * (W - pl - pr);
+  const py = (y) => H - pb - (y / yMax) * (H - pt - pb);
+
+  let path = "";
+  const N = 60;
+  for (let i = 0; i <= N; i++) {
+    const x = (maxX * i) / N;
+    const y = lambda * Math.exp(-lambda * x);
+    path += (i === 0 ? "M" : "L") + px(x).toFixed(1) + " " + py(y).toFixed(1) + " ";
+  }
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      <line x1={pl} y1={H - pb} x2={W - pr} y2={H - pb} stroke={C.faint} strokeWidth={1} />
+      {idens.map((d, i) => {
+        const h = (d / yMax) * (H - pt - pb);
+        return <rect key={i} x={pl + i * iw + 1} y={H - pb - h} width={iw - 2} height={Math.max(h, 0)}
+          rx={2} fill={C.pop} opacity={0.85} />;
+      })}
+      <path d={path} fill="none" stroke={C.theory} strokeWidth={2.4} />
+      {[0, maxX / 2, maxX].map((x, i) => (
+        <text key={i} x={px(x)} y={H - 7} fontSize="9" fill={C.sub} textAnchor="middle" className="pp-mono">{x.toFixed(1)}</text>
+      ))}
+      <text x={4} y={pt + 6} fontSize="9" fill={C.sub} className="pp-mono">密度</text>
+      <text x={W - pr} y={H - 7} fontSize="9" fill={C.sub} textAnchor="end" className="pp-mono">间隔(s)</text>
+      <g>
+        <rect x={pl + 4} y={pt} width={11} height={11} rx={2} fill={C.pop} />
+        <text x={pl + 19} y={pt + 9.5} fontSize="9.5" fill={C.ink}>实测</text>
+        <line x1={pl + 52} y1={pt + 5.5} x2={pl + 68} y2={pt + 5.5} stroke={C.theory} strokeWidth={2.4} />
+        <text x={pl + 72} y={pt + 9.5} fontSize="9.5" fill={C.ink}>理论 λe^(−λt)</text>
+      </g>
+    </svg>
+  );
+}
+
+// ── 计数直方图 + 泊松点 ──
+function CountHist({ stats, lambda }) {
+  const W = 320, H = 150, pl = 26, pr = 8, pt = 12, pb = 22;
+  const { freq, totW, kmax } = stats;
+  const lamW = lambda * BIN_W;
+  const kHi = Math.max(kmax, Math.ceil(lamW + 3 * Math.sqrt(lamW)), 6);
+  const ks = []; for (let k = 0; k <= kHi; k++) ks.push(k);
+  const prob = ks.map((k) => (totW > 0 ? (freq[k] || 0) / totW : 0));
+  const pmf = ks.map((k) => Math.exp(-lamW) * Math.pow(lamW, k) / factorial(k));
+  const yMax = Math.max(...prob, ...pmf) * 1.15 || 1;
+  const bw = (W - pl - pr) / ks.length;
+  const py = (y) => H - pb - (y / yMax) * (H - pt - pb);
+  const cx = (k) => pl + k * bw + bw / 2;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      <line x1={pl} y1={H - pb} x2={W - pr} y2={H - pb} stroke={C.faint} strokeWidth={1} />
+      {ks.map((k) => {
+        const h = (prob[k] / yMax) * (H - pt - pb);
+        return <g key={k}>
+          <rect x={pl + k * bw + bw * 0.18} y={H - pb - h} width={bw * 0.64} height={Math.max(h, 0)}
+            rx={2} fill={C.pop} opacity={0.85} />
+          <text x={cx(k)} y={H - 8} fontSize="9" fill={C.sub} textAnchor="middle" className="pp-mono">{k}</text>
+        </g>;
+      })}
+      {/* 理论泊松：虚线连圆点 */}
+      <path d={ks.map((k, i) => (i === 0 ? "M" : "L") + cx(k).toFixed(1) + " " + py(pmf[k]).toFixed(1)).join(" ")}
+        fill="none" stroke={C.theory} strokeWidth={1.6} strokeDasharray="3 3" opacity={0.8} />
+      {ks.map((k) => <circle key={k} cx={cx(k)} cy={py(pmf[k])} r={2.8} fill={C.theory} />)}
+      <text x={4} y={pt + 4} fontSize="9" fill={C.sub} className="pp-mono">占比</text>
+      <text x={W - pr} y={pt + 4} fontSize="9.5" fill={C.sub} textAnchor="end">每秒颗数 k</text>
+    </svg>
+  );
+}
+
+// ── 小组件 ──
+function Stat({ label, value, hi }) {
+  return (
+    <div style={{ flex: 1, textAlign: "center" }}>
+      <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 3 }}>{label}</div>
+      <div className="pp-mono" style={{ fontSize: 15, fontWeight: 600, color: hi ? C.theory : C.ink }}>{value}</div>
+    </div>
+  );
+}
+function card() {
+  return { background: C.card, borderRadius: 18, padding: 16, marginBottom: 12, boxShadow: "0 4px 18px rgba(190,140,70,.12)" };
+}
+function rowHead() { return { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }; }
+function headLabel() { return { fontSize: 14, fontWeight: 700 }; }
+function readout() { return { display: "flex", gap: 6, marginTop: 12, padding: "10px 4px", background: "#FFF8EE", borderRadius: 12 }; }
