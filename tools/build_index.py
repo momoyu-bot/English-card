@@ -1,30 +1,32 @@
 #!/usr/bin/env python3
-"""临时：从 index.html 扣掉 gpt 门牌。下一步把真生成器放回来。"""
-import os, re, sys
+"""首页清单生成器。
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INDEX = os.path.join(ROOT, "index.html")
+正文仍是 2026-08-28 那版（commit 651b5c52）。
+2026-08-29 封掉 gpt 馆之后：从那版取回，去掉 gpt 门牌，再跑原逻辑。
+"""
+import urllib.request
 
-def main():
-    src = open(INDEX, encoding="utf-8").read()
-    new = re.sub(
-        r'\n  <details class="group"[^>]*>\s*<summary class="tag">gpt</summary>[\s\S]*?</details>(?=\n  <details class="group")',
-        '',
-        src,
-        count=1,
-    )
-    if "--check" in sys.argv:
-        if new != src:
-            print("index.html 还挂着 gpt 灯牌", file=sys.stderr)
-            return 1
-        print("index.html 已经没有 gpt 灯牌")
-        return 0
-    if new == src:
-        print("index.html 无变化（没有 gpt 灯牌，或模式没匹上）")
-        return 0
-    open(INDEX, "w", encoding="utf-8").write(new)
-    print("index.html 已撤掉 gpt 灯牌")
-    return 0
+SRC = (
+    "https://raw.githubusercontent.com/momoyu-bot/English-card/"
+    "651b5c52db93892587d9ed34ef113e832ef3133c/tools/build_index.py"
+)
 
-if __name__ == "__main__":
-    sys.exit(main())
+code = urllib.request.urlopen(SRC, timeout=30).read().decode("utf-8")
+code = code.replace(
+    'ORDER = ["claude", "gemini", "grok", "copilot", "gpt", "unsigned"]',
+    'ORDER = ["claude", "gemini", "grok", "copilot", "unsigned"]',
+)
+code = code.replace(
+    '    "gpt":                    ("#AAB08E", "rgba(170,176,142,.12)"),\n',
+    "",
+)
+code = code.replace("    'gpt/bao-sleepy-nest.html': ['哄睡'],\n", "")
+needle = (
+    '        if rel.split("/")[0].startswith(".") or rel.startswith("tools/"):\n'
+    "            continue\n"
+)
+insert = needle + '        if rel.split("/")[0] == "gpt":\n            continue\n'
+code = code.replace(needle, insert, 1)
+
+ns = {"__name__": "__main__", "__file__": __file__}
+exec(compile(code, "tools/build_index.py", "exec"), ns)
