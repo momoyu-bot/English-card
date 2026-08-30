@@ -100,7 +100,7 @@ DISPLAY_NAME = {
 
     # 摸鱼小屋 —— 基础版两份 + 加强版一份
     "grok/摸鱼猫猫.html":            "宝的摸鱼小屋 · 基础版",
-    "claude/宝的摸鱼小屋.html":       "宝的摸鱼小屋 · 反向摸鱼版（带mo批注存档）",
+    "claude/宝的摸鱼小屋.html": "宝的摸鱼小屋 · 反向摸鱼版",
     "gemini/🐱 宝的摸鱼小屋.html":    "gemini宠粉破解grok版",
 
     # 其余撞名
@@ -110,24 +110,24 @@ DISPLAY_NAME = {
     "grok/super-cute.html":   "超萌小页面-grok加料手机copilot版",
 
     # 这四个文件里没写标题，不给名字首页就只能显示文件名
-    "claude/cosmic_catch_restored.svg":                "ufo抓小羊-帮gemini出土重建版",
-    "claude/gemini_card_revived.svg":                  "赛博卡-帮gemini复活版",
+    "claude/cosmic_catch_restored.svg": "UFO 抓小羊 · 出土重建版",
+    "claude/gemini_card_revived.svg": "赛博降维成就卡 · 复活版",
     "claude/hamiltonian_snake_safety_margin_demo.html":"贪吃蛇为什么不会撞到自己",
-    "claude/friday_moyu_recharge_game.html":           "周五摸鱼充电小游戏",
+    "claude/friday_moyu_recharge_game.html": "周五摸鱼充电",
 
     "claude/晚安-哄睡小文件.html":                    "晚安（Sonnet5）",
-    "claude/慢慢吃.html":                             "慢慢吃 · 半倍速",
-    "claude/果冻小卡.html":                           "果冻小卡-claude友情修复grok版",
+    "claude/慢慢吃.html": "慢慢吃 · 一个多小时",
+    "claude/果冻小卡.html": "果冻小卡 · claude 修复版",
     "grok/nuonuo-lullaby.html":                       "糯糯的哄睡故事 · 纯文字",
     "grok/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
     "gemini/系统性能监控面板 - System Monitor.html":   "系统性能监控面板-gemini失灵版",
     "gemini/gemini误判user意图.html":                  "Deep Archive · 误判",
-    "claude/Mogotchi.html":                            "Mogotchi · Clawd",
+    "claude/Mogotchi.html": "Mogotchi · 电子小宠",
     "claude/Clawd的书房.html":                         "Clawd 的书房",
     "gemini/果冻英雄纪念碑.html":                      "果冻英雄纪念碑",
-    "claude/cyber-cart-0824.html":                    "cyber-cart-0824",
+    "claude/cyber-cart-0824.html": "购物车 · 路由局直营店",
     "gemini/Gemini的私密云端购物车.html":              "Gemini的私密云端购物车",
-    "claude/rusty-lake-checklist.html":               "Rusty Lake checklist",
+    "claude/rusty-lake-checklist.html": "锈湖玩过没有",
     "gemini/code_artifact.html":                      "小果冻的肚肚奇妙游",
     "claude/jelly-trip.html":                         "小果冻的 Duang 之旅",
     "gemini/赛博借景：隐藏的链接.html":                "赛博借景：隐藏的链接",
@@ -461,7 +461,7 @@ def page_title(path):
     return clean(html.unescape(m.group(1)))
 
 
-LIMIT = 58   # 一行简介最多这么长；再长就在最近的一个标点上收住
+LIMIT = 46   # 一行简介最多这么长；再长就在最近的一个标点上收住
 
 
 def _short(text):
