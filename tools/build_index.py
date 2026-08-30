@@ -166,6 +166,7 @@ SKIP_LIST = {
     "claude/赛博老赖.html",
     "copilot/🐍可爱贪吃蛇.html",
     "copilot/🚀星际矿工.html",
+    "copilot/copilot运维日记.html",  # 真身在 copilot/小游戏/
     "grok/给宝的专属动态哄哄网页.html",  # 真身在 gemini/盲盒/
     "grok/Gemini 的秘密心意.html",  # 真身在 gemini/盲盒/
 }
