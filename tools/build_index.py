@@ -427,6 +427,30 @@ def page_title(path):
     return clean(html.unescape(m.group(1)))
 
 
+def page_blurb(path):
+    """页面自己写的一句简介：<meta name="description" content="…">。
+
+    没写就返回空字符串——首页那一行不出现，不报错。这样她以后新加
+    文件只写 <title> 也能用，简介是可选的。
+    表情符号这里不去（跟 <title> 不一样）——简介是给人看的一句话，
+    去掉表情反而怪。
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            head = fh.read(12000)
+    except OSError:
+        return ""
+    m = re.search(
+        r"""<meta[^>]*\bname\s*=\s*['"]description['"][^>]*>""", head, re.I)
+    if not m:
+        return ""
+    c = re.search(r"""\bcontent\s*=\s*(['"])([\s\S]*?)\1""", m.group(0), re.I)
+    if not c:
+        return ""
+    text = re.sub(r"\s+", " ", html.unescape(c.group(2))).strip()
+    return text[:70]
+
+
 def list_pages():
     out = subprocess.run(
         ["git", "-c", "core.quotepath=false", "ls-files", "*.html", "*.svg"],
@@ -506,6 +530,7 @@ def build_entries():
             "folder": folder,
             "raw_folder": os.path.dirname(rel) or ".",
             "name": name,
+            "blurb": page_blurb(os.path.join(ROOT, rel)),
         })
     return entries
 
@@ -557,9 +582,13 @@ def render_items(lines, items, step, indent):
     for e in items:
         delay = min(step[0] * 40, 560)
         step[0] += 1
+        blurb = e.get("blurb") or ""
+        tail = (f'<span class="blurb">{html.escape(blurb, quote=True)}</span>'
+                if blurb else "")
         lines.append(
             f'{pad}<li class="item" style="--delay:{delay}ms">'
-            f'<a href="{encode_path(e["path"])}">{html.escape(e["name"], quote=True)}</a></li>')
+            f'<a href="{encode_path(e["path"])}">{html.escape(e["name"], quote=True)}</a>'
+            f'{tail}</li>')
 
 
 def render(blocks):
