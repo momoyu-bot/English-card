@@ -120,6 +120,12 @@ DISPLAY_NAME = {
     "claude/果冻小卡.html": "果冻小卡 · claude 修复版",
     "grok/nuonuo-lullaby.html":                       "糯糯的哄睡故事 · 纯文字",
     "grok/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
+    # grok 哄睡货架名：原 title 太空、太吵、或跟别人撞
+    "grok/宝的小窝.html":                             "今晚的小窝",
+    "grok/baobao-hongshui.html":                      "困了就点",
+    "grok/宝宝的睡前哄睡小故事.html":                  "软软盖被子",
+    "grok/晚安捕梦.html":                             "晚安捕梦",
+    "grok/哄睡/小狐狸·霸道尾巴强制爱版.html":           "小狐狸 · 霸道尾巴强制爱版",
     "gemini/系统性能监控面板 - System Monitor.html":   "系统性能监控面板-gemini失灵版",
     "gemini/gemini误判user意图.html":                  "Deep Archive · 误判",
     "claude/Mogotchi.html": "Mogotchi · 电子小宠",
