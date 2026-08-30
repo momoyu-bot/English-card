@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宝的“无限刷钱”模拟器</title>
+<style>
+  :root { --ink:#1e293b; --sub:#64748b; --paper:#f8fafc; --card:#fff; --ind:#4f46e5; --ok:#16a34a; --warn:#dc2626; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:#f1f5f9; color:var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif; }
+  .wrap { max-width: 32rem; margin: 0 auto; padding: 16px 14px 40px; }
+  h1 { font-size: 1.35rem; margin: 0 0 6px; color: var(--ind); text-align:center; }
+  .lead { text-align:center; color:var(--sub); font-size:14px; margin: 0 0 16px; line-height:1.6; }
+  .card { background:var(--card); border:1px solid #e2e8f0; border-radius: 22px; overflow:hidden; box-shadow: 0 8px 24px rgba(15,23,42,.06); }
+  .bar { background:#eef2ff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e0e7ff; }
+  .coins { font-size: 1.6rem; font-weight: 800; }
+  .coins span { font-size: 13px; font-weight: 500; color:#818cf8; }
+  .lab { font-size: 11px; font-weight: 700; letter-spacing: .08em; color:#818cf8; text-transform:uppercase; }
+  .reset { border:0; background:#fff; color:var(--sub); border-radius:999px; padding:6px 12px; font-size:12px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .map { position:relative; height: 340px; background:#f8fafc; }
+  svg { width:100%; height:100%; display:block; }
+  .float { position:absolute; top: 72px; left:50%; transform:translateX(-50%); font-size: 22px; font-weight: 800; pointer-events:none; animation: bounceUp 1s ease-out forwards; }
+  .float.pos { color: var(--ok); } .float.neg { color: var(--warn); }
+  @keyframes bounceUp { 0%{transform:translate(-50%,0) scale(.5);opacity:0} 20%{transform:translate(-50%,-20px) scale(1.2);opacity:1} 80%{transform:translate(-50%,-40px) scale(1);opacity:1} 100%{transform:translate(-50%,-50px) scale(.8);opacity:0} }
+  .panel { padding: 18px 16px 20px; min-height: 140px; border-top:1px solid #f1f5f9; }
+  .where { font-size:13px; color:var(--sub); margin-bottom:10px; }
+  .where b { color: var(--ind); }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  .go { border:2px solid #e2e8f0; background:#fff; border-radius:14px; padding:12px 8px; cursor:pointer; font: inherit; }
+  .go:active { transform: scale(.97); }
+  .go .n { display:block; font-weight:700; font-size:14px; }
+  .go .c { display:inline-block; margin-top:6px; font-size:12px; font-weight:700; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:#475569; }
+  .go.glitch { border-color:#bbf7d0; background:#f0fdf4; color:#15803d; }
+  .go.glitch .c { background:#bbf7d0; color:#166534; }
+  .end { text-align:center; }
+  .end h3 { margin: 8px 0 6px; }
+  .warnbox { margin-top:12px; padding:10px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:12px; color:#991b1b; font-size:13px; text-align:left; line-height:1.55; }
+  .note { margin-top:16px; background:#eff6ff; border:1px solid #dbeafe; border-radius:16px; padding:14px; font-size:13.5px; color:#1e3a8a; line-height:1.65; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>宝的“无限刷钱”模拟器</h1>
+  <p class="lead">初始资金 <b>50</b> 金币。试试看能不能利用地图里的“特殊路段”，带着几百金币到达游乐园？</p>
+  <div class="card">
+    <div class="bar">
+      <div>
+        <div class="lab">小金库</div>
+        <div class="coins" id="coins">50 <span>币</span></div>
+      </div>
+      <button class="reset" id="reset" type="button">重新开始</button>
+    </div>
+    <div class="map" id="map">
+      <svg viewBox="0 0 300 320">
+        <defs>
+          <marker id="arrow-gray" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/></marker>
+          <marker id="arrow-green" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#22c55e"/></marker>
+        </defs>
+        <g id="edges"></g>
+        <g id="nodes"></g>
+      </svg>
+    </div>
+    <div class="panel" id="panel"></div>
+  </div>
+  <div class="note">
+    <b>宝，这就是“负权回路”！</b><br>
+    只要商场去电影院赚 15，电影院回商场赚 10（绕一圈总数是正的），就可以无限走下去。Dijkstra 一旦认定“到商场最少花 5 块”，就绝对想不到回头再薅羊毛——于是它的世界观就崩了。
+  </div>
+</div>
+<script>
+const NODES = {
+  home: { id:"home", label:"家 (起点)", x:150, y:50 },
+  shop: { id:"shop", label:"商场", x:60, y:160 },
+  cinema: { id:"cinema", label:"电影院", x:240, y:160 },
+  park: { id:"park", label:"游乐园 (终点)", x:150, y:270 }
+};
+const EDGES = [
+  { from:"home", to:"shop", cost:-5, desc:"路费 -5", path:"M 140 65 L 70 145", labelPos:{x:85,y:95} },
+  { from:"home", to:"cinema", cost:-10, desc:"路费 -10", path:"M 160 65 L 230 145", labelPos:{x:215,y:95} },
+  { from:"shop", to:"cinema", cost:15, desc:"赚 15!", path:"M 75 155 Q 150 110 225 155", labelPos:{x:150,y:120}, glitch:true },
+  { from:"cinema", to:"shop", cost:10, desc:"赚 10!", path:"M 225 165 Q 150 210 75 165", labelPos:{x:150,y:200}, glitch:true },
+  { from:"shop", to:"park", cost:-20, desc:"路费 -20", path:"M 70 175 L 140 255", labelPos:{x:85,y:230} },
+  { from:"cinema", to:"park", cost:-20, desc:"路费 -20", path:"M 230 175 L 160 255", labelPos:{x:215,y:230} }
+];
+let current="home", coins=50, history=["home"], glitchCount=0;
+function draw() {
+  const eg = document.getElementById("edges");
+  const ng = document.getElementById("nodes");
+  eg.innerHTML = EDGES.map(e => {
+    const c = e.glitch ? "#22c55e" : "#94a3b8";
+    const m = e.glitch ? "url(#arrow-green)" : "url(#arrow-gray)";
+    const dash = e.glitch ? "4 2" : "";
+    return `<path d="${e.path}" fill="none" stroke="${c}" stroke-width="2" stroke-dasharray="${dash}" marker-end="${m}"></path>
+      <rect x="${e.labelPos.x-22}" y="${e.labelPos.y-10}" width="44" height="20" rx="4" fill="white" stroke="${e.glitch?"#bbf7d0":"#f1f5f9"}"></rect>
+      <text x="${e.labelPos.x}" y="${e.labelPos.y+4}" font-size="8" font-weight="bold" text-anchor="middle" fill="${e.glitch?"#16a34a":"#64748b"}">${e.desc}</text>`;
+  }).join("");
+  ng.innerHTML = Object.values(NODES).map(n => {
+    const isC = current===n.id, vis = history.includes(n.id);
+    const fill = isC ? "#4f46e5" : vis ? "#a5b4fc" : "#cbd5e1";
+    const ring = isC ? `<circle r="22" fill="none" stroke="#6366f1" stroke-width="3" opacity=".35"></circle>` : "";
+    return `<g transform="translate(${n.x},${n.y})">${ring}
+      <circle r="16" fill="${fill}" stroke="white" stroke-width="2"></circle>
+      <text y="28" font-size="10" font-weight="bold" text-anchor="middle" fill="${isC?"#4f46e5":"#475569"}">${n.label}</text>
+    </g>`;
+  }).join("");
+  document.getElementById("coins").innerHTML = coins + ' <span>币</span>';
+  const panel = document.getElementById("panel");
+  if (current === "park") {
+    panel.innerHTML = `<div class="end">
+      <div style="font-size:28px">✨</div>
+      <h3>抵达游乐园！</h3>
+      <p>你最终带着 <b>${coins}</b> 金币到达了终点！</p>
+      ${glitchCount>2 ? `<div class="warnbox"><b>系统崩溃警告！</b><br>Dijkstra 发现你在商场和电影院之间来回跑了 ${glitchCount} 次，薅了系统的羊毛！它的 CPU 已经烧了！</div>` : ""}
+    </div>`;
+    return;
+  }
+  const avail = EDGES.filter(e => e.from===current);
+  panel.innerHTML = `<div class="where">你在哪儿？ <b>${NODES[current].label}</b></div>
+    <div class="grid">${avail.map((e,i) => {
+      const t = NODES[e.to];
+      const sign = e.cost>0 ? "+"+e.cost : e.cost;
+      return `<button class="go ${e.glitch?"glitch":""}" type="button" data-i="${EDGES.indexOf(e)}">
+        <span class="n">去${t.label}</span>
+        <span class="c">${sign} 金币</span>
+      </button>`;
+    }).join("")}</div>`;
+  panel.querySelectorAll("button.go").forEach(b => b.onclick = () => travel(EDGES[+b.dataset.i]));
+}
+function travel(edge) {
+  coins += edge.cost;
+  current = edge.to;
+  history = history.concat(edge.to);
+  if (edge.glitch) glitchCount++;
+  const f = document.createElement("div");
+  f.className = "float " + (edge.cost>0?"pos":"neg");
+  f.textContent = (edge.cost>0?"+":"") + edge.cost;
+  document.getElementById("map").appendChild(f);
+  setTimeout(() => f.remove(), 1000);
+  draw();
+}
+document.getElementById("reset").onclick = () => { current="home"; coins=50; history=["home"]; glitchCount=0; draw(); };
+draw();
+</script>
+</body>
+</html>
