@@ -461,6 +461,24 @@ def page_title(path):
     return clean(html.unescape(m.group(1)))
 
 
+LIMIT = 58   # 一行简介最多这么长；再长就在最近的一个标点上收住
+
+
+def _short(text):
+    """把一句简介收拾干净：折掉换行、去掉首尾空白，太长就在标点上断，补省略号。
+
+    直接按字数硬切会切在半个词中间（「新收录影壳蜗与月光」），所以先找
+    LIMIT 之前最后一个句读，从那儿断。找不到句读才硬切。
+    """
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= LIMIT:
+        return text
+    cut = max(text.rfind(ch, 0, LIMIT) for ch in "。；;，,、！？!?·… ")
+    if cut < LIMIT // 2:
+        cut = LIMIT
+    return text[:cut].rstrip("，,、；;·… ") + "…"
+
+
 def page_blurb(path):
     """页面自己写的一句简介：<meta name="description" content="…">。
 
@@ -481,8 +499,20 @@ def page_blurb(path):
     c = re.search(r"""\bcontent\s*=\s*(['"])([\s\S]*?)\1""", m.group(0), re.I)
     if not c:
         return ""
-    text = re.sub(r"\s+", " ", html.unescape(c.group(2))).strip()
-    return text[:70]
+    return _short(html.unescape(c.group(2)))
+
+
+def svg_blurb(path):
+    """SVG 没有 <meta>，它自己的那一行叫 <desc>。读法一样，读不到就空。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            head = fh.read(12000)
+    except OSError:
+        return ""
+    m = re.search(r"<desc[^>]*>([\s\S]*?)</desc>", head, re.I)
+    if not m:
+        return ""
+    return _short(re.sub(r"<[^>]+>", "", m.group(1)))
 
 
 def list_pages():
@@ -568,7 +598,9 @@ def build_entries():
             "folder": folder,
             "raw_folder": os.path.dirname(rel) or ".",
             "name": name,
-            "blurb": page_blurb(os.path.join(ROOT, rel)),
+            "blurb": (svg_blurb(os.path.join(ROOT, rel))
+                      if rel.lower().endswith(".svg")
+                      else page_blurb(os.path.join(ROOT, rel))),
         })
     return entries
 
