@@ -1,0 +1,92 @@
+<h2 class="sr-only">图片 token 计算器：输入图片宽高，计算 Claude 读取该图片所需的 visual token 数量，并显示是否触发自动缩放，以及等价的文字量。</h2>
+<div style="padding: 0.5rem 0;">
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem;">
+    <button onclick="setPreset(1470,890)" style="font-size:12px;padding:6px 10px;">电脑截图 1470×890</button>
+    <button onclick="setPreset(1920,1080)" style="font-size:12px;padding:6px 10px;">全屏 1920×1080</button>
+    <button onclick="setPreset(1170,2532)" style="font-size:12px;padding:6px 10px;">iPhone 截屏</button>
+    <button onclick="setPreset(4032,3024)" style="font-size:12px;padding:6px 10px;">手机拍照</button>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+    <label style="font-size:14px;color:var(--text-secondary);min-width:32px;">宽</label>
+    <input type="range" id="w" min="200" max="4500" step="10" value="1470" style="flex:1;" oninput="calc()" />
+    <span id="wout" style="font-size:14px;font-weight:500;min-width:56px;text-align:right;">1470</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;">
+    <label style="font-size:14px;color:var(--text-secondary);min-width:32px;">高</label>
+    <input type="range" id="h" min="200" max="4500" step="10" value="890" style="flex:1;" oninput="calc()" />
+    <span id="hout" style="font-size:14px;font-weight:500;min-width:56px;text-align:right;">890</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:1.25rem;">
+    <div style="background:var(--surface-1);border-radius:var(--radius);padding:1rem;">
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">最终 token</p>
+      <p id="tok" style="font-size:24px;font-weight:500;margin:0;">1,696</p>
+    </div>
+    <div style="background:var(--surface-1);border-radius:var(--radius);padding:1rem;">
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">≈ 中文字数</p>
+      <p id="cn" style="font-size:24px;font-weight:500;margin:0;">1,700</p>
+    </div>
+    <div style="background:var(--surface-1);border-radius:var(--radius);padding:1rem;">
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">≈ 英文单词</p>
+      <p id="en" style="font-size:24px;font-weight:500;margin:0;">1,270</p>
+    </div>
+  </div>
+
+  <div id="note" style="font-size:13px;line-height:1.6;padding:12px 14px;border-radius:var(--radius);background:var(--bg-success);color:var(--text-success);">
+    没触发缩放，原图直接切块，细节全部保留。
+  </div>
+
+</div>
+<script>
+const MAX_EDGE = 1568;
+const MAX_TOK = 1600;
+
+function calc() {
+  let w = +document.getElementById('w').value;
+  let h = +document.getElementById('h').value;
+  document.getElementById('wout').textContent = w;
+  document.getElementById('hout').textContent = h;
+
+  let sw = w, sh = h, scaled = false;
+
+  const longEdge = Math.max(w, h);
+  if (longEdge > MAX_EDGE) {
+    const r = MAX_EDGE / longEdge;
+    sw = Math.round(w * r); sh = Math.round(h * r); scaled = true;
+  }
+  let tok = Math.ceil(sw / 28) * Math.ceil(sh / 28);
+  if (tok > MAX_TOK) {
+    const r = Math.sqrt(MAX_TOK / tok);
+    sw = Math.round(sw * r); sh = Math.round(sh * r); scaled = true;
+    tok = Math.ceil(sw / 28) * Math.ceil(sh / 28);
+  }
+
+  document.getElementById('tok').textContent = Math.round(tok).toLocaleString();
+  document.getElementById('cn').textContent = Math.round(tok * 1.0).toLocaleString();
+  document.getElementById('en').textContent = Math.round(tok * 0.75).toLocaleString();
+
+  const note = document.getElementById('note');
+  const origPx = (w * h / 1e6).toFixed(1);
+  const newPx = (sw * sh / 1e6).toFixed(2);
+  const lost = Math.round((1 - (sw * sh) / (w * h)) * 100);
+
+  if (scaled) {
+    note.style.background = 'var(--bg-warning)';
+    note.style.color = 'var(--text-warning)';
+    note.textContent = '触发缩放：' + origPx + 'MP → ' + newPx + 'MP，丢掉了约 ' + lost + '% 的像素（缩到 ' + sw + '×' + sh + '）。token 没省下来，细节倒是没了。';
+  } else {
+    note.style.background = 'var(--bg-success)';
+    note.style.color = 'var(--text-success)';
+    note.textContent = '没触发缩放，原图直接切块，细节全部保留。';
+  }
+}
+function setPreset(w, h) {
+  document.getElementById('w').value = w;
+  document.getElementById('h').value = h;
+  calc();
+}
+calc();
+</script>

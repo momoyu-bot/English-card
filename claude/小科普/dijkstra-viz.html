@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dijkstra 一步一步跑</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useRef, useCallback } = React;
+
+// ---- 图定义（节点坐标 + 带权无向边）----
+const NODES = [
+  { id: "S", x: 55, y: 175 },
+  { id: "A", x: 165, y: 60 },
+  { id: "B", x: 250, y: 188 },
+  { id: "C", x: 355, y: 78 },
+  { id: "T", x: 432, y: 196 },
+];
+const EDGES = [
+  ["S", "A", 2], ["S", "B", 5], ["A", "B", 1],
+  ["A", "C", 7], ["B", "C", 3], ["B", "T", 8], ["C", "T", 2],
+];
+const ADJ = {};
+NODES.forEach((n) => (ADJ[n.id] = []));
+EDGES.forEach(([a, b, w]) => { ADJ[a].push([b, w]); ADJ[b].push([a, w]); });
+const pos = (id) => NODES.find((n) => n.id === id);
+
+// ---- 跑一遍 Dijkstra，把每一步录下来 ----
+function buildSteps() {
+  const dist = {}, prev = {};
+  NODES.forEach((n) => { dist[n.id] = Infinity; prev[n.id] = null; });
+  dist["S"] = 0;
+  let pq = [[0, "S"]];
+  const visited = new Set();
+  const steps = [];
+  const snap = (extra) => ({
+    dist: { ...dist },
+    prev: { ...prev },
+    pq: pq.map(([d, n]) => ({ d, n, stale: d > dist[n] })),
+    visited: new Set(visited),
+    edge: null, path: null, current: null,
+    ...extra,
+  });
+
+  steps.push(snap({ type: "init", desc: "初始化：起点 S 距离设为 0，其余全是 ∞（还没找到路）。把起点丢进队列。" }));
+
+  while (pq.length) {
+    let mi = 0;
+    for (let k = 1; k < pq.length; k++) if (pq[k][0] < pq[mi][0]) mi = k;
+    const [cd, u] = pq[mi];
+    pq.splice(mi, 1);
+
+    if (cd > dist[u]) {
+      steps.push(snap({ type: "skip", current: u, desc: `从队列弹出 (${cd}, ${u})，可 ${u} 现在的最短距离已经是 ${dist[u]} 了——这是条过期旧记录，直接跳过 ⏭` }));
+      continue;
+    }
+    steps.push(snap({ type: "pop", current: u, desc: `弹出队列里最近的点 ${u}（距离 ${cd}）。它的最短距离从此敲定 ✓` }));
+    visited.add(u);
+
+    for (const [v, w] of ADJ[u]) {
+      const nd = cd + w;
+      if (nd < dist[v]) {
+        const old = dist[v];
+        dist[v] = nd; prev[v] = u; pq.push([nd, v]);
+        steps.push(snap({ type: "relax", current: u, edge: [u, v], desc: `松弛邻居 ${v}：经过 ${u} 只要 ${cd}+${w}=${nd}，比原来的 ${old === Infinity ? "∞" : old} 更近 → 改小，并记下 ${v} 从 ${u} 来。` }));
+      }
+    }
+  }
+  const path = []; let c = "T";
+  while (c != null) { path.push(c); c = prev[c]; }
+  path.reverse();
+  steps.push(snap({ type: "done", path, desc: `队列空了，全部搞定！从 T 顺着「前驱」倒推回 S，最短路径 ${path.join(" → ")}，总距离 ${dist["T"]}。` }));
+  return steps;
+}
+
+const TYPE_LABEL = {
+  init: ["初始化", "#7e89a8"], pop: ["敲定", "#4ade80"],
+  relax: ["松弛更新", "#ffb454"], skip: ["跳过过期", "#586187"], done: ["完成", "#fbbf24"],
+};
+
+function DijkstraViz() {
+  const steps = useMemo(() => buildSteps(), []);
+  const [i, setI] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const timer = useRef(null);
+  const last = steps.length - 1;
+  const s = steps[i];
+  const prevDist = i > 0 ? steps[i - 1].dist : null;
+
+  useEffect(() => {
+    if (!playing) return;
+    timer.current = setInterval(() => setI((p) => (p >= last ? p : p + 1)), 1450);
+    return () => clearInterval(timer.current);
+  }, [playing, last]);
+  useEffect(() => { if (i >= last) setPlaying(false); }, [i, last]);
+
+  const C = {
+    bg: "#0a0e1a", panel: "#121a30", border: "#222d4d", text: "#e8edf7",
+    dim: "#7e89a8", cur: "#ffb454", done: "#4ade80", path: "#fbbf24", stale: "#586187",
+  };
+
+  const isActiveEdge = (a, b) => s.edge && ((s.edge[0] === a && s.edge[1] === b) || (s.edge[0] === b && s.edge[1] === a));
+  const isPathEdge = (a, b) => {
+    if (!s.path) return false;
+    for (let k = 0; k < s.path.length - 1; k++) {
+      const x = s.path[k], y = s.path[k + 1];
+      if ((x === a && y === b) || (x === b && y === a)) return true;
+    }
+    return false;
+  };
+  const nodeStyle = (id) => {
+    if (s.path && s.path.includes(id)) return { fill: "#3a2f0f", stroke: C.path, sw: 3, glow: true };
+    if (s.current === id) return { fill: "#3a2a12", stroke: C.cur, sw: 3, glow: true };
+    if (s.visited.has(id)) return { fill: "#13331e", stroke: C.done, sw: 2.5, glow: false };
+    return { fill: "#16203a", stroke: "#3c486f", sw: 1.5, glow: false };
+  };
+  const justUpdated = (id) => prevDist && s.dist[id] !== prevDist[id];
+  const fmt = (v) => (v === Infinity ? "∞" : v);
+
+  const btn = (label, onClick, disabled, accent) => (
+    <button onClick={onClick} disabled={disabled}
+      style={{
+        flex: 1, padding: "10px 6px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+        border: `1px solid ${accent ? C.cur : C.border}`,
+        background: disabled ? "#0e1424" : accent ? "#2a2110" : "#172138",
+        color: disabled ? "#3d486b" : accent ? C.cur : C.text,
+        cursor: disabled ? "default" : "pointer", fontFamily: "inherit",
+        opacity: disabled ? 0.5 : 1, transition: "all .15s",
+      }}>{label}</button>
+  );
+
+  const [tl, tc] = TYPE_LABEL[s.type];
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100%", padding: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: C.text }}>
+      <style>{`
+        
+        @keyframes pulseRing { 0%{opacity:.65;r:26} 100%{opacity:0;r:42} }
+        @keyframes flow { to { stroke-dashoffset:-22 } }
+      `}</style>
+
+      <div style={{ maxWidth: 470, margin: "0 auto" }}>
+        <div style={{ fontSize: 11, letterSpacing: 1.5, color: C.dim, marginBottom: 2 }}>SHORTEST PATH · S → T</div>
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>Dijkstra 一步一步跑</div>
+
+        {/* 说明条 */}
+        <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", marginBottom: 12, minHeight: 70 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: tc, border: `1px solid ${tc}55`, borderRadius: 6, padding: "2px 7px", marginRight: 8 }}>{tl}</span>
+          <span style={{ fontSize: 11, color: C.dim }}>第 {i + 1} / {steps.length} 步</span>
+          <div style={{ fontSize: 13.5, lineHeight: 1.55, marginTop: 8 }}>{s.desc}</div>
+        </div>
+
+        {/* 图 */}
+        <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 8, marginBottom: 8 }}>
+          <svg viewBox="0 0 490 250" style={{ width: "100%", display: "block" }}>
+            <defs>
+              <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="3.5" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            {/* 边 */}
+            {EDGES.map(([a, b, w], k) => {
+              const p1 = pos(a), p2 = pos(b);
+              const path = isPathEdge(a, b), act = isActiveEdge(a, b);
+              const col = path ? C.path : act ? C.cur : "#2b3858";
+              return (
+                <line key={k} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                  stroke={col} strokeWidth={path ? 4 : act ? 3.5 : 1.8}
+                  strokeDasharray={act ? "6 5" : "0"}
+                  style={act ? { animation: "flow .9s linear infinite" } : undefined}
+                  filter={path ? "url(#glow)" : undefined} />
+              );
+            })}
+            {/* 权重标签 */}
+            {EDGES.map(([a, b, w], k) => {
+              const p1 = pos(a), p2 = pos(b);
+              const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+              const hot = isPathEdge(a, b) || isActiveEdge(a, b);
+              return (
+                <g key={"w" + k}>
+                  <circle cx={mx} cy={my} r={11} fill={C.bg} stroke={hot ? C.cur : "#2b3858"} strokeWidth={1.2} />
+                  <text x={mx} y={my + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill={hot ? C.cur : "#9aa6c8"}>{w}</text>
+                </g>
+              );
+            })}
+            {/* 节点 */}
+            {NODES.map((n) => {
+              const st = nodeStyle(n.id);
+              return (
+                <g key={n.id}>
+                  {st.glow && <circle cx={n.x} cy={n.y} r={26} fill="none" stroke={st.stroke} strokeWidth={2} style={{ animation: "pulseRing 1.3s ease-out infinite" }} />}
+                  <circle cx={n.x} cy={n.y} r={23} fill={st.fill} stroke={st.stroke} strokeWidth={st.sw} filter={st.glow ? "url(#glow)" : undefined} />
+                  <text x={n.x} y={n.y - 1} textAnchor="middle" fontSize={16} fontWeight={700} fill={C.text}>{n.id}</text>
+                  <text x={n.x} y={n.y + 13} textAnchor="middle" fontSize={10} fontWeight={700} fill={st.stroke}>{fmt(s.dist[n.id])}</text>
+                </g>
+              );
+            })}
+          </svg>
+          {/* 图例 */}
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", fontSize: 10.5, color: C.dim, paddingBottom: 4, flexWrap: "wrap" }}>
+            <span><span style={{ color: C.cur }}>●</span> 正在处理</span>
+            <span><span style={{ color: C.done }}>●</span> 已敲定</span>
+            <span><span style={{ color: C.path }}>●</span> 最短路径</span>
+            <span>节点下小字 = 当前 dist</span>
+          </div>
+        </div>
+
+        {/* dist 表 */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          {NODES.map((n) => {
+            const st = nodeStyle(n.id);
+            const upd = justUpdated(n.id);
+            return (
+              <div key={n.id} style={{
+                flex: 1, background: upd ? "#2a2110" : "#0f1626", border: `1px solid ${st.stroke === "#3c486f" ? C.border : st.stroke}`,
+                borderRadius: 9, padding: "7px 2px", textAlign: "center", transition: "all .2s",
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{n.id}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: upd ? C.cur : st.stroke }}>{fmt(s.dist[n.id])}</div>
+                <div style={{ fontSize: 9, color: C.dim, marginTop: 1 }}>{n.id === "S" ? "起点" : s.prev[n.id] ? "←" + s.prev[n.id] : "—"}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 优先队列 */}
+        <div style={{ background: "#0f1626", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 11px", marginBottom: 12, minHeight: 52 }}>
+          <div style={{ fontSize: 10.5, color: C.dim, marginBottom: 6 }}>优先队列（小顶堆，永远先弹出距离最小的）</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {s.pq.length === 0 && <span style={{ fontSize: 12, color: C.dim }}>（空）</span>}
+            {s.pq.map((it, k) => (
+              <span key={k} style={{
+                fontSize: 12, padding: "3px 9px", borderRadius: 7,
+                border: `1px solid ${it.stale ? "#3a4060" : C.cur + "66"}`,
+                background: it.stale ? "#11192b" : "#221a0e",
+                color: it.stale ? C.stale : C.cur,
+                textDecoration: it.stale ? "line-through" : "none",
+              }}>{it.d}·{it.n}{it.stale ? " 过期" : ""}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* 控制 */}
+        <div style={{ display: "flex", gap: 8 }}>
+          {btn("◀ 上一步", () => setI((p) => Math.max(0, p - 1)), i === 0, false)}
+          {btn(playing ? "⏸ 暂停" : i >= last ? "⟳ 重看" : "▶ 自动播放",
+            () => { if (i >= last) { setI(0); setPlaying(true); } else setPlaying((p) => !p); }, false, true)}
+          {btn("下一步 ▶", () => setI((p) => Math.min(last, p + 1)), i === last, false)}
+        </div>
+        <button onClick={() => { setPlaying(false); setI(0); }}
+          style={{ width: "100%", marginTop: 8, padding: 8, borderRadius: 9, fontSize: 12, color: C.dim, background: "transparent", border: `1px solid ${C.border}`, cursor: "pointer", fontFamily: "inherit" }}>
+          重置到第一步
+        </button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<DijkstraViz />);
+</script>
+</body>
+</html>

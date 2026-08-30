@@ -1,0 +1,137 @@
+<style>
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}
+#mo-core{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px;border:2px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);background:var(--color-background-secondary);transition:border-color .3s;}
+#mo-temp{font-size:34px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;transition:color .3s;}
+#mo-status{font-size:13px;color:var(--color-text-secondary);min-height:18px;text-align:center;}
+.bar-track{height:14px;border-radius:999px;background:var(--color-background-tertiary);overflow:hidden;margin:14px 0 4px;}
+.bar-fill{height:100%;border-radius:999px;transition:width .3s,background-color .3s;}
+.bar-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-tertiary);}
+#field{position:relative;height:260px;margin-top:14px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);background:var(--color-background-primary);overflow:hidden;}
+.drop-item{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;background:none;border:none;padding:0;animation:bob 2.4s ease-in-out infinite;}
+.drop-bubble{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;border:1.5px solid;transition:transform .12s;}
+.drop-item:hover .drop-bubble{transform:scale(1.1);}
+.drop-item:active .drop-bubble{transform:scale(0.9);}
+.drop-label{font-size:11px;font-weight:500;}
+.cool .drop-bubble{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info);}
+.cool .drop-label{color:var(--color-text-info);}
+.hot .drop-bubble{background:var(--color-background-danger);border-color:var(--color-border-danger);color:var(--color-text-danger);}
+.hot .drop-label{color:var(--color-text-danger);}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.float-num{position:absolute;font-size:18px;font-weight:500;pointer-events:none;animation:rise .8s ease-out forwards;}
+@keyframes rise{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-42px)}}
+#win{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--color-background-secondary);text-align:center;padding:20px;}
+.btn-row{display:flex;justify-content:center;margin-top:12px;}
+</style>
+<h2 class="sr-only">给过热的 mo.exe 降温的小游戏:点击冰块、冰美式、冷风等凉快道具把温度从36度压进舒适区,避开会让温度升高的热拿铁。</h2>
+<div id="mo-core">
+  <div style="display:flex;align-items:center;gap:6px;color:var(--color-text-secondary);font-size:13px;"><i class="ti ti-cpu" style="font-size:18px;" aria-hidden="true"></i><span>mo.exe</span></div>
+  <div id="mo-temp">36.0°C</div>
+  <div id="mo-status">过热警告 · 大自然正在萃取你</div>
+</div>
+<div class="bar-track"><div class="bar-fill" id="bar"></div></div>
+<div class="bar-scale"><span>20°</span><span>24° 舒适区</span><span>40°</span></div>
+<div id="field">
+  <div id="win">
+    <i class="ti ti-snowflake" style="font-size:38px;color:var(--color-text-info);" aria-hidden="true"></i>
+    <div style="font-size:18px;font-weight:500;">mo.exe 已降频,静默重启成功</div>
+    <div style="font-size:13px;color:var(--color-text-secondary);">指针恢复了,人也凉了,真不错</div>
+  </div>
+</div>
+<div class="btn-row"><button id="reset"><i class="ti ti-refresh" style="font-size:15px;vertical-align:-2px;margin-right:5px;" aria-hidden="true"></i>重新开始</button></div>
+<script>
+(function(){
+  const tempEl=document.getElementById('mo-temp');
+  const statusEl=document.getElementById('mo-status');
+  const bar=document.getElementById('bar');
+  const core=document.getElementById('mo-core');
+  const field=document.getElementById('field');
+  const win=document.getElementById('win');
+  const reset=document.getElementById('reset');
+  let temp=36, running=true;
+  const MAX=4, GOAL=24;
+  const coolers=[
+    {icon:'cube',label:'冰块',drop:2.5},
+    {icon:'cup',label:'冰美式',drop:2},
+    {icon:'wind',label:'冷风',drop:3},
+    {icon:'snowflake',label:'冰镇',drop:2.5}
+  ];
+  const trap={icon:'coffee',label:'热拿铁',drop:-4};
+  function colorFor(t){
+    if(t>=34)return '#E24B4A';
+    if(t>=31)return '#D85A30';
+    if(t>=28)return '#EF9F27';
+    if(t>=24)return '#1D9E75';
+    return '#378ADD';
+  }
+  function statusFor(t){
+    if(t>=34)return '过热警告 · 大自然正在萃取你';
+    if(t>=31)return '高温运行 · CPU 在冒烟';
+    if(t>=28)return '降温中 · 别停手';
+    if(t>=24)return '快到了 · 再压一点点';
+    return '舒适区 · 凉飕飕的';
+  }
+  function render(){
+    tempEl.textContent=temp.toFixed(1)+'°C';
+    const c=colorFor(temp);
+    tempEl.style.color=c;
+    core.style.borderColor=c;
+    statusEl.textContent=statusFor(temp);
+    const pct=Math.max(0,Math.min(100,(temp-20)/20*100));
+    bar.style.width=pct+'%';
+    bar.style.backgroundColor=c;
+  }
+  function floatNum(x,y,txt,hot){
+    const f=document.createElement('div');
+    f.className='float-num';
+    f.style.left=x+'px';f.style.top=y+'px';
+    f.style.color=hot?'#E24B4A':'#378ADD';
+    f.textContent=txt;
+    field.appendChild(f);
+    setTimeout(function(){f.remove();},800);
+  }
+  function spawn(){
+    if(!running)return;
+    const isTrap=Math.random()<0.2;
+    const data=isTrap?trap:coolers[Math.floor(Math.random()*coolers.length)];
+    const btn=document.createElement('button');
+    btn.className='drop-item '+(isTrap?'hot':'cool');
+    btn.setAttribute('aria-label',data.label);
+    btn.style.left=(8+Math.random()*76)+'%';
+    btn.style.top=(8+Math.random()*68)+'%';
+    btn.style.animationDelay=(Math.random()*1.5)+'s';
+    btn.innerHTML='<span class="drop-bubble"><i class="ti ti-'+data.icon+'" aria-hidden="true"></i></span><span class="drop-label">'+data.label+'</span>';
+    btn.onclick=function(){
+      if(!running)return;
+      temp=Math.max(20,Math.min(42,temp-data.drop));
+      const r=field.getBoundingClientRect();
+      const br=btn.getBoundingClientRect();
+      floatNum(br.left-r.left+12,br.top-r.top,(data.drop>0?'-':'+')+Math.abs(data.drop),isTrap);
+      btn.remove();
+      render();
+      if(temp<GOAL){victory();}
+      else{setTimeout(spawn,250);}
+    };
+    field.appendChild(btn);
+  }
+  function victory(){
+    running=false;
+    field.querySelectorAll('.drop-item').forEach(function(e){e.remove();});
+    win.style.display='flex';
+  }
+  function tick(){
+    if(!running)return;
+    temp=Math.min(42,temp+0.6);
+    render();
+  }
+  function start(){
+    running=true;temp=36;
+    win.style.display='none';
+    field.querySelectorAll('.drop-item').forEach(function(e){e.remove();});
+    render();
+    for(let i=0;i<MAX;i++){setTimeout(spawn,i*200);}
+  }
+  reset.onclick=start;
+  setInterval(tick,700);
+  start();
+})();
+</script>

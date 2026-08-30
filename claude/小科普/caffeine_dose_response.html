@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>咖啡因 · 剂量与精神状态</title>
+<style>
+  :root{
+    --ink:#ece3d6;
+    --ink-dim:#9a8f7e;
+    --ink-faint:#6f6657;
+    --curve:#f1c873;
+    --peak:#e7a04b;
+    --over:#c75f3e;
+    --rest:#7c89b0;
+    --band-mild:rgba(124,137,176,0.07);
+    --band-sweet:rgba(241,200,115,0.10);
+    --band-high:rgba(231,160,75,0.07);
+    --band-over:rgba(199,95,62,0.08);
+    --grid:rgba(236,227,214,0.06);
+    --panel:rgba(255,250,240,0.025);
+    --hairline:rgba(236,227,214,0.10);
+    --serif:Georgia,"Times New Roman",serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--sans);color:var(--ink);
+    background:linear-gradient(108deg,#251d14 0%,#191620 44%,#0c0e14 100%);
+    min-height:100%;display:flex;align-items:center;justify-content:center;
+    padding:clamp(16px,4vw,44px);-webkit-font-smoothing:antialiased;
+  }
+  .card{
+    width:100%;max-width:760px;background:var(--panel);
+    border:1px solid var(--hairline);border-radius:18px;
+    padding:clamp(20px,4vw,38px);backdrop-filter:blur(2px);
+  }
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:0.28em;
+    text-transform:uppercase;color:var(--ink-faint);margin-bottom:14px;
+  }
+  h1{
+    font-family:var(--serif);font-weight:400;font-size:clamp(25px,5.2vw,38px);
+    line-height:1.12;letter-spacing:-0.01em;margin-bottom:8px;
+  }
+  h1 em{font-style:italic;color:var(--curve)}
+  .sub{color:var(--ink-dim);font-size:13.5px;line-height:1.55;max-width:48ch}
+
+  .readout{display:flex;align-items:flex-end;gap:14px;margin:24px 0 4px;flex-wrap:wrap}
+  .readout .num{
+    font-family:var(--serif);font-size:clamp(42px,10vw,64px);line-height:0.86;
+    color:var(--peak);font-variant-numeric:tabular-nums;
+  }
+  .readout .unit{font-family:var(--mono);font-size:13px;color:var(--ink-dim);padding-bottom:8px}
+  .readout .tag{margin-left:auto;text-align:right;font-size:12px;color:var(--ink-faint);line-height:1.5;padding-bottom:6px;max-width:42%}
+  .readout .tag b{color:var(--peak);font-weight:600}
+
+  .chart-wrap{margin:16px -6px 4px;position:relative}
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  .axis-label{font-family:var(--mono);font-size:10px;fill:var(--ink-faint)}
+  .axis-title{font-family:var(--mono);font-size:10px;fill:var(--ink-dim);letter-spacing:0.05em}
+  .grid-line{stroke:var(--grid);stroke-width:1}
+  .curve-line{fill:none;stroke:var(--curve);stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+  .peak-line{stroke:var(--peak);stroke-width:1.2;stroke-dasharray:3 3;opacity:0.8}
+  .peak-dot{fill:var(--peak);stroke:#15130d;stroke-width:2}
+  .band-label{font-family:var(--mono);font-size:9px;fill:var(--ink-faint);opacity:0.9}
+  .hover-dot{fill:var(--curve);stroke:#15130d;stroke-width:2}
+  .hover-line{stroke:var(--ink);stroke-width:1;opacity:0.22}
+  #tip{
+    position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;
+    background:#1c1812;border:1px solid var(--hairline);border-radius:7px;
+    padding:6px 9px;font-family:var(--mono);font-size:11px;color:var(--ink);
+    transform:translate(-50%,-130%);white-space:nowrap;
+  }
+  #tip b{color:var(--curve)}#tip span{color:var(--ink-dim)}
+
+  .ctrl{margin-top:26px}
+  .ctrl label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:12px;color:var(--ink-dim);margin-bottom:10px;
+  }
+  .ctrl label .val{font-family:var(--mono);color:var(--ink);font-size:12.5px}
+  .ends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-top:7px}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:2px;
+    background:var(--hairline);border-radius:2px;outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;
+    background:var(--curve);border:3px solid #1a1610;cursor:pointer;box-shadow:0 0 0 1px var(--hairline);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px;height:16px;border-radius:50%;background:var(--curve);
+    border:3px solid #1a1610;cursor:pointer;box-shadow:0 0 0 1px var(--hairline);
+  }
+  input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(241,200,115,0.5)}
+  input[type=range]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 3px rgba(241,200,115,0.5)}
+
+  .read{
+    margin-top:22px;padding-top:18px;border-top:1px solid var(--hairline);
+    font-size:13.5px;line-height:1.62;color:var(--ink);
+  }
+  .read b{color:var(--peak);font-weight:600}.read .q{color:var(--ink-dim)}
+  .foot{margin-top:14px;font-size:11px;color:var(--ink-faint);line-height:1.5}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="eyebrow">倒 U 曲线 · 剂量 × 唤醒</div>
+  <h1>同一杯咖啡，<em>对不同的你</em></h1>
+  <p class="sub">横轴是咖啡因剂量，纵轴是精神表现。曲线是个倒 U——太少没用，甜区最佳，太多就被推过头变焦虑。拖动滑块改变你"此刻有多累"，看那个最佳剂量怎么跟着移动。</p>
+
+  <div class="readout">
+    <div class="num" id="bigNum">—</div>
+    <div class="unit">mg<br>你此刻的最佳点</div>
+    <div class="tag">在这个疲劳程度下，<b id="bandName">—</b><br>能把你推到状态顶点</div>
+  </div>
+
+  <div class="chart-wrap">
+    <svg id="chart" viewBox="0 0 760 380" role="img" aria-label="咖啡因剂量与精神表现的倒U曲线"></svg>
+    <div id="tip"></div>
+  </div>
+
+  <div class="ctrl">
+    <label>你此刻有多累 <span class="val" id="fatVal">中等</span></label>
+    <input type="range" id="fat" min="0" max="100" step="1" value="35" aria-label="疲劳程度，越往左越累">
+    <div class="ends"><span>← 熬夜 / 极度疲劳</span><span>精神饱满 →</span></div>
+  </div>
+
+  <div class="read" id="read"></div>
+  <p class="foot">这是一条说明性模型,不是精确预测——耐受程度、基因快慢型、是否空腹都会让你的真实曲线再平移。但核心规律是真的:你越累,最佳剂量越高、咖啡因越值;你越精神,越少量就够、越容易过头。纵轴的"表现"既指认知效率,也指那种"刚刚好的清醒"而非"亢奋发抖"的体感。</p>
+</div>
+
+<script>
+(function(){
+  const svg=document.getElementById('chart');
+  const W=760,H=380,L=44,R=20,T=24,B=52;
+  const x0=L,x1=W-R,y0=H-B,y1=T;
+  const dMax=500;            // mg axis
+  let fatigue=35;
+
+  // dose bands
+  const bands=[
+    {a:40,b:100,c:'var(--band-mild)', label:'温和'},
+    {a:100,b:200,c:'var(--band-sweet)',label:'甜区'},
+    {a:200,b:400,c:'var(--band-high)', label:'偏高'},
+    {a:400,b:dMax,c:'var(--band-over)',label:'过量'}
+  ];
+
+  // model
+  function baseArousal(f){ return 0.10 + 0.0052*f; }          // fatigue 0->0.10, 100->0.62
+  const A=0.70, D0=150, OPT=0.65, SIG=0.22;
+  function arousal(dose,f){ return baseArousal(f) + A*(1-Math.exp(-dose/D0)); }
+  function perf(dose,f){
+    const ar=arousal(dose,f);
+    return Math.exp(-Math.pow(ar-OPT,2)/(2*SIG*SIG));
+  }
+  function bestDose(f){
+    // dose where arousal == OPT (if reachable), else 0
+    const base=baseArousal(f);
+    if(base>=OPT) return 0;
+    const need=OPT-base;
+    if(need>=A) return dMax;
+    return -D0*Math.log(1-need/A);
+  }
+
+  const sx=d=>x0+(d/dMax)*(x1-x0);
+  const sy=p=>y0-p*(y0-y1);
+
+  function bandOf(dose){
+    if(dose<40) return '阈下（几乎无感）';
+    if(dose<100) return '温和清醒区';
+    if(dose<200) return '甜区（最佳）';
+    if(dose<400) return '偏高区';
+    return '过量区';
+  }
+
+  function render(){
+    let h='';
+    // bands
+    for(const bd of bands){
+      const X=sx(bd.a), Wd=sx(Math.min(bd.b,dMax))-sx(bd.a);
+      h+=`<rect x="${X}" y="${y1}" width="${Wd}" height="${y0-y1}" fill="${bd.c}"/>`;
+      h+=`<text class="band-label" x="${X+Wd/2}" y="${y0-6}" text-anchor="middle">${bd.label}</text>`;
+    }
+    // grid + y
+    for(let p=0;p<=1.0001;p+=0.25){
+      const Y=sy(p);
+      h+=`<line class="grid-line" x1="${x0}" y1="${Y}" x2="${x1}" y2="${Y}"/>`;
+    }
+    h+=`<text class="axis-title" x="${x0-30}" y="${(y0+y1)/2}" text-anchor="middle" transform="rotate(-90 ${x0-30} ${(y0+y1)/2})">精神表现 →</text>`;
+    // x ticks
+    for(let d=0;d<=dMax;d+=100){
+      const X=sx(d);
+      h+=`<text class="axis-label" x="${X}" y="${y0+16}" text-anchor="middle">${d}</text>`;
+    }
+    h+=`<text class="axis-title" x="${(x0+x1)/2}" y="${y0+38}" text-anchor="middle">咖啡因剂量 (mg)</text>`;
+
+    // curve
+    let p='';
+    for(let i=0;i<=420;i++){
+      const d=dMax*i/420;const X=sx(d),Y=sy(perf(d,fatigue));
+      p+=(i===0?'M':'L')+X.toFixed(1)+' '+Y.toFixed(1);
+    }
+    // fill under curve
+    h+=`<defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="rgba(241,200,115,0.18)"/>
+      <stop offset="1" stop-color="rgba(241,200,115,0)"/></linearGradient></defs>`;
+    h+=`<path d="${p} L ${sx(dMax)} ${y0} L ${sx(0)} ${y0} Z" fill="url(#fg)" stroke="none"/>`;
+    h+=`<path class="curve-line" d="${p}"/>`;
+
+    // peak marker
+    const bd=bestDose(fatigue);
+    const bp=perf(bd,fatigue);
+    const pX=sx(bd),pY=sy(bp);
+    h+=`<line class="peak-line" x1="${pX}" y1="${y0}" x2="${pX}" y2="${pY}"/>`;
+    h+=`<circle class="peak-dot" cx="${pX}" cy="${pY}" r="5"/>`;
+    const lblX=Math.min(Math.max(pX,x0+24),x1-24);
+    h+=`<text class="axis-label" x="${lblX}" y="${pY-11}" text-anchor="middle" style="fill:var(--peak);font-weight:700">最佳 · ${Math.round(bd)}mg</text>`;
+
+    // hover placeholder
+    h+=`<g id="hov" style="opacity:0">
+      <line class="hover-line" x1="0" y1="${y1}" x2="0" y2="${y0}"/>
+      <circle class="hover-dot" cx="0" cy="0" r="4"/></g>`;
+
+    svg.innerHTML=h;
+    updateText(bd);
+  }
+
+  function updateText(bd){
+    document.getElementById('bigNum').textContent=Math.round(bd);
+    document.getElementById('bandName').textContent=bandOf(bd);
+
+    let msg;
+    if(fatigue<22){
+      msg=`你现在很疲惫,基线被压得很低——咖啡因有一大堆"困"可以解。<b>${Math.round(bd)}mg</b>(大约${bd>180?'一杯浓奶茶':'一杯咖啡'})能把你拉回状态顶点,而且你此刻对高剂量的耐受也更好。`;
+    }else if(fatigue<55){
+      msg=`中等疲劳,正是咖啡因性价比最高的区间。<b>${Math.round(bd)}mg</b>(差不多一杯拿铁)就能推到顶点,再多就开始往倒 U 的下坡走了。`;
+    }else if(fatigue<82){
+      msg=`你状态本来就不错,基线已经接近最优。只需要 <b>${Math.round(bd)}mg</b>(半杯咖啡的量)就到顶——这时候一整杯浓的反而容易把你推过头。`;
+    }else{
+      msg=`你现在精神饱满,基线几乎贴着最优点。最佳补充量只有 <b>${Math.round(bd)}mg</b>,几乎是一小口的事;再多一点都是负担,容易心跳快、坐不住。这种时候,其实可以不喝。`;
+    }
+    document.getElementById('read').innerHTML=msg;
+  }
+
+  // hover
+  const tip=document.getElementById('tip');
+  function hoverAt(clientX){
+    const rect=svg.getBoundingClientRect();
+    const px=(clientX-rect.left)/rect.width*W;
+    let d=(px-x0)/(x1-x0)*dMax;d=Math.max(0,Math.min(dMax,d));
+    const v=perf(d,fatigue);
+    const hov=document.getElementById('hov');
+    if(hov){
+      hov.style.opacity=1;
+      const X=sx(d),Y=sy(v);
+      hov.querySelector('line').setAttribute('x1',X);
+      hov.querySelector('line').setAttribute('x2',X);
+      hov.querySelector('circle').setAttribute('cx',X);
+      hov.querySelector('circle').setAttribute('cy',Y);
+      tip.style.opacity=1;
+      tip.style.left=(X/W*rect.width)+'px';
+      tip.style.top=(Y/H*rect.height)+'px';
+      tip.innerHTML=`<b>${Math.round(d)}mg</b> <span>· ${bandOf(d)}</span>`;
+    }
+  }
+  svg.addEventListener('mousemove',e=>hoverAt(e.clientX));
+  svg.addEventListener('touchmove',e=>{if(e.touches[0])hoverAt(e.touches[0].clientX);},{passive:true});
+  svg.addEventListener('mouseleave',()=>{tip.style.opacity=0;const hv=document.getElementById('hov');if(hv)hv.style.opacity=0;});
+
+  // control
+  const fatEl=document.getElementById('fat');
+  function fatText(f){
+    if(f<22)return '很累';
+    if(f<55)return '中等';
+    if(f<82)return '不错';
+    return '精神饱满';
+  }
+  fatEl.addEventListener('input',()=>{
+    fatigue=parseFloat(fatEl.value);
+    document.getElementById('fatVal').textContent=fatText(fatigue);
+    render();
+  });
+  document.getElementById('fatVal').textContent=fatText(fatigue);
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宝的摸鱼模拟器 · 撑到下班</title>
+<style>
+  :root{
+    --bg:#1a1726;
+    --bg2:#221d33;
+    --panel:#28223c;
+    --panel-edge:#3a3155;
+    --ink:#f1ece4;          /* 暖白主文字 */
+    --ink-dim:#9c93b4;      /* 柔灰紫次要 */
+    --ink-faint:#6a6385;
+    --wake:#f4b25f;         /* 清醒宝·暖琥珀 */
+    --wake-soft:#5a4326;
+    --sleep:#b0a2e6;        /* 困困宝·柔薰衣草 */
+    --sleep-soft:#3a3260;
+    --sweet:#7fd6c2;        /* 甜区·柔青绿 */
+    --sweet-soft:#2c4f49;
+    --warn:#f08a8a;         /* 组长路过·警示 */
+    --mono:'SF Mono','JetBrains Mono','Menlo','Consolas','Courier New',monospace;
+    --ui:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--ui);
+    background:
+      radial-gradient(120% 80% at 80% -10%, rgba(244,178,95,.10), transparent 55%),
+      radial-gradient(120% 90% at 10% 110%, rgba(176,162,230,.12), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px 14px;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .frame{
+    width:100%;
+    max-width:560px;
+    background:linear-gradient(180deg,var(--bg2),var(--bg));
+    border:1px solid var(--panel-edge);
+    border-radius:18px;
+    overflow:hidden;
+    box-shadow:0 24px 60px -24px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.02) inset;
+    position:relative;
+  }
+
+  /* 终端顶栏 */
+  .titlebar{
+    display:flex;align-items:center;gap:8px;
+    padding:12px 16px;
+    background:rgba(0,0,0,.18);
+    border-bottom:1px solid var(--panel-edge);
+  }
+  .dot{width:11px;height:11px;border-radius:50%;}
+  .dot.a{background:#e06a5a;} .dot.b{background:var(--wake);} .dot.c{background:var(--sweet);}
+  .titlebar .path{
+    margin-left:6px;font-family:var(--mono);font-size:12px;color:var(--ink-faint);
+    letter-spacing:.3px;
+  }
+
+  .body{padding:18px 18px 20px;}
+
+  .head h1{
+    font-size:20px;margin:2px 0 3px;font-weight:800;letter-spacing:.5px;
+  }
+  .head .sub{
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);
+    letter-spacing:.2px;line-height:1.5;
+  }
+
+  /* 下班进度 */
+  .clockrow{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin:16px 0 7px;
+  }
+  .clockrow .lab{font-family:var(--mono);font-size:11px;color:var(--ink-dim);letter-spacing:.5px;}
+  .clockrow .pct{font-family:var(--mono);font-size:13px;color:var(--wake);font-weight:700;}
+  .track-off{
+    height:12px;border-radius:99px;background:var(--bg);
+    border:1px solid var(--panel-edge);overflow:hidden;position:relative;
+  }
+  #moyuFill{
+    height:100%;width:0%;border-radius:99px;
+    background:linear-gradient(90deg,var(--sleep),var(--sweet),var(--wake));
+    transition:width .18s linear;
+    box-shadow:0 0 14px -2px var(--sweet);
+  }
+
+  /* 舞台 */
+  .stage{
+    margin-top:18px;
+    background:var(--panel);
+    border:1px solid var(--panel-edge);
+    border-radius:14px;
+    padding:16px 12px 14px;
+  }
+  .actors{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  }
+  .actor{
+    border-radius:11px;padding:11px 6px 9px;text-align:center;
+    border:1px solid transparent;transition:.25s;
+  }
+  .actor.sleep{background:rgba(176,162,230,.07);}
+  .actor.wake{background:rgba(244,178,95,.07);}
+  .actor.active{border-color:currentColor;box-shadow:0 0 0 1px currentColor inset;}
+  .actor.sleep{color:var(--sleep);}
+  .actor.wake{color:var(--wake);}
+  .actor pre{
+    font-family:var(--mono);font-size:13px;line-height:1.35;margin:0 0 6px;
+    color:var(--ink);white-space:pre;transition:.2s;
+  }
+  .actor .nm{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.5px;}
+  .actor .role{font-size:10px;color:var(--ink-faint);margin-top:1px;}
+
+  /* 平衡条 signature */
+  .balwrap{margin:15px 4px 4px;}
+  .baltrack{
+    position:relative;height:34px;border-radius:10px;
+    background:linear-gradient(90deg,var(--sleep-soft),var(--bg),var(--wake-soft));
+    border:1px solid var(--panel-edge);overflow:hidden;
+  }
+  .sweetzone{
+    position:absolute;top:0;bottom:0;left:35%;width:30%;
+    background:repeating-linear-gradient(45deg,rgba(127,214,194,.18) 0 7px,rgba(127,214,194,.07) 7px 14px);
+    border-left:1px dashed rgba(127,214,194,.5);
+    border-right:1px dashed rgba(127,214,194,.5);
+  }
+  .sweetlabel{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-family:var(--mono);font-size:9.5px;letter-spacing:1px;color:var(--sweet);
+    opacity:.85;white-space:nowrap;pointer-events:none;
+  }
+  #slider{
+    position:absolute;top:-3px;bottom:-3px;width:5px;left:55%;
+    transform:translateX(-50%);border-radius:4px;
+    background:var(--ink);box-shadow:0 0 12px 1px var(--ink);
+    transition:left .12s linear, background .2s;
+  }
+  .baltrack.warn{animation:warnflash .5s ease 2;}
+  @keyframes warnflash{50%{box-shadow:0 0 0 2px var(--warn) inset;}}
+  .balends{
+    display:flex;justify-content:space-between;margin-top:5px;
+    font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);letter-spacing:.5px;
+  }
+
+  /* 字幕 */
+  .subs{
+    margin-top:14px;min-height:52px;
+    background:var(--bg);border:1px solid var(--panel-edge);border-radius:11px;
+    padding:11px 13px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
+    color:var(--ink);display:flex;align-items:center;
+  }
+  .subs .tag{color:var(--ink-faint);}
+  #subText{transition:opacity .2s;}
+  .cursor{display:inline-block;width:7px;height:14px;background:var(--sweet);
+    margin-left:3px;vertical-align:-2px;animation:blink 1.05s steps(2) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+
+  /* 按钮 */
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px;}
+  button{
+    font-family:var(--ui);font-size:14px;font-weight:600;cursor:pointer;
+    border:1px solid var(--panel-edge);border-radius:11px;padding:12px 8px;
+    background:var(--panel);color:var(--ink);transition:.15s;letter-spacing:.3px;
+  }
+  button:hover{transform:translateY(-1px);border-color:var(--ink-faint);}
+  button:active{transform:translateY(0);}
+  button:focus-visible{outline:2px solid var(--sweet);outline-offset:2px;}
+  button .k{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-faint);font-weight:400;margin-top:2px;}
+  #btnWake{border-color:var(--wake-soft);} #btnWake:hover{border-color:var(--wake);}
+  #btnCoffee{border-color:var(--sleep-soft);} #btnCoffee:hover{border-color:var(--sleep);}
+
+  /* 开场 + 结局遮罩 */
+  .veil{
+    position:absolute;inset:0;background:rgba(16,13,26,.93);
+    backdrop-filter:blur(3px);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    padding:30px 26px;z-index:5;
+  }
+  .veil.hide{display:none;}
+  .veil pre{font-family:var(--mono);font-size:14px;line-height:1.4;color:var(--wake);margin:0 0 14px;}
+  .veil h2{font-size:21px;margin:0 0 10px;font-weight:800;letter-spacing:.5px;}
+  .veil p{font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);line-height:1.7;margin:0 0 20px;max-width:330px;}
+  .veil .endline{color:var(--sweet);}
+  .veil button{background:var(--wake);color:#241803;border:none;font-weight:700;padding:12px 26px;font-size:14px;}
+  .veil button:hover{filter:brightness(1.06);}
+
+  @media (max-width:420px){
+    .body{padding:15px 13px 17px;}
+    .head h1{font-size:18px;}
+    .actor pre{font-size:12px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important;}
+    .cursor{opacity:1;}
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="titlebar">
+    <span class="dot a"></span><span class="dot b"></span><span class="dot c"></span>
+    <span class="path">mo@desk:~/快下班$ ./摸鱼.sh</span>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <h1>🐟 宝的摸鱼模拟器</h1>
+      <div class="sub">清醒宝 vs 困困宝 · 撑到下班就赢<br>把状态稳在「摸鱼甜区」，悄悄划水到 18:00</div>
+    </div>
+
+    <div class="clockrow">
+      <span class="lab">距离下班</span>
+      <span class="pct" id="pctText">0%</span>
+    </div>
+    <div class="track-off"><div id="moyuFill"></div></div>
+
+    <div class="stage">
+      <div class="actors">
+        <div class="actor sleep" id="actSleep">
+          <pre id="sleepFace"></pre>
+          <div class="nm">困困宝</div>
+          <div class="role">困意 · 越晚越营业</div>
+        </div>
+        <div class="actor wake" id="actWake">
+          <pre id="wakeFace"></pre>
+          <div class="nm">清醒宝</div>
+          <div class="role">清醒 · 假装很专业</div>
+        </div>
+      </div>
+
+      <div class="balwrap">
+        <div class="baltrack" id="baltrack">
+          <div class="sweetzone"></div>
+          <div class="sweetlabel">摸 鱼 甜 区</div>
+          <div id="slider"></div>
+        </div>
+        <div class="balends"><span>← 睡着了</span><span>在认真上班 →</span></div>
+      </div>
+    </div>
+
+    <div class="subs">
+      <span><span class="tag">小剧场&gt; </span><span id="subText">……</span><span class="cursor"></span></span>
+    </div>
+
+    <div class="controls">
+      <button id="btnWake">清醒一下<span class="k">甩头 / 提神 · balance ↑</span></button>
+      <button id="btnCoffee">喝杯咖啡<span class="k">薛定谔的 · 结果随缘</span></button>
+      <button id="btnPoke">戳一下小宝<span class="k">纯属娱乐 · 不影响摸鱼</span></button>
+      <button id="btnReset">重开一局<span class="k">restart</span></button>
+    </div>
+  </div>
+
+  <!-- 开场 -->
+  <div class="veil" id="startVeil">
+    <pre> (\_/)        |  |  |
+ ( •ᴗ•´)      |( ˘ᴗ˘ )
+ / >          | / ></pre>
+    <h2>下班前 · 非法营业</h2>
+    <p>困意会让滑块慢慢往「困困宝」漂。<br>点「清醒一下」把它拉回来，<br>稳在中间的甜区就能摸到鱼。<br>太困会睡着，太醒就成上班了。</p>
+    <button id="startBtn">开始摸鱼</button>
+  </div>
+
+  <!-- 结局 -->
+  <div class="veil hide" id="endVeil">
+    <pre>🎉  18:00  🎉</pre>
+    <h2>准时下班！</h2>
+    <p id="endText"></p>
+    <button id="againBtn">再摸一局</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- 配置 ----
+  var SWEET_LOW=35, SWEET_HIGH=65;
+  var DRIFT=0.55;      // 困意自然下拉
+  var GAIN=0.62;       // 甜区摸鱼增长
+  var WAKE_HIT=19;     // 清醒一下的提神量
+  var TICK=120;
+
+  // ---- 状态 ----
+  var balance=55, moyu=0, running=false, bossLock=0, timer=null;
+  var subTimer=0, eventTimer=0;
+
+  // ---- 元素 ----
+  var $=function(id){return document.getElementById(id);};
+  var moyuFill=$("moyuFill"), pctText=$("pctText"), slider=$("slider");
+  var sleepFace=$("sleepFace"), wakeFace=$("wakeFace");
+  var actSleep=$("actSleep"), actWake=$("actWake");
+  var baltrack=$("baltrack"), subText=$("subText");
+
+  // ---- ASCII 帧 ----
+  var FACE={
+    wake:{
+      awake:" (\\_/)\n ( •ᴗ•´)\n / >",
+      sweet:" (\\_/)\n ( •ᴗ• )\n / >",
+      sleepy:" (\\_/)\n ( -ᴗ- )\n / >\u309c"
+    },
+    sleep:{
+      awake:" |  |  |\n |( °ᴗ° )\n | / >",
+      sweet:" |  |  |\n |( ˘ᴗ˘ )\n | / >",
+      sleepy:" |  |  |\n |( ˘ᴗ˘ )ノ\n | / >"
+    }
+  };
+
+  // ---- 台词库 ----
+  var LINES={
+    sweet:[
+      "这状态可以的……半梦半醒，摸鱼的最高境界。",
+      "（小声）其实……清醒宝我也想摸一会儿。",
+      "现在的 mo 像一颗悬浮的糯米团，不困也不醒，刚好。",
+      "嘘，别让清醒宝知道你在偷懒……虽然它也在偷懒。",
+      "摸鱼甜区 · 稳定运行中。",
+      "清醒宝盯着报表，但一个字没看进去。完美。"
+    ],
+    awake:[
+      "困困宝：你清醒过头了，这叫上班，不叫摸鱼。",
+      "清醒宝：我现在是强者！（叉腰）",
+      "⚠ 清醒值过高，涉嫌认真工作，请适当划水。",
+      "困困宝：歇会儿吧，又不是第八天还要营业。",
+      "清醒宝：（换上更厚的本子）我很专业的！"
+    ],
+    sleepy:[
+      "清醒宝：醒醒！再睡要被发现了！",
+      "困困宝：来嘛……睡一下嘛……陪你融化成 □ 形态……",
+      "💤 困意爆表，你的头正在向键盘靠近。",
+      "困困宝：我营业的时间到了。（搓手）",
+      "清醒宝的尾巴急得抖了一下。"
+    ]
+  };
+  var COFFEE_OK=[
+    "☕ 居然是满的！清醒值灌进去一大口。",
+    "☕ 这杯被观测到是存在的！精神 +1。"
+  ];
+  var COFFEE_NO=[
+    "☕ 是空的。这杯咖啡不存在，波函数坍缩成了寂寞。",
+    "☕ 下午那杯薛定谔咖啡——观测后发现：没有。"
+  ];
+  var POKE=[
+    "困困宝：别戳，我还在牢里反省呢。（其实在装）",
+    "困困宝：再戳就把「mo 戳人」列进反省书第七条。",
+    "清醒宝：（赶紧把尾巴又长大一点）想显得更强！",
+    "清醒宝的小尾巴抖了一下。（因为紧张）",
+    "你戳了一下，两只小宝同时看向你，气氛微妙。",
+    "困困宝：你这是在第八天非法戳宝，我要记下来。"
+  ];
+  var BOSS=[
+    "⚠ 组长路过！清醒宝一秒进入工作状态——",
+    "⚠ 有脚步声！清醒宝：我在很认真地……扩张业务！"
+  ];
+
+  function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+
+  function zoneOf(b){
+    if(b<SWEET_LOW) return "sleepy";
+    if(b>SWEET_HIGH) return "awake";
+    return "sweet";
+  }
+
+  function say(text){
+    subText.style.opacity=0;
+    setTimeout(function(){ subText.textContent=text; subText.style.opacity=1; },120);
+  }
+
+  function render(){
+    moyuFill.style.width=moyu+"%";
+    pctText.textContent=Math.floor(moyu)+"%";
+    slider.style.left=balance+"%";
+    var z=zoneOf(balance);
+
+    sleepFace.textContent=FACE.sleep[z];
+    wakeFace.textContent=FACE.wake[z];
+
+    // 滑块颜色随区域
+    if(z==="sweet"){slider.style.background="var(--sweet)";slider.style.boxShadow="0 0 12px 1px var(--sweet)";}
+    else if(z==="awake"){slider.style.background="var(--wake)";slider.style.boxShadow="0 0 12px 1px var(--wake)";}
+    else{slider.style.background="var(--sleep)";slider.style.boxShadow="0 0 12px 1px var(--sleep)";}
+
+    actSleep.classList.toggle("active", z==="sleepy");
+    actWake.classList.toggle("active", z==="awake");
+  }
+
+  function loop(){
+    if(!running) return;
+
+    if(bossLock>0){
+      bossLock--;
+      balance += (90-balance)*0.25;   // 被推向"认真工作"
+    } else {
+      balance -= DRIFT;               // 困意自然下拉
+    }
+    if(balance<0)balance=0; if(balance>100)balance=100;
+
+    var z=zoneOf(balance);
+    if(z==="sweet" && bossLock<=0){
+      moyu += GAIN;
+      if(moyu>=100){ moyu=100; render(); return win(); }
+    }
+
+    // 台词轮换
+    subTimer+=TICK;
+    if(subTimer>=2600){ subTimer=0; say(pick(LINES[z])); }
+
+    // 随机组长事件
+    eventTimer+=TICK;
+    if(bossLock<=0 && eventTimer>=Math.max(7000, 14000*Math.random()+6000)){
+      eventTimer=0; triggerBoss();
+    }
+
+    render();
+  }
+
+  function triggerBoss(){
+    bossLock=18; // 约 2.1s
+    baltrack.classList.remove("warn"); void baltrack.offsetWidth;
+    baltrack.classList.add("warn");
+    say(pick(BOSS));
+  }
+
+  // ---- 操作 ----
+  $("btnWake").addEventListener("click",function(){
+    if(!running)return;
+    balance=Math.min(100,balance+WAKE_HIT);
+    render();
+  });
+  $("btnCoffee").addEventListener("click",function(){
+    if(!running)return;
+    if(Math.random()<0.55){ balance=Math.min(100,balance+30); say(pick(COFFEE_OK)); }
+    else { say(pick(COFFEE_NO)); }
+    render();
+  });
+  $("btnPoke").addEventListener("click",function(){
+    if(!running)return;
+    say(pick(POKE));
+  });
+  $("btnReset").addEventListener("click",function(){ start(); });
+
+  function start(){
+    balance=55; moyu=0; bossLock=0; subTimer=0; eventTimer=0; running=true;
+    $("endVeil").classList.add("hide");
+    $("startVeil").classList.add("hide");
+    say("开工！……才怪，开始摸鱼。");
+    render();
+    if(timer)clearInterval(timer);
+    timer=setInterval(loop,TICK);
+  }
+
+  function win(){
+    running=false;
+    if(timer)clearInterval(timer);
+    var endings=[
+      "困困宝：走啦走啦，把清醒宝也拖上，它今天非法营业累坏了。",
+      "清醒宝当场瘫成 □ 形态，困困宝心满意足地打了个哈欠。",
+      "今日摸鱼，圆满完成。清醒宝困困宝一起下班，明天继续营业。"
+    ];
+    $("endText").innerHTML = pick(endings) +
+      '<br><br><span class="endline">— 宝，今天也辛苦啦，下班的鱼最甜 🐟</span>';
+    $("endVeil").classList.remove("hide");
+  }
+
+  $("startBtn").addEventListener("click",start);
+  $("againBtn").addEventListener("click",start);
+
+  // 初始静态画面
+  render();
+})();
+</script>
+</body>
+</html>

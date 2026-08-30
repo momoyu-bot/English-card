@@ -1,0 +1,100 @@
+<h2 class="sr-only">Blood glucose curves after lunch. A slider controls how much vegetable, protein and fat is eaten before the carbohydrate; as it increases the curve flattens, the peak drops and arrives later, and the post-peak dip below baseline disappears.</h2>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 12px; font-size: 12px; color: var(--text-secondary);">
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 14px; height: 3px; border-radius: 2px; background: #2a78d6;"></span>当前吃法（实线）</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 14px; height: 3px; border-radius: 2px; background: #eb6834;"></span>先扒饭（虚线，参考）</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 14px; height: 0; border-top: 1px dashed #898781;"></span>餐前基线</span>
+</div>
+
+<div style="position: relative; width: 100%; height: 300px;">
+  <canvas id="glu" role="img" aria-label="Post-lunch blood glucose over four hours. Eating carbohydrate first produces a sharp peak near 9 millimoles per litre at about 40 minutes followed by a dip below the 5 millimole baseline. Eating vegetables and protein first produces a peak near 6.6 at about 100 minutes with no dip.">先吃碳水时血糖约 40 分钟冲到 9 mmol/L 左右，随后跌破 5 的基线；蔬菜蛋白先吃时峰值约 6.6，约 100 分钟到达，且不跌破基线。</canvas>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; margin: 1.5rem 0 1.25rem;">
+  <label for="pad" style="font-size: 14px; color: var(--text-secondary); white-space: nowrap;">碳水之前垫了多少菜和蛋白</label>
+  <input type="range" id="pad" min="0" max="100" step="1" value="100" style="flex: 1;" />
+  <span id="padOut" style="font-size: 13px; font-weight: 500; min-width: 52px; text-align: right;">充分</span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+  <div style="background: var(--surface-1); border-radius: var(--radius); padding: 1rem;">
+    <div style="font-size: 13px; color: var(--text-secondary);">峰值</div>
+    <div style="font-size: 24px; font-weight: 500; margin-top: 4px;"><span id="mPeak">6.6</span> <span style="font-size:13px; color: var(--text-secondary);">mmol/L</span></div>
+  </div>
+  <div style="background: var(--surface-1); border-radius: var(--radius); padding: 1rem;">
+    <div style="font-size: 13px; color: var(--text-secondary);">到峰时间</div>
+    <div style="font-size: 24px; font-weight: 500; margin-top: 4px;"><span id="mT">100</span> <span style="font-size:13px; color: var(--text-secondary);">分钟</span></div>
+  </div>
+  <div style="background: var(--surface-1); border-radius: var(--radius); padding: 1rem;">
+    <div style="font-size: 13px; color: var(--text-secondary);">峰后最陡跌速</div>
+    <div style="font-size: 24px; font-weight: 500; margin-top: 4px;"><span id="mSlope">0.8</span> <span style="font-size:13px; color: var(--text-secondary);">mmol/L·时</span></div>
+    <div id="mSlopeD" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">缓</div>
+  </div>
+  <div style="background: var(--surface-1); border-radius: var(--radius); padding: 1rem;">
+    <div style="font-size: 13px; color: var(--text-secondary);">峰后最低点</div>
+    <div style="font-size: 24px; font-weight: 500; margin-top: 4px;"><span id="mLow">5.0</span> <span style="font-size:13px; color: var(--text-secondary);">mmol/L</span></div>
+    <div id="mLowD" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">没有跌破基线</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function(){
+  var G0=5.0, ke=0.9;
+  var css=getComputedStyle(document.documentElement);
+  var muted=css.getPropertyValue('--text-muted')||'#898781';
+  var dark=matchMedia('(prefers-color-scheme: dark)').matches;
+  var grid=dark?'#2c2c2a':'#e1e0d9';
+  function par(s){ var f=s/100; return {ka:6-4.8*f, amp:4.0-2.4*f, und:0.9*Math.pow(1-f,1.5)}; }
+  function curve(p){
+    var tmax=Math.log(p.ka/ke)/(p.ka-ke);
+    var pmax=Math.exp(-ke*tmax)-Math.exp(-p.ka*tmax);
+    var tU=tmax+1.4, pts=[], t;
+    for(t=0;t<=4.001;t+=0.04){
+      var b=(Math.exp(-ke*t)-Math.exp(-p.ka*t))/pmax;
+      pts.push({x:+t.toFixed(2), y:G0+p.amp*b-p.und*Math.exp(-Math.pow(t-tU,2)/0.72)});
+    }
+    return pts;
+  }
+  function stats(pts){
+    var pk=-99, tpk=0, i;
+    for(i=0;i<pts.length;i++){ if(pts[i].y>pk){ pk=pts[i].y; tpk=pts[i].x; } }
+    var slope=0, low=99;
+    for(i=0;i<pts.length-1;i++){
+      if(pts[i].x<tpk) continue;
+      var d=(pts[i+1].y-pts[i].y)/0.04;
+      if(d<slope) slope=d;
+      if(pts[i].y<low) low=pts[i].y;
+    }
+    return {pk:pk, tpk:tpk, slope:-slope, low:low};
+  }
+  var refPts=curve(par(0));
+  var ch=new Chart(document.getElementById('glu'),{
+    type:'line',
+    data:{datasets:[
+      {label:'先扒饭',data:refPts,borderColor:'#eb6834',backgroundColor:'rgba(235,104,52,0.08)',borderWidth:2,borderDash:[6,4],fill:false,pointRadius:0,tension:0.3},
+      {label:'当前吃法',data:curve(par(100)),borderColor:'#2a78d6',backgroundColor:'rgba(42,120,214,0.10)',borderWidth:2,fill:true,pointRadius:0,tension:0.3},
+      {label:'基线',data:[{x:0,y:G0},{x:4,y:G0}],borderColor:muted,borderWidth:1,borderDash:[3,3],fill:false,pointRadius:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:200},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{filter:function(c){return c.datasetIndex<2;},callbacks:{title:function(i){return '餐后 '+Math.round(i[0].parsed.x*60)+' 分钟';},label:function(c){return c.dataset.label+'：'+c.parsed.y.toFixed(1)+' mmol/L';}}}},
+      scales:{
+        x:{type:'linear',min:0,max:4,title:{display:true,text:'餐后小时数',color:muted,font:{size:12}},ticks:{color:muted,stepSize:1},grid:{display:false},border:{color:grid}},
+        y:{min:3.5,max:9.5,title:{display:true,text:'血糖 mmol/L',color:muted,font:{size:12}},ticks:{color:muted,stepSize:1,callback:function(v){return v.toFixed(0);}},grid:{color:grid},border:{display:false}}
+      }}
+  });
+  var sl=document.getElementById('pad');
+  function upd(){
+    var s=+sl.value, pts=curve(par(s)), st=stats(pts);
+    ch.data.datasets[1].data=pts; ch.update();
+    document.getElementById('mPeak').textContent=st.pk.toFixed(1);
+    document.getElementById('mT').textContent=Math.round(st.tpk*60);
+    document.getElementById('mSlope').textContent=st.slope.toFixed(1);
+    document.getElementById('mLow').textContent=st.low.toFixed(1);
+    document.getElementById('mSlopeD').textContent= st.slope>2.2?'陡':(st.slope>1.4?'偏陡':'缓');
+    document.getElementById('mLowD').textContent= st.low<G0-0.15?('跌破基线 '+(G0-st.low).toFixed(1)):'没有跌破基线';
+    document.getElementById('padOut').textContent= s>75?'充分':(s>45?'一般':(s>15?'很少':'全无'));
+  }
+  sl.addEventListener('input',upd); upd();
+})();
+</script>

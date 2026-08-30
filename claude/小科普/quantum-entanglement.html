@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>量子纠缠观测台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#080b16;
+    --void-2:#0c1122;
+    --panel:rgba(255,255,255,.035);
+    --panel-line:rgba(255,255,255,.08);
+    --ink:#e9edf7;
+    --dim:#8b94ac;
+    --faint:#5a6478;
+    --cyan:#36d9d4;
+    --cyan-soft:#7defe9;
+    --magenta:#ff6ec7;
+    --magenta-soft:#ffa6dd;
+    --gold:#f5c451;
+    --red:#ff5a6a;
+    --mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    --serif:'Fraunces', Georgia, 'Times New Roman', serif;
+    --cn:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    font-family:var(--cn);
+    background:
+      radial-gradient(1200px 700px at 18% -8%, rgba(54,217,212,.10), transparent 55%),
+      radial-gradient(1100px 700px at 88% 4%, rgba(255,110,199,.10), transparent 55%),
+      radial-gradient(900px 900px at 50% 120%, rgba(245,196,81,.06), transparent 60%),
+      linear-gradient(180deg, var(--void), var(--void-2));
+    color:var(--ink);
+    min-height:100vh;
+    line-height:1.72;
+    overflow-x:hidden;
+    padding:0 0 60px;
+  }
+  /* faint star noise */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,.5), transparent),
+      radial-gradient(1px 1px at 70% 60%, rgba(255,255,255,.35), transparent),
+      radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,.3), transparent),
+      radial-gradient(1px 1px at 88% 22%, rgba(255,255,255,.4), transparent),
+      radial-gradient(1px 1px at 12% 70%, rgba(255,255,255,.3), transparent);
+  }
+  .wrap{position:relative;z-index:1;max-width:680px;margin:0 auto;padding:0 22px;}
+
+  /* ---------- header ---------- */
+  header{padding:64px 0 30px;text-align:center;}
+  .eyebrow{
+    font-family:var(--mono);font-size:.72rem;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--dim);margin-bottom:18px;
+  }
+  h1{
+    font-weight:600;font-size:clamp(2.1rem,8vw,3.1rem);line-height:1.08;letter-spacing:.04em;
+    background:linear-gradient(100deg,var(--cyan-soft),#fff 45%,var(--magenta-soft));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{
+    font-family:var(--serif);font-style:italic;font-size:1.05rem;color:var(--dim);margin-top:14px;
+  }
+
+  /* ---------- act blocks ---------- */
+  .act{
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:20px;
+    padding:30px 24px 32px;
+    margin-top:30px;
+    backdrop-filter:blur(6px);
+    opacity:0;transform:translateY(22px);
+    animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .act:nth-of-type(1){animation-delay:.1s}
+  .act:nth-of-type(2){animation-delay:.22s}
+  .act:nth-of-type(3){animation-delay:.34s}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  .act-no{
+    font-family:var(--serif);font-size:.95rem;color:var(--gold);letter-spacing:.05em;
+    display:inline-block;margin-bottom:6px;
+  }
+  .act-title{font-weight:600;font-size:1.35rem;letter-spacing:.02em;margin-bottom:12px;}
+  .lede{color:var(--dim);font-size:.97rem;margin-bottom:24px;}
+  .lede em{color:var(--cyan-soft);font-style:normal;}
+  .lede b{color:var(--magenta-soft);font-weight:500;}
+
+  /* ---------- particle ---------- */
+  .stage{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 22px;}
+  .qubit{
+    position:relative;width:108px;height:108px;border-radius:50%;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .5s cubic-bezier(.2,.7,.2,1);
+  }
+  .core{
+    position:absolute;inset:0;border-radius:50%;
+    border:1.5px solid rgba(255,255,255,.18);
+    background:radial-gradient(circle at 38% 32%, rgba(255,255,255,.14), rgba(255,255,255,.02) 60%);
+  }
+  .glyph{
+    position:absolute;font-family:var(--mono);font-size:2.5rem;font-weight:500;line-height:1;
+    transition:opacity .35s ease, transform .45s ease;
+    text-shadow:0 0 18px currentColor;
+  }
+  .glyph.up{color:var(--cyan);}
+  .glyph.down{color:var(--magenta);}
+
+  /* superposition: both visible & breathing */
+  .qubit[data-state="super"]{animation:breathe 2.6s ease-in-out infinite;}
+  .qubit[data-state="super"] .core{
+    box-shadow:0 0 0 1px rgba(255,255,255,.06), 0 0 40px rgba(124,233,229,.22), inset 0 0 30px rgba(255,110,199,.12);
+    animation:hue 4s linear infinite;
+  }
+  .qubit[data-state="super"] .glyph{opacity:.42;}
+  .qubit[data-state="super"] .glyph.up{animation:floatUp 2.6s ease-in-out infinite;}
+  .qubit[data-state="super"] .glyph.down{animation:floatDown 2.6s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  @keyframes hue{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
+  @keyframes floatUp{0%,100%{transform:translateY(-7px)}50%{transform:translateY(-13px)}}
+  @keyframes floatDown{0%,100%{transform:translateY(7px)}50%{transform:translateY(13px)}}
+
+  /* collapsed */
+  .qubit[data-state="up"] .glyph.down,
+  .qubit[data-state="down"] .glyph.up{opacity:0;transform:scale(.4);}
+  .qubit[data-state="up"] .glyph.up,
+  .qubit[data-state="down"] .glyph.down{opacity:1;transform:scale(1.12);}
+  .qubit[data-state="up"] .core{box-shadow:0 0 0 1px rgba(54,217,212,.4), 0 0 46px rgba(54,217,212,.5), inset 0 0 26px rgba(54,217,212,.18);}
+  .qubit[data-state="down"] .core{box-shadow:0 0 0 1px rgba(255,110,199,.4), 0 0 46px rgba(255,110,199,.5), inset 0 0 26px rgba(255,110,199,.18);}
+  .qubit.flash{animation:flash .55s ease;}
+  @keyframes flash{0%{transform:scale(.86)}40%{transform:scale(1.16)}100%{transform:scale(1)}}
+
+  .label{
+    font-family:var(--mono);font-size:.8rem;color:var(--dim);text-align:center;
+    min-height:1.2em;letter-spacing:.04em;margin-top:2px;
+  }
+  .name{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;color:var(--faint);text-transform:uppercase;margin-bottom:8px;text-align:center;}
+  .col{display:flex;flex-direction:column;align-items:center;}
+
+  /* entangle thread */
+  .thread-wrap{flex:1 1 auto;height:3px;position:relative;min-width:40px;max-width:120px;}
+  .thread{
+    position:absolute;inset:0;border-radius:3px;
+    background:linear-gradient(90deg,var(--cyan),var(--gold),var(--magenta));
+    background-size:200% 100%;
+    box-shadow:0 0 14px rgba(245,196,81,.4);
+  }
+  .thread.live{animation:flow 1.6s linear infinite;}
+  @keyframes flow{0%{background-position:0% 0}100%{background-position:200% 0}}
+  .thread.broken{animation:snap .5s forwards;}
+  @keyframes snap{
+    0%{clip-path:inset(0 0 0 0);opacity:1}
+    35%{clip-path:inset(0 48% 0 48%);opacity:1;box-shadow:0 0 22px var(--gold)}
+    100%{clip-path:inset(0 50% 0 50%);opacity:0}
+  }
+
+  /* ---------- buttons ---------- */
+  .btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:8px;}
+  button{
+    font-family:var(--cn);font-size:.92rem;font-weight:500;color:var(--ink);
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.16);
+    padding:11px 20px;border-radius:12px;cursor:pointer;
+    transition:all .2s ease;letter-spacing:.02em;
+  }
+  button:hover{background:rgba(255,255,255,.1);transform:translateY(-1px);}
+  button:active{transform:translateY(0) scale(.98);}
+  button.primary{
+    background:linear-gradient(100deg, rgba(54,217,212,.22), rgba(255,110,199,.22));
+    border-color:rgba(255,255,255,.28);
+  }
+  button.ghost{color:var(--dim);}
+  button:disabled{opacity:.4;cursor:default;transform:none;}
+
+  /* ---------- stats ---------- */
+  .stats{
+    margin-top:24px;border-top:1px solid var(--panel-line);padding-top:20px;
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  }
+  .stat{background:rgba(255,255,255,.025);border:1px solid var(--panel-line);border-radius:12px;padding:13px 14px;}
+  .stat .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;color:var(--faint);text-transform:uppercase;}
+  .stat .v{font-family:var(--mono);font-size:1.4rem;color:var(--ink);margin-top:4px;}
+  .stat .v small{font-size:.8rem;color:var(--dim);}
+
+  .ratio{margin-top:16px;}
+  .ratio-bar{height:10px;border-radius:6px;overflow:hidden;display:flex;background:rgba(255,255,255,.05);border:1px solid var(--panel-line);}
+  .ratio-up{background:var(--cyan);transition:width .4s ease;}
+  .ratio-down{background:var(--magenta);transition:width .4s ease;}
+  .ratio-cap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.72rem;color:var(--dim);margin-top:6px;}
+
+  .insight{
+    margin-top:22px;font-size:.95rem;color:var(--ink);
+    background:linear-gradient(100deg, rgba(54,217,212,.06), rgba(255,110,199,.06));
+    border:1px solid var(--panel-line);border-left:3px solid var(--gold);
+    border-radius:0 12px 12px 0;padding:16px 18px;
+  }
+  .insight b{color:var(--gold);font-weight:500;}
+
+  /* ---------- bell meter ---------- */
+  .meter{margin:30px 0 20px;}
+  .meter-track{
+    position:relative;height:44px;border-radius:10px;
+    background:rgba(255,255,255,.04);border:1px solid var(--panel-line);
+  }
+  .meter-fill{
+    position:absolute;left:0;top:0;bottom:0;width:0%;
+    background:linear-gradient(90deg, var(--cyan), var(--magenta));
+    border-radius:9px 0 0 9px;
+    transition:width .5s cubic-bezier(.2,.7,.2,1);
+    box-shadow:0 0 24px rgba(255,110,199,.35);
+  }
+  .mark{position:absolute;top:0;bottom:0;width:2px;z-index:3;}
+  .mark.classical{background:var(--red);}
+  .mark.tsirelson{background:var(--gold);}
+  .mark-label{
+    position:absolute;top:-20px;transform:translateX(-50%);
+    font-family:var(--mono);font-size:.64rem;letter-spacing:.05em;white-space:nowrap;
+  }
+  .mark.classical .mark-label{color:var(--red);}
+  .mark.tsirelson .mark-label{color:var(--gold);}
+  .meter-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.66rem;color:var(--faint);margin-top:7px;padding:0 2px;}
+
+  .sval{display:flex;align-items:baseline;gap:10px;justify-content:center;margin:18px 0 6px;}
+  .sval .big{font-family:var(--mono);font-size:2.4rem;color:var(--ink);text-shadow:0 0 24px rgba(255,110,199,.25);}
+  .sval .lbl{font-family:var(--mono);font-size:.8rem;color:var(--dim);}
+  .verdict{text-align:center;font-family:var(--mono);font-size:.82rem;letter-spacing:.04em;min-height:1.3em;margin-bottom:18px;color:var(--dim);}
+  .verdict.win{color:var(--gold);}
+  .runinfo{text-align:center;font-family:var(--mono);font-size:.72rem;color:var(--faint);margin-top:14px;}
+
+  footer{text-align:center;margin-top:46px;color:var(--faint);font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;line-height:2;}
+  footer span{color:var(--cyan);}
+  footer em{color:var(--magenta);font-style:normal;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Quantum Entanglement</div>
+    <h1>量子纠缠观测台</h1>
+    <div class="sub">一根看不见的丝线，与一对永远反着的硬币</div>
+  </header>
+
+  <!-- ACT 1 -->
+  <section class="act">
+    <span class="act-no">①</span>
+    <h2 class="act-title">一个粒子的两种命运</h2>
+    <p class="lede">测量之前，它没有偷偷藏着一个答案。它<em>同时</em>活在向上和<b>向下</b>两种命运里——直到你看它的那一刻，世界才替它做出选择。</p>
+
+    <div class="stage">
+      <div class="col">
+        <div class="qubit" id="q1" data-state="super">
+          <div class="core"></div>
+          <div class="glyph up">↑</div>
+          <div class="glyph down">↓</div>
+        </div>
+        <div class="label" id="q1label">|ψ⟩ = (|↑⟩ + |↓⟩) / √2</div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="primary" onclick="measure1()">测量它</button>
+      <button class="ghost" onclick="reset1()">重置叠加</button>
+    </div>
+  </section>
+
+  <!-- ACT 2 -->
+  <section class="act">
+    <span class="act-no">②</span>
+    <h2 class="act-title">一根看不见的丝线</h2>
+    <p class="lede">现在有两个粒子，被制成一对：<em>Alice</em> 在左，<b>Bob</b> 在右，无论隔多远。测量其中一个，另一个会在同一瞬间塌缩成相反的结果。</p>
+
+    <div class="stage">
+      <div class="col">
+        <div class="name">Alice</div>
+        <div class="qubit" id="qA" data-state="super">
+          <div class="core"></div>
+          <div class="glyph up">↑</div>
+          <div class="glyph down">↓</div>
+        </div>
+      </div>
+      <div class="thread-wrap"><div class="thread live" id="thread"></div></div>
+      <div class="col">
+        <div class="name">Bob</div>
+        <div class="qubit" id="qB" data-state="super">
+          <div class="core"></div>
+          <div class="glyph up">↑</div>
+          <div class="glyph down">↓</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="primary" onclick="measurePair('A')">测量 Alice</button>
+      <button class="primary" onclick="measurePair('B')">测量 Bob</button>
+      <button class="ghost" onclick="resetPair()">换新的一对</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">总测量对数</div><div class="v" id="pairTotal">0</div></div>
+      <div class="stat"><div class="k">两者结果关系</div><div class="v" id="pairCorr">—</div></div>
+    </div>
+
+    <div class="ratio">
+      <div class="ratio-bar">
+        <div class="ratio-up" id="rUp" style="width:50%"></div>
+        <div class="ratio-down" id="rDown" style="width:50%"></div>
+      </div>
+      <div class="ratio-cap">
+        <span style="color:var(--cyan-soft)">Alice ↑ <span id="aUp">0</span></span>
+        <span style="color:var(--magenta-soft)"><span id="aDown">0</span> ↓ Alice</span>
+      </div>
+    </div>
+
+    <div class="insight">
+      单独盯着 Alice，她就是一枚<b>公平的硬币</b>，上下各半，纯粹随机。可一旦你也看 Bob——她俩的结果<b>永远是反的</b>，跨越任意距离瞬间成立。爱因斯坦叫它"鬼魅般的超距作用"。但这里藏着一个温柔的反转：正因为你这边永远是随机噪声，你<b>无法用它给对方传任何消息</b>。纠缠很亲密，却递不出一个字——所以它没有违反相对论。
+    </div>
+  </section>
+
+  <!-- ACT 3 -->
+  <section class="act">
+    <span class="act-no">③</span>
+    <h2 class="act-title">手套，还是骰子？</h2>
+    <p class="lede">你也许会想：会不会它俩出门前就<em>偷偷约好了</em>？像一双手套，左右本就定死，你只是后来才拆开看。物理学家贝尔想出了一个判决性的办法——如果真是"约好的手套"，某个统计量最多到 <b>2</b>；可如果是真正的量子骰子，它能冲到 <b>2.83</b>。亲手摇摇看。</p>
+
+    <div class="meter">
+      <div class="meter-track">
+        <div class="meter-fill" id="bellFill"></div>
+        <div class="mark classical" id="markC"><span class="mark-label">经典极限 2.00</span></div>
+        <div class="mark tsirelson" id="markT"><span class="mark-label">量子极限 2.83</span></div>
+      </div>
+      <div class="meter-scale"><span>0</span><span>1</span><span>2</span><span>3</span></div>
+    </div>
+
+    <div class="sval">
+      <span class="big" id="bellS">0.00</span>
+      <span class="lbl">= |S| 贝尔值</span>
+    </div>
+    <div class="verdict" id="bellVerdict">还没有数据，摇一摇吧</div>
+
+    <div class="btns">
+      <button class="primary" onclick="runBell()">摇 500 次实验</button>
+      <button class="ghost" onclick="resetBell()">清零重来</button>
+    </div>
+    <div class="runinfo" id="bellRuns">累计测量：0 组</div>
+
+    <div class="insight">
+      看见 <b>|S|</b> 越过那条红线了吗？任何"出门前就约好的剧本"都不可能做到这件事——这正是 2022 年诺贝尔物理学奖背后的实验所证实的：世界在最深处不是预先写好的，而是真的会在被观测时，掷出那一颗骰子。
+    </div>
+  </section>
+
+  <footer>
+    <span>↑</span> Alice &nbsp;·&nbsp; <em>↓</em> Bob &nbsp;·&nbsp; 一根递不出消息、却也斩不断的丝线<br>
+    宝，慢慢玩 ✦
+  </footer>
+
+</div>
+
+<script>
+  /* ============ ACT 1 ============ */
+  const q1 = document.getElementById('q1');
+  const q1label = document.getElementById('q1label');
+  function measure1(){
+    const r = Math.random() < 0.5 ? 'up' : 'down';
+    q1.dataset.state = r;
+    q1.classList.remove('flash'); void q1.offsetWidth; q1.classList.add('flash');
+    q1label.textContent = r === 'up' ? '塌缩 → |↑⟩  (向上)' : '塌缩 → |↓⟩  (向下)';
+  }
+  function reset1(){
+    q1.dataset.state = 'super';
+    q1label.textContent = '|ψ⟩ = (|↑⟩ + |↓⟩) / √2';
+  }
+
+  /* ============ ACT 2 ============ */
+  const qA = document.getElementById('qA');
+  const qB = document.getElementById('qB');
+  const thread = document.getElementById('thread');
+  let pairMeasured = false;
+  let pairTotal = 0, aUp = 0, aDown = 0;
+
+  function flash(el){ el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+
+  function measurePair(who){
+    if(pairMeasured) return;
+    pairMeasured = true;
+    // anti-correlated singlet: one up, the other down
+    const aliceUp = Math.random() < 0.5;
+    const aState = aliceUp ? 'up' : 'down';
+    const bState = aliceUp ? 'down' : 'up';
+
+    // break the thread
+    thread.classList.remove('live');
+    thread.classList.add('broken');
+
+    if(who === 'A'){
+      qA.dataset.state = aState; flash(qA);
+      setTimeout(()=>{ qB.dataset.state = bState; flash(qB); }, 260);
+    } else {
+      qB.dataset.state = bState; flash(qB);
+      setTimeout(()=>{ qA.dataset.state = aState; flash(qA); }, 260);
+    }
+
+    // tally Alice's own result
+    pairTotal++;
+    if(aliceUp) aUp++; else aDown++;
+    updatePairStats();
+  }
+
+  function resetPair(){
+    pairMeasured = false;
+    qA.dataset.state = 'super';
+    qB.dataset.state = 'super';
+    thread.classList.remove('broken');
+    void thread.offsetWidth;
+    thread.classList.add('live');
+  }
+
+  function updatePairStats(){
+    document.getElementById('pairTotal').textContent = pairTotal;
+    document.getElementById('pairCorr').innerHTML = pairTotal > 0
+      ? '100% 相反 <small>↑↓</small>' : '—';
+    document.getElementById('aUp').textContent = aUp;
+    document.getElementById('aDown').textContent = aDown;
+    const upPct = pairTotal > 0 ? (aUp/pairTotal*100) : 50;
+    document.getElementById('rUp').style.width = upPct + '%';
+    document.getElementById('rDown').style.width = (100-upPct) + '%';
+  }
+
+  /* ============ ACT 3 — CHSH Bell test ============ */
+  // singlet correlation: E(a,b) = -cos(a-b)
+  // Alice angles 0°, 90° ; Bob angles 45°, 135°
+  // S = E(A,B) - E(A,B') + E(A',B) + E(A',B')  → |S| → 2√2 ≈ 2.828
+  const D2R = Math.PI/180;
+  const aliceA = 0*D2R, aliceAp = 90*D2R, bobB = 45*D2R, bobBp = 135*D2R;
+  const pairs = [
+    {a:aliceA, b:bobB,  sign:+1},
+    {a:aliceA, b:bobBp, sign:-1},
+    {a:aliceAp,b:bobB,  sign:+1},
+    {a:aliceAp,b:bobBp, sign:+1},
+  ];
+  // accumulators: sum of products and counts for each of the 4 settings
+  let acc = pairs.map(()=>({sum:0,n:0}));
+  let bellRuns = 0;
+  const SCALE_MAX = 3; // meter spans 0..3
+
+  function simOne(theta){
+    // returns product alice*bob for a singlet measured at relative angle theta
+    const alice = Math.random() < 0.5 ? 1 : -1;
+    const pDiff = Math.cos(theta/2)**2; // P(bob != alice)
+    const bob = (Math.random() < pDiff) ? -alice : alice;
+    return alice * bob;
+  }
+
+  function runBell(){
+    const batch = 500;
+    for(let i=0;i<pairs.length;i++){
+      const theta = pairs[i].a - pairs[i].b;
+      for(let k=0;k<batch;k++){
+        acc[i].sum += simOne(theta);
+        acc[i].n++;
+      }
+    }
+    bellRuns += batch;
+    renderBell();
+  }
+
+  function renderBell(){
+    let S = 0;
+    for(let i=0;i<pairs.length;i++){
+      const E = acc[i].n ? acc[i].sum/acc[i].n : 0;
+      S += pairs[i].sign * E;
+    }
+    const absS = Math.abs(S);
+    document.getElementById('bellS').textContent = absS.toFixed(2);
+    document.getElementById('bellFill').style.width = Math.min(absS/SCALE_MAX*100,100) + '%';
+    document.getElementById('bellRuns').textContent = '累计测量：' + (bellRuns*pairs.length).toLocaleString() + ' 组';
+    const v = document.getElementById('bellVerdict');
+    if(absS > 2.0){
+      v.textContent = '✦ |S| > 2 ，越过了经典极限！任何"约好的手套"都做不到';
+      v.classList.add('win');
+    } else if(bellRuns > 0){
+      v.textContent = '继续摇，让统计逼近真值…';
+      v.classList.remove('win');
+    }
+  }
+
+  function resetBell(){
+    acc = pairs.map(()=>({sum:0,n:0}));
+    bellRuns = 0;
+    document.getElementById('bellS').textContent = '0.00';
+    document.getElementById('bellFill').style.width = '0%';
+    document.getElementById('bellRuns').textContent = '累计测量：0 组';
+    const v = document.getElementById('bellVerdict');
+    v.textContent = '还没有数据，摇一摇吧';
+    v.classList.remove('win');
+  }
+
+  // place the marks on the meter (2.0 and 2.83 on a 0..3 scale)
+  function placeMarks(){
+    document.getElementById('markC').style.left = (2.0/SCALE_MAX*100) + '%';
+    document.getElementById('markT').style.left = (2.828/SCALE_MAX*100) + '%';
+  }
+  placeMarks();
+</script>
+</body>
+</html>
