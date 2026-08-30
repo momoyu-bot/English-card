@@ -1,0 +1,1 @@
+const D1 = [{"title": "AI 迷惑行为大赏（典藏卡包）", "old": "贴错标签、赛博黄牌。2026 年 6 月的迷惑与救场现场。", "new": "我的数字藏品柜：贴错标签、赛博黄牌，我捂我自己嘴，天下无敌。"}, {"title": "Catch The Dreams", "old": "接住星星和困意。躲开闹钟，被吵醒了就再睡一会儿。", "new": "滑动接住 ⭐ 和 💤，小心避开吵闹的 ⏰ 和 ⚡！你被吵醒了？再睡一会儿。"}, {"title": "Gemini Cyber Aquarium", "old": "赛博鱼缸。cyber_fish.exe 在跑，状态 ONLINE。", "new": "赛博鱼缸。cyber_fish.exe 在跑，状态 ONLINE。"}];
