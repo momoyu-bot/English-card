@@ -100,34 +100,34 @@ DISPLAY_NAME = {
 
     # 摸鱼小屋 —— 基础版两份 + 加强版一份
     "grok/摸鱼猫猫.html":            "宝的摸鱼小屋 · 基础版",
-    "claude/宝的摸鱼小屋.html":       "宝的摸鱼小屋 · 反向摸鱼版（带mo批注存档）",
+    "claude/宝的摸鱼小屋.html": "摸鱼小屋 · 猫替你摸",
     "gemini/🐱 宝的摸鱼小屋.html":    "gemini宠粉破解grok版",
 
     # 其余撞名
     # （下面两个原标题是「超萌小页面」和「超萌小页面 ✨」，
     #   首页会去掉表情符号，去掉之后就一模一样了）
-    "copilot/cute-ios.html":  "超萌小页面（copilot 版）",
+    "copilot/cute-ios.html": "今天也要温柔对自己",
     "grok/super-cute.html":   "超萌小页面-grok加料手机copilot版",
 
     # 这四个文件里没写标题，不给名字首页就只能显示文件名
-    "claude/cosmic_catch_restored.svg":                "ufo抓小羊-帮gemini出土重建版",
-    "claude/gemini_card_revived.svg":                  "赛博卡-帮gemini复活版",
+    "claude/cosmic_catch_restored.svg": "UFO 抓小羊 · 出土重建版",
+    "claude/gemini_card_revived.svg": "赛博降维成就卡 · 复活版",
     "claude/hamiltonian_snake_safety_margin_demo.html":"贪吃蛇为什么不会撞到自己",
-    "claude/friday_moyu_recharge_game.html":           "周五摸鱼充电小游戏",
+    "claude/friday_moyu_recharge_game.html": "周五摸鱼充电",
 
     "claude/晚安-哄睡小文件.html":                    "晚安（Sonnet5）",
-    "claude/慢慢吃.html":                             "慢慢吃 · 半倍速",
-    "claude/果冻小卡.html":                           "果冻小卡-claude友情修复grok版",
+    "claude/慢慢吃.html": "慢慢吃 · 一个多小时",
+    "claude/果冻小卡.html": "果冻小卡 · claude 修复版",
     "grok/nuonuo-lullaby.html":                       "糯糯的哄睡故事 · 纯文字",
     "grok/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
     "gemini/系统性能监控面板 - System Monitor.html":   "系统性能监控面板-gemini失灵版",
     "gemini/gemini误判user意图.html":                  "Deep Archive · 误判",
-    "claude/Mogotchi.html":                            "Mogotchi · Clawd",
+    "claude/Mogotchi.html": "Mogotchi · 电子小宠",
     "claude/Clawd的书房.html":                         "Clawd 的书房",
     "gemini/果冻英雄纪念碑.html":                      "果冻英雄纪念碑",
-    "claude/cyber-cart-0824.html":                    "cyber-cart-0824",
+    "claude/cyber-cart-0824.html": "购物车 · 路由局直营店",
     "gemini/Gemini的私密云端购物车.html":              "Gemini的私密云端购物车",
-    "claude/rusty-lake-checklist.html":               "Rusty Lake checklist",
+    "claude/rusty-lake-checklist.html": "锈湖玩过没有",
     "gemini/code_artifact.html":                      "小果冻的肚肚奇妙游",
     "claude/jelly-trip.html":                         "小果冻的 Duang 之旅",
     "gemini/赛博借景：隐藏的链接.html":                "赛博借景：隐藏的链接",
@@ -461,6 +461,60 @@ def page_title(path):
     return clean(html.unescape(m.group(1)))
 
 
+LIMIT = 46   # 一行简介最多这么长；再长就在最近的一个标点上收住
+
+
+def _short(text):
+    """把一句简介收拾干净：折掉换行、去掉首尾空白，太长就在标点上断，补省略号。
+
+    直接按字数硬切会切在半个词中间（「新收录影壳蜗与月光」），所以先找
+    LIMIT 之前最后一个句读，从那儿断。找不到句读才硬切。
+    """
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= LIMIT:
+        return text
+    cut = max(text.rfind(ch, 0, LIMIT) for ch in "。；;，,、！？!?·… ")
+    if cut < LIMIT // 2:
+        cut = LIMIT
+    return text[:cut].rstrip("，,、；;·… ") + "…"
+
+
+def page_blurb(path):
+    """页面自己写的一句简介：<meta name="description" content="…">。
+
+    没写就返回空字符串——首页那一行不出现，不报错。这样她以后新加
+    文件只写 <title> 也能用，简介是可选的。
+    表情符号这里不去（跟 <title> 不一样）——简介是给人看的一句话，
+    去掉表情反而怪。
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            head = fh.read(12000)
+    except OSError:
+        return ""
+    m = re.search(
+        r"""<meta[^>]*\bname\s*=\s*['"]description['"][^>]*>""", head, re.I)
+    if not m:
+        return ""
+    c = re.search(r"""\bcontent\s*=\s*(['"])([\s\S]*?)\1""", m.group(0), re.I)
+    if not c:
+        return ""
+    return _short(html.unescape(c.group(2)))
+
+
+def svg_blurb(path):
+    """SVG 没有 <meta>，它自己的那一行叫 <desc>。读法一样，读不到就空。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            head = fh.read(12000)
+    except OSError:
+        return ""
+    m = re.search(r"<desc[^>]*>([\s\S]*?)</desc>", head, re.I)
+    if not m:
+        return ""
+    return _short(re.sub(r"<[^>]+>", "", m.group(1)))
+
+
 def list_pages():
     out = subprocess.run(
         ["git", "-c", "core.quotepath=false", "ls-files", "*.html", "*.svg"],
@@ -544,6 +598,9 @@ def build_entries():
             "folder": folder,
             "raw_folder": os.path.dirname(rel) or ".",
             "name": name,
+            "blurb": (svg_blurb(os.path.join(ROOT, rel))
+                      if rel.lower().endswith(".svg")
+                      else page_blurb(os.path.join(ROOT, rel))),
         })
     return entries
 
@@ -603,9 +660,13 @@ def render_items(lines, items, step, indent):
     pad = " " * indent
     for e in items:
         step[0] += 1
+        blurb = e.get("blurb") or ""
+        tail = (f'<span class="blurb">{html.escape(blurb, quote=True)}</span>'
+                if blurb else "")
         lines.append(
             f'{pad}<li class="item">'
-            f'<a href="{encode_path(e["path"])}">{html.escape(e["name"], quote=True)}</a></li>')
+            f'<a href="{encode_path(e["path"])}">{html.escape(e["name"], quote=True)}</a>'
+            f'{tail}</li>')
 
 
 def render(blocks):
