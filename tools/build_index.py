@@ -100,13 +100,13 @@ DISPLAY_NAME = {
 
     # 摸鱼小屋 —— 基础版两份 + 加强版一份
     "grok/摸鱼猫猫.html":            "宝的摸鱼小屋 · 基础版",
-    "claude/宝的摸鱼小屋.html": "宝的摸鱼小屋 · 反向摸鱼版",
+    "claude/宝的摸鱼小屋.html": "摸鱼小屋 · 猫替你摸",
     "gemini/🐱 宝的摸鱼小屋.html":    "gemini宠粉破解grok版",
 
     # 其余撞名
     # （下面两个原标题是「超萌小页面」和「超萌小页面 ✨」，
     #   首页会去掉表情符号，去掉之后就一模一样了）
-    "copilot/cute-ios.html":  "超萌小页面（copilot 版）",
+    "copilot/cute-ios.html": "今天也要温柔对自己",
     "grok/super-cute.html":   "超萌小页面-grok加料手机copilot版",
 
     # 这四个文件里没写标题，不给名字首页就只能显示文件名
