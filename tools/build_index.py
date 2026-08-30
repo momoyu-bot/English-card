@@ -227,6 +227,12 @@ SKIP_LIST = {
     "copilot/copilot运维日记.html",  # 真身在 copilot/小游戏/
     "grok/给宝的专属动态哄哄网页.html",  # 真身在 gemini/盲盒/
     "grok/Gemini 的秘密心意.html",  # 真身在 gemini/盲盒/
+    # 摘抄人分卷：封面已经挂着 001–005，货架上不再并列六条同一句
+    "grok/博物馆/摘抄人.001.html",
+    "grok/博物馆/摘抄人.002.html",
+    "grok/博物馆/摘抄人.003.html",
+    "grok/博物馆/摘抄人.004.html",
+    "grok/博物馆/摘抄人.005.html",
 }
 SUBFOLDER_CAT = {
     "gemini/失误捞claude鱼": "打捞机",
