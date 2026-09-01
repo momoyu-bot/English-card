@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>午夜摸鱼贪吃蛇</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none; /* Prevent scroll on touch devices */
+        }
+        
+        canvas {
+            background-color: #1e1e24;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        #fake-terminal {
+            font-family: 'Fira Code', monospace;
+            background-color: #0d1117;
+            color: #56d364;
+            display: none; /* Hidden by default */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 50;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .log-line {
+            margin: 4px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .blinking-cursor {
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen relative">
+
+    <div id="game-ui" class="w-full max-w-md px-4 flex flex-col items-center z-10 transition-opacity duration-300">
+        <div class="w-full flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-xl font-bold text-gray-200">午夜贪吃蛇 🐍</h1>
+                <p class="text-sm text-gray-400">得分: <span id="score" class="font-bold text-green-400">0</span></p>
+            </div>
+            <button id="boss-key-btn" class="bg-red-900 hover:bg-red-700 text-red-100 text-xs py-1.5 px-3 rounded-md shadow border border-red-800 transition-colors">
+                🚨 紧急伪装 (Space)
+            </button>
+        </div>
+
+        <div class="relative w-full aspect-square max-w-[400px]">
+            <canvas id="gameCanvas" width="400" height="400" class="w-full h-full"></canvas>
+            
+            <!-- Game Over Overlay -->
+            <div id="game-over" class="absolute inset-0 bg-black bg-opacity-70 rounded-xl flex flex-col items-center justify-center hidden">
+                <h2 class="text-2xl font-bold text-white mb-2">游戏结束!</h2>
+                <p class="text-gray-300 mb-4">最终得分: <span id="final-score" class="text-green-400 font-bold">0</span></p>
+                <button id="restart-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-colors">
+                    再来一局
+                </button>
+            </div>
+
+            <!-- Start Overlay -->
+            <div id="start-screen" class="absolute inset-0 bg-black bg-opacity-70 rounded-xl flex flex-col items-center justify-center">
+                <h2 class="text-xl font-bold text-white mb-4">准备好摸鱼了吗？</h2>
+                <p class="text-sm text-gray-400 mb-6 text-center px-4">滑动屏幕或使用方向键控制<br>随时按空格键进入伪装模式</p>
+                <button id="start-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-colors">
+                    开始游戏
+                </button>
+            </div>
+        </div>
+        
+        <p class="text-xs text-gray-500 mt-6 text-center">嘘... 玩累了就早点睡吧 晚安</p>
+    </div>
+
+    <div id="fake-terminal">
+        <div id="terminal-content">
+            <div class="log-line">Initializing system dependencies... [OK]</div>
+            <div class="log-line">Connecting to primary database cluster... [OK]</div>
+            <div class="log-line">Running nightly batch processing scripts...</div>
+        </div>
+        <div class="log-line text-green-300">> Awaiting further instructions<span class="blinking-cursor">_</span></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const finalScoreElement = document.getElementById('final-score');
+        const gameOverScreen = document.getElementById('game-over');
+        const startScreen = document.getElementById('start-screen');
+        
+        // Game settings
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+        let speed = 100; // ms per frame
+        
+        // Game state
+        let snake = [];
+        let food = { x: 0, y: 0 };
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let gameLoop;
+        let isPlaying = false;
+        let isFakeTerminalActive = false;
+
+        function initGame() {
+            snake = [
+                { x: 10, y: 10 },
+                { x: 10, y: 11 },
+                { x: 10, y: 12 }
+            ];
+            dx = 0;
+            dy = -1; // Moving up initially
+            score = 0;
+            speed = 120;
+            scoreElement.innerText = score;
+            spawnFood();
+            gameOverScreen.classList.add('hidden');
+            startScreen.classList.add('hidden');
+            isPlaying = true;
+            
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(update, speed);
+        }
+
+        function spawnFood() {
+            let valid = false;
+            while (!valid) {
+                food.x = Math.floor(Math.random() * tileCount);
+                food.y = Math.floor(Math.random() * tileCount);
+                valid = true;
+                // Make sure food doesn't spawn on the snake
+                for (let segment of snake) {
+                    if (segment.x === food.x && segment.y === food.y) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        function update() {
+            if (!isPlaying || isFakeTerminalActive) return;
+
+            // Calculate new head position
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Wall collision (Game Over)
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                handleGameOver();
+                return;
+            }
+
+            // Self collision (Game Over)
+            for (let segment of snake) {
+                if (head.x === segment.x && head.y === segment.y) {
+                    handleGameOver();
+                    return;
+                }
+            }
+
+            snake.unshift(head); // Add new head
+
+            // Check if food eaten
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                scoreElement.innerText = score;
+                spawnFood();
+                // Increase speed slightly
+                if (speed > 50) {
+                    clearInterval(gameLoop);
+                    speed -= 2; 
+                    gameLoop = setInterval(update, speed);
+                }
+            } else {
+                snake.pop(); // Remove tail if no food eaten
+            }
+
+            draw();
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#1e1e24';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid lines (optional, for aesthetics)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            for(let i=0; i<tileCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * gridSize, 0);
+                ctx.lineTo(i * gridSize, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i * gridSize);
+                ctx.lineTo(canvas.width, i * gridSize);
+                ctx.stroke();
+            }
+
+            // Draw Food (Apple)
+            ctx.fillStyle = '#ff4757';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff4757';
+            ctx.beginPath();
+            ctx.arc(food.x * gridSize + gridSize/2, food.y * gridSize + gridSize/2, gridSize/2 - 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0; // Reset shadow
+
+            for (let i = 0; i < snake.length; i++) {
+                const segment = snake[i];
+                // Head is brighter, tail fades out slightly
+                if (i === 0) {
+                    ctx.fillStyle = '#2ed573';
+                } else {
+                    ctx.fillStyle = `rgba(46, 213, 115, ${1 - (i/snake.length)*0.6})`;
+                }
+                
+                // Draw rounded rect for snake segments
+                ctx.fillRect(segment.x * gridSize + 1, segment.y * gridSize + 1, gridSize - 2, gridSize - 2);
+            }
+        }
+
+        function handleGameOver() {
+            isPlaying = false;
+            clearInterval(gameLoop);
+            finalScoreElement.innerText = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        const fakeTerminal = document.getElementById('fake-terminal');
+        const gameUI = document.getElementById('game-ui');
+        const terminalContent = document.getElementById('terminal-content');
+        let terminalInterval;
+
+        function toggleBossKey() {
+            isFakeTerminalActive = !isFakeTerminalActive;
+            
+            if (isFakeTerminalActive) {
+                // Activate Boss Key
+                gameUI.style.opacity = '0';
+                setTimeout(() => gameUI.style.display = 'none', 300); // Hide after fade
+                fakeTerminal.style.display = 'block';
+                document.title = "System Data Processing..."; // Change tab title
+                simulateTerminalLogs();
+            } else {
+                // Deactivate Boss Key
+                fakeTerminal.style.display = 'none';
+                gameUI.style.display = 'flex';
+                setTimeout(() => gameUI.style.opacity = '1', 10);
+                document.title = "午夜摸鱼贪吃蛇";
+                clearInterval(terminalInterval);
+            }
+        }
+
+        const fakeLogMessages = [
+            "Compiling modules...",
+            "Fetching metrics from US-East region...",
+            "WARN: High latency detected in shard 4.",
+            "Optimizing database queries...",
+            "Executing garbage collection...",
+            "Synchronizing user state...",
+            "Deploying hotfix v2.4.1...",
+            "Building dependency graph... [DONE]",
+            "Waiting for thread pool execution..."
+        ];
+
+        function simulateTerminalLogs() {
+            clearInterval(terminalInterval);
+            terminalInterval = setInterval(() => {
+                if (terminalContent.childElementCount > 25) {
+                    terminalContent.removeChild(terminalContent.firstChild);
+                }
+                const newLog = document.createElement('div');
+                newLog.className = 'log-line';
+                const timestamp = new Date().toISOString().split('T')[1].slice(0,8);
+                const randomMsg = fakeLogMessages[Math.floor(Math.random() * fakeLogMessages.length)];
+                newLog.innerText = `[${timestamp}] INFO: ${randomMsg}`;
+                terminalContent.appendChild(newLog);
+            }, 800 + Math.random() * 1000);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            // Boss key handling
+            if (e.code === 'Space') {
+                e.preventDefault();
+                toggleBossKey();
+                return;
+            }
+
+            if (!isPlaying || isFakeTerminalActive) return;
+
+            // Prevent default scrolling for arrow keys
+            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                e.preventDefault();
+            }
+
+            // Direction controls (prevent 180 degree turns)
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (dy !== 1) { dx = 0; dy = -1; }
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (dy !== -1) { dx = 0; dy = 1; }
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (dx !== 1) { dx = -1; dy = 0; }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (dx !== -1) { dx = 1; dy = 0; }
+                    break;
+            }
+        });
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+            e.preventDefault();
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', (e) => {
+            if (!isPlaying || isFakeTerminalActive) return;
+            
+            let touchEndX = e.changedTouches[0].screenX;
+            let touchEndY = e.changedTouches[0].screenY;
+            
+            let deltaX = touchEndX - touchStartX;
+            let deltaY = touchEndY - touchStartY;
+            
+            // Require a minimum swipe distance
+            if (Math.abs(deltaX) < 30 && Math.abs(deltaY) < 30) return;
+
+            // Determine swipe direction based on largest delta
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // Horizontal swipe
+                if (deltaX > 0 && dx !== -1) { dx = 1; dy = 0; } // Right
+                else if (deltaX < 0 && dx !== 1) { dx = -1; dy = 0; } // Left
+            } else {
+                // Vertical swipe
+                if (deltaY > 0 && dy !== -1) { dx = 0; dy = 1; } // Down
+                else if (deltaY < 0 && dy !== 1) { dx = 0; dy = -1; } // Up
+            }
+            e.preventDefault();
+        }, {passive: false});
+
+        document.getElementById('start-btn').addEventListener('click', initGame);
+        document.getElementById('restart-btn').addEventListener('click', initGame);
+        document.getElementById('boss-key-btn').addEventListener('click', toggleBossKey);
+
+        // Initial draw for background
+        draw();
+
+    </script>
+</body>
+</html>
