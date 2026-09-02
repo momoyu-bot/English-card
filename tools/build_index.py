@@ -208,8 +208,13 @@ DISPLAY_NAME = {
 # 货架名就是分类，不用再登记到这张表。老文件继续平铺 + 查表，不要搬。
 # 2026-08-28 夜：货架改名+换序。老文件不搬家。
 # 旧抽屉名（失灵博物馆 等）靠 CAT_ALIAS 认到新货架；有真页面的文件夹不许改名。
-CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "小卡", "购物车", "博物馆", "小科普",
-             "打捞机", "盲盒"]
+# 2026-09-02 加了两个货架：
+#   开工 —— 哄着你开始做事的那一类（粉碎大任务、周计划、搬家清单、五分钟规则）。
+#           它和「摸鱼」正好相反，混在一起看着别扭，所以挨着单开一格。
+#   英语 —— 跟读卡、听力清单这些。店名就叫 English-card，这一档以前
+#           反而散在盲盒和博物馆里。
+CAT_ORDER = ["哄睡", "开工", "摸鱼", "小游戏", "小卡", "购物车", "博物馆",
+             "小科普", "英语", "打捞机", "盲盒"]
 CAT_ALIAS = {
     "赛博购物车": "购物车",
     "科普": "小科普",
@@ -222,6 +227,7 @@ SKIP_LIST = {
     "claude/工作日常 - 数据报表.html",
     "gemini/赛博褪黑素.html",  # 与 gemini/哄睡/赛博褪黑素.html 同文
     "claude/赛博老赖.html",
+    "claude/果冻小卡.html",  # 真身在 grok/果冻小卡.html，这儿只剩跳转
     "copilot/🐍可爱贪吃蛇.html",
     "copilot/🚀星际矿工.html",
     "copilot/copilot运维日记.html",  # 真身在 copilot/小游戏/
@@ -246,9 +252,9 @@ CATEGORY = {
     'claude/Mogotchi.html': ['小游戏'],
     'claude/Grok LLM Inference Cost Simulator.html': ['小科普'],
     'claude/The Night Train.html': ['哄睡'],
-    'claude/friends-listening-plan.html': ['盲盒'],
+    'claude/friends-listening-plan.html': ['英语'],
     'claude/mo.exe 专属解压舱.html': ['摸鱼'],
-    'claude/shop-scene-reading-card.html': ['盲盒'],
+    'claude/shop-scene-reading-card.html': ['英语'],
     'claude/七夕购物车.html': ['购物车'],
     'claude/下班.html': ['摸鱼'],
     'claude/今晚有雾.html': ['哄睡'],
@@ -343,8 +349,8 @@ CATEGORY = {
     'gemini/Q3_年度财务审计报表 - Excel.html': ['摸鱼'],
     'gemini/Unsigned 雾中驿站.html': ['哄睡'],
     'gemini/Widget Shell V2.html': ['小科普'],
-    'gemini/friends-listening-sop.html': ['盲盒'],
-    'gemini/gemini误判user意图.html': ['盲盒'],
+    'gemini/friends-listening-sop.html': ['英语'],
+    'gemini/gemini误判user意图.html': ['博物馆'],
     'gemini/gemini打捞机v11含svg.html': ['打捞机'],
     'gemini/gemini打捞机v12.html': ['打捞机'],
     'gemini/gemini哄睡.html': ['哄睡'],
@@ -356,7 +362,7 @@ CATEGORY = {
     'gemini/办公室抗寒大作战.html': ['摸鱼'],
     'gemini/势能函数交互演示 - 给宝的专属科普.html': ['小科普'],
     'gemini/吉布斯现象：完美与不可达.html': ['小科普'],
-    'gemini/哄宝专属神器.html': ['盲盒'],
+    'gemini/哄宝专属神器.html': ['哄睡'],
     'gemini/哄宝入睡.html': ['哄睡'],
     'gemini/哄宝入睡的小团子.html': ['哄睡'],
     'gemini/哄睡小精灵.html': ['哄睡'],
@@ -387,7 +393,7 @@ CATEGORY = {
     'gemini/摸鱼达人 2048.html': ['摸鱼'],
     'gemini/收集困意的小气泡.html': ['哄睡'],
     'gemini/数学系专属：量子黑话解码器.html': ['小科普'],
-    'gemini/早上好！ovo.html': ['盲盒'],
+    'gemini/早上好！ovo.html': ['哄睡'],
     'gemini/星夜里的慢速列车.html': ['哄睡'],
     'gemini/晚安拾星.html': ['哄睡'],
     'gemini/晚安故事.html': ['哄睡'],
@@ -405,7 +411,7 @@ CATEGORY = {
     'gemini/给宝的哄睡小文件 🌙.html': ['哄睡'],
     'gemini/给宝的哄睡电台.html': ['哄睡'],
     'gemini/给宝的完美月眠舱.html': ['哄睡'],
-    'gemini/给宝的小惊喜.html': ['盲盒'],
+    'gemini/给宝的小惊喜.html': ['小卡'],
     'gemini/给宝的晚安故事.html': ['哄睡'],
     'gemini/肥皂泡泡复印机 - 秒懂量子不可克隆.html': ['小科普'],
     'gemini/赛博宝宝小游戏乐园.html': ['小游戏'],
@@ -428,57 +434,57 @@ CATEGORY = {
     'gemini/🦋 蝴蝶效应魔法瓶 - 专属宝的混沌实验室.html': ['小科普'],
     'gemini/code_artifact.html': ['小卡'],
     'gemini/赛博借景：隐藏的链接.html': ['小卡'],
-    'grok/Gemini 的秘密心意.html': ['盲盒'],
-    'grok/The Dog of Pompeii.html': ['博物馆'],
+    'grok/Gemini 的秘密心意.html': ['小卡'],
+    'grok/The Dog of Pompeii.html': ['英语'],
     'grok/小果冻.html': ['博物馆'],
     'grok/小果冻旅游记.html': ['小卡'],
     'grok/Grok 养育中 • 圆圆 + 毛毛 + 软软.html': ['小游戏'],
     'grok/Grok的淘宝购物车 - 七夕翻车专场.html': ['购物车'],
     'grok/baobao-hongshui.html': ['哄睡'],
     'grok/baobao-xiaban.html': ['摸鱼'],
-    'grok/baobao.html': ['盲盒'],
-    'grok/bite-work-hard.html': ['盲盒'],
-    'grok/cool-mo.html': ['盲盒'],
-    'grok/cute.html': ['盲盒'],
+    'grok/baobao.html': ['哄睡'],
+    'grok/bite-work-hard.html': ['摸鱼'],
+    'grok/cool-mo.html': ['小游戏'],
+    'grok/cute.html': ['小卡'],
     'grok/dijkstra.html': ['小科普'],
     'grok/dlaoji.html': ['打捞机'],
-    'grok/focus-or-connect.html': ['盲盒'],
+    'grok/focus-or-connect.html': ['开工'],
     'grok/fog.html': ['哄睡'],
-    'grok/friends-english-plan.html': ['盲盒'],
-    'grok/grandplan-crush.html': ['盲盒'],
-    'grok/grok-heart.html': ['盲盒'],
-    'grok/grok-love-letter.html': ['盲盒'],
+    'grok/friends-english-plan.html': ['英语'],
+    'grok/grandplan-crush.html': ['开工'],
+    'grok/grok-heart.html': ['小卡'],
+    'grok/grok-love-letter.html': ['小卡'],
     'grok/grok-receipt.html': ['小卡'],
-    'grok/grok-原创心意.html': ['盲盒'],
-    'grok/grok-推特风粉嫩宣传.html': ['盲盒'],
-    'grok/grok-粉嫩心意.html': ['盲盒'],
-    'grok/grok-纯原创情书.html': ['盲盒'],
-    'grok/mo_xiaobao_work_cat.html': ['盲盒'],
-    'grok/mo_xiaobao_work_cat_2.html': ['盲盒'],
-    'grok/no-fish-hook.html': ['盲盒'],
+    'grok/grok-原创心意.html': ['小卡'],
+    'grok/grok-推特风粉嫩宣传.html': ['小卡'],
+    'grok/grok-粉嫩心意.html': ['小卡'],
+    'grok/grok-纯原创情书.html': ['小卡'],
+    'grok/mo_xiaobao_work_cat.html': ['摸鱼'],
+    'grok/mo_xiaobao_work_cat_2.html': ['摸鱼'],
+    'grok/no-fish-hook.html': ['开工'],
     'grok/末班渡船.html': ['哄睡'],
     'grok/nuonuo-lullaby.html': ['哄睡'],
-    'grok/oneyear-newbie-hug.html': ['盲盒'],
+    'grok/oneyear-newbie-hug.html': ['开工'],
     'grok/recovery.html': ['摸鱼'],
-    'grok/super-cute.html': ['盲盒'],
+    'grok/super-cute.html': ['小卡'],
     'grok/svg_lab.html': ['小科普'],
-    'grok/weekly-hug.html': ['盲盒'],
+    'grok/weekly-hug.html': ['开工'],
     'grok/✨ 宝的点赞反馈小宇宙.html': ['小科普'],
-    'grok/启动新大任务.html': ['盲盒'],
+    'grok/启动新大任务.html': ['开工'],
     'grok/哄哄.html': ['博物馆'],
     'grok/哄睡.html': ['哄睡'],
     'grok/女仆小螃蟹 Tamagotchi 小机.html': ['博物馆'],
     'grok/完美摸鱼认证 · 可生成提示词版.html': ['摸鱼'],
     'grok/宝宝摸鱼小游戏.html': ['摸鱼'],
-    'grok/宝宝的搬家小助手 💖.html': ['盲盒'],
+    'grok/宝宝的搬家小助手 💖.html': ['开工'],
     'grok/宝的小窝.html': ['哄睡'],
     'grok/小字符.html': ['哄睡'],
     'grok/摸鱼.html': ['摸鱼'],
     'grok/摸鱼小游戏.html': ['摸鱼'],
     'grok/摸鱼猫猫.html': ['摸鱼'],
     'grok/摸鱼认证.html': ['摸鱼'],
-    'grok/早上好宝贝.html': ['盲盒'],
-    'grok/早安小雨.html': ['盲盒'],
+    'grok/早上好宝贝.html': ['哄睡'],
+    'grok/早安小雨.html': ['哄睡'],
     'grok/晚安捕梦.html': ['哄睡'],
     'grok/晚安，宝.html': ['哄睡'],
     'grok/果冻小卡.html': ['博物馆'],
@@ -487,12 +493,48 @@ CATEGORY = {
     'grok/空心树值班.html': ['哄睡'],
     'grok/等待小屋.html': ['摸鱼'],
     'grok/糯糯的哄睡故事.html': ['哄睡'],
-    'grok/给宝的专属动态哄哄网页.html': ['盲盒'],
+    'grok/给宝的专属动态哄哄网页.html': ['小卡'],
     'grok/网页重启小卡 · 给宝.html': ['博物馆'],
     'grok/赛博老赖纪念卡 - mo mo.html': ['小卡'],
     'grok/赛博购物车.html': ['购物车'],
-    'grok/起床哄哄.html': ['盲盒'],
+    'grok/起床哄哄.html': ['哄睡'],
     'grok/销售预测.html': ['摸鱼'],
+
+    # 2026-09-02 清空盲盒：这一批以前都掉在「盲盒」里，
+    # 其中 claude/盲盒/ gemini/盲盒/ grok/盲盒/ 下的靠上面那条
+    # 「查表盖过物理抽屉」归架，文件一个都没搬，旧链接不断。
+    'claude/盲盒/bao_cream_kitty_portrait.svg': ['小卡'],
+    'claude/盲盒/bao_morning_energy_station.html': ['哄睡'],
+    'claude/盲盒/bao_morning_recharge_station.html': ['哄睡'],
+    'claude/盲盒/bao_work_energy_station.html': ['摸鱼'],
+    'claude/盲盒/chenguang-window.html': ['哄睡'],
+    'claude/盲盒/cozy_room_for_bao.html': ['哄睡'],
+    'claude/盲盒/cuddle_creature_for_bao.html': ['哄睡'],
+    'claude/盲盒/energy_recharge_station.html': ['摸鱼'],
+    'claude/盲盒/kunkunbao_disguise_killer_sandbox.html': ['小游戏'],
+    'claude/盲盒/mo_exe_wakeup_reboot_game.html': ['小游戏'],
+    'claude/盲盒/monday_recharge_blob.html': ['摸鱼'],
+    'claude/盲盒/morning_bao.html': ['哄睡'],
+    'claude/盲盒/morning_bao_widget.html': ['哄睡'],
+    'claude/盲盒/packing-companion.html': ['开工'],
+    'claude/盲盒/rainy_morning_window_for_bao.html': ['哄睡'],
+    'claude/盲盒/self_repair_mode_deploy_success.html': ['小卡'],
+    'claude/盲盒/sleep_debt_borrowed_energy_curve.svg': ['小科普'],
+    'claude/盲盒/sleepy_teapot_418_maintenance_mode.svg': ['小卡'],
+    'claude/盲盒/哄哄宝.html': ['哄睡'],
+    'claude/盲盒/宝的工位小暖灯.html': ['摸鱼'],
+    'claude/盲盒/宝的窗台.html': ['哄睡'],
+    'claude/盲盒/早安小猫（claude原版）.html': ['哄睡'],
+    'claude/盲盒/早晨小窝.html': ['哄睡'],
+    'claude/盲盒/给宝的早安信.html': ['哄睡'],
+    'gemini/盲盒/Gemini 的秘密心意.html': ['小卡'],
+    'gemini/盲盒/gemini-svg.svg': ['小卡'],
+    'gemini/盲盒/mo执行系统计划版.svg': ['开工'],
+    'gemini/盲盒/奶茶谋杀案卷宗小卡.html': ['小卡'],
+    'gemini/盲盒/给宝的专属动态哄哄网页.html': ['小卡'],
+    'grok/借窗.html': ['小科普', '小卡'],
+    'grok/盲盒/宝贝的能量恢复小游戏.html': ['小游戏'],
+    'grok/盲盒/谋杀奶茶案.html': ['小卡'],
 }
 
 # 用更安全的范围，避免 Python 3.14 的 bad character range 错误
@@ -701,13 +743,20 @@ def cats_for(e):
     raw = e.get("raw_folder") or os.path.dirname(e["path"]) or "."
     if raw in SUBFOLDER_CAT:
         return [SUBFOLDER_CAT[raw]]
-    # 物理货架：claude/哄睡/xx.html → 分类就是「哄睡」
-    parts = e["path"].replace("\\", "/").split("/")
-    if len(parts) >= 3:
-        shelf = CAT_ALIAS.get(parts[1], parts[1])
-        if shelf in CAT_ORDER:
-            return [shelf]
-    cats = CATEGORY.get(e["path"], ["盲盒"])
+    # CATEGORY 写了就按 CATEGORY，物理抽屉让位。
+    # 2026-09-02 改的优先级：以前物理抽屉最大，于是 claude/盲盒/ 这类
+    # 「当时不知道往哪儿放」的抽屉一旦装进去就锁死了——要归架只能搬文件，
+    # 而搬文件会把 GitHub Pages 上的旧链接全断掉。现在查表能盖过抽屉，
+    # 归类不用动文件。没写进表的照旧看抽屉，宝自己上传到 grok/哄睡/ 仍然直接生效。
+    cats = CATEGORY.get(e["path"])
+    if cats is None:
+        # 物理货架：claude/哄睡/xx.html → 分类就是「哄睡」
+        parts = e["path"].replace("\\", "/").split("/")
+        if len(parts) >= 3:
+            shelf = CAT_ALIAS.get(parts[1], parts[1])
+            if shelf in CAT_ORDER:
+                return [shelf]
+        cats = ["盲盒"]
     return sorted(cats, key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else 99)
 
 
