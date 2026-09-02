@@ -131,7 +131,7 @@ DISPLAY_NAME = {
     # 其余撞名
     # （下面两个原标题是「超萌小页面」和「超萌小页面 ✨」，
     #   首页会去掉表情符号，去掉之后就一模一样了）
-    "copilot/cute-ios.html": "今天也要温柔对自己",
+    "copilot/摸鱼/cute-ios.html": "今天也要温柔对自己",
     "grok/盲盒/super-cute.html":   "超萌小页面-grok加料手机copilot版",
 
     # 这四个文件里没写标题，不给名字首页就只能显示文件名
@@ -221,9 +221,6 @@ CAT_ALIAS = {
 FLAT_FOLDERS = {"unsigned"}
 SKIP_LIST = {
     # 真身已挪走，根上只留跳转，旧链接不断，首页不再挂一份
-    "copilot/🐍可爱贪吃蛇.html",
-    "copilot/🚀星际矿工.html",
-    "copilot/copilot运维日记.html",  # 真身在 copilot/小游戏/
     # 摘抄人分卷：封面已经挂着 001–005，货架上不再并列六条同一句
     "grok/博物馆/摘抄人.001.html",
     "grok/博物馆/摘抄人.002.html",
@@ -239,18 +236,6 @@ CATEGORY = {
 
 
     # 2026-08-26 新登记：以前都掉在盲盒里
-    'copilot/copilot画花.html': ['小卡'],
-    'copilot/copilot运维日记.html': ['小游戏'],
-    'copilot/cute-ios.html': ['摸鱼'],
-    'copilot/friday-countdown-mo.html': ['摸鱼'],
-    'copilot/goodnight.html': ['哄睡'],
-    'copilot/goodnight_mo.html': ['哄睡'],
-    'copilot/holo-cards.html': ['小卡'],
-    'copilot/文字钓鱼游戏.html': ['小游戏'],
-    'copilot/🐍可爱贪吃蛇.html': ['摸鱼'],
-    'copilot/🐻小熊挖宝.html': ['小游戏'],
-    'copilot/🚀星际矿工.html': ['摸鱼'],
-    'copilot/🤖2048×Copilot偷偷帮忙版.html': ['小游戏'],
 }
 
 # 用更安全的范围，避免 Python 3.14 的 bad character range 错误
