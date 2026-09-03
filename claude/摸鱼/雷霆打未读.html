@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b1020">
+<title>雷霆 · 打未读</title>
+<meta name="description" content="未读、@全体成员、需求变更一排排压下来。手指拖着走，它自己开火。没有声音，你在上班。老板来了按 Esc，整屏变回同步日志。">
+<style>
+/* 字体只用系统里已经有的，不从任何网址取。中文要圆的，不要宋体。 */
+:root{
+  --font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  /* 夜空 */
+  --sky-0:#070b18;
+  --sky-1:#0e1430;
+  --ink-sky:#e8ecff;
+  --dim:#8b93bb;
+  --cyan:#6ee7ff;
+  --warn:#ff8a8a;
+  /* 老板键那一面：浅色，越无聊越好 */
+  --paper:#f9f9f7;
+  --surface:#ffffff;
+  --ink:#0b0b0b;
+  --ink-2:#52514e;
+  --ink-3:#898781;
+  --line:rgba(11,11,11,.10);
+  --ok:#006300;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overscroll-behavior:none}
+body{
+  background:var(--sky-0);
+  color:var(--ink-sky);
+  font-family:var(--font-sans);
+  -webkit-text-size-adjust:100%;
+  -webkit-tap-highlight-color:transparent;
+  overflow:hidden;
+}
+
+/* ============ 游戏这一面 ============ */
+#app{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  background:linear-gradient(180deg,var(--sky-1) 0%,var(--sky-0) 60%);
+  padding-top:var(--safe-top);
+  padding-bottom:var(--safe-bottom);
+}
+#hud{
+  flex:0 0 auto;
+  display:flex;align-items:center;gap:10px;
+  padding:8px 14px 6px;
+  font-size:13px;letter-spacing:.04em;
+}
+#hp{font-size:15px;letter-spacing:.12em;line-height:1}
+#score{
+  font-family:var(--font-mono);
+  font-size:14px;color:var(--ink-sky);
+  font-variant-numeric:tabular-nums;
+}
+#score b{font-weight:600}
+#lab{color:var(--dim);font-size:12px}
+#wrap{position:relative;flex:1 1 auto;min-height:0}
+canvas{
+  display:block;width:100%;height:100%;
+  touch-action:none;
+}
+#bkey{
+  position:absolute;right:10px;top:10px;z-index:6;
+  font:inherit;font-size:11.5px;letter-spacing:.06em;
+  color:#aeb6d8;background:#151b33;      /* 不透明：卡片从底下过时按钮还看得清 */
+  border:1px solid rgba(255,255,255,.16);border-radius:999px;
+  padding:6px 11px;cursor:pointer;
+  box-shadow:0 2px 10px rgba(7,11,24,.7);
+}
+#bkey:active{background:rgba(255,255,255,.14)}
+
+/* 遮罩：开始 / 结束。文字一开始就是实的，不靠动画显出来。 */
+#mask{
+  position:absolute;inset:0;z-index:3;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;text-align:center;padding:24px;
+  background:radial-gradient(120% 90% at 50% 40%,rgba(14,20,48,.72),rgba(7,11,24,.94));
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+}
+#mask[hidden]{display:none}
+#big{
+  font-size:44px;letter-spacing:.36em;
+  text-indent:.36em; /* 字距会把最后一个字推歪，补回来 */
+  line-height:1.1;margin:0;font-weight:500;
+  color:#fff;text-shadow:0 0 24px rgba(110,231,255,.45);
+}
+#sub{color:var(--dim);font-size:13px;letter-spacing:.1em;margin:0}
+#note{color:var(--dim);font-size:12.5px;line-height:1.9;margin:0;max-width:19em}
+#note em{font-style:normal;color:var(--cyan)}
+#go{
+  font:inherit;font-size:15px;letter-spacing:.14em;text-indent:.14em;
+  color:#0b1020;background:var(--cyan);
+  border:0;border-radius:999px;padding:12px 30px;cursor:pointer;
+  box-shadow:0 6px 24px rgba(110,231,255,.28);
+}
+#go:active{transform:translateY(1px)}
+#rank{color:var(--cyan);font-size:14px;letter-spacing:.08em;margin:0}
+#tip{
+  transition:opacity .8s;
+  position:absolute;left:0;right:0;bottom:calc(8px + var(--safe-bottom));
+  text-align:center;color:rgba(139,147,187,.55);font-size:11px;letter-spacing:.06em;
+  z-index:2;pointer-events:none;
+}
+
+/* ============ 老板键那一面 ============ */
+#sheet{
+  position:fixed;inset:0;z-index:9;
+  background:var(--paper);color:var(--ink);
+  padding:var(--safe-top) 0 var(--safe-bottom);
+  overflow:auto;-webkit-overflow-scrolling:touch;
+}
+#sheet[hidden]{display:none}
+.sh-in{max-width:760px;margin:0 auto;padding:16px 16px 40px}
+.sh-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
+.sh-top h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.01em}
+.sh-top span{color:var(--ink-3);font-size:12px}
+.sh-bar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin:12px 0;padding-bottom:10px;border-bottom:1px solid var(--line);
+}
+.chip{
+  font-size:11.5px;color:var(--ink-2);background:var(--surface);
+  border:1px solid var(--line);border-radius:6px;padding:4px 9px;
+}
+.chip.on{color:var(--ok);border-color:rgba(0,99,0,.25)}
+.sh-back{
+  margin-left:auto;font:inherit;font-size:11.5px;color:var(--ink-2);
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  padding:5px 10px;cursor:pointer;
+}
+table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12.5px}
+th{
+  text-align:left;font-weight:500;color:var(--ink-3);font-size:11px;
+  letter-spacing:.04em;padding:0 10px 7px 0;border-bottom:1px solid var(--line);
+  white-space:nowrap;
+}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
+td.n{font-variant-numeric:tabular-nums;text-align:right;padding-right:14px}
+td.s{color:var(--ok)}
+td.w{color:#734500}
+.sh-foot{margin-top:14px;color:var(--ink-3);font-size:11.5px;line-height:1.8}
+@media (max-width:400px){
+  #big{font-size:36px}
+  th:nth-child(4),td:nth-child(4){display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="hud">
+    <span id="hp" aria-label="剩余耐心">♥♥♥</span>
+    <span id="score">已读 <b>0</b></span>
+    <span id="lab" aria-hidden="true"></span>
+  </div>
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <button id="bkey" type="button">老板键 Esc</button>
+    <div id="tip">手指拖动 · 自动开火</div>
+    <div id="mask">
+      <h1 id="big">雷 霆</h1>
+      <p id="sub">未 读 清 空 作 战</p>
+      <p id="rank" hidden></p>
+      <p id="note">
+        它们从上面一排排压下来：<em>未读</em>、<em>@全体成员</em>、<em>再改一版</em>。<br>
+        手指按住屏幕拖着飞，枪自己会响。<br>
+        没有声音——你在上班。
+      </p>
+      <button id="go" type="button">开 始</button>
+    </div>
+  </div>
+</div>
+
+<section id="sheet" hidden aria-label="批处理同步控制台">
+  <div class="sh-in">
+    <div class="sh-top">
+      <h1>批处理同步 · 控制台</h1>
+      <span id="shTime">最近刷新 —</span>
+    </div>
+    <div class="sh-bar">
+      <span class="chip on">运行中</span>
+      <span class="chip">队列 3</span>
+      <span class="chip">重试 0</span>
+      <button class="sh-back" id="bkey2" type="button">返回上一视图 Esc</button>
+    </div>
+    <table>
+      <thead><tr><th>任务</th><th>开始</th><th class="n" style="text-align:right">条数</th><th>耗时</th><th>状态</th></tr></thead>
+      <tbody id="shRows"></tbody>
+    </table>
+    <p class="sh-foot">
+      视图 1 / 共 3 · 每 5 分钟自动刷新 · 增量模式<br>
+      按 Esc 返回上一视图
+    </p>
+  </div>
+</section>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------------------------------------------------------------
+   雷霆 · 打未读
+   手指拖着飞机走，自动开火，把压下来的工作消息打散。
+   Esc / 点右上角 = 老板键，整屏换成同步日志，游戏同时暂停。
+   全程不联网、不加载外部字体、没有声音。
+   --------------------------------------------------------------- */
+
+var cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+var app=document.getElementById('app'), wrap=document.getElementById('wrap');
+var mask=document.getElementById('mask'), big=document.getElementById('big');
+var sub=document.getElementById('sub'), note=document.getElementById('note');
+var goBtn=document.getElementById('go'), rankEl=document.getElementById('rank');
+var hpEl=document.getElementById('hp'), scEl=document.getElementById('score').querySelector('b');
+var labEl=document.getElementById('lab'), tipEl=document.getElementById('tip');
+var sheet=document.getElementById('sheet');
+
+var CS=getComputedStyle(document.body);
+var FS=CS.getPropertyValue('--font-sans').trim();   // 只在开场取一次
+var FM=CS.getPropertyValue('--font-mono').trim();
+
+var W=0,H=0,DPR=1;
+var mode='ready';        // ready | play | over
+var boss=false;          // 老板键是否亮着
+var t=0;                 // 存活秒数
+var score=0;
+
+/* 被打的东西：工作里那些破事。都是编的，不指任何真的公司或人。 */
+var WORDS=[
+  '未读 12','未读 47','@全体成员','会议邀请','需求变更','在吗',
+  '周报','日报','月度复盘','对齐一下','拉个会','帮忙看下',
+  '紧急','催一下','已读未回','排期','优先级 P0','明天上线',
+  '改一版','再改一版','最后一版','真的最后一版','辛苦了','收到请回复'
+];
+/* 大家伙：血厚、横着晃、掉的东西多 */
+var BOSSES=['全 员 大 会','季 度 复 盘','需 求 评 审 会'];
+
+var P,bullets,foes,foeShots,parts,drops,bigFoe;
+var spawnT,dropT,bigT,shotT,shakeT,waveT;
+
+function reset(){
+  P={x:W/2,y:H-120,tx:W/2,ty:H-120,hp:3,pow:1,inv:90,alive:true};
+  bullets=[];foes=[];foeShots=[];parts=[];drops=[];bigFoe=null;
+  spawnT=22;dropT=0;bigT=1080;shotT=0;shakeT=0;waveT=260;
+  t=0;score=0;
+  paintHUD();
+}
+
+/* ---------- 画布尺寸：按设备像素比放大，字才不糊 ---------- */
+function fit(){
+  var r=wrap.getBoundingClientRect();
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  W=Math.max(1,Math.round(r.width)); H=Math.max(1,Math.round(r.height));
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  if(P){ P.x=clamp(P.x,20,W-20); P.tx=clamp(P.tx,20,W-20);
+         P.y=clamp(P.y,60,H-30); P.ty=clamp(P.ty,60,H-30); }
+}
+function clamp(v,a,b){return v<a?a:(v>b?b:v)}
+function rnd(a,b){return a+Math.random()*(b-a)}
+function pick(a){return a[(Math.random()*a.length)|0]}
+
+/* ---------- 背景：极淡的日志行往下流，既是星空也是没干完的活 ---------- */
+var bg=[];
+function seedBG(){
+  bg=[];
+  for(var i=0;i<16;i++){
+    bg.push({x:rnd(0,1),y:rnd(0,1),v:rnd(6,26),
+      s:pick(['SYNC-2418 ok','retry 0','batch 1/3','queue 12','200 OK','flush','idle','commit','ack','offset 8102'])});
+  }
+}
+function drawBG(dt){
+  ctx.save();
+  ctx.font='11px '+FM;
+  for(var i=0;i<bg.length;i++){
+    var b=bg[i];
+    b.y+=b.v*dt/H;
+    if(b.y>1.1){b.y=-0.1;b.x=Math.random()}
+    ctx.fillStyle='rgba(140,155,220,'+(0.028+(b.v/26)*0.032).toFixed(3)+')';
+    ctx.fillText(b.s,b.x*W,b.y*H);
+  }
+  ctx.restore();
+}
+
+/* ---------- 玩家那架小飞机 ---------- */
+function drawShip(){
+  var blink=(P.inv>0 && ((P.inv/5)|0)%2===0);
+  ctx.save();
+  ctx.translate(P.x,P.y);
+  ctx.scale(1.22,1.22);
+  ctx.globalAlpha=blink?0.35:1;
+
+  // 尾焰
+  var f=6+Math.random()*7;
+  var g=ctx.createLinearGradient(0,8,0,8+f);
+  g.addColorStop(0,'rgba(110,231,255,.85)');
+  g.addColorStop(1,'rgba(110,231,255,0)');
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.moveTo(-4,8);ctx.lineTo(4,8);ctx.lineTo(0,8+f);ctx.closePath();ctx.fill();
+
+  // 机身
+  ctx.fillStyle='#eef3ff';
+  ctx.beginPath();
+  ctx.moveTo(0,-15); ctx.lineTo(7,4); ctx.lineTo(3,7);
+  ctx.lineTo(-3,7); ctx.lineTo(-7,4); ctx.closePath(); ctx.fill();
+  // 机翼
+  ctx.fillStyle='#9fb4e8';
+  ctx.beginPath();ctx.moveTo(-7,1);ctx.lineTo(-15,8);ctx.lineTo(-5,7);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(7,1);ctx.lineTo(15,8);ctx.lineTo(5,7);ctx.closePath();ctx.fill();
+  // 座舱
+  ctx.fillStyle='#6ee7ff';
+  ctx.beginPath();ctx.ellipse(0,-4,2.4,4.4,0,0,6.284);ctx.fill();
+  ctx.restore();
+}
+
+/* ---------- 敌人：一张消息卡片 ---------- */
+function spawnFoe(){
+  var s=pick(WORDS);
+  ctx.font='13px '+FS;
+  var w=Math.min(ctx.measureText(s).width+22,W-24);
+  var hard=Math.random()<Math.min(0.10+t/260,0.34);
+  foes.push({
+    x:rnd(w/2+8,W-w/2-8), y:-24, w:w, h:26, s:s,
+    vy:rnd(72,104)+t*0.5, vx:rnd(-16,16),
+    hp:hard?7:3, max:hard?7:3, hard:hard, hit:0,
+    fire:hard?rnd(70,150):-1
+  });
+}
+function spawnWave(){
+  var n=4+((Math.random()*3)|0), i, made=[];
+  for(i=0;i<n;i++){
+    spawnFoe();
+    made.push(foes[foes.length-1]);
+  }
+  // 排成一行、匀开、同速下落
+  var v=rnd(78,96)+t*0.5;
+  for(i=0;i<made.length;i++){
+    var f=made[i];
+    f.x=(W/(n+1))*(i+1);
+    f.x=clamp(f.x,f.w/2+6,W-f.w/2-6);
+    f.y=-26-i%2*18;
+    f.vy=v; f.vx=0;
+  }
+}
+function drawFoe(f){
+  var flash=f.hit>0;
+  ctx.save();
+  ctx.translate(f.x,f.y);
+  // 卡片
+  ctx.fillStyle=flash?'rgba(255,255,255,.92)':(f.hard?'rgba(126,96,172,.46)':'rgba(70,88,152,.44)');
+  ctx.strokeStyle=flash?'#fff':(f.hard?'rgba(206,175,255,.85)':'rgba(163,183,240,.7)');
+  ctx.lineWidth=1;
+  rr(-f.w/2,-f.h/2,f.w,f.h,7); ctx.fill(); ctx.stroke();
+  // 左边那道未读小竖条
+  ctx.fillStyle=f.hard?'#c6a4ff':'#7fa0ff';
+  rr(-f.w/2+4,-f.h/2+6,2.5,f.h-12,1.5); ctx.fill();
+  // 字
+  ctx.fillStyle=flash?'#0b1020':'#dfe6ff';
+  ctx.font='13px '+FS;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(f.s,2,1);
+  // 血条（只有硬的才画）
+  if(f.hp<f.max){
+    ctx.fillStyle='rgba(255,255,255,.2)';ctx.fillRect(-f.w/2,f.h/2+3,f.w,2);
+    ctx.fillStyle='#c6a4ff';ctx.fillRect(-f.w/2,f.h/2+3,f.w*f.hp/f.max,2);
+  }
+  ctx.restore();
+}
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+}
+
+/* ---------- 大家伙 ---------- */
+function spawnBig(){
+  bigFoe={x:W/2,y:-40,w:Math.min(W-60,260),h:46,s:pick(BOSSES),
+    hp:170+((t/30)|0)*45, max:0, vx:52, hit:0, fire:60, phase:0};
+  bigFoe.max=bigFoe.hp;
+}
+function drawBig(b){
+  ctx.save();ctx.translate(b.x,b.y);
+  ctx.fillStyle=b.hit>0?'rgba(255,255,255,.9)':'rgba(150,60,90,.34)';
+  ctx.strokeStyle=b.hit>0?'#fff':'rgba(255,140,170,.8)';ctx.lineWidth=1.4;
+  rr(-b.w/2,-b.h/2,b.w,b.h,10);ctx.fill();ctx.stroke();
+  ctx.fillStyle=b.hit>0?'#0b1020':'#ffe6ee';
+  ctx.font='600 15px '+FS;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(b.s,0,-3);
+  // 血条
+  ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(-b.w/2+8,b.h/2-9,b.w-16,3);
+  ctx.fillStyle='#ff8aa8';ctx.fillRect(-b.w/2+8,b.h/2-9,(b.w-16)*b.hp/b.max,3);
+  ctx.restore();
+}
+
+/* ---------- 爆开的碎片 ---------- */
+function burst(x,y,n,col){
+  for(var i=0;i<n;i++){
+    var a=Math.random()*6.284,sp=rnd(30,150);
+    parts.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:rnd(.3,.7),max:.7,c:col||'#9fc0ff'});
+  }
+}
+/* ---------- 掉落 ---------- */
+function spawnDrop(x,y){
+  var kind=Math.random()<0.34?'fish':'coffee';
+  drops.push({x:x,y:y,vy:52,kind:kind,sp:0});
+}
+function drawDrop(d){
+  ctx.save();ctx.translate(d.x,d.y);
+  ctx.rotate(Math.sin(d.sp*3)*0.25);
+  var glow=ctx.createRadialGradient(0,0,1,0,0,17);
+  glow.addColorStop(0, d.kind==='fish'?'rgba(143,227,192,.5)':'rgba(255,216,168,.5)');
+  glow.addColorStop(1, d.kind==='fish'?'rgba(143,227,192,0)':'rgba(255,216,168,0)');
+  ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(0,0,17,0,6.284); ctx.fill();
+  ctx.font='18px '+FS;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(d.kind==='fish'?'🐟':'☕',0,0);
+  ctx.restore();
+}
+
+/* ---------- HUD ---------- */
+function paintHUD(){
+  var s='';
+  for(var i=0;i<3;i++) s+= i<P.hp?'♥':'♡';
+  hpEl.textContent=s;
+  hpEl.style.color=P.hp<=1?'var(--warn)':'#ff9bb5';
+  scEl.textContent=score;
+  labEl.textContent = P.pow>=3?'火力 满':(P.pow===2?'火力 ＋':'');
+}
+
+/* ---------- 一帧 ---------- */
+var last=0, tipHide=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  var dt=Math.min((ts-last)/1000,0.05); last=ts;
+  if(boss||document.hidden){ return; }   // 老板键亮着就整个停住
+  step(dt); draw(dt);
+}
+
+function step(dt){
+  var i,j,f,b,d;
+
+  if(mode==='play'){
+    t+=dt;
+
+    // 飞机追手指，带一点滞后，手感软一些
+    P.x+=(P.tx-P.x)*Math.min(1,dt*14);
+    P.y+=(P.ty-P.y)*Math.min(1,dt*14);
+    P.x=clamp(P.x,16,W-16); P.y=clamp(P.y,46,H-24);
+    if(P.inv>0)P.inv--;
+
+    // 开火：火力越高越密
+    shotT-=dt;
+    if(shotT<=0){
+      shotT = P.pow>=3?0.068:(P.pow===2?0.085:0.10);
+      if(P.pow===1) bullets.push({x:P.x,y:P.y-16,vx:0,vy:-560});
+      else if(P.pow===2){
+        bullets.push({x:P.x-6,y:P.y-13,vx:-30,vy:-560});
+        bullets.push({x:P.x+6,y:P.y-13,vx:30,vy:-560});
+      }else{
+        bullets.push({x:P.x,y:P.y-17,vx:0,vy:-620});
+        bullets.push({x:P.x-8,y:P.y-11,vx:-95,vy:-540});
+        bullets.push({x:P.x+8,y:P.y-11,vx:95,vy:-540});
+      }
+    }
+
+    // 放敌人
+    spawnT-=dt*60;
+    if(spawnT<=0){
+      var cap=bigFoe?5:13;                    // 大家伙在场时给它腾地方
+      if(foes.length<cap) spawnFoe();
+      if(t>45&&!bigFoe&&foes.length<cap&&Math.random()<0.32) spawnFoe();
+      spawnT=Math.max(16,30-t*0.4);
+    }
+
+    // 每隔一阵来一整排，横着压下来
+    waveT-=dt*60;
+    if(waveT<=0&&!bigFoe&&foes.length<8){ spawnWave(); waveT=rnd(240,340); }
+
+    // 放大家伙
+    bigT-=dt*60;
+    if(bigT<=0&&!bigFoe){ spawnBig(); bigT=2100; }
+  }
+
+  // 子弹
+  for(i=bullets.length-1;i>=0;i--){
+    b=bullets[i]; b.x+=b.vx*dt; b.y+=b.vy*dt;
+    if(b.y<-20||b.x<-20||b.x>W+20) bullets.splice(i,1);
+  }
+
+  // 敌人走 & 挨打
+  for(i=foes.length-1;i>=0;i--){
+    f=foes[i];
+    f.y+=f.vy*dt; f.x+=f.vx*dt;
+    if(f.x<f.w/2+6||f.x>W-f.w/2-6){f.vx*=-1;f.x=clamp(f.x,f.w/2+6,W-f.w/2-6)}
+    if(f.hit>0)f.hit--;
+    if(f.fire>0){ f.fire-=dt*60;
+      if(f.fire<=0&&mode==='play'&&f.y>0){
+        foeShots.push({x:f.x,y:f.y+f.h/2,vx:0,vy:150+t*1.2});
+        f.fire=rnd(90,190);
+      }
+    }
+    if(f.y-f.h/2>H+10){ foes.splice(i,1); continue; }
+
+    for(j=bullets.length-1;j>=0;j--){
+      b=bullets[j];
+      if(Math.abs(b.x-f.x)<f.w/2+2 && Math.abs(b.y-f.y)<f.h/2+3){
+        bullets.splice(j,1); f.hp--; f.hit=3;
+        burst(b.x,b.y,3,'#bcd2ff');
+        if(f.hp<=0){
+          burst(f.x,f.y,f.hard?16:10,f.hard?'#c6a4ff':'#9fc0ff');
+          score+=f.hard?30:10; paintHUD();
+          if(Math.random()<(f.hard?0.55:0.10)) spawnDrop(f.x,f.y);
+          foes.splice(i,1);
+        }
+        break;
+      }
+    }
+  }
+
+  // 大家伙
+  if(bigFoe){
+    var B=bigFoe;
+    if(B.y<70) B.y+=42*dt;
+    else{
+      B.x+=B.vx*dt;
+      if(B.x<B.w/2+10||B.x>W-B.w/2-10){B.vx*=-1;B.x=clamp(B.x,B.w/2+10,W-B.w/2-10)}
+      B.fire-=dt*60;
+      if(B.fire<=0&&mode==='play'){
+        // 一次撒一排，中间留一条缝，绕得过去
+        var gap=(Math.random()*5)|0;
+        for(var k=0;k<6;k++){
+          if(k===gap)continue;
+          foeShots.push({x:B.x-B.w/2+ (B.w/5)*k, y:B.y+B.h/2, vx:rnd(-14,14), vy:135+t*0.9});
+        }
+        B.fire=rnd(60,95);
+      }
+    }
+    if(B.hit>0)B.hit--;
+    for(j=bullets.length-1;j>=0;j--){
+      b=bullets[j];
+      if(Math.abs(b.x-B.x)<B.w/2 && Math.abs(b.y-B.y)<B.h/2+3){
+        bullets.splice(j,1); B.hp--; B.hit=2; burst(b.x,b.y,2,'#ffc3d4');
+        if(B.hp<=0){
+          burst(B.x,B.y,46,'#ff9bb5'); shakeT=0.45;
+          score+=300; paintHUD();
+          spawnDrop(B.x-24,B.y); spawnDrop(B.x+24,B.y);
+          bigFoe=null; break;
+        }
+      }
+    }
+    if(bigFoe&&bigFoe.y>H+60) bigFoe=null;
+  }
+
+  // 敌弹
+  for(i=foeShots.length-1;i>=0;i--){
+    b=foeShots[i]; b.x+=(b.vx||0)*dt; b.y+=b.vy*dt;
+    if(b.y>H+16){foeShots.splice(i,1);continue}
+    if(mode==='play'&&P.inv<=0&&Math.abs(b.x-P.x)<7&&Math.abs(b.y-P.y)<9){
+      foeShots.splice(i,1); hurt();
+    }
+  }
+
+  // 撞机
+  if(mode==='play'&&P.inv<=0){
+    for(i=0;i<foes.length;i++){
+      f=foes[i];
+      if(Math.abs(f.x-P.x)<f.w/2+5&&Math.abs(f.y-P.y)<f.h/2+6){
+        burst(f.x,f.y,10,'#9fc0ff'); foes.splice(i,1); hurt(); break;
+      }
+    }
+  }
+
+  // 掉落
+  for(i=drops.length-1;i>=0;i--){
+    d=drops[i]; d.y+=d.vy*dt; d.sp+=dt;
+    if(d.y>H+20){drops.splice(i,1);continue}
+    if(mode==='play'&&Math.abs(d.x-P.x)<20&&Math.abs(d.y-P.y)<20){
+      if(d.kind==='coffee'){ P.pow=Math.min(3,P.pow+1); score+=20; }
+      else { P.hp=Math.min(3,P.hp+1); score+=20; }
+      burst(d.x,d.y,8,d.kind==='fish'?'#8fe3c0':'#ffd8a8');
+      drops.splice(i,1); paintHUD();
+    }
+  }
+
+  // 碎片
+  for(i=parts.length-1;i>=0;i--){
+    var p=parts[i];
+    p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=0.94;p.vy=p.vy*0.94+60*dt;
+    p.life-=dt; if(p.life<=0)parts.splice(i,1);
+  }
+  if(shakeT>0)shakeT-=dt;
+}
+
+function hurt(){
+  P.hp--; P.inv=100; shakeT=0.3;
+  P.pow=Math.max(1,P.pow-1);
+  burst(P.x,P.y,18,'#ff9bb5');
+  paintHUD();
+  if(P.hp<=0) over();
+}
+
+function draw(dt){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if(shakeT>0){ var m=shakeT*10; ctx.translate(rnd(-m,m),rnd(-m,m)); }
+
+  drawBG(dt);
+
+  // 敌弹
+  for(var i=0;i<foeShots.length;i++){
+    var s=foeShots[i];
+    ctx.fillStyle='rgba(255,138,138,.22)';
+    ctx.beginPath();ctx.arc(s.x,s.y,7.5,0,6.284);ctx.fill();
+    ctx.fillStyle='#ff8a8a';
+    ctx.beginPath();ctx.arc(s.x,s.y,3.9,0,6.284);ctx.fill();
+  }
+  // 我的子弹
+  ctx.strokeStyle='#6ee7ff';ctx.lineWidth=2.6;ctx.lineCap='round';
+  ctx.beginPath();
+  for(i=0;i<bullets.length;i++){
+    var b=bullets[i]; ctx.moveTo(b.x,b.y); ctx.lineTo(b.x-b.vx*0.014,b.y+13);
+  }
+  ctx.stroke();
+
+  for(i=0;i<foes.length;i++) drawFoe(foes[i]);
+  if(bigFoe) drawBig(bigFoe);
+  for(i=0;i<drops.length;i++) drawDrop(drops[i]);
+
+  // 碎片
+  for(i=0;i<parts.length;i++){
+    var p=parts[i];
+    ctx.globalAlpha=Math.max(0,p.life/p.max);
+    ctx.fillStyle=p.c;
+    ctx.fillRect(p.x-1.6,p.y-1.6,3.2,3.2);
+  }
+  ctx.globalAlpha=1;
+
+  if(mode==='play'||mode==='over') if(P.alive) drawShip();
+  ctx.restore();
+}
+
+/* ---------- 开局 / 收摊 ---------- */
+var RANKS=[
+  [0,   '已读不回见习'],
+  [400, '通知栏清道夫'],
+  [1200,'会议邀请粉碎机'],
+  [2600,'需求变更之敌'],
+  [4500,'红点终结者'],
+  [7000,'雷 霆 本 霆']
+];
+function start(){
+  reset(); mode='play'; P.alive=true;
+  mask.hidden=true; tipEl.style.display=''; tipEl.style.opacity='1';
+  clearTimeout(tipHide); tipHide=setTimeout(function(){tipEl.style.opacity='0'},8000);
+  document.title='雷霆 · 打未读';
+}
+function over(){
+  mode='over'; P.alive=false;
+  bullets.length=0;      // 人没了，火力就断了
+  var r=RANKS[0][1];
+  for(var i=0;i<RANKS.length;i++) if(score>=RANKS[i][0]) r=RANKS[i][1];
+  big.textContent='破 防';
+  sub.textContent='已读 '+score+' 条 · 撑了 '+t.toFixed(0)+' 秒';
+  rankEl.hidden=false; rankEl.textContent='称号：'+r;
+  note.innerHTML='它们明天还会再来。<br>但今天这一批，是你打下来的。';
+  labEl.textContent='';
+  goBtn.textContent='再 来 一 局';
+  mask.hidden=false; tipEl.style.display='none';
+}
+
+/* ---------- 控制：手指优先，键盘也认 ---------- */
+function aim(cx,cy){
+  var r=cv.getBoundingClientRect();
+  P.tx=cx-r.left;
+  P.ty=cy-r.top-42;      // 飞机浮在手指上面一点，别被手指盖住
+}
+var dragging=false;
+cv.addEventListener('touchstart',function(e){
+  if(mode!=='play')return;
+  dragging=true; aim(e.touches[0].clientX,e.touches[0].clientY);
+  e.preventDefault();
+},{passive:false});
+cv.addEventListener('touchmove',function(e){
+  if(!dragging)return; aim(e.touches[0].clientX,e.touches[0].clientY); e.preventDefault();
+},{passive:false});
+cv.addEventListener('touchend',function(e){dragging=false;e.preventDefault()},{passive:false});
+cv.addEventListener('touchcancel',function(){dragging=false});
+
+cv.addEventListener('mousedown',function(e){if(mode!=='play')return;dragging=true;aim(e.clientX,e.clientY)});
+window.addEventListener('mousemove',function(e){if(dragging)aim(e.clientX,e.clientY)});
+window.addEventListener('mouseup',function(){dragging=false});
+
+var keys={};
+window.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){e.preventDefault();toggleBoss();return}
+  if(boss)return;
+  if(e.key===' '||e.key==='Enter'){
+    if(mode!=='play'){e.preventDefault();start()}
+    return;
+  }
+  if(/^Arrow/.test(e.key)){keys[e.key]=1;e.preventDefault()}
+});
+window.addEventListener('keyup',function(e){if(/^Arrow/.test(e.key))keys[e.key]=0});
+setInterval(function(){
+  if(mode!=='play'||boss||dragging)return;
+  var sp=9;
+  if(keys.ArrowLeft) P.tx-=sp;
+  if(keys.ArrowRight)P.tx+=sp;
+  if(keys.ArrowUp)   P.ty-=sp;
+  if(keys.ArrowDown) P.ty+=sp;
+  P.tx=clamp(P.tx,16,W-16); P.ty=clamp(P.ty,46,H-24);
+},16);
+
+goBtn.addEventListener('click',start);
+
+/* ---------- 老板键 ---------- */
+function pad(n){return n<10?'0'+n:''+n}
+function fillSheet(){
+  var rows=document.getElementById('shRows'), out='';
+  var now=new Date(), base=now.getHours()*60+now.getMinutes();
+  for(var i=0;i<14;i++){
+    var m=((base-i*7)%1440+1440)%1440, hh=(m/60)|0, mm=m%60;
+    var n=(1200+((i*2711)%9000));
+    var ms=(180+((i*617)%2400));
+    var warn=(i===4||i===11);
+    out+='<tr><td>SYNC-'+(2431-i)+'</td><td>'+pad(hh)+':'+pad(mm)+'</td>'+
+         '<td class="n">'+n.toLocaleString('en-US')+'</td>'+
+         '<td class="n">'+ms+' ms</td>'+
+         '<td class="'+(warn?'w':'s')+'">'+(warn?'重试 1 次':'完成')+'</td></tr>';
+  }
+  rows.innerHTML=out;
+  document.getElementById('shTime').textContent='最近刷新 '+pad(now.getHours())+':'+pad(now.getMinutes());
+}
+function toggleBoss(){
+  boss=!boss;
+  sheet.hidden=!boss;
+  app.style.display=boss?'none':'flex';
+  document.title=boss?'批处理同步 · 控制台':'雷霆 · 打未读';
+  document.querySelector('meta[name=theme-color]').setAttribute('content',boss?'#f9f9f7':'#0b1020');
+  if(boss) fillSheet();
+  else{
+    last=performance.now();          // 回来别把暂停那段算成一帧
+    if(mode==='play') P.inv=Math.max(P.inv,70);   // 给一秒多的无敌，回来不至于当场挨打
+    fit();
+  }
+}
+document.getElementById('bkey').addEventListener('click',toggleBoss);
+document.getElementById('bkey2').addEventListener('click',toggleBoss);
+
+/* ---------- 起飞 ---------- */
+window.addEventListener('resize',fit);
+if(window.visualViewport) window.visualViewport.addEventListener('resize',fit);
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) last=performance.now(); });
+document.addEventListener('gesturestart',function(e){e.preventDefault()});
+
+fit(); seedBG(); reset(); mode='ready';
+requestAnimationFrame(function(ts){last=ts;requestAnimationFrame(loop)});
+})();
+</script>
+</body>
+</html>
