@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的高颜值便签</title>
+    
+    <!-- 加载 Tailwind CSS 框架用于快速布局和样式 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 加载 Google Fonts: Inter 字体，提供类似苹果的清爽排版体验 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- 加载 Phosphor Icons 用于精美的图标 -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            /* 禁用移动端点击高亮 */
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        /* 隐藏原生滚动条但保持可滚动 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        /* 自定义圆形 Checkbox 样式 (iOS 风格) */
+        .ios-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border: 2px solid #d1d5db;
+            border-radius: 50%;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            background-color: white;
+            flex-shrink: 0;
+        }
+
+        .ios-checkbox:checked {
+            background-color: #007AFF; /* 苹果经典的蓝色 */
+            border-color: #007AFF;
+        }
+
+        .ios-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            width: 6px;
+            height: 12px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            margin-top: -2px; /* 微调勾勾的位置 */
+            animation: checkmark-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* 动画关键帧 */
+        @keyframes checkmark-in {
+            0% { width: 0; height: 0; opacity: 0; }
+            100% { width: 6px; height: 12px; opacity: 1; }
+        }
+
+        @keyframes slide-down {
+            from { opacity: 0; transform: translateY(-15px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes fade-out-up {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
+        .task-item {
+            animation: slide-down 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .task-item.removing {
+            animation: fade-out-up 0.2s ease-out forwards;
+        }
+
+        /* 文本划线动画 */
+        .text-strike {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .text-strike::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 0;
+            height: 1.5px;
+            background-color: #9CA3AF; /* gray-400 */
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .task-completed .text-strike::after {
+            width: 100%;
+        }
+        
+        .task-completed {
+            color: #9CA3AF;
+            transition: color 0.3s ease;
+        }
+
+        /* 毛玻璃效果 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+    </style>
+</head>
+
+<!-- 使用柔和的渐变色背景，营造轻松愉悦的氛围 -->
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center p-4 sm:p-8">
+
+    <!-- 主容器卡片 -->
+    <div class="w-full max-w-md h-[85vh] max-h-[800px] glass-panel rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col relative">
+        
+        <!-- 头部区域 -->
+        <header class="px-8 pt-10 pb-6 shrink-0 relative z-10">
+            <div class="flex justify-between items-end mb-2">
+                <div>
+                    <h2 id="greeting" class="text-gray-500 text-sm font-medium mb-1">早安，</h2>
+                    <h1 class="text-3xl font-bold text-gray-900 tracking-tight">今日任务</h1>
+                </div>
+                <div class="text-right">
+                    <div id="current-date" class="text-lg font-semibold text-gray-800"></div>
+                    <div id="current-day" class="text-sm text-gray-500 font-medium"></div>
+                </div>
+            </div>
+            
+            <!-- 进度条区域 -->
+            <div class="mt-6">
+                <div class="flex justify-between text-xs text-gray-500 font-medium mb-2">
+                    <span>完成进度</span>
+                    <span id="progress-text">0/0</span>
+                </div>
+                <div class="w-full bg-gray-200/60 rounded-full h-1.5">
+                    <div id="progress-bar" class="bg-[#007AFF] h-1.5 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 任务列表区域 (可滚动) -->
+        <main class="flex-1 overflow-y-auto px-6 pb-24 no-scrollbar relative z-0" id="task-container">
+            <ul id="task-list" class="space-y-2">
+                <!-- 任务项会通过 JavaScript 动态插入到这里 -->
+            </ul>
+
+            <!-- 空状态提示 (当没有任务时显示) -->
+            <div id="empty-state" class="hidden flex-col items-center justify-center h-full text-center pb-10 opacity-60">
+                <i class="ph ph-coffee text-5xl text-gray-400 mb-4"></i>
+                <p class="text-gray-500 font-medium text-sm">今天的小任务都搞定啦！<br>喝杯咖啡休息一下吧 ☕️</p>
+            </div>
+        </main>
+
+        <!-- 底部输入区域 (固定在底部) -->
+        <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white/90 to-transparent pt-12 z-20">
+            <form id="add-task-form" class="relative flex items-center">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i class="ph ph-plus text-gray-400 text-lg"></i>
+                </div>
+                <input 
+                    type="text" 
+                    id="task-input" 
+                    placeholder="添加新的小任务..." 
+                    class="w-full bg-gray-100/80 border-0 rounded-2xl py-4 pl-11 pr-12 text-gray-800 font-medium placeholder-gray-400 focus:ring-2 focus:ring-[#007AFF]/20 focus:bg-white transition-all shadow-sm outline-none"
+                    autocomplete="off"
+                >
+                <button 
+                    type="submit" 
+                    class="absolute inset-y-1.5 right-1.5 bg-[#007AFF] hover:bg-blue-600 active:scale-95 text-white rounded-xl w-11 flex items-center justify-center transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    id="add-btn"
+                    disabled
+                >
+                    <i class="ph ph-arrow-up text-lg font-bold"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- 状态管理 ---
+        // 从 localStorage 获取已保存的任务，如果没有则初始化为空数组
+        let tasks = JSON.parse(localStorage.getItem('todo_tasks')) || [];
+
+        // DOM 元素引用
+        const taskList = document.getElementById('task-list');
+        const taskInput = document.getElementById('task-input');
+        const addTaskForm = document.getElementById('add-task-form');
+        const addBtn = document.getElementById('add-btn');
+        const emptyState = document.getElementById('empty-state');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+
+        // --- 初始化日期和问候语 ---
+        function initDateAndGreeting() {
+            const now = new Date();
+            const hours = now.getHours();
+            let greeting = '你好，';
+            
+            if (hours >= 5 && hours < 12) greeting = '早安，';
+            else if (hours >= 12 && hours < 18) greeting = '午安，';
+            else if (hours >= 18 && hours < 22) greeting = '晚安，';
+            else greeting = '夜深了，';
+
+            document.getElementById('greeting').textContent = greeting;
+
+            const optionsDate = { month: 'long', day: 'numeric' };
+            const optionsDay = { weekday: 'long' };
+            
+            document.getElementById('current-date').textContent = now.toLocaleDateString('zh-CN', optionsDate);
+            document.getElementById('current-day').textContent = now.toLocaleDateString('zh-CN', optionsDay);
+        }
+
+        // --- 数据持久化 ---
+        function saveTasks() {
+            localStorage.setItem('todo_tasks', JSON.stringify(tasks));
+            updateProgress();
+        }
+
+        // --- UI 更新与渲染 ---
+        function updateProgress() {
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            
+            // 更新文字
+            progressText.textContent = `${completed}/${total}`;
+            
+            // 更新进度条宽度
+            const percentage = total === 0 ? 0 : (completed / total) * 100;
+            progressBar.style.width = `${percentage}%`;
+
+            // 处理空状态显示
+            if (total === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+        }
+
+        function createTaskElement(task) {
+            const li = document.createElement('li');
+            li.className = `task-item bg-white/60 hover:bg-white/90 border border-white/50 rounded-2xl p-4 flex items-center justify-between group transition-colors shadow-sm ${task.completed ? 'task-completed' : ''}`;
+            li.id = `task-${task.id}`;
+
+            // 左侧：复选框和文字
+            const leftDiv = document.createElement('div');
+            leftDiv.className = 'flex items-center gap-3 overflow-hidden flex-1';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'ios-checkbox cursor-pointer';
+            checkbox.checked = task.completed;
+            
+            const textSpan = document.createElement('span');
+            textSpan.className = 'text-strike text-[15px] font-medium truncate cursor-pointer select-none';
+            textSpan.textContent = task.text;
+
+            // 点击文字也可以切换状态
+            const toggleFn = () => {
+                task.completed = !task.completed;
+                checkbox.checked = task.completed;
+                if (task.completed) {
+                    li.classList.add('task-completed');
+                } else {
+                    li.classList.remove('task-completed');
+                }
+                saveTasks();
+            };
+
+            checkbox.addEventListener('change', toggleFn);
+            textSpan.addEventListener('click', toggleFn);
+
+            leftDiv.appendChild(checkbox);
+            leftDiv.appendChild(textSpan);
+
+            // 右侧：删除按钮
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2 -mr-2 rounded-lg';
+            deleteBtn.innerHTML = '<i class="ph ph-trash text-lg"></i>';
+            
+            deleteBtn.addEventListener('click', () => {
+                // 添加移除动画
+                li.classList.add('removing');
+                // 动画结束后再真正从DOM和数据中删除
+                setTimeout(() => {
+                    tasks = tasks.filter(t => t.id !== task.id);
+                    saveTasks();
+                    li.remove();
+                    updateProgress();
+                }, 200);
+            });
+
+            li.appendChild(leftDiv);
+            li.appendChild(deleteBtn);
+
+            return li;
+        }
+
+        // 初始化渲染所有任务
+        function renderAllTasks() {
+            taskList.innerHTML = '';
+            tasks.forEach(task => {
+                taskList.appendChild(createTaskElement(task));
+            });
+            updateProgress();
+        }
+
+        // --- 事件监听 ---
+        
+        // 监听输入框变化，控制添加按钮的状态
+        taskInput.addEventListener('input', (e) => {
+            if (e.target.value.trim().length > 0) {
+                addBtn.disabled = false;
+                addBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                addBtn.disabled = true;
+                addBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        });
+
+        // 提交表单添加新任务
+        addTaskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = taskInput.value.trim();
+            if (!text) return;
+
+            const newTask = {
+                id: Date.now().toString(), // 使用时间戳作为简单唯一ID
+                text: text,
+                completed: false
+            };
+
+            tasks.push(newTask);
+            saveTasks();
+
+            // 将新任务追加到列表 DOM 中，带动画
+            const taskEl = createTaskElement(newTask);
+            taskList.appendChild(taskEl);
+
+            // 滚动到最底部
+            const taskContainer = document.getElementById('task-container');
+            setTimeout(() => {
+                taskContainer.scrollTo({
+                    top: taskContainer.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 50);
+
+            // 清空输入框
+            taskInput.value = '';
+            addBtn.disabled = true;
+            addBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        });
+
+        // --- 页面加载执行 ---
+        window.onload = () => {
+            initDateAndGreeting();
+            renderAllTasks();
+        };
+
+    </script>
+</body>
+</html>
