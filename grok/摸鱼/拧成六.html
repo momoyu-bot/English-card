@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>拧成六</title>
+  <meta name="description" content="划过会转，往下滚会聚成指针，再聚成结。" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #05060a; color: #e8e8ee; font-family: ui-sans-serif, system-ui, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    .hint {
+      position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+      z-index: 3; pointer-events: none;
+      font-size: 13px; letter-spacing: 0.08em;
+      color: rgba(220,225,235,.55);
+      text-align: center;
+    }
+    .hint em { font-style: normal; color: rgba(220,225,235,.82); }
+    main { position: relative; z-index: 1; }
+    .pad { height: 100svh; }
+    .cue {
+      min-height: 90svh;
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 0 24px 18vh;
+    }
+    .cue p {
+      max-width: 22em; text-align: center;
+      font-size: 14px; line-height: 1.7;
+      color: rgba(220,225,235,.42);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <p class="hint">拖着转　·　往下滚会 <em id="mode">拧成六</em></p>
+  <main>
+    <div class="pad" data-shape="six"></div>
+    <section class="cue" data-shape="cursor"><p>聚成指针。</p></section>
+    <section class="cue" data-shape="knot"><p>再聚成结。</p></section>
+    <section class="cue" data-shape="six"><p>散回去，还是六。</p></section>
+  </main>
+  <script>
+  (() => {
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d", { alpha: false });
+    const modeEl = document.getElementById("mode");
+    const N = matchMedia("(pointer: coarse)").matches ? 4200 : 7800;
+    const labels = { six: "拧成六", cursor: "聚成指针", knot: "聚成结" };
+
+    const mouse = { x: 0, y: 0, sx: 0, sy: 0, down: false, lx: 0, ly: 0 };
+    const cam = { rot: 0, vel: 0.0012, target: 0.0012 };
+    let W = 0, H = 0, dpr = 1, time = 0;
+
+    function resize() {
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      W = innerWidth; H = innerHeight;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    addEventListener("resize", resize);
+
+    function hash(i) {
+      let x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    function samplePath(d, n, w, h) {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", d);
+      svg.appendChild(p);
+      const len = p.getTotalLength();
+      const pts = [];
+      for (let i = 0; i < n; i++) {
+        const t = (i + 0.5) / n;
+        const pt = p.getPointAtLength(t * len);
+        pts.push([(pt.x / w) * 2 - 1, (pt.y / h) * 2 - 1]);
+      }
+      return pts;
+    }
+
+    const cursorD = "M9.60978 17.0223C9.24308 17.739 8.76808 18.189 8.18478 18.3723C7.60148 18.564 7.03478 18.4931 6.48478 18.1598C5.93478 17.8348 5.53061 17.314 5.27228 16.5973L0.672282 3.68478C0.497282 3.19312 0.455612 2.72645 0.547282 2.28478C0.638952 1.83478 0.838952 1.45561 1.14728 1.14728C1.45561 0.838948 1.83478 0.638949 2.28478 0.547279C2.73478 0.455619 3.20561 0.497279 3.69728 0.672279L16.6098 5.27228C17.3265 5.53062 17.8473 5.93478 18.1723 6.48478C18.5056 7.02648 18.5765 7.58898 18.3848 8.17228C18.2015 8.75558 17.7515 9.23058 17.0348 9.59728L12.1098 12.1098L9.60978 17.0223Z";
+    const knotDs = [
+      "M86 22 C 58 8 32 18 22 42 C 10 72 28 98 58 112 C 78 122 96 118 112 104",
+      "M112 104 C 138 88 148 58 132 34 C 116 12 88 16 86 22",
+      "M58 112 C 48 138 68 156 96 150 C 124 144 132 122 112 104",
+      "M86 22 C 92 48 88 78 72 98"
+    ];
+
+    const cursorHome = samplePath(cursorD, 240, 19, 19);
+    const knotHome = knotDs.flatMap((d) => samplePath(d, 160, 172, 172));
+
+    function spiralHome(i) {
+      const u = hash(i);
+      const v = hash(i + 19);
+      const arm = i % 3;
+      const t = Math.pow(u, 0.62);
+      const theta = t * 5.6 * Math.PI + arm * (Math.PI * 2 / 3) + v * 0.18;
+      const r = 0.08 + t * 0.92;
+      const x = Math.cos(theta) * r;
+      const y = Math.sin(theta) * r * 0.86;
+      const z = (v - 0.5) * 0.12 * (1 - t);
+      return [x, y, z];
+    }
+
+    function pick(arr, i) {
+      return arr[i % arr.length];
+    }
+
+    const P = new Array(N);
+    for (let i = 0; i < N; i++) {
+      const s = spiralHome(i);
+      const c = pick(cursorHome, i);
+      const k = pick(knotHome, i + 7);
+      const warm = hash(i + 3) > 0.82;
+      P[i] = {
+        x: s[0], y: s[1], z: s[2],
+        sx: s[0], sy: s[1], sz: s[2],
+        cx: c[0] * 0.55, cy: c[1] * 0.55, cz: (hash(i + 5) - 0.5) * 0.04,
+        kx: k[0] * 0.62, ky: k[1] * 0.62, kz: (hash(i + 9) - 0.5) * 0.05,
+        size: 0.6 + hash(i + 11) * 2.4,
+        warm,
+        a: 0.35 + hash(i + 13) * 0.65
+      };
+    }
+
+    const cues = [...document.querySelectorAll("[data-shape]")];
+    function mixShapes() {
+      const mid = innerHeight * 0.45;
+      let six = 0, cursor = 0, knot = 0, wsum = 0;
+      for (const el of cues) {
+        const r = el.getBoundingClientRect();
+        const c = (r.top + r.bottom) / 2;
+        const w = Math.exp(-Math.pow((c - mid) / (innerHeight * 0.38), 2));
+        wsum += w;
+        if (el.dataset.shape === "cursor") cursor += w;
+        else if (el.dataset.shape === "knot") knot += w;
+        else six += w;
+      }
+      if (wsum < 1e-6) return { six: 1, cursor: 0, knot: 0, name: "six" };
+      six /= wsum; cursor /= wsum; knot /= wsum;
+      const name = knot > cursor && knot > six ? "knot" : cursor > six ? "cursor" : "six";
+      return { six, cursor, knot, name };
+    }
+
+    addEventListener("pointermove", (e) => {
+      if (mouse.down) {
+        cam.vel += (e.clientX - mouse.lx) * 0.00008;
+      }
+      mouse.x = e.clientX; mouse.y = e.clientY;
+      mouse.lx = e.clientX; mouse.ly = e.clientY;
+    });
+    addEventListener("pointerdown", (e) => {
+      mouse.down = true; mouse.lx = e.clientX; mouse.ly = e.clientY;
+    });
+    addEventListener("pointerup", () => { mouse.down = false; });
+    addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") cam.vel -= 0.01;
+      if (e.key === "ArrowRight") cam.vel += 0.01;
+    });
+
+    function project(x, y, z, scale) {
+      const zz = 1.35 + z;
+      return [W * 0.5 + x * scale / zz, H * 0.52 + y * scale / zz, zz];
+    }
+
+    let lastName = "";
+    function frame(t) {
+      time = t * 0.001;
+      const mix = mixShapes();
+      if (mix.name !== lastName) {
+        lastName = mix.name;
+        modeEl.textContent = labels[mix.name];
+      }
+      cam.vel += (cam.target - cam.vel) * 0.012;
+      if (!mouse.down) cam.vel += 0.00035 * (0.0018 - Math.abs(cam.vel));
+      cam.rot += cam.vel;
+
+      mouse.sx += (mouse.x - mouse.sx) * 0.12;
+      mouse.sy += (mouse.y - mouse.sy) * 0.12;
+
+      ctx.fillStyle = "#05060a";
+      ctx.fillRect(0, 0, W, H);
+
+      const scale = Math.min(W, H) * 0.46;
+      const cr = Math.cos(cam.rot), sr = Math.sin(cam.rot);
+      ctx.globalCompositeOperation = "lighter";
+
+      for (let i = 0; i < N; i++) {
+        const p = P[i];
+        const tx = p.sx * mix.six + p.cx * mix.cursor + p.kx * mix.knot;
+        const ty = p.sy * mix.six + p.cy * mix.cursor + p.ky * mix.knot;
+        const tz = p.sz * mix.six + p.cz * mix.cursor + p.kz * mix.knot;
+        p.x += (tx - p.x) * 0.045;
+        p.y += (ty - p.y) * 0.045;
+        p.z += (tz - p.z) * 0.045;
+
+        let x = p.x * cr - p.y * sr;
+        let y = p.x * sr + p.y * cr;
+        let z = p.z;
+
+        const [px, py, zz] = project(x, y, z, scale);
+        const dx = px - mouse.sx, dy = py - mouse.sy;
+        const d2 = dx * dx + dy * dy;
+        const push = Math.exp(-d2 / (9000 + mix.cursor * 4000));
+        const qx = px + dx * push * 0.12;
+        const qy = py + dy * push * 0.12;
+
+        const s = p.size * (1.15 / zz) * (0.85 + 0.25 * Math.sin(time * 2.1 + i));
+        const a = p.a * (0.22 + 0.78 / zz);
+        if (p.warm) ctx.fillStyle = `rgba(255,176,96,${a})`;
+        else ctx.fillStyle = `rgba(214,228,255,${a})`;
+        ctx.beginPath();
+        ctx.arc(qx, qy, s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.globalCompositeOperation = "source-over";
+      const g = ctx.createRadialGradient(W * 0.5, H * 0.52, 0, W * 0.5, H * 0.52, Math.min(W, H) * 0.18);
+      g.addColorStop(0, "rgba(255,255,255,0.16)");
+      g.addColorStop(0.35, "rgba(210,225,255,0.05)");
+      g.addColorStop(1, "rgba(5,6,10,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(W * 0.5, H * 0.52, Math.min(W, H) * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>
