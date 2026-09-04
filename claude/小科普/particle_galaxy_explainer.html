@@ -1,0 +1,86 @@
+<h2 class="sr-only">交互式粒子星系演示：移动鼠标可推开粒子，滑块分别控制斥力半径、斥力强度、回弹力、阻尼与形态插值</h2>
+<style>
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ctl{display:flex;align-items:center;gap:12px;margin-bottom:9px}
+.ctl .lb{font-size:13px;color:var(--text-secondary);min-width:96px}
+.ctl .tg{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-width:104px}
+.ctl input[type=range]{flex:1;min-width:60px}
+.ctl .v{font-size:13px;font-weight:500;min-width:34px;text-align:right}
+.row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.row button{font-size:13px}
+</style>
+<div style="padding:1rem 0">
+<canvas id="cv" width="1360" height="800" style="width:100%;display:block;border-radius:12px;background:#070a11;cursor:crosshair"></canvas>
+<div style="margin-top:1.25rem">
+<div class="ctl"><span class="lb">斥力半径</span><span class="tg">mouse radius</span><input type="range" id="s1" min="0" max="300" step="5" value="150"><span class="v" id="v1">150</span></div>
+<div class="ctl"><span class="lb">斥力强度</span><span class="tg">repel force</span><input type="range" id="s2" min="0" max="100" step="1" value="45"><span class="v" id="v2">45</span></div>
+<div class="ctl"><span class="lb">回弹力</span><span class="tg">spring</span><input type="range" id="s3" min="1" max="100" step="1" value="22"><span class="v" id="v3">22</span></div>
+<div class="ctl"><span class="lb">阻尼</span><span class="tg">damping</span><input type="range" id="s4" min="0" max="100" step="1" value="62"><span class="v" id="v4">62</span></div>
+<div class="ctl"><span class="lb">形态插值</span><span class="tg">morph / lerp</span><input type="range" id="s5" min="0" max="100" step="1" value="0"><span class="v" id="v5">0</span></div>
+<div class="row">
+<button id="bBreath">自动呼吸：关</button>
+<button id="bBlend">加性混合：开</button>
+<button id="bRaw">光晕贴图：开</button>
+</div>
+</div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+var W=1360,H=800,N=3000,P=[];
+function mk(sz,r,g,b){var c=document.createElement('canvas');c.width=c.height=sz;var x=c.getContext('2d');
+var gr=x.createRadialGradient(sz/2,sz/2,0,sz/2,sz/2,sz/2);
+gr.addColorStop(0,'rgba('+r+','+g+','+b+',1)');gr.addColorStop(0.22,'rgba('+r+','+g+','+b+',0.55)');
+gr.addColorStop(0.55,'rgba('+r+','+g+','+b+',0.12)');gr.addColorStop(1,'rgba('+r+','+g+','+b+',0)');
+x.fillStyle=gr;x.fillRect(0,0,sz,sz);return c;}
+var SP=[mk(40,255,255,255),mk(40,255,206,150),mk(40,160,205,255)];
+function flat(r,g,b){var c=document.createElement('canvas');c.width=c.height=4;var x=c.getContext('2d');
+x.fillStyle='rgb('+r+','+g+','+b+')';x.fillRect(0,0,4,4);return c;}
+var FL=[flat(255,255,255),flat(255,206,150),flat(160,205,255)];
+var cx=W/2,cy=H/2;
+for(var i=0;i<N;i++){
+ var arm=i%3, t=Math.pow(Math.random(),0.55), rad=t*430+8;
+ var ang=t*4.2+arm*2.0944+(Math.random()-0.5)*(0.5+0.8*(1-t));
+ var ax=cx+Math.cos(ang)*rad*1.02+(Math.random()-0.5)*26;
+ var ay=cy+Math.sin(ang)*rad*0.92+(Math.random()-0.5)*26;
+ var ba=Math.random()*6.2832, br=Math.sqrt(Math.random())*640;
+ var core=t<0.16;
+ P.push({x:ax,y:ay,vx:0,vy:0,ax:ax,ay:ay,bx:cx+Math.cos(ba)*br,by:cy+Math.sin(ba)*br*0.62,
+  s:(core?1.6:0.5)+Math.random()*1.5,c:core?(Math.random()<0.5?1:0):(Math.random()<0.72?0:(Math.random()<0.6?2:1)),
+  a:0.25+Math.random()*0.75});}
+var mx=-9999,my=-9999,breath=false,blend=true,raw=true,ph=0;
+var R=150,F=45,K=22,D=62,M=0;
+function bind(id,vid,fn){var e=document.getElementById(id),o=document.getElementById(vid);
+ e.addEventListener('input',function(){o.textContent=Math.round(+e.value);fn(+e.value);});}
+bind('s1','v1',function(v){R=v;});bind('s2','v2',function(v){F=v;});
+bind('s3','v3',function(v){K=v;});bind('s4','v4',function(v){D=v;});
+var s5=document.getElementById('s5');
+bind('s5','v5',function(v){M=v;breath=false;document.getElementById('bBreath').textContent='自动呼吸：关';});
+cv.addEventListener('pointermove',function(e){var r=cv.getBoundingClientRect();
+ mx=(e.clientX-r.left)/r.width*W;my=(e.clientY-r.top)/r.height*H;});
+cv.addEventListener('pointerleave',function(){mx=-9999;my=-9999;});
+document.getElementById('bBreath').addEventListener('click',function(){breath=!breath;
+ this.textContent='自动呼吸：'+(breath?'开':'关');});
+document.getElementById('bBlend').addEventListener('click',function(){blend=!blend;
+ this.textContent='加性混合：'+(blend?'开':'关');});
+document.getElementById('bRaw').addEventListener('click',function(){raw=!raw;
+ this.textContent='光晕贴图：'+(raw?'开':'关');});
+function loop(){
+ if(breath){ph+=0.006;M=(1-Math.cos(ph))*50;s5.value=M;document.getElementById('v5').textContent=Math.round(M);}
+ var m=M/100,k=K/4000,dp=0.80+D/100*0.185,rr=R*2,f=F*90;
+ ctx.globalCompositeOperation='source-over';
+ ctx.fillStyle='#070a11';ctx.fillRect(0,0,W,H);
+ ctx.globalCompositeOperation=blend?'lighter':'source-over';
+ var img=raw?SP:FL,base=raw?40:4;
+ for(var i=0;i<N;i++){var p=P[i];
+  var tx=p.ax+(p.bx-p.ax)*m,ty=p.ay+(p.by-p.ay)*m;
+  p.vx+=(tx-p.x)*k;p.vy+=(ty-p.y)*k;
+  var dx=p.x-mx,dy=p.y-my,d2=dx*dx+dy*dy;
+  if(d2<rr*rr&&d2>1){var d=Math.sqrt(d2),g=(1-d/rr)*f/d;p.vx+=dx*g*0.01;p.vy+=dy*g*0.01;}
+  p.vx*=dp;p.vy*=dp;p.x+=p.vx;p.y+=p.vy;
+  var sz=p.s*(raw?9:2.2);ctx.globalAlpha=p.a;
+  ctx.drawImage(img[p.c],p.x-sz/2,p.y-sz/2,sz,sz);}
+ ctx.globalAlpha=1;requestAnimationFrame(loop);}
+loop();
+})();
+</script>
