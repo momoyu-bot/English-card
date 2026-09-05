@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>专属深夜哄睡电台</title>
+    <!-- 引入 Tailwind CSS 进行样式管理 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Tone.js 用于生成环境白噪音和舒缓音效 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        night: {
+                            900: '#0a0a1a',
+                            800: '#13132b',
+                        }
+                    },
+                    animation: {
+                        'breathe': 'breathe 8s infinite ease-in-out',
+                        'fadeText': 'fadeText 8s infinite ease-in-out',
+                        'float': 'float 6s infinite ease-in-out',
+                    },
+                    keyframes: {
+                        breathe: {
+                            '0%, 100%': { transform: 'scale(0.85)', opacity: 0.3, boxShadow: '0 0 20px #818cf8' },
+                            '50%': { transform: 'scale(1.25)', opacity: 0.7, boxShadow: '0 0 60px #a5b4fc' },
+                        },
+                        fadeText: {
+                            '0%': { opacity: 0, transform: 'translateY(15px)' },
+                            '15%, 85%': { opacity: 1, transform: 'translateY(0)' },
+                            '100%': { opacity: 0, transform: 'translateY(-15px)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 隐藏滚动条，保持沉浸感 */
+        body {
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            touch-action: none; /* 防止移动端意外滑动 */
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-night-900 via-night-800 to-indigo-950 text-slate-200 h-screen w-screen flex flex-col items-center justify-center relative">
+    
+    <!-- 星空背景画布 -->
+    <canvas id="star-canvas" class="absolute top-0 left-0 w-full h-full z-0"></canvas>
+
+    <!-- 初始启动画面：需要用户点击以初始化音频上下文 -->
+    <div id="start-screen" class="z-10 flex flex-col items-center justify-center w-full h-full p-6 text-center transition-opacity duration-1000">
+        <div class="animate-float mb-8">
+            <svg class="w-20 h-20 text-indigo-300 opacity-80" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12.1,22c-5.5,0-10-4.5-10-10c0-4.5,3-8.4,7.4-9.6c0.4-0.1,0.8,0.2,0.8,0.6c0,0.1,0,0.2-0.1,0.3C9.3,4.8,8.8,6.8,9,8.9c0.4,4,3.7,7.2,7.7,7.4c1.8,0.1,3.5-0.5,4.9-1.5c0.3-0.2,0.7-0.2,0.9,0.1c0.1,0.2,0.1,0.4,0,0.5C20.6,19.3,16.6,22,12.1,22z"/>
+            </svg>
+        </div>
+        <h1 class="text-2xl md:text-3xl font-light tracking-wider text-indigo-100 mb-4 shadow-sm">专属哄睡电台</h1>
+        <p class="text-sm md:text-base text-indigo-300/60 mb-12 max-w-xs leading-relaxed">戴上耳机，调暗屏幕<br>让世界安静下来</p>
+        
+        <button id="start-btn" onclick="startRadio()" class="group px-8 py-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-200 rounded-full backdrop-blur-md border border-indigo-400/30 transition-all duration-300 shadow-[0_0_20px_rgba(99,102,241,0.15)] hover:shadow-[0_0_30px_rgba(99,102,241,0.3)] flex items-center gap-3 active:scale-95">
+            <svg class="w-5 h-5 text-indigo-300 group-hover:animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            轻触开启
+        </button>
+    </div>
+
+    <!-- 播放主界面 -->
+    <div id="radio-screen" class="z-10 hidden flex-col items-center justify-between w-full h-full p-8 md:p-12 opacity-0 transition-opacity duration-1000">
+        
+        <!-- 顶部工具栏 -->
+        <div class="w-full flex justify-between items-center text-indigo-300/50 text-sm tracking-widest">
+            <span>FM 3.00 AM</span>
+            <button onclick="toggleAudio()" id="audio-toggle" class="p-2 rounded-full hover:bg-white/5 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5 10v4a2 2 0 002 2h2.586l3.293 3.293A1 1 0 0014 18.5V5.5a1 1 0 00-1.707-.707L7.586 10H7a2 2 0 00-2 2z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- 中心律动区 -->
+        <div class="flex-1 flex flex-col items-center justify-center w-full relative my-10">
+            <!-- 呼吸光球 -->
+            <div class="absolute w-32 h-32 md:w-48 md:h-48 rounded-full bg-indigo-500 blur-xl opacity-50 animate-breathe mix-blend-screen pointer-events-none"></div>
+            <div class="absolute w-24 h-24 md:w-36 md:h-36 rounded-full bg-indigo-300 blur-lg opacity-30 animate-breathe mix-blend-screen pointer-events-none" style="animation-delay: 0.2s"></div>
+            
+            <!-- 文字展示区 -->
+            <div class="glass-panel w-full max-w-lg rounded-2xl p-8 md:p-12 min-h-[200px] flex items-center justify-center text-center shadow-2xl relative z-10">
+                <p id="story-text" class="text-lg md:text-xl leading-loose font-light text-indigo-50 tracking-wide">
+                    <!-- 文字由 JS 动态注入 -->
+                </p>
+            </div>
+        </div>
+
+        <!-- 底部提示 -->
+        <div class="text-xs text-indigo-400/40 tracking-widest uppercase flex flex-col items-center gap-2">
+            <span>跟随着光晕的节奏</span>
+            <span>吸气 · 呼气</span>
+        </div>
+    </div>
+
+    <script>
+        // 哄睡电台文案
+        const storyLines = [
+            "宝，现在把手机屏幕调到最暗\n最好是直接开启护眼模式。",
+            "找一个枕头上最舒服的坑，\n把自己软软地陷进去。",
+            "对，就是这样。\n现在，试着做个深呼吸。",
+            "吸气……\n慢慢地，把空气吸进肚子里。",
+            "呼气……\n把今天所有的疲惫和执念，全都呼出去。",
+            "把紧绷的肩膀放下来，\n微微皱着的眉头舒展开。",
+            "想象你现在正躺在一朵巨大的、\n刚刚晒过太阳的棉花糖云朵上。",
+            "周围没有刺眼的灯光，\n只有几颗很温柔的星星在远处一闪一闪。",
+            "有一阵很轻很轻的微风吹过来，\n带着一点点薰衣草和热牛奶的香气。",
+            "在这个只属于你的小宇宙里，\n时间是静止的。",
+            "你可以什么都不做，什么都不想。",
+            "你已经做得很棒了，今天辛苦啦。",
+            "剩下的事情，\n都交给明天的你去烦恼吧。",
+            "听着我的声音，慢慢地，慢慢地……",
+            "一，二，三……\n晚安，做个甜甜的梦。"
+        ];
+
+        let currentLine = 0;
+        let textInterval;
+        let isAudioPlaying = false;
+        
+        // Tone.js 乐器实例
+        let synth;
+        let noiseSynth;
+
+        async function setupAudio() {
+            // 确保 Tone.js 音频上下文启动 (浏览器要求由用户交互触发)
+            await Tone.start();
+            
+            // 1. 创建背景舒缓无人机低音 (Drone Pad)
+            const reverb = new Tone.Reverb({ decay: 8, preDelay: 0.1, wet: 0.7 }).toDestination();
+            const lowpass = new Tone.Filter(350, "lowpass").connect(reverb);
+            
+            synth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sine" },
+                envelope: { attack: 4, decay: 2, sustain: 0.8, release: 6 },
+            }).connect(lowpass);
+            synth.volume.value = -18; // 保持非常轻柔的音量
+
+            // 2. 创建微弱的粉红噪音模拟风声/海浪声
+            const noiseFilter = new Tone.Filter(400, "lowpass").connect(reverb);
+            // 用 LFO 调制滤波器的频率来产生呼吸感的海浪声
+            const lfo = new Tone.LFO(1/8, 100, 600).connect(noiseFilter.frequency);
+            noiseSynth = new Tone.NoiseSynth({
+                noise: { type: 'pink' },
+                envelope: { attack: 2, decay: 1, sustain: 1, release: 2 }
+            }).connect(noiseFilter);
+            noiseSynth.volume.value = -25;
+            
+            // 调度和弦序列
+            const chords = [
+                ["C3", "G3", "C4"],
+                ["A2", "E3", "A3"],
+                ["F2", "C3", "F3"],
+                ["G2", "D3", "G3"]
+            ];
+            let chordIdx = 0;
+            
+            Tone.Transport.scheduleRepeat((time) => {
+                synth.triggerAttackRelease(chords[chordIdx], "3m", time);
+                chordIdx = (chordIdx + 1) % chords.length;
+            }, "4m");
+
+            Tone.Transport.bpm.value = 25; // 极慢的节奏
+            Tone.Transport.start();
+            
+            // 开启环境噪音和 LFO
+            lfo.start();
+            noiseSynth.triggerAttack();
+            isAudioPlaying = true;
+        }
+
+        function startStoryCycle() {
+            const textElement = document.getElementById('story-text');
+            
+            // 初始化第一句
+            textElement.innerText = storyLines[0];
+            textElement.classList.add('animate-fadeText');
+            
+            // 设定每 8 秒切换一次文字（与 CSS 呼吸动画周期保持一致）
+            textInterval = setInterval(() => {
+                currentLine++;
+                // 如果播完了，就停留在最后一句
+                if (currentLine >= storyLines.length) {
+                    clearInterval(textInterval);
+                    return;
+                }
+                
+                // 重置动画
+                textElement.classList.remove('animate-fadeText');
+                // 触发重排，使动画重新开始生效
+                void textElement.offsetWidth;
+                
+                // 格式化换行符
+                textElement.innerHTML = storyLines[currentLine].replace(/\n/g, '<br>');
+                textElement.classList.add('animate-fadeText');
+            }, 8000); 
+        }
+
+        const canvas = document.getElementById('star-canvas');
+        const ctx = canvas.getContext('2d');
+        let stars = [];
+
+        function initStars() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            stars = [];
+            
+            const numStars = window.innerWidth < 768 ? 50 : 100;
+            for(let i = 0; i < numStars; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    r: Math.random() * 1.2,
+                    alpha: Math.random(),
+                    fadeDir: (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 0.01 + 0.005)
+                });
+            }
+            animateStars();
+        }
+
+        function animateStars() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            stars.forEach(star => {
+                star.alpha += star.fadeDir;
+                if(star.alpha >= 1 || star.alpha <= 0) {
+                    star.fadeDir *= -1;
+                }
+                
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.abs(star.alpha) * 0.5})`;
+                ctx.fill();
+            });
+            
+            requestAnimationFrame(animateStars);
+        }
+
+        async function startRadio() {
+            // 切换界面
+            const startScreen = document.getElementById('start-screen');
+            const radioScreen = document.getElementById('radio-screen');
+            
+            startScreen.classList.add('opacity-0');
+            setTimeout(() => {
+                startScreen.classList.add('hidden');
+                radioScreen.classList.remove('hidden');
+                // 触发重排
+                void radioScreen.offsetWidth;
+                radioScreen.classList.remove('opacity-0');
+                
+                // 启动逻辑
+                setupAudio();
+                startStoryCycle();
+                initStars();
+            }, 1000);
+        }
+
+        // 音频切换控制
+        function toggleAudio() {
+            const btn = document.getElementById('audio-toggle');
+            const svgIcon = btn.querySelector('svg');
+            
+            if (isAudioPlaying) {
+                Tone.Destination.mute = true;
+                svgIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />`;
+                isAudioPlaying = false;
+            } else {
+                Tone.Destination.mute = false;
+                svgIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5 10v4a2 2 0 002 2h2.586l3.293 3.293A1 1 0 0014 18.5V5.5a1 1 0 00-1.707-.707L7.586 10H7a2 2 0 00-2 2z"></path>`;
+                isAudioPlaying = true;
+            }
+        }
+
+        // 处理窗口大小调整以适配画布
+        window.addEventListener('resize', () => {
+            if (canvas.width > 0) {
+                initStars(); // 重新生成适应新尺寸的星空
+            }
+        });
+    </script>
+</body>
+</html>
