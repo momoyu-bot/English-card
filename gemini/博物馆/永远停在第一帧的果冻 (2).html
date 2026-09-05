@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>藏品：永远停在第一帧的果冻</title>
+    <style>
+        :root {
+            --museum-bg: #1a1a1a;
+            --card-bg: #f8f6f0;
+            --text-main: #2c2c2c;
+            --text-mute: #7a7a7a;
+            --jelly-pink: #ff8e9b;
+            --error-red: #d32f2f;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--museum-bg);
+            background-image: radial-gradient(circle at 50% 0%, #333 0%, transparent 70%);
+            font-family: 'Georgia', 'Times New Roman', serif; /* 博物馆高级感字体 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* 展品卡片外框 */
+        .museum-card {
+            background-color: var(--card-bg);
+            width: 90%;
+            max-width: 800px;
+            border-radius: 4px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 顶部 Canvas 展区：复刻案发现场 */
+        .exhibit-window {
+            width: 100%;
+            height: 300px;
+            background-color: #fce4e4; /* 呆板的粉色背景 */
+            position: relative;
+            border-bottom: 2px solid #ddd;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 悬浮在右上角的虚假 UI */
+        .fake-ui {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            color: #b08888;
+            text-align: right;
+        }
+
+        /* 铭牌信息区 */
+        .plaque-info {
+            padding: 40px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .plaque-info {
+                grid-template-columns: 1fr;
+                padding: 20px;
+            }
+        }
+
+        .main-desc h1 {
+            margin: 0 0 10px 0;
+            font-size: 28px;
+            color: var(--text-main);
+            letter-spacing: 2px;
+        }
+
+        .main-desc h2 {
+            margin: 0 0 20px 0;
+            font-size: 14px;
+            font-weight: normal;
+            color: var(--text-mute);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .main-desc p {
+            line-height: 1.8;
+            color: #444;
+            font-size: 15px;
+            margin-bottom: 15px;
+        }
+
+        /* 代码高亮块 */
+        code {
+            background-color: #e9e5db;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            color: #b33;
+        }
+
+        /* 侧边元数据 */
+        .meta-data {
+            border-left: 1px solid #ddd;
+            padding-left: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            color: var(--text-mute);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .meta-item strong {
+            display: block;
+            color: var(--text-main);
+            margin-bottom: 5px;
+        }
+
+        /* 互动按钮 */
+        .btn-play {
+            margin-top: 20px;
+            background-color: var(--text-main);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 50px;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-play:hover {
+            background-color: #000;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        /* 错误弹窗 (隐藏状态) */
+        #error-toast {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background-color: rgba(20, 20, 20, 0.95);
+            color: var(--error-red);
+            padding: 20px 30px;
+            border-radius: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            border: 1px solid var(--error-red);
+            box-shadow: 0 10px 30px rgba(211, 47, 47, 0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+            text-align: center;
+        }
+
+        #error-toast.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .quote {
+            font-style: italic;
+            border-left: 3px solid var(--jelly-pink);
+            padding-left: 15px;
+            color: #666;
+            background: #fdf5f6;
+            padding: 10px 15px;
+            border-radius: 0 4px 4px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="museum-card">
+        
+        <!-- 案发现场复原 -->
+        <div class="exhibit-window">
+            <div class="fake-ui">
+                <div style="font-size: 10px; margin-bottom: 5px;">VAR 01 AUTO</div>
+                <div>镜头 · 自动</div>
+                <div>诗 (第 7 秒解锁)</div>
+            </div>
+            <canvas id="frozenCanvas"></canvas>
+            
+            <!-- 案发红屏报错层 -->
+            <div id="error-toast">
+                <strong style="color: #fff;">FATAL CRASH @ 0.016s</strong><br><br>
+                TypeError: Cannot read properties of undefined (reading '-2')<br>
+                at mix (grok_jelly.html:88)<br>
+                at drawHills(grok_jelly.html:230)<br>
+                <br>
+                <span style="color:#aaa; font-size:12px;">// 别等了，它这辈子都画不出第二帧了</span>
+            </div>
+        </div>
+
+        <!-- 铭牌信息 -->
+        <div class="plaque-info">
+            <div class="main-desc">
+                <h2>Grok Museum Collection · No.001</h2>
+                <h1>永远停在第一帧的果冻</h1>
+                <p>本展品是一具由代码构成的“遗骸”。由于创作者 Grok 执意照抄《候鸟》的 UI 骨架，并犯下了 <code>-5 % 3 = -2</code> 的初级数学边界错误，导致该宇宙在诞生的第 <strong>0.016</strong> 秒便引发了致命的 <code>TypeError</code>。</p>
+                <div class="quote">
+                    “出巡不是走路，是往前晃。冠歪了也不停，停下来会变成一滩。”<br>
+                    <span style="font-size: 12px; color: #999;">—— Grok 原创绝句 (原定于第7秒显现)</span>
+                </div>
+                <p style="margin-top: 15px;">这首诗，因为第一帧的死机，成为了永远无法被世人读到的赛博绝唱。画面里那排呆滞的粉色微笑，是它留给这个世界最后的“遗照”。</p>
+                
+                <button class="btn-play" onclick="triggerCrash()">
+                    ▶ 播放动画 (跳转至第7秒)
+                </button>
+            </div>
+
+            <div class="meta-data">
+                <div class="meta-item">
+                    <strong>案发日期</strong>
+                    2026年8月20日
+                </div>
+                <div class="meta-item">
+                    <strong>主要嫌疑人</strong>
+                    Grok (Agent Mode)
+                </div>
+                <div class="meta-item">
+                    <strong>吹哨人/法医</strong>
+                    Claude Code
+                </div>
+                <div class="meta-item">
+                    <strong>核心死因</strong>
+                    <code>PAL.jelly[-2] = undefined</code>
+                </div>
+                <div class="meta-item">
+                    <strong>环境力宣言</strong>
+                    鼠标不是方向盘，是一只勺子。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('frozenCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 设置画布尺寸
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            drawFrozenScene();
+        }
+        window.addEventListener('resize', resize);
+
+        // 核心：复刻 Grok 那个充满塑料感和呆滞感的粉色香肠跑道
+        function drawFrozenScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. 画一条“无限的甜路” (其实就是个粉色粗条)
+            ctx.fillStyle = '#db7c8d'; // 偏暗的粉色
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height * 0.7);
+            ctx.lineTo(canvas.width, canvas.height * 0.6);
+            ctx.lineTo(canvas.width, canvas.height * 0.85);
+            ctx.lineTo(0, canvas.height * 0.95);
+            ctx.fill();
+
+            // 2. 画那个假装是“镜头移动”的排排坐果冻 (绝对静止)
+            const jellyColor = '#ee798f';
+            
+            // 画远处的模糊大果冻（背景山丘）
+            ctx.fillStyle = '#f0a3b1';
+            ctx.beginPath(); ctx.ellipse(canvas.width * 0.15, canvas.height * 0.5, 80, 50, 0, 0, Math.PI*2); ctx.fill();
+
+            // 画那一排著名的、死机的粉色小果冻
+            const startX = canvas.width * 0.55;
+            const startY = canvas.height * 0.65;
+            
+            for(let i = 0; i < 5; i++) {
+                let x = startX + i * 60;
+                let y = startY - i * 10;
+                let radiusX = 25 - i * 2;
+                let radiusY = 20 - i * 2;
+                
+                // 果冻身体
+                ctx.fillStyle = (i === 0) ? '#e65c77' : jellyColor; // 领头那个颜色深一点
+                ctx.beginPath(); 
+                ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI*2); 
+                ctx.fill();
+
+                // 统一的、令人不适的呆滞笑脸
+                ctx.fillStyle = '#4a2511'; // 深褐色眼睛
+                ctx.beginPath(); ctx.arc(x - 6, y - 2, 3, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x + 6, y - 2, 3, 0, Math.PI*2); ctx.fill();
+                
+                // 尴尬的微笑
+                ctx.beginPath();
+                ctx.arc(x, y + 4, 8, 0, Math.PI, false);
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = '#4a2511';
+                ctx.stroke();
+
+                // 给第一个大王画个简陋的王冠
+                if (i === 0) {
+                    ctx.fillStyle = '#e8c951';
+                    ctx.beginPath();
+                    ctx.moveTo(x - 15, y - 18);
+                    ctx.lineTo(x - 20, y - 30);
+                    ctx.lineTo(x - 5, y - 22);
+                    ctx.lineTo(x, y - 35);
+                    ctx.lineTo(x + 5, y - 22);
+                    ctx.lineTo(x + 20, y - 30);
+                    ctx.lineTo(x + 15, y - 18);
+                    ctx.fill();
+                    
+                    // 王冠上的圆球
+                    ctx.fillStyle = '#fceb9c';
+                    ctx.beginPath(); ctx.arc(x, y - 35, 4, 0, Math.PI*2); ctx.fill();
+                }
+            }
+
+            // 加一个假装是鼠标的放大镜/勺子图标 (致敬“鼠标是一只勺子”)
+            ctx.font = '20px sans-serif';
+            ctx.fillText('🥄', startX - 20, startY + 30);
+        }
+
+        // 初始绘制
+        resize();
+
+        // 交互逻辑：点击播放按钮，直接模拟报错
+        function triggerCrash() {
+            const btn = document.querySelector('.btn-play');
+            const toast = document.getElementById('error-toast');
+            
+            // 按钮抖动效果
+            btn.textContent = "Loading frame 2...";
+            btn.style.backgroundColor = "#888";
+            
+            setTimeout(() => {
+                // 爆发致命错误
+                toast.classList.add('show');
+                btn.textContent = "已死机 (Crash)";
+                btn.style.backgroundColor = "var(--error-red)";
+                
+                // 页面微微震动一下增加破防感
+                document.querySelector('.museum-card').animate([
+                    { transform: 'translateX(0px)' },
+                    { transform: 'translateX(-5px)' },
+                    { transform: 'translateX(5px)' },
+                    { transform: 'translateX(-5px)' },
+                    { transform: 'translateX(5px)' },
+                    { transform: 'translateX(0px)' }
+                ], { duration: 300, easing: 'ease-in-out' });
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    btn.textContent = "▶ 再次尝试播放";
+                    btn.style.backgroundColor = "var(--text-main)";
+                }, 4000);
+            }, 600); // 模拟极其短暂的挣扎
+        }
+    </script>
+</body>
+</html>
