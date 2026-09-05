@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>果冻大王 (Jelly King)</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%); /* 软萌水蜜桃背景 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            color: rgba(209, 107, 140, 0.8); /* 适配浅色背景 */
+            pointer-events: none;
+        }
+        h1 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+            letter-spacing: 2px;
+            color: #ff4d6d; /* 更鲜艳的果冻红 */
+            text-shadow: 0 0 10px rgba(255, 77, 109, 0.3);
+        }
+        p {
+            margin: 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <h1>果冻大王 JELLY KING</h1>
+        <p>滑动鼠标戳一戳，感受 Q 弹物理学。点击页面有惊喜。</p>
+    </div>
+
+    <canvas id="jellyCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('jellyCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let mouse = { x: -1000, y: -1000, isDown: false };
+        let jellies = [];
+
+        // 初始化和窗口大小调整
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 鼠标与触摸交互事件
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('touchmove', (e) => {
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        });
+        window.addEventListener('mousedown', () => mouse.isDown = true);
+        window.addEventListener('mouseup', () => mouse.isDown = false);
+        window.addEventListener('touchstart', (e) => {
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+            mouse.isDown = true;
+        });
+        window.addEventListener('touchend', () => mouse.isDown = false);
+
+        // 点击时果冻大王会特别开心（跳跃）
+        window.addEventListener('click', () => {
+            jellies.forEach(j => {
+                if (j.isKing) j.vy -= 15; // 给个向上的初速度
+            });
+        });
+
+        // 核心：果冻类，使用弹簧物理学模拟边缘的 Q 弹
+        class Jelly {
+            constructor(x, y, radius, color, layer, isKing = false) {
+                this.x = x;
+                this.y = y;
+                this.baseRadius = radius;
+                this.color = color;
+                this.layer = layer; // 层级 (深景深)：越小越远，移动越慢，越模糊
+                this.isKing = isKing;
+                
+                // 物理运动参数
+                this.vx = (Math.random() - 0.5) * (this.layer * 0.5);
+                this.vy = Math.random() * 0.5 - 0.2;
+                this.time = Math.random() * 100;
+
+                // 构建果冻边缘的顶点（模拟弹簧）
+                this.numPoints = isKing ? 30 : 15; // 大王细节更多
+                this.points = [];
+                for (let i = 0; i < this.numPoints; i++) {
+                    this.points.push({
+                        angle: (i / this.numPoints) * Math.PI * 2,
+                        currentRadius: this.baseRadius,
+                        velocity: 0
+                    });
+                }
+            }
+
+            update() {
+                this.time += 0.05;
+                
+                // 缓慢漂浮移动
+                this.x += this.vx;
+                this.y += this.vy + Math.sin(this.time) * this.layer * 0.2;
+
+                // 边界回弹
+                if (this.x > width + this.baseRadius) this.x = -this.baseRadius;
+                if (this.x < -this.baseRadius) this.x = width + this.baseRadius;
+                
+                // 只有大王受重力并在底部弹跳
+                if (this.isKing) {
+                    this.vy += 0.2; // 重力
+                    if (this.y > height - this.baseRadius * 1.2) {
+                        this.y = height - this.baseRadius * 1.2;
+                        this.vy *= -0.8; // 落地反弹
+                    }
+                } else {
+                    if (this.y > height + this.baseRadius) this.y = -this.baseRadius;
+                    if (this.y < -this.baseRadius) this.y = height + this.baseRadius;
+                }
+
+                // 弹簧物理学：更新边缘顶点
+                const spring = 0.05; // 弹力系数 (越大约硬)
+                const damp = 0.85;   // 阻尼 (越小停止越快)
+
+                for (let i = 0; i < this.numPoints; i++) {
+                    let p = this.points[i];
+                    
+                    // 计算顶点在世界坐标中的实际位置
+                    let px = this.x + Math.cos(p.angle) * p.currentRadius;
+                    let py = this.y + Math.sin(p.angle) * p.currentRadius;
+
+                    // 1. 鼠标排斥力 (当你戳果冻时)
+                    // 如果是大王或者在较近图层，才会受到强烈的鼠标影响
+                    if (this.layer > 1) {
+                        let dx = mouse.x - px;
+                        let dy = mouse.y - py;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        let interactionRadius = this.isKing ? 150 : 80;
+                        
+                        if (dist < interactionRadius) {
+                            let force = (interactionRadius - dist) / interactionRadius;
+                            // 鼠标按下时戳得更深
+                            let pushDir = mouse.isDown ? -10 : -3;
+                            p.velocity += pushDir * force;
+                        }
+                    }
+
+                    // 2. 弹簧恢复力 (果冻想恢复原本的圆润)
+                    // 加上正弦波让它自身有一种像呼吸一样的蠕动感
+                    let targetR = this.baseRadius + Math.sin(p.angle * 3 + this.time) * (this.baseRadius * 0.05);
+                    let force = (targetR - p.currentRadius) * spring;
+                    p.velocity += force;
+                    p.velocity *= damp;
+                    p.currentRadius += p.velocity;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                
+                // 视差层级特效：远处的果冻要模糊、变暗
+                if (this.layer < 3) {
+                    ctx.filter = `blur(${ (3 - this.layer) * 3 }px)`;
+                    ctx.globalAlpha = this.layer * 0.4;
+                } else if (!this.isKing) {
+                    ctx.globalAlpha = 0.8;
+                } else {
+                    ctx.globalAlpha = 0.9; // 大王稍微透明一点点，更有质感
+                }
+
+                // 创建带光泽的渐变色 (更通透)
+                let gradient = ctx.createRadialGradient(
+                    this.x - this.baseRadius*0.3, this.y - this.baseRadius*0.3, 0,
+                    this.x, this.y, this.baseRadius
+                );
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // 强高光
+                gradient.addColorStop(0.3, this.color); // 主色
+                gradient.addColorStop(1, this.shadeColor(this.color, -20)); // 暗部边缘
+
+                ctx.beginPath();
+                // 使用贝塞尔曲线连接各个受到弹簧力影响的顶点，画出顺滑的果冻边缘
+                for (let i = 0; i < this.numPoints; i++) {
+                    let p = this.points[i];
+                    let nextP = this.points[(i + 1) % this.numPoints];
+                    
+                    let px = this.x + Math.cos(p.angle) * p.currentRadius;
+                    let py = this.y + Math.sin(p.angle) * p.currentRadius;
+                    let nx = this.x + Math.cos(nextP.angle) * nextP.currentRadius;
+                    let ny = this.y + Math.sin(nextP.angle) * nextP.currentRadius;
+                    
+                    // 中点控制，使曲线圆滑
+                    let cx = (px + nx) / 2;
+                    let cy = (py + ny) / 2;
+
+                    if (i === 0) {
+                        ctx.moveTo(cx, cy);
+                    } else {
+                        // 控制点使用当前点，结束点使用中点
+                        let prevP = this.points[i-1];
+                        let ppx = this.x + Math.cos(prevP.angle) * prevP.currentRadius;
+                        let ppy = this.y + Math.sin(prevP.angle) * prevP.currentRadius;
+                        ctx.quadraticCurveTo(px, py, cx, cy);
+                    }
+                }
+                // 闭合最后一段曲线
+                let firstP = this.points[0];
+                let fpx = this.x + Math.cos(firstP.angle) * firstP.currentRadius;
+                let fpy = this.y + Math.sin(firstP.angle) * firstP.currentRadius;
+                let nx2 = this.x + Math.cos(this.points[1].angle) * this.points[1].currentRadius;
+                let ny2 = this.y + Math.sin(this.points[1].angle) * this.points[1].currentRadius;
+                ctx.quadraticCurveTo(fpx, fpy, (fpx + nx2) / 2, (fpy + ny2) / 2);
+
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                // 增加反光高光片（让它看起来像果冻一样湿润反光）
+                ctx.save();
+                ctx.clip(); // 限制在刚刚画好的果冻形状范围内
+                ctx.beginPath();
+                ctx.ellipse(this.x - this.baseRadius*0.25, this.y - this.baseRadius*0.4, this.baseRadius*0.4, this.baseRadius*0.15, -Math.PI/6, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.fill();
+                ctx.restore();
+
+                // 恶趣味环节：如果它是大王，给它画脸和王冠！
+                if (this.isKing) {
+                    this.drawKingFace();
+                }
+
+                ctx.restore();
+            }
+
+            // 辅助函数：加深颜色用于暗部
+            shadeColor(color, percent) {
+                let R = parseInt(color.substring(1,3),16);
+                let G = parseInt(color.substring(3,5),16);
+                let B = parseInt(color.substring(5,7),16);
+                R = parseInt(R * (100 + percent) / 100);
+                G = parseInt(G * (100 + percent) / 100);
+                B = parseInt(B * (100 + percent) / 100);
+                R = (R<255)?R:255;  G = (G<255)?G:255;  B = (B<255)?B:255;
+                let RR = ((R.toString(16).length==1)?"0"+R.toString(16):R.toString(16));
+                let GG = ((G.toString(16).length==1)?"0"+G.toString(16):G.toString(16));
+                let BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
+                return "#"+RR+GG+BB;
+            }
+
+            drawKingFace() {
+                // 脸部会随着果冻的运动（速度和形变）稍微偏移，产生惯性效果
+                let lookX = (mouse.x - this.x) * 0.05;
+                let lookY = (mouse.y - this.y) * 0.05;
+                // 限制眼球最大偏移
+                lookX = Math.max(-15, Math.min(15, lookX));
+                lookY = Math.max(-15, Math.min(15, lookY));
+
+                let faceX = this.x + lookX;
+                let faceY = this.y + lookY;
+
+                // 腮红
+                ctx.fillStyle = 'rgba(255, 100, 150, 0.5)';
+                ctx.beginPath(); ctx.arc(faceX - 45, faceY + 10, 15, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(faceX + 45, faceY + 10, 15, 0, Math.PI*2); ctx.fill();
+
+                // 呆萌的眼睛（一头大一头小，略带鄙视或呆滞）
+                ctx.fillStyle = '#1a0b2e'; // 深色眼珠
+                ctx.beginPath(); ctx.arc(faceX - 25, faceY - 10, 12, 0, Math.PI*2); ctx.fill(); // 左眼大
+                ctx.beginPath(); ctx.arc(faceX + 25, faceY - 5, 8, 0, Math.PI*2); ctx.fill();  // 右眼小
+
+                // 眼神光
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(faceX - 28, faceY - 14, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(faceX + 23, faceY - 7, 2.5, 0, Math.PI*2); ctx.fill();
+
+                // 嘟嘟嘴/波浪嘴
+                ctx.beginPath();
+                ctx.moveTo(faceX - 10, faceY + 20);
+                ctx.quadraticCurveTo(faceX - 5, faceY + 28, faceX, faceY + 20);
+                ctx.quadraticCurveTo(faceX + 5, faceY + 28, faceX + 10, faceY + 20);
+                ctx.strokeStyle = '#1a0b2e';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // 歪歪扭扭的王冠
+                ctx.save();
+                ctx.translate(this.x, this.y - this.baseRadius * 0.85); // 锚点在头顶
+                ctx.rotate(Math.sin(this.time * 2) * 0.1 + lookX * 0.01); // 跟着晃动
+                
+                ctx.fillStyle = '#ffd700'; // 金色
+                ctx.beginPath();
+                ctx.moveTo(-30, 0);
+                ctx.lineTo(-40, -40); // 左尖
+                ctx.lineTo(-15, -20);
+                ctx.lineTo(0, -50);   // 中尖
+                ctx.lineTo(15, -20);
+                ctx.lineTo(40, -40);  // 右尖
+                ctx.lineTo(30, 0);
+                ctx.closePath();
+                ctx.fill();
+                
+                // 王冠上的红宝石
+                ctx.fillStyle = '#ff3366';
+                ctx.beginPath(); ctx.arc(0, -25, 6, 0, Math.PI*2); ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 初始化果冻宇宙
+        function initScene() {
+            jellies = [];
+            
+            // 背景层（浅色水蜜桃泡泡）
+            for(let i=0; i<3; i++) {
+                jellies.push(new Jelly(Math.random()*width, Math.random()*height, Math.random()*80 + 150, '#ffb3c6', 1));
+            }
+            // 中景层
+            for(let i=0; i<5; i++) {
+                jellies.push(new Jelly(Math.random()*width, Math.random()*height, Math.random()*50 + 60, '#ffc2d1', 2));
+            }
+            
+            // 果冻大王出场！（更鲜艳的草莓红）
+            jellies.push(new Jelly(width/2, height/2, 120, '#ff4d6d', 3, true));
+        }
+
+        // 动画主循环 (每秒60帧的重绘魔法就在这里)
+        function animate() {
+            // 每次画之前，先用半透明背景覆盖上一帧，形成轻微的拖影效果（Motion Blur）适配浅色背景
+            ctx.fillStyle = 'rgba(255, 240, 245, 0.4)';
+            ctx.fillRect(0, 0, width, height);
+
+            // 让果冻们按照层级排序，确保大王画在最前面
+            jellies.sort((a, b) => a.layer - b.layer);
+
+            jellies.forEach(jelly => {
+                jelly.update();
+                jelly.draw();
+            });
+
+            requestAnimationFrame(animate); // 无限循环
+        }
+
+        initScene();
+        animate();
+
+    </script>
+</body>
+</html>
