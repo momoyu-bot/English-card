@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>灯下的书桌</title>
+  <meta name="description" content="窗在底下，纸在手边。想写就写，不想写就看灯。" />
+  <style>
+    :root {
+      --paper: #FBFAF7;
+      --goods: #55504A;
+      --blurb: #8B847B;
+      --shelf: #3D3830;
+      --sign: #A9A29A;
+      --note: #BEB7AD;
+      --line: #E4DFD6;
+      --panel: #FFFdf8;
+      --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+              "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--paper);
+      color: var(--goods);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, textarea, input { font-family: var(--font); }
+
+    .stage {
+      position: fixed; inset: 0; overflow: hidden; cursor: grab;
+      background: var(--paper);
+    }
+    .stage.dragging { cursor: grabbing; }
+    .world {
+      position: absolute; inset: -16%;
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    .room {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, #F3EEE4, transparent 60%),
+        var(--paper);
+    }
+    .window {
+      position: absolute; left: 50%; top: 10%;
+      width: min(52vw, 420px); height: min(46vh, 340px);
+      transform: translateX(-50%);
+      background: #2C2A27;
+      border: 10px solid #E8E2D8;
+      box-shadow: 0 18px 40px rgba(61, 56, 48, .08);
+    }
+    .window::before {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(#E8E2D8, #E8E2D8) 50% 0 / 8px 100% no-repeat,
+        linear-gradient(#E8E2D8, #E8E2D8) 0 42% / 100% 8px no-repeat;
+      opacity: .9;
+      pointer-events: none;
+    }
+    .night {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(circle at 72% 22%, rgba(251,250,247,.18) 0 2px, transparent 3px),
+        radial-gradient(circle at 30% 36%, rgba(251,250,247,.14) 0 1.5px, transparent 3px),
+        radial-gradient(circle at 58% 58%, rgba(251,250,247,.1) 0 1px, transparent 2px),
+        linear-gradient(#3A3732, #2A2825);
+    }
+    .sill {
+      position: absolute; left: 50%; top: calc(10% + min(46vh, 340px) - 2px);
+      width: min(58vw, 468px); height: 14px;
+      transform: translateX(-50%);
+      background: #EFEAE1;
+    }
+    .desk {
+      position: absolute; left: 8%; right: 8%; bottom: 8%;
+      height: 22%;
+      background: linear-gradient(#F2EDE4, #E7E1D6);
+      border-top: 1px solid #DDD6CA;
+    }
+    .lamp {
+      position: absolute; right: 18%; bottom: 26%;
+      width: 8px; height: 22%;
+      background: #C9C2B6;
+    }
+    .lamp::before {
+      content: "";
+      position: absolute; left: 50%; bottom: 100%;
+      width: 86px; height: 48px;
+      transform: translateX(-50%);
+      background: #E4DDD1;
+      border-radius: 40px 40px 8px 8px;
+    }
+    .lamp::after {
+      content: "";
+      position: absolute; left: 50%; top: -70px;
+      width: 220px; height: 220px;
+      transform: translateX(-50%);
+      background: radial-gradient(circle, rgba(251,247,236,.7), transparent 62%);
+      pointer-events: none;
+    }
+    .sheet {
+      position: absolute; left: 22%; bottom: 16%;
+      width: min(38vw, 280px); height: 18%;
+      background: #FFFdf8;
+      box-shadow: 0 8px 18px rgba(61,56,48,.06);
+      transform: rotate(-2deg);
+    }
+    .sheet::after {
+      content: "";
+      position: absolute; left: 16px; right: 20px; top: 18px;
+      height: 55%;
+      background: repeating-linear-gradient(
+        #FFFdf8 0 10px,
+        #E8E2D8 10px 11px
+      );
+      opacity: .7;
+    }
+
+    .scene-lamp .window { filter: brightness(.72); }
+    .scene-lamp .lamp::after { width: 340px; height: 340px; top: -120px; }
+    .scene-paper .window { opacity: .35; transform: translateX(-50%) scale(.86); }
+    .scene-paper .sheet {
+      left: 18%; bottom: 18%;
+      width: min(58vw, 520px); height: 42%;
+      transform: rotate(0);
+    }
+
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(251,250,247,.2) 0%, transparent 18%, transparent 70%, rgba(251,250,247,.55) 100%);
+    }
+
+    .hud { position: fixed; inset: 0; pointer-events: none; }
+    .hud > * { pointer-events: auto; }
+    .hud.dim .chrome,
+    .hud.dim .panel,
+    .hud.dim .sound { opacity: 0; pointer-events: none; }
+
+    .top {
+      position: absolute; top: 22px; left: 24px; right: 24px;
+      display: flex; align-items: baseline; justify-content: space-between;
+    }
+    .top h1 {
+      font-size: 15.5px; font-weight: 400; letter-spacing: .07em; color: var(--shelf);
+    }
+    .top .quiet {
+      font-size: 12px; letter-spacing: .08em; color: var(--sign);
+    }
+
+    .copy {
+      position: absolute; left: 26px; top: 78px; max-width: 280px;
+    }
+    .copy h2 {
+      font-size: 28px; font-weight: 400; letter-spacing: .12em; color: var(--shelf);
+    }
+    .copy p {
+      margin-top: 10px; font-size: 14px; line-height: 1.8; color: var(--blurb);
+    }
+    .zoom {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 16px; font-size: 12px; color: var(--note);
+    }
+    .zoom button {
+      width: 22px; height: 22px; border: 1px solid var(--line);
+      background: var(--paper); color: var(--goods); cursor: pointer;
+    }
+
+    .hotspot {
+      position: absolute; display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--shelf);
+    }
+    .hotspot .plus {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 1px solid #D8D1C6; background: var(--paper);
+      display: grid; place-items: center; color: var(--blurb);
+    }
+    .hotspot .tag { color: var(--blurb); }
+    .hs-win { left: 48%; top: 26%; }
+    .hs-lamp { right: 20%; bottom: 38%; }
+    .hs-paper { left: 30%; bottom: 28%; }
+    .scene-window .hs-lamp { display: none; }
+    .scene-lamp .hs-win, .scene-lamp .hs-paper { display: none; }
+    .scene-paper .hs-win, .scene-paper .hs-lamp { display: none; }
+
+    .bottom {
+      position: absolute; left: 22px; right: 22px; bottom: 18px;
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+    }
+    .hint { font-size: 11px; color: var(--note); margin-bottom: 8px; }
+    .thumbs { display: flex; gap: 8px; }
+    .thumb {
+      width: 86px; height: 54px; border: 1px solid var(--line);
+      background: #F3EEE6; cursor: pointer; position: relative;
+    }
+    .thumb.on { border-color: var(--shelf); }
+    .thumb span {
+      position: absolute; left: 6px; bottom: 4px;
+      font-size: 11px; color: var(--blurb);
+    }
+    .t1 { background: linear-gradient(#3A3732 62%, #F3EEE6 63%); }
+    .t2 { background: radial-gradient(circle at 70% 30%, #F7F1E4, #E4DDD1 46%, #F3EEE6); }
+    .t3 { background: repeating-linear-gradient(#FFFdf8 0 8px, #E8E2D8 8px 9px); }
+
+    .modes {
+      display: flex; gap: 2px; border: 1px solid var(--line); background: var(--paper);
+    }
+    .modes button, .ghost {
+      border: 0; background: transparent; color: var(--blurb);
+      padding: 8px 14px; cursor: pointer; font-size: 13px;
+    }
+    .modes button.on { color: var(--shelf); background: #F3EEE6; }
+    .ghost {
+      border: 1px solid var(--line); color: var(--blurb); background: var(--paper);
+    }
+
+    .sound {
+      position: absolute; left: 22px; bottom: 92px;
+      border: 1px solid var(--line); background: var(--paper);
+      color: var(--blurb); padding: 7px 12px; font-size: 12px; cursor: pointer;
+    }
+
+    .panel {
+      position: absolute; top: 70px; right: 20px;
+      width: min(340px, 92vw); max-height: calc(100% - 140px);
+      background: var(--panel); color: var(--goods);
+      border: 1px solid var(--line);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .tabs { display: flex; border-bottom: 1px solid var(--line); }
+    .tabs button {
+      flex: 1; border: 0; background: transparent; padding: 13px 8px;
+      cursor: pointer; color: var(--note); font-size: 13px;
+    }
+    .tabs button.on {
+      color: var(--shelf);
+      box-shadow: inset 0 -1px 0 var(--shelf);
+    }
+    .pane { display: none; padding: 16px; overflow: auto; }
+    .pane.on { display: block; }
+    .who { font-size: 13px; color: var(--blurb); margin-bottom: 10px; }
+    .bubble {
+      background: #F6F2EA; padding: 12px 14px;
+      font-size: 14px; line-height: 1.75; margin-bottom: 12px; color: var(--goods);
+    }
+    .asks { display: grid; gap: 8px; }
+    .asks button, .send {
+      text-align: left; border: 1px solid var(--line);
+      background: var(--paper); padding: 10px 12px;
+      cursor: pointer; font-size: 13px; color: var(--goods);
+    }
+    .row { display: flex; gap: 8px; margin-top: 10px; }
+    .row input {
+      flex: 1; border: 1px solid var(--line); padding: 10px 12px;
+      background: var(--paper); color: var(--goods);
+    }
+    .send { width: 40px; text-align: center; padding: 10px 0; }
+    .ms-title { font-size: 11px; letter-spacing: .16em; color: var(--note); margin-bottom: 8px; }
+    textarea {
+      width: 100%; min-height: 220px; border: 0; resize: vertical;
+      background: transparent; font-size: 15px; line-height: 1.9; color: var(--goods); outline: none;
+    }
+    .meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--note); margin-top: 6px; }
+    .note { font-size: 11px; color: var(--note); margin-top: 10px; }
+
+    @media (max-width: 820px) {
+      .copy h2 { font-size: 22px; }
+      .panel { top: auto; bottom: 86px; right: 12px; left: 12px; width: auto; max-height: 40vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="world scene-window" id="world">
+      <div class="room"></div>
+      <div class="window"><div class="night"></div></div>
+      <div class="sill"></div>
+      <div class="lamp"></div>
+      <div class="desk"></div>
+      <div class="sheet"></div>
+      <div class="hotspot hs-win"><span class="plus">+</span><span class="tag">窗外这会儿很静</span></div>
+      <div class="hotspot hs-lamp"><span class="plus">+</span><span class="tag">灯先开着</span></div>
+      <div class="hotspot hs-paper"><span class="plus">+</span><span class="tag">纸还是空的</span></div>
+    </div>
+  </div>
+  <div class="vignette"></div>
+
+  <div class="hud" id="hud">
+    <div class="chrome top">
+      <h1>灯下的书桌</h1>
+      <div class="quiet">窗　/　灯　/　纸</div>
+    </div>
+
+    <div class="chrome copy">
+      <h2 id="title">窗</h2>
+      <p id="blurb">先看一会儿。字会自己来，或不来。</p>
+      <div class="zoom">
+        <span>停在喜欢的地方</span>
+        <button type="button" id="zout">−</button>
+        <span id="zlabel">100%</span>
+        <button type="button" id="zin">+</button>
+      </div>
+    </div>
+
+    <button class="sound" id="sound" type="button">环境音已关闭</button>
+
+    <div class="chrome bottom">
+      <div>
+        <div class="hint">拖动画面</div>
+        <div class="thumbs">
+          <div class="thumb t1 on" data-scene="window"><span>01 窗</span></div>
+          <div class="thumb t2" data-scene="lamp"><span>02 灯</span></div>
+          <div class="thumb t3" data-scene="paper"><span>03 纸</span></div>
+        </div>
+      </div>
+      <div class="modes">
+        <button class="on" id="modeWalk" type="button">看看</button>
+        <button id="modeWrite" type="button">写写</button>
+      </div>
+      <button class="ghost" id="immerse" type="button">只看房间</button>
+    </div>
+
+    <aside class="panel" id="panel">
+      <div class="tabs">
+        <button class="on" data-tab="chat" type="button">旁边</button>
+        <button data-tab="page" type="button">书稿</button>
+      </div>
+      <div class="pane on" id="chat">
+        <div class="who">没有人要介绍。灯开着就行。</div>
+        <div class="bubble" id="bubble">可以看窗，也可以把纸拉近一点。</div>
+        <div class="asks">
+          <button type="button" data-say="look">带我看看这里</button>
+          <button type="button" data-say="spark">给我一句</button>
+          <button type="button" data-say="quiet">我写，你别吵</button>
+        </div>
+        <div class="row">
+          <input id="say" placeholder="说一句…" />
+          <button class="send" id="go" type="button">↑</button>
+        </div>
+        <div class="note">房间自己应。还没有接任何人。</div>
+      </div>
+      <div class="pane" id="page">
+        <div class="ms-title">只在这台设备上</div>
+        <textarea id="draft" placeholder="先写一行看看。"></textarea>
+        <div class="meta"><span id="count">0 字</span><span>不上传</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const world = document.getElementById("world");
+    const stage = document.getElementById("stage");
+    const hud = document.getElementById("hud");
+    let scale = 1, x = 0, y = 0, dragging = false, lx = 0, ly = 0;
+    const apply = () => { world.style.transform = `translate(${x}px, ${y}px) scale(${scale})`; };
+    const setZ = () => { document.getElementById("zlabel").textContent = Math.round(scale * 100) + "%"; };
+
+    stage.addEventListener("pointerdown", e => {
+      if (e.target.closest(".hud")) return;
+      dragging = true; stage.classList.add("dragging");
+      lx = e.clientX; ly = e.clientY; stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener("pointermove", e => {
+      if (!dragging) return;
+      x += e.clientX - lx; y += e.clientY - ly; lx = e.clientX; ly = e.clientY; apply();
+    });
+    window.addEventListener("pointerup", () => { dragging = false; stage.classList.remove("dragging"); });
+    stage.addEventListener("wheel", e => {
+      e.preventDefault();
+      scale = Math.min(2.1, Math.max(0.88, scale + (e.deltaY > 0 ? -0.08 : 0.08)));
+      apply(); setZ();
+    }, { passive: false });
+    document.getElementById("zin").onclick = () => { scale = Math.min(2.1, scale + 0.12); apply(); setZ(); };
+    document.getElementById("zout").onclick = () => { scale = Math.max(0.88, scale - 0.12); apply(); setZ(); };
+
+    const blurbs = {
+      window: ["窗", "先看一会儿。字会自己来，或不来。"],
+      lamp: ["灯", "亮就这一圈。够写，也够发呆。"],
+      paper: ["纸", "还是空的。空着也算一种在。"]
+    };
+    document.querySelectorAll(".thumb").forEach(t => {
+      t.onclick = () => {
+        document.querySelectorAll(".thumb").forEach(n => n.classList.remove("on"));
+        t.classList.add("on");
+        const s = t.dataset.scene;
+        world.className = "world scene-" + s;
+        document.getElementById("title").textContent = blurbs[s][0];
+        document.getElementById("blurb").textContent = blurbs[s][1];
+        x = 0; y = 0; scale = s === "paper" ? 1.08 : 1; apply(); setZ();
+      };
+    });
+
+    document.querySelectorAll(".tabs button").forEach(b => {
+      b.onclick = () => {
+        document.querySelectorAll(".tabs button").forEach(n => n.classList.remove("on"));
+        b.classList.add("on");
+        document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === b.dataset.tab));
+      };
+    });
+
+    const lines = {
+      look: "窗还是那扇窗。灯还是那盏灯。没有下一项。",
+      spark: "写一个把灯拧到最暗、还不肯关的人。纸上只肯留下半句。",
+      quiet: "好。我把声音放下。你写到哪一行为止都可以。"
+    };
+    const bubble = document.getElementById("bubble");
+    document.querySelectorAll(".asks button").forEach(b => {
+      b.onclick = () => { bubble.textContent = lines[b.dataset.say]; };
+    });
+    const speak = () => {
+      const v = document.getElementById("say").value.trim();
+      if (!v) return;
+      bubble.textContent = "收到了。「" + v + "」先搁在灯旁边，不必马上变成一段。";
+      document.getElementById("say").value = "";
+    };
+    document.getElementById("go").onclick = speak;
+    document.getElementById("say").addEventListener("keydown", e => { if (e.key === "Enter") speak(); });
+
+    const draft = document.getElementById("draft");
+    draft.value = localStorage.getItem("lamp-desk-draft") || "";
+    const count = () => {
+      document.getElementById("count").textContent = draft.value.replace(/\s/g, "").length + " 字";
+      localStorage.setItem("lamp-desk-draft", draft.value);
+    };
+    count();
+    draft.addEventListener("input", count);
+
+    document.getElementById("modeWrite").onclick = () => {
+      document.getElementById("modeWrite").classList.add("on");
+      document.getElementById("modeWalk").classList.remove("on");
+      document.querySelector('[data-tab="page"]').click();
+    };
+    document.getElementById("modeWalk").onclick = () => {
+      document.getElementById("modeWalk").classList.add("on");
+      document.getElementById("modeWrite").classList.remove("on");
+      document.querySelector('[data-tab="chat"]').click();
+    };
+    document.getElementById("immerse").onclick = () => {
+      hud.classList.toggle("dim");
+      document.getElementById("immerse").textContent = hud.classList.contains("dim") ? "回到桌边" : "只看房间";
+    };
+
+    let audio, on = false;
+    document.getElementById("sound").onclick = async () => {
+      if (!audio) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const bufSize = 2 * ctx.sampleRate;
+        const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < bufSize; i++) {
+          last = last * 0.97 + (Math.random() * 2 - 1) * 0.018;
+          data[i] = last;
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buffer; src.loop = true;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass"; filter.frequency.value = 240;
+        const gain = ctx.createGain(); gain.gain.value = 0.045;
+        src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+        src.start();
+        audio = { ctx, gain };
+      }
+      on = !on;
+      if (audio.ctx.state === "suspended") await audio.ctx.resume();
+      audio.gain.gain.value = on ? 0.045 : 0;
+      document.getElementById("sound").textContent = on ? "环境音已开启" : "环境音已关闭";
+    };
+
+    document.querySelectorAll(".hotspot").forEach(h => {
+      h.onclick = () => {
+        document.querySelector('[data-tab="chat"]').click();
+        bubble.textContent = h.querySelector(".tag").textContent + "。先停这儿。";
+      };
+    });
+  </script>
+</body>
+</html>
