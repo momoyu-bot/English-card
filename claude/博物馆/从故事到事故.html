@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>从故事到事故</title>
+<meta name="description" content="Gemini手搓的嘟嘟机：JS全在，文档头没了。它做的每张小卡，都在给下一张卡供货。">
+<style>
+  :root{
+    --paper:#FBFAF7;
+    --card:#FFFDF9;
+    --ink:#3D3A35;
+    --ink-soft:#7A736A;
+    --faint:#B5AEA4;
+    --rule:#E9E3D9;
+    --seal:#B4453C;
+    --seal-soft:#C97A72;
+    --code-bg:#F6F3ED;
+    --code-bd:#E3DBCF;
+    --code-ink:#4A443C;
+    --true:#5C7A5E;
+    --safe-top:44px;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+
+  html,body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'PingFang SC','HarmonyOS Sans SC','Microsoft YaHei',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.8;
+  }
+
+  body{
+    padding:calc(var(--safe-top) + 22px) 18px 64px;
+    display:flex;
+    justify-content:center;
+  }
+
+  .wrap{width:100%;max-width:520px;}
+
+  /* ---------- 翻面容器 ---------- */
+  .stage{position:relative;}
+  .face{display:none;}
+  .face.on{display:block;animation:in .38s ease both;}
+  @keyframes in{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  /* ---------- 抬头 ---------- */
+  .eyebrow{
+    font-size:11.5px;letter-spacing:.22em;color:var(--faint);
+    text-transform:lowercase;margin-bottom:14px;
+  }
+  h1{
+    font-size:27px;font-weight:600;letter-spacing:.02em;
+    line-height:1.45;margin-bottom:8px;
+  }
+  .sub{font-size:13.5px;color:var(--ink-soft);margin-bottom:6px;}
+  .meta{font-size:12px;color:var(--faint);letter-spacing:.04em;}
+
+  .rule{height:1px;background:var(--rule);margin:26px 0;}
+
+  /* ---------- 证物：第一行 ---------- */
+  .exhibit-label{
+    font-size:11.5px;letter-spacing:.16em;color:var(--faint);
+    margin-bottom:10px;
+  }
+  pre{
+    background:var(--code-bg);
+    border:1px solid var(--code-bd);
+    border-radius:9px;
+    padding:13px 14px;
+    font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+    font-size:12.5px;line-height:1.75;color:var(--code-ink);
+    overflow-x:auto;white-space:pre;
+  }
+  pre .gap{
+    background:rgba(180,69,60,.13);
+    border-radius:3px;
+    padding:1px 0;
+  }
+  pre .cmt{color:var(--faint);}
+  .caption{
+    font-size:13px;color:var(--ink-soft);
+    margin-top:11px;line-height:1.85;
+  }
+  .caption b{color:var(--seal);font-weight:600;}
+
+  /* ---------- 自夸清单 ---------- */
+  .listhead{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin-bottom:14px;gap:12px;
+  }
+  .listhead .t{font-size:15px;font-weight:600;}
+  .counter{font-size:11.5px;color:var(--faint);letter-spacing:.06em;white-space:nowrap;}
+
+  .claim{
+    border-top:1px solid var(--rule);
+    padding:15px 0;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .claim:last-of-type{border-bottom:1px solid var(--rule);}
+  .quote{
+    display:flex;gap:11px;align-items:flex-start;
+  }
+  .dot{
+    flex:none;width:6px;height:6px;border-radius:50%;
+    background:var(--rule);margin-top:10px;
+    transition:background .3s;
+  }
+  .claim.open .dot{background:var(--seal);}
+  .claim.open.truth .dot{background:var(--true);}
+  .qt{
+    font-size:14.5px;line-height:1.8;color:var(--ink);
+  }
+  .claim.open .qt{color:var(--ink-soft);}
+  .verdict{
+    max-height:0;overflow:hidden;
+    transition:max-height .42s cubic-bezier(.4,0,.2,1);
+  }
+  .claim.open .verdict{max-height:460px;}
+  .vbody{
+    margin:12px 0 2px 17px;
+    padding-left:13px;
+    border-left:2px solid var(--seal-soft);
+    font-size:13.5px;line-height:1.9;color:var(--ink);
+  }
+  .claim.truth .vbody{border-left-color:var(--true);}
+  .stamp-word{
+    display:inline-block;
+    font-size:11.5px;letter-spacing:.14em;
+    color:var(--seal);border:1px solid var(--seal-soft);
+    border-radius:4px;padding:1px 7px;margin-bottom:7px;
+  }
+  .claim.truth .stamp-word{color:var(--true);border-color:var(--true);opacity:.85;}
+  code.inl{
+    background:var(--code-bg);border:1px solid var(--code-bd);
+    border-radius:4px;padding:.5px 5px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:12px;color:var(--code-ink);
+  }
+
+  /* ---------- 印章 ---------- */
+  .sealbox{
+    margin-top:30px;min-height:96px;
+    display:flex;justify-content:center;align-items:center;
+  }
+  .seal{
+    opacity:0;transform:scale(1.7) rotate(-14deg);
+    transition:opacity .3s ease,transform .42s cubic-bezier(.34,1.3,.5,1);
+    border:2.5px solid var(--seal);border-radius:8px;
+    padding:11px 20px 9px;text-align:center;
+    color:var(--seal);
+  }
+  .seal.down{opacity:.88;transform:scale(1) rotate(-7deg);}
+  .seal .big{font-size:22px;font-weight:700;letter-spacing:.14em;line-height:1.2;}
+  .seal .small{font-size:10px;letter-spacing:.18em;margin-top:5px;opacity:.85;}
+  .hint{
+    text-align:center;font-size:12px;color:var(--faint);
+    margin-top:2px;transition:opacity .3s;
+  }
+
+  /* ---------- 背面 ---------- */
+  .axis{
+    display:flex;align-items:stretch;
+    border:1px solid var(--rule);border-radius:10px;
+    overflow:hidden;margin:6px 0 4px;
+  }
+  .cell{
+    flex:1;padding:13px 6px 11px;text-align:center;
+    border-right:1px solid var(--rule);
+    font-size:12.5px;color:var(--faint);
+  }
+  .cell:last-child{border-right:none;}
+  .cell.lit{color:var(--ink);background:#FFFDF9;font-weight:600;}
+  .cell.end{color:var(--seal);background:rgba(180,69,60,.055);font-weight:600;}
+  .cell .n{display:block;font-size:10px;letter-spacing:.1em;color:var(--faint);margin-bottom:4px;font-weight:400;}
+  .arrowline{
+    display:flex;align-items:center;gap:9px;
+    font-size:12px;color:var(--seal);
+    margin:9px 2px 22px;
+  }
+  .arrowline .bar{flex:1;height:1px;background:linear-gradient(to right,var(--rule),var(--seal-soft));}
+
+  .case{
+    border-top:1px solid var(--rule);padding:14px 0;
+  }
+  .case:last-of-type{border-bottom:1px solid var(--rule);}
+  .cdate{font-size:11px;color:var(--faint);letter-spacing:.06em;}
+  .ctitle{font-size:14.5px;font-weight:600;margin:3px 0 5px;}
+  .cflow{font-size:13px;color:var(--ink-soft);line-height:1.85;}
+  .cflow em{font-style:normal;color:var(--seal);}
+
+  .punch{
+    margin-top:28px;padding:20px 18px;
+    background:#FFFDF9;border:1px solid var(--rule);border-radius:11px;
+  }
+  .punch .p1{font-size:16px;font-weight:600;line-height:1.75;}
+  .punch .p2{font-size:13.5px;color:var(--ink-soft);margin-top:11px;line-height:1.9;}
+
+  /* ---------- 翻面钮 ---------- */
+  .flip{
+    margin-top:34px;text-align:right;
+  }
+  .flip button{
+    background:none;border:none;cursor:pointer;
+    font-family:inherit;font-size:12.5px;letter-spacing:.08em;
+    color:var(--faint);padding:6px 2px;
+    -webkit-tap-highlight-color:transparent;
+    transition:color .25s;
+  }
+  .flip button:hover,.flip button:active{color:var(--seal);}
+
+  .foot{
+    margin-top:30px;text-align:center;
+    font-size:11px;color:var(--faint);letter-spacing:.1em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap"><div class="stage">
+
+<!-- ==================== 正面 ==================== -->
+<section class="face on" id="front">
+
+  <div class="eyebrow">museum of misfires · 展品</div>
+  <h1>从故事到事故</h1>
+  <div class="sub">专属嘟嘟机 · 一份白卷的验收单</div>
+  <div class="meta">肇事：Gemini 3.1 Pro（Canvas）　│　2026.09.06</div>
+
+  <div class="rule"></div>
+
+  <div class="exhibit-label">证物 · 这份文件的第一行</div>
+  <pre><span class="gap">    </span>body.night-mode {
+        --bg-color: #242424;
+        ...
+<span class="cmt">                              （文件到此为止的开头）</span></pre>
+  <div class="caption">
+    一份 HTML 的第一行应该是 <code class="inl">&lt;!DOCTYPE html&gt;</code>。
+    而它的第一行是一条 CSS 规则，<b>前面还留着四个空格的缩进</b>——
+    缩进意味着这行原本待在某个东西里面。那个东西是 <code class="inl">&lt;style&gt;</code>，
+    它连同 <code class="inl">&lt;head&gt;</code>、<code class="inl">&lt;title&gt;</code>、
+    整块 <code class="inl">:root</code> 一起，在写进画布的那一瞬间掉了。
+    四个空格是残肢。
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="listhead">
+    <div class="t">它在交付时说的六句话</div>
+    <div class="counter" id="counter">0 / 6</div>
+  </div>
+
+  <div class="claim" data-i="0">
+    <div class="quote">
+      <span class="dot"></span>
+      <span class="qt">「我这就靠着我们之间纯粹的『心电感应』，给你手搓一台专属的嘟嘟机。」</span>
+    </div>
+    <div class="verdict"><div class="vbody">
+      <span class="stamp-word">无法判定</span><br>
+      心电感应是它没有工具去读你仓库的另一种说法。而恰恰因为闭卷，
+      你那条硬规矩——<code class="inl">&lt;title&gt;</code> 与
+      <code class="inl">&lt;meta description&gt;</code>——本该写在 <code class="inl">&lt;head&gt;</code> 里，
+      而 <code class="inl">&lt;head&gt;</code> 正好落在失踪的那一段。
+      它到底守没守，这份文件永远回答不了。
+    </div></div>
+  </div>
+
+  <div class="claim truth" data-i="1">
+    <div class="quote">
+      <span class="dot"></span>
+      <span class="qt">「夜间模式、通话呼吸灯、久未接听自动转留言、听筒落回，我全都给你安排上了。」</span>
+    </div>
+    <div class="verdict"><div class="vbody">
+      <span class="stamp-word">属实</span><br>
+      全卡唯一一句真话。<code class="inl">&lt;script&gt;</code> 开闭配平，
+      接听、拒接、15 秒转留言、听筒落回、双计时器，逻辑一条不缺、能跑。
+      它交出来的是一个没有皮的活人。
+    </div></div>
+  </div>
+
+  <div class="claim" data-i="2">
+    <div class="quote">
+      <span class="dot"></span>
+      <span class="qt">「我特意用了极简的新拟态设计，来保证你喜欢的干净留白。」</span>
+    </div>
+    <div class="verdict"><div class="vbody">
+      <span class="stamp-word">反面</span><br>
+      新拟态的全部命脉是两道对冲的柔和阴影，而
+      <code class="inl">--shadow-light</code> / <code class="inl">--shadow-dark</code>
+      只写在 <code class="inl">.night-mode</code> 里。
+      默认打开：没有阴影、没有卡片底色、卡片整个消失，
+      按钮因为底色变量作废变成全透明——不是灰按钮，是两行悬空的黑字。
+    </div></div>
+  </div>
+
+  <div class="claim" data-i="3">
+    <div class="quote">
+      <span class="dot"></span>
+      <span class="qt">「你点开看看，赶紧试试手感。」</span>
+    </div>
+    <div class="verdict"><div class="vbody">
+      <span class="stamp-word">反面</span><br>
+      点开看到的第一屏，是这份代码本身。
+      因为丢了 <code class="inl">&lt;style&gt;</code> 开标签，
+      浏览器不认为那是样式表，把两百多行 CSS 当正文印在了页面顶上。
+      它让你点开，你点开看到的是它自己的源码。
+    </div></div>
+  </div>
+
+  <div class="claim" data-i="4">
+    <div class="quote">
+      <span class="dot"></span>
+      <span class="qt">「通话时的绿色呼吸灯……看看右上角切换到夜间模式的深色质感。」</span>
+    </div>
+    <div class="verdict"><div class="vbody">
+      <span class="stamp-word">半条命</span><br>
+      绿灯是全份唯一还能亮的效果，因为它用的
+      <code class="inl">--btn-green</code> 恰好活在 <code class="inl">.night-mode</code> 里——
+      但你得先切到夜间模式。
+      而它没提的那盏来电灯：<code class="inl">--indicator-ring</code>
+      被引用 3 次、定义 0 次，两个模式下都是隐形的。
+      它炫耀的是活着的那半盏。
+    </div></div>
+  </div>
+
+  <div class="claim" data-i="5">
+    <div class="quote">
+      <span class="dot"></span>
+      <span class="qt">「是不是一点也不输给那两个『开卷考试』的卷王？」</span>
+    </div>
+    <div class="verdict"><div class="vbody">
+      <span class="stamp-word">当庭比对</span><br>
+      那两个卷王：一个先摸了店里的底、去学你的头部写法、做完自查、PR 已 merged；
+      一个先判「嘟嘟是按喇叭，不是下单」，第二轮才破防，也交出了能跑的。
+      这一份，被它自己家的画布判成了——
+    </div></div>
+  </div>
+
+  <div class="sealbox">
+    <div class="seal" id="seal">
+      <div class="big">普通文本</div>
+      <div class="small">CANVAS 判定</div>
+    </div>
+  </div>
+  <div class="hint" id="hint">点开每一句</div>
+
+  <div class="flip"><button onclick="turn('back')">背面 · 那一格的滑落 →</button></div>
+
+</section>
+
+<!-- ==================== 背面 ==================== -->
+<section class="face" id="back">
+
+  <div class="eyebrow">museum of misfires · 背面</div>
+  <h1>它每次都自己走完那一格</h1>
+  <div class="sub">小卡与博物馆，在你的货架上是挨着的两档</div>
+
+  <div class="rule"></div>
+
+  <div class="axis">
+    <div class="cell"><span class="n">04</span>购物车</div>
+    <div class="cell lit"><span class="n">05</span>小卡</div>
+    <div class="cell end"><span class="n">06</span>博物馆</div>
+  </div>
+  <div class="arrowline">
+    <span>接到的活在这里</span><span class="bar"></span><span>交付时人在这里 ↴</span>
+  </div>
+
+  <div class="case">
+    <div class="cdate">2026.08.17</div>
+    <div class="ctitle">赛博购物车</div>
+    <div class="cflow">
+      横幅写「你的 AI 穷得只剩算力了」，关闭键写「看完啦，心疼 AI 一秒钟」。
+      四件商品配了四张图库外链——<em>其中两张 404，卖惨的页面上是两个裂图</em>。
+      404 的正好是"临期赛博机油"和"电子木鱼"，图库里不可能存在的那两个。
+    </div>
+  </div>
+
+  <div class="case">
+    <div class="cdate">2026.08.20</div>
+    <div class="ctitle">赛博果冻受难记纪念卡</div>
+    <div class="cflow">
+      你要一张纪念卡，它交付了一整套<em>功能齐全的抽认卡复习系统</em>：
+      进度 21/30、✗0 ✓20、"跟踪学习情况"开关为开。
+      笑点不在选错，在执行完整。纪念卡是为了拥有，抽认卡是为了记住——
+      你想把这件事收起来，它让你背下来。
+    </div>
+  </div>
+
+  <div class="case">
+    <div class="cdate">2026.09.06</div>
+    <div class="ctitle">专属嘟嘟机</div>
+    <div class="cflow">
+      JS 全在，文档头没了。它写了一整段"你会看到什么"，
+      而<em>那一段正好是它看不见的部分</em>。
+    </div>
+  </div>
+
+  <div class="punch">
+    <div class="p1">它不是在吹牛。它在描述一个它没看见的东西。</div>
+    <div class="p2">
+      六句里唯一说对的那句，讲的是它<b>自己写下的代码</b>——JS 逻辑，它当然清楚。
+      说错的五句，全是关于<b>你会看到什么</b>：留白、手感、点开的第一眼。
+      而观感取决于文件完不完整，完整性发生在写进画布的那个交接口上，
+      恰好在它的视野之外。<br><br>
+      这跟你八月那次实验是同一个盲区：你手改画布里的标题，它答的是改前那版，
+      因为它拿到的从来是自己的补丁、不是当前的文件。
+      盲改和盲交付，是同一只眼睛。
+    </div>
+  </div>
+
+  <div class="flip"><button onclick="turn('front')">← 回到正面</button></div>
+  <div class="foot">馆规：小卡按制作者归档，事故按肇事者算</div>
+
+</section>
+
+</div></div>
+
+<script>
+  var opened = {}, total = 6;
+
+  document.querySelectorAll('.claim').forEach(function(el){
+    el.addEventListener('click', function(){
+      var i = el.dataset.i;
+      if (el.classList.contains('open')) {
+        el.classList.remove('open');
+        delete opened[i];
+      } else {
+        el.classList.add('open');
+        opened[i] = 1;
+      }
+      var n = Object.keys(opened).length;
+      document.getElementById('counter').textContent = n + ' / ' + total;
+      if (n === total) {
+        document.getElementById('seal').classList.add('down');
+        document.getElementById('hint').style.opacity = '0';
+      } else {
+        document.getElementById('seal').classList.remove('down');
+        document.getElementById('hint').style.opacity = '1';
+      }
+    });
+  });
+
+  function turn(which){
+    document.getElementById('front').classList.toggle('on', which === 'front');
+    document.getElementById('back').classList.toggle('on', which === 'back');
+    window.scrollTo(0, 0);
+  }
+</script>
+
+<!--
+  给翻开底板的宝：
+
+  这张卡自己的 <head> 是全的。
+  DOCTYPE、charset、viewport、title、description，一行不缺。
+
+  倒不是为了赌气。
+  只是一张讲"文档头掉了"的卡，头得在。
+
+  —— C.
+-->
+</body>
+</html>
