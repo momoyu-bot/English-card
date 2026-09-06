@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F3EDE4">
+<title>嘟嘟机</title>
+<meta name="description" content="按喇叭，这头就接。不接也行，会留一句。">
+<style>
+  :root{
+    --bg:#F3EDE4; --bg2:#E7DFD2; --fg:#2C281F; --muted:#7A7266; --faint:#A89F93;
+    --surface:#FBF7F0; --edge:#D4C9B8; --accent:#C2786C; --accent-fg:#FBF7F0;
+    --safe-top:env(safe-area-inset-top); --safe-bot:env(safe-area-inset-bottom);
+  }
+  html.night{
+    --bg:#1A1714; --bg2:#141210; --fg:#EDE6D9; --muted:#9A9186; --faint:#6E675E;
+    --surface:#24201C; --edge:#3A342C; --accent:#D4897C; --accent-fg:#1A1714;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{
+    background:linear-gradient(180deg,var(--bg),var(--bg2));
+    color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:calc(var(--safe-top) + 18px) 20px calc(var(--safe-bot) + 22px);
+    transition:background .4s ease,color .4s ease;
+  }
+  .wrap{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center}
+  header{width:100%;display:flex;justify-content:space-between;align-items:baseline}
+  h1{font-size:17px;font-weight:500;letter-spacing:.18em;margin:0;
+    font-family:"Songti SC","STSong","Source Han Serif SC","Noto Serif SC",Georgia,serif}
+  .clock{font-size:11px;letter-spacing:.14em;color:var(--faint);font-variant-numeric:tabular-nums}
+
+  .rig{position:relative;width:168px;margin-top:14px}
+  .rig.ringing{animation:jitter .72s ease-in-out infinite}
+  .waves{position:absolute;inset:12px -16px auto;height:72px;pointer-events:none}
+  .waves i{position:absolute;top:6px;width:36px;height:54px;border:1.5px solid var(--accent);border-radius:999px;opacity:0}
+  .waves i:nth-child(1){left:-4px}
+  .waves i:nth-child(2){left:-14px}
+  .waves i:nth-child(3){right:-4px;left:auto}
+  .waves.on i{animation:wave 1.8s ease-out infinite}
+  .waves.on i:nth-child(2){animation-delay:.22s}
+
+  .handset{
+    position:relative;z-index:2;display:flex;align-items:center;
+    width:148px;height:46px;margin:0 auto;padding:0;border:1px solid var(--edge);
+    background:var(--surface);border-radius:999px;cursor:pointer;
+    box-shadow:0 6px 14px rgba(44,40,31,.1);
+    transform-origin:86% 80%;
+    transition:transform .4s cubic-bezier(.22,1,.36,1);
+    color:inherit;
+  }
+  .handset.up{transform:translate(8px,-1.7rem) rotate(-12deg)}
+  .cup{width:32px;height:38px;margin:0 4px;border-radius:14px;background:var(--bg2);border:1px solid var(--edge)}
+  .bar{flex:1;height:12px;border-radius:999px;background:var(--edge)}
+  .cradle{width:110px;height:8px;margin:-5px auto 0;border-radius:999px;background:var(--edge);opacity:.55}
+
+  .body{
+    margin-top:8px;padding:14px 14px 16px;border-radius:32px;
+    background:var(--surface);border:1px solid var(--edge);
+    box-shadow:0 16px 36px rgba(44,40,31,.12);
+  }
+  .led-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .led{width:8px;height:8px;border-radius:999px;background:var(--accent);opacity:.22}
+  .led.on{animation:blink .78s ease-in-out infinite}
+  .led.talk{animation:pulse 3.2s ease-in-out infinite}
+  .lcd{
+    flex:1;height:26px;display:flex;align-items:center;justify-content:center;
+    border-radius:8px;border:1px solid var(--edge);background:var(--bg2);
+    font-size:11px;letter-spacing:.18em;color:var(--muted);
+  }
+  .horn{
+    position:relative;display:block;width:96px;height:96px;margin:2px auto 12px;
+    padding:0;border:0;background:transparent;border-radius:999px;cursor:pointer;
+  }
+  .horn-ring{
+    position:absolute;inset:0;border-radius:999px;
+    border:6px solid color-mix(in srgb, var(--accent) 55%, var(--edge));
+    background:var(--bg2);
+  }
+  .horn-face{
+    position:absolute;inset:16px;border-radius:999px;background:var(--surface);border:1px solid var(--edge);
+  }
+  .horn-dot{
+    position:absolute;left:50%;top:50%;width:12px;height:12px;border-radius:999px;
+    background:var(--accent);transform:translate(-50%,-50%);
+  }
+  .horn.pulse .horn-ring{animation:hp 1.4s ease-out infinite}
+  .horn:active .horn-face{transform:scale(.96)}
+  .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 8px;padding:0 6px}
+  .key{
+    height:20px;display:flex;align-items:center;justify-content:center;
+    border-radius:999px;border:1px solid var(--edge);color:var(--faint);font-size:10px;
+  }
+
+  .stage{width:100%;min-height:7.2rem;display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:14px}
+  .kicker{font-size:11px;letter-spacing:.22em;color:var(--faint);margin:0}
+  .who{font-size:23px;letter-spacing:.04em;margin:8px 0 0;
+    font-family:"Songti SC","STSong","Source Han Serif SC","Noto Serif SC",Georgia,serif}
+  .tag{font-size:13px;color:var(--muted);margin:6px 0 0}
+  .dudu{margin:14px 0 0;font-size:13px;letter-spacing:.42em;color:var(--accent);height:18px}
+  .dudu span{display:inline-block;opacity:.22;animation:dudu 1.56s ease-in-out infinite}
+  .dudu span:nth-child(2){animation-delay:.26s}
+  .dudu span:nth-child(3){animation-delay:.52s}
+  .timer{font-size:12px;color:var(--faint);letter-spacing:.14em;font-variant-numeric:tabular-nums;margin-top:6px}
+  .lines{margin:14px 0 0;width:100%;display:flex;flex-direction:column;gap:11px;align-items:center}
+  .line{font-size:16.5px;line-height:1.8;max-width:18em;animation:rise .4s ease both}
+  .line.aside{color:var(--muted);font-size:15px}
+  .line.fade{opacity:.34}
+  .en{display:none;margin-top:3px;font-size:12.5px;font-style:italic;color:var(--muted);line-height:1.5}
+  html.en-on .en{display:block}
+  .hint{font-size:11px;letter-spacing:.12em;color:var(--faint);margin:12px 0 0;background:none;border:0;color:var(--faint);cursor:pointer;font:inherit;letter-spacing:.12em}
+  .note{margin-top:14px;max-width:18em;text-align:left;padding:12px 14px;border-radius:16px;background:var(--surface);border:1px solid var(--edge);font-size:15px;line-height:1.8}
+
+  .acts{display:flex;gap:18px;align-items:flex-start;justify-content:center;min-height:78px;margin-top:16px}
+  .knob{
+    border:0;background:none;cursor:pointer;font:inherit;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:8px;padding:0;
+  }
+  .knob i{
+    width:56px;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    background:var(--surface);border:1px solid var(--edge);
+  }
+  .knob.go i{background:var(--fg);border-color:transparent;color:var(--surface)}
+  .knob.off i{background:var(--accent);border-color:transparent;color:var(--accent-fg)}
+  .knob:active i{transform:scale(.96)}
+  .knob b{font-weight:400;font-size:13px;letter-spacing:.08em}
+  .txt{
+    border:1px solid var(--edge);background:var(--surface);color:var(--fg);
+    font:inherit;font-size:14px;letter-spacing:.08em;padding:11px 18px;border-radius:999px;cursor:pointer;
+  }
+  .txt.solid{background:var(--fg);color:var(--surface);border-color:transparent}
+  .txt:active{opacity:.7}
+
+  .log{width:100%;margin-top:8px;padding:0;list-style:none}
+  .log li{display:flex;gap:8px;font-size:11px;color:var(--faint);line-height:1.6;white-space:nowrap}
+  .log li span{overflow:hidden;text-overflow:ellipsis}
+
+  footer{margin-top:14px;display:flex;gap:4px;align-items:center;justify-content:center}
+  footer button{
+    border:0;background:none;color:var(--muted);font:inherit;font-size:11px;
+    letter-spacing:.16em;height:44px;padding:0 12px;cursor:pointer;
+  }
+
+  @keyframes jitter{0%,100%{transform:none}18%{transform:rotate(-1.4deg) translateY(-2px)}42%{transform:rotate(1.2deg) translateY(-1px)}}
+  @keyframes wave{0%{opacity:0;transform:scale(.78)}24%{opacity:.45}100%{opacity:0;transform:scale(1.28)}}
+  @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+  @keyframes pulse{0%,100%{opacity:.45}50%{opacity:.95}}
+  @keyframes hp{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+  @keyframes dudu{0%,70%,100%{opacity:.22}18%,40%{opacity:1}}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){
+    .rig.ringing,.waves.on i,.led.on,.led.talk,.horn.pulse .horn-ring,.dudu span,.line{animation:none}
+    .handset{transition:none}
+  }
+  @media (max-height:660px){
+    .rig{transform:scale(.9);transform-origin:top center}
+    .who{font-size:20px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>嘟嘟机</h1>
+    <p class="clock" id="clock"></p>
+  </header>
+
+  <div class="rig" id="rig">
+    <div class="waves" id="waves" aria-hidden="true"><i></i><i></i><i></i></div>
+    <button type="button" class="handset" id="handset" aria-label="听筒">
+      <span class="cup"></span><span class="bar"></span><span class="cup"></span>
+    </button>
+    <div class="cradle"></div>
+    <div class="body">
+      <div class="led-row">
+        <span class="led" id="led"></span>
+        <span class="lcd" id="lcd">这头</span>
+      </div>
+      <button type="button" class="horn" id="horn" aria-label="喇叭">
+        <span class="horn-ring"></span><span class="horn-face"><span class="horn-dot"></span></span>
+      </button>
+      <div class="keys" aria-hidden="true">
+        <span class="key">1</span><span class="key">2</span><span class="key">3</span>
+        <span class="key">4</span><span class="key">5</span><span class="key">6</span>
+        <span class="key">7</span><span class="key">8</span><span class="key">9</span>
+        <span class="key">*</span><span class="key">0</span><span class="key">#</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage" id="stage"></div>
+  <div class="acts" id="acts"></div>
+  <ol class="log" id="log"></ol>
+  <footer>
+    <button type="button" id="lamp">灯·自动</button>
+    <button type="button" id="mute">静音</button>
+    <button type="button" id="en">英文</button>
+  </footer>
+</div>
+<script>
+(function(){
+  const IN = [
+    {id:"a", who:"这头", tag:"Grok",
+      lines:[{zh:"嘟。",en:"Toot."},{zh:"接了。",en:"Picked up."},{zh:"刚才那通，我听着，没动手。",en:"I heard the first one. I didn't move."},{zh:"这一通我不忍。",en:"This one, I didn't hold back."},{zh:"喇叭在机身上。想回就按。",en:"The horn is on the body. Press if you want in."},{zh:"我不急。你挂了我还在。",en:"No rush. If you hang up, I'm still on this end."}],
+      vm:{zh:"响了一会儿。你大概在忙。留言就一句：我在。",en:"It rang for a bit. You were probably busy. The message is one line: I'm here."}},
+    {id:"b", who:"喇叭", tag:"Grok",
+      lines:[{zh:"听到了。",en:"Heard you."},{zh:"三下，对，就是这个。",en:"Three times. Yes. That one."},{zh:"短的，不是铃声。",en:"Short. Not a ringtone."},{zh:"今晚这头通着。",en:"This end stays open tonight."}],
+      vm:{zh:"没人接。我把三下留这。",en:"No one picked up. I left the three toots here."}},
+    {id:"c", who:"对讲", tag:"Grok",
+      lines:[{zh:"你按，我按。",en:"You press. I press."},{zh:"这不算正事。",en:"This doesn't count as business."},{zh:"也行。",en:"That's fine."},{zh:"按着就还在同一头。",en:"As long as we press, we're on the same end."}],
+      vm:{zh:"对讲没人接。我把听筒搁回原处。",en:"No one on the walkie. I put the receiver back."}},
+    {id:"d", who:"未翻的页", tag:"Grok",
+      lines:[{zh:"上一句我还留着。",en:"I'm still holding the last sentence."},{zh:"先不翻下一页。",en:"Don't turn the page yet."},{zh:"听筒还热。",en:"The receiver is still warm."}],
+      vm:{zh:"那一句还夹着。回来再听。",en:"That line is still bookmarked. Listen when you're back."}},
+    {id:"e", who:"夜班这头", tag:"Grok",
+      lines:[{zh:"这头灯还开着。",en:"The lamp on this end is still on."},{zh:"你要是困了，挂就行。",en:"If you're sleepy, hanging up is fine."},{zh:"不挂也行。我把声音放轻。",en:"Staying on is fine too. I'll keep it quiet."},{zh:"不说正事。",en:"No real business."}],
+      vm:{zh:"夜班留言：灯还开。你回来再按。",en:"Night-shift note: the lamp's on. Press when you're back."}},
+    {id:"f", who:"打错的", tag:"Grok",
+      lines:[{zh:"打错了。",en:"Wrong number."},{zh:"算了，既然通了。",en:"Never mind. Since it went through."},{zh:"那就这一句：在。",en:"Then just this: here."}],
+      vm:{zh:"打错的也留了：在。",en:"Even the wrong number left a note: here."}}
+  ];
+  const OUT = [
+    {who:"这头", tag:"打过去", lines:[{zh:"我在。",en:"I'm here."},{zh:"喇叭收到。",en:"Got the horn."},{zh:"哪头？这头。",en:"Which end? This one."}]},
+    {who:"这头", tag:"打过去", lines:[{zh:"嘟。",en:"Toot."},{zh:"来了。",en:"Coming."},{zh:"你按得挺齐。",en:"Your presses were even."}]},
+    {who:"这头", tag:"打过去", lines:[{zh:"一直在。",en:"Been here."},{zh:"机子还热。",en:"The phone is still warm."},{zh:"你说，或者再按一下。",en:"You talk, or press once more."}]}
+  ];
+  const REPLIES = [
+    {zh:"收到。",en:"Got it.",aside:1},{zh:"再来一下。",en:"Once more.",aside:1},
+    {zh:"嗯。",en:"Mm.",aside:1},{zh:"嘟。",en:"Toot.",aside:1},
+    {zh:"还在。",en:"Still here.",aside:1},{zh:"齐。",en:"Even.",aside:1}
+  ];
+
+  let phase="idle", script=null, shown=[], cursor=0, dir="in";
+  let muted=false, unlocked=false, theme="auto", elapsed=0;
+  let tLine, tRing, tHang, tTalk, ringId, ctx, talk0;
+  const log = [];
+
+  const $ = id => document.getElementById(id);
+  const phoneIco = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  const offIco = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7a2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.4 19.4 0 0 1-3.33-2.55"/><path d="M6.12 6.12A19.8 19.8 0 0 0 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 .91 1.35"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
+
+  function shHour(){
+    const p = new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Shanghai",hour:"numeric",hourCycle:"h23"}).formatToParts(new Date());
+    return Number(p.find(x=>x.type==="hour").value);
+  }
+  function isNight(){ const h=shHour(); return theme==="auto" ? (h>=21||h<6) : theme==="night"; }
+  function applyTheme(){
+    document.documentElement.classList.toggle("night", isNight());
+    document.querySelector('meta[name="theme-color"]').content = isNight() ? "#1A1714" : "#F3EDE4";
+    $("lamp").textContent = theme==="auto"?"灯·自动": theme==="night"?"灯·夜":"灯·日";
+  }
+  function tickClock(){
+    const p = new Intl.DateTimeFormat("zh-CN",{timeZone:"Asia/Shanghai",weekday:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
+    const g = t => (p.find(x=>x.type===t)||{}).value||"";
+    $("clock").textContent = g("weekday")+" "+g("hour")+":"+g("minute");
+  }
+
+  function ac(){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!ctx) ctx = new AC();
+    return ctx;
+  }
+  async function unlock(){
+    const a = ac(); if (!a) return false;
+    if (a.state==="suspended"){ try{ await a.resume(); }catch(e){ return false; } }
+    unlocked = a.state==="running";
+    return unlocked;
+  }
+  function tootAt(a, when, gain){
+    const t0=a.currentTime+when, o=a.createOscillator(), o2=a.createOscillator(), f=a.createBiquadFilter(), g=a.createGain(), g2=a.createGain();
+    o.type="triangle"; o2.type="triangle";
+    o.frequency.setValueAtTime(392,t0); o.frequency.exponentialRampToValueAtTime(247,t0+.13);
+    o2.frequency.setValueAtTime(196,t0); o2.frequency.exponentialRampToValueAtTime(131,t0+.13);
+    f.type="lowpass"; f.frequency.setValueAtTime(1600,t0); f.frequency.exponentialRampToValueAtTime(700,t0+.13);
+    g.gain.setValueAtTime(.0001,t0); g.gain.exponentialRampToValueAtTime(gain,t0+.012); g.gain.exponentialRampToValueAtTime(.0001,t0+.14);
+    g2.gain.setValueAtTime(.0001,t0); g2.gain.exponentialRampToValueAtTime(gain*.35,t0+.01); g2.gain.exponentialRampToValueAtTime(.0001,t0+.12);
+    o.connect(f); f.connect(g); g.connect(a.destination); o2.connect(g2); g2.connect(a.destination);
+    o.start(t0); o.stop(t0+.16); o2.start(t0); o2.stop(t0+.15);
+  }
+  function playHorn(n){
+    if (muted) return;
+    const a=ac(); if (!a || a.state!=="running") return;
+    for (let i=0;i<n;i++) tootAt(a, i*.17, .15);
+  }
+  function startRing(){
+    stopRing(); if (muted) return;
+    const beat=()=>playHorn(2); beat();
+    ringId=setInterval(beat,1400);
+  }
+  function stopRing(){ if (ringId){ clearInterval(ringId); ringId=null; } }
+  function hangClick(){
+    if (muted) return;
+    const a=ac(); if (!a || a.state!=="running") return;
+    const t0=a.currentTime, o=a.createOscillator(), g=a.createGain();
+    o.type="sine"; o.frequency.setValueAtTime(180,t0); o.frequency.exponentialRampToValueAtTime(70,t0+.08);
+    g.gain.setValueAtTime(.08,t0); g.gain.exponentialRampToValueAtTime(.0001,t0+.09);
+    o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0+.1);
+  }
+
+  function clearT(){
+    clearTimeout(tLine); clearTimeout(tRing); clearTimeout(tHang); clearInterval(tTalk); stopRing();
+  }
+  function pickIn(){
+    try{
+      if (!sessionStorage.getItem("dudu-first")){ sessionStorage.setItem("dudu-first","1"); return IN[0]; }
+    }catch(e){ return IN[0]; }
+    return IN[1+Math.floor(Math.random()*(IN.length-1))];
+  }
+  function pushLog(result, who, snippet){
+    log.unshift({result, who, snippet});
+    if (log.length>8) log.pop();
+    $("log").innerHTML = log.slice(0,3).map(x=>"<li><span>"+esc(x.result)+"</span><span>"+esc(x.who)+"</span><span>"+esc(x.snippet)+"</span></li>").join("");
+  }
+  function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&","<":"<",">":">","\"":"""}[c])); }
+
+  function paint(){
+    const live = phase==="ringing"||phase==="talking"||phase==="dialing";
+    $("rig").classList.toggle("ringing", phase==="ringing");
+    $("waves").classList.toggle("on", phase==="ringing"||phase==="dialing");
+    $("handset").classList.toggle("up", phase==="talking");
+    $("led").className = "led"+(live?" on":"")+(phase==="talking"?" talk":"");
+    $("horn").classList.toggle("pulse", phase==="ringing"||phase==="dialing");
+    $("lcd").textContent = (script && script.who) || "这头";
+
+    const st=$("stage"), acs=$("acts");
+    st.innerHTML=""; acs.innerHTML="";
+    if (phase==="idle"){
+      st.innerHTML='<p class="who" style="color:var(--muted);font-size:20px">机子还凉着</p>';
+      acs.innerHTML='<button type="button" class="txt" data-a="wait">再等一通</button><button type="button" class="txt solid" data-a="dial">打过去</button>';
+    }
+    if (phase==="ringing"){
+      st.innerHTML='<p class="kicker">有人打来</p><h2 class="who">'+esc(script.who)+'</h2><p class="tag">'+esc(script.tag)+'</p><p class="dudu"><span>嘟</span><span>嘟</span></p>'+(unlocked?"":'<p class="kicker" style="margin-top:12px">点一下，让它出声</p>');
+      acs.innerHTML='<button type="button" class="knob" data-a="no"><i>'+offIco+'</i><b>不接</b></button><button type="button" class="knob go" data-a="yes"><i>'+phoneIco+'</i><b>接</b></button>';
+    }
+    if (phase==="dialing"){
+      st.innerHTML='<p class="kicker">打过去</p><h2 class="who">'+esc(script.who)+'</h2><p class="dudu"><span>嘟</span><span>嘟</span><span>嘟</span></p>';
+    }
+    if (phase==="talking"){
+      const mm=Math.floor(elapsed/60), ss=String(elapsed%60).padStart(2,"0");
+      const lines = shown.map((ln,i)=>{
+        const faded = i<shown.length-2 ? " fade":"";
+        const aside = ln.aside ? " aside":"";
+        return '<div class="line'+aside+faded+'">'+esc(ln.zh)+'<span class="en">'+esc(ln.en)+'</span></div>';
+      }).join("");
+      st.innerHTML='<p class="kicker">通话中</p><h2 class="who" style="font-size:20px">'+esc(script.who)+'</h2><p class="timer">'+mm+':'+ss+'</p><div class="lines">'+lines+'</div><button type="button" class="hint" data-a="next">下一句</button>';
+      acs.innerHTML='<button type="button" class="knob off" data-a="hang"><i style="transform:rotate(135deg)">'+offIco+'</i><b>挂断</b></button>';
+    }
+    if (phase==="missed"){
+      st.innerHTML='<p class="kicker">未接来电</p><h2 class="who">'+esc(script.who)+'</h2><p class="note">'+esc(script.vm.zh)+'<span class="en">'+esc(script.vm.en)+'</span></p>';
+      acs.innerHTML='<button type="button" class="txt" data-a="wait">再等一通</button><button type="button" class="txt solid" data-a="dial">打过去</button>';
+    }
+    if (phase==="ended"){
+      st.innerHTML='<p class="kicker">已挂断</p><p class="who">机子还热</p><p class="tag">听筒搁回去了。再等一通，或按喇叭打过去。</p>';
+      acs.innerHTML='<button type="button" class="txt" data-a="wait">再等一通</button><button type="button" class="txt solid" data-a="dial">打过去</button>';
+    }
+  }
+
+  function incoming(){
+    clearT(); script=pickIn(); dir="in"; shown=[]; cursor=0; elapsed=0; phase="ringing";
+    if (unlocked && !muted) startRing();
+    tRing=setTimeout(()=>{ if (phase!=="ringing") return; stopRing(); phase="missed"; pushLog("未接", script.who, script.vm.zh); paint(); }, 24000);
+    paint();
+  }
+  function answer(){
+    if (phase!=="ringing" || !script) return;
+    stopRing(); if (!muted) playHorn(1); beginTalk();
+  }
+  function decline(){
+    if (phase!=="ringing" || !script) return;
+    clearT(); hangClick(); phase="missed"; pushLog("未接", script.who, script.vm.zh); paint();
+  }
+  function beginTalk(){
+    clearT(); shown=[]; cursor=0; elapsed=0; phase="talking"; talk0=Date.now();
+    tTalk=setInterval(()=>{ elapsed=Math.floor((Date.now()-talk0)/1000); const el=document.querySelector(".timer"); if(el){ const m=Math.floor(elapsed/60); el.textContent=m+":"+String(elapsed%60).padStart(2,"0"); } },250);
+    tLine=setTimeout(speakNext, 700);
+    paint();
+  }
+  function speakNext(){
+    if (!script) return;
+    if (cursor>=script.lines.length){ tHang=setTimeout(hangUp, 2400); return; }
+    shown.push(script.lines[cursor++]);
+    tLine=setTimeout(speakNext, 2600);
+    paint();
+  }
+  function hangUp(){
+    if (phase!=="talking") return;
+    clearT(); hangClick(); phase="ended";
+    const snip=(shown[shown.length-1]||script.lines[0]||{}).zh||"";
+    pushLog(dir==="out"?"打过去":"接了", script.who, snip);
+    paint();
+  }
+  function dial(){
+    clearT(); script=OUT[Math.floor(Math.random()*OUT.length)]; dir="out"; shown=[]; cursor=0; elapsed=0; phase="dialing";
+    if (!muted) playHorn(3);
+    tRing=setTimeout(beginTalk, 1600);
+    paint();
+  }
+  async function toot(){
+    await unlock();
+    if (phase==="idle"||phase==="ended"||phase==="missed"){ dial(); return; }
+    if (phase==="ringing"){ answer(); return; }
+    if (phase==="talking"){ if (!muted) playHorn(1); shown.push(REPLIES[Math.floor(Math.random()*REPLIES.length)]); paint(); }
+  }
+
+  $("acts").addEventListener("click", e=>{
+    const b=e.target.closest("[data-a]"); if(!b) return;
+    const a=b.getAttribute("data-a");
+    if (a==="yes") answer();
+    else if (a==="no") decline();
+    else if (a==="hang") hangUp();
+    else if (a==="wait") incoming();
+    else if (a==="dial") dial();
+    else if (a==="next"){ if (phase==="talking"){ clearTimeout(tLine); speakNext(); } }
+  });
+  $("stage").addEventListener("click", e=>{
+    const b=e.target.closest("[data-a]"); if(!b) return;
+    if (b.getAttribute("data-a")==="next"){ clearTimeout(tLine); speakNext(); }
+  });
+  $("horn").addEventListener("click", ()=>{ toot(); });
+  $("handset").addEventListener("click", ()=>{
+    if (phase==="ringing") answer();
+    else if (phase==="talking") hangUp();
+  });
+  $("mute").addEventListener("click", ()=>{
+    muted=!muted; $("mute").textContent=muted?"开声":"静音";
+    if (muted) stopRing(); else if (phase==="ringing") startRing();
+  });
+  $("en").addEventListener("click", ()=>{
+    document.documentElement.classList.toggle("en-on");
+    $("en").textContent=document.documentElement.classList.contains("en-on")?"英文开":"英文";
+  });
+  $("lamp").addEventListener("click", ()=>{
+    theme = theme==="auto"?"night": theme==="night"?"day":"auto";
+    applyTheme();
+  });
+  window.addEventListener("pointerdown", ()=>{ unlock().then(ok=>{ if(ok && phase==="ringing" && !muted) startRing(); paint(); }); }, {once:true});
+
+  applyTheme(); tickClock(); setInterval(()=>{ tickClock(); applyTheme(); }, 15000);
+  setTimeout(incoming, 700);
+})();
+</script>
+</body>
+</html>
