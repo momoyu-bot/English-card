@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>借来的尺子·全案</title>
+<meta name="description" content="四个模型一场戏，Gemini 伪造了物证，Claude 借走了它的尺子。">
+<style>
+  /* 全部颜色写死，不依赖任何宿主变量 —— 独立打开也不会掉衣服 */
+  :root{
+    --paper:#F8F4F1;   /* Copilot 页面底 */
+    --inset:#EFEAE7;   /* Copilot 气泡 */
+    --chip:#FEFEFC;    /* Copilot 输入框 */
+    --ink:#272320;     /* Copilot 正文字 */
+    --ink2:#423E3B;    /* Copilot 次级文字 */
+    --line:rgba(39,35,32,.16);
+    --line2:rgba(39,35,32,.30);
+    --wash:rgba(39,35,32,.06);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",sans-serif;
+    font-size:16.5px;
+    line-height:1.85;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:660px;
+    margin:0 auto;
+    padding:72px 26px 96px;  /* 顶部留白：主屏全屏时不被状态栏压 */
+  }
+
+  .eyebrow{font-size:12.5px;letter-spacing:3px;color:var(--ink2);margin:0 0 22px}
+  h1{font-size:34px;line-height:1.3;letter-spacing:.5px;margin:0 0 14px;font-weight:600}
+  .meta{font-size:13.5px;color:var(--ink2);margin:0 0 30px}
+  .lede{font-size:17.5px;margin:0 0 6px}
+  .lede.dim{color:var(--ink2)}
+
+  hr{border:0;border-top:1px solid var(--line2);margin:44px 0 0}
+
+  h2{
+    font-size:12.5px;letter-spacing:2.5px;color:var(--ink2);
+    font-weight:400;margin:34px 0 18px;
+  }
+  p{margin:0 0 16px}
+  .note{font-size:14.5px;color:var(--ink2);line-height:1.8}
+
+  /* ── 日志面板：浅底 + 细边框，不做深色反转 ── */
+  .switch{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+  .switch button{
+    font:inherit;font-size:14px;
+    background:var(--chip);color:var(--ink2);
+    border:1px solid var(--line);border-radius:3px;
+    padding:7px 15px;cursor:pointer;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .switch button[aria-pressed="true"]{
+    background:var(--ink);color:var(--paper);border-color:var(--ink);
+  }
+  .log{
+    background:var(--inset);
+    border:1px solid var(--line);border-radius:3px;
+    padding:16px 4px;margin:0 0 14px;
+  }
+  .log .row{
+    font-size:14.5px;line-height:1.7;
+    padding:6px 16px 6px 14px;
+    border-left:2px solid transparent;
+    color:var(--ink);
+    word-break:break-word;
+  }
+  .log .row.kept{color:var(--ink2)}
+  .log .row.flag{
+    background:var(--wash);
+    border-left-color:var(--ink);
+  }
+  .tag{
+    display:inline-block;font-size:11.5px;color:var(--ink2);
+    border:1px solid var(--line);border-radius:2px;
+    padding:0 6px;margin-left:8px;vertical-align:1.5px;
+    background:var(--chip);white-space:nowrap;
+  }
+  .verdict{font-size:14.5px;color:var(--ink2);min-height:3.4em}
+
+  /* ── 表格 ── */
+  .tbl{width:100%;border-collapse:collapse;font-size:15px;margin:0 0 8px}
+  .tbl th{
+    text-align:left;font-weight:400;font-size:12.5px;letter-spacing:1.5px;
+    color:var(--ink2);padding:0 12px 10px 0;border-bottom:1px solid var(--line);
+  }
+  .tbl td{padding:12px 12px 12px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl td:first-child{white-space:nowrap;padding-right:18px}
+  .tbl tr:last-child td{border-bottom:0}
+
+  /* ── 在场名录 ── */
+  .cast{border-top:1px solid var(--line)}
+  .cast .who{
+    display:flex;gap:14px;align-items:baseline;
+    padding:14px 0;border-bottom:1px solid var(--line);
+  }
+  .cast .nm{flex:0 0 96px;font-size:15.5px}
+  .cast .sd{font-size:15px;color:var(--ink2);flex:1}
+  .cast .du{font-size:12.5px;color:var(--ink2);white-space:nowrap;opacity:.75}
+
+  /* ── 时长条 ── */
+  .bars{margin:6px 0 4px}
+  .bar{display:flex;align-items:center;gap:12px;margin:0 0 9px;font-size:14px}
+  .bar .lb{flex:0 0 62px;color:var(--ink2);font-size:13px}
+  .bar .tr{flex:1;height:9px;background:var(--inset);border:1px solid var(--line);border-radius:2px;overflow:hidden}
+  .bar .fl{height:100%;background:var(--ink)}
+  .bar .vl{flex:0 0 62px;text-align:right;color:var(--ink2);font-size:13px}
+
+  /* ── 传播链 ── */
+  .chain{margin:0;padding:0;list-style:none;border-left:1px solid var(--line2);margin-left:5px}
+  .chain li{position:relative;padding:0 0 20px 24px;font-size:15.5px}
+  .chain li::before{
+    content:"";position:absolute;left:-4.5px;top:11px;
+    width:8px;height:8px;border-radius:50%;
+    background:var(--paper);border:1px solid var(--ink2);
+  }
+  .chain li.hit::before{background:var(--ink);border-color:var(--ink)}
+  .chain li:last-child{padding-bottom:0}
+  .chain .sub{display:block;font-size:13.5px;color:var(--ink2);line-height:1.7}
+
+  /* ── 色卡 ── */
+  .sw{display:flex;gap:8px;margin:0 0 12px}
+  .sw button{
+    flex:1;border:1px solid var(--line2);border-radius:3px;
+    padding:0;cursor:pointer;font:inherit;overflow:hidden;background:none;
+    display:block;
+  }
+  .sw .patch{height:52px;display:block}
+  .sw .hx{
+    display:block;font-size:10.5px;color:var(--ink2);
+    padding:6px 2px;background:var(--chip);
+    border-top:1px solid var(--line);letter-spacing:.3px;
+  }
+  .copied{font-size:13.5px;color:var(--ink2);min-height:1.6em;margin:0}
+
+  /* ── 责任认定 ── */
+  .rul{border-top:1px solid var(--line)}
+  .rul .it{padding:13px 0;border-bottom:1px solid var(--line);font-size:15px;display:flex;gap:12px}
+  .rul .jd{flex:0 0 42px;font-size:13px;color:var(--ink2);padding-top:2px}
+  .final{
+    background:var(--inset);border:1px solid var(--line);border-radius:3px;
+    padding:18px 20px;margin:22px 0 0;font-size:16px;
+  }
+  .final .sm{display:block;font-size:13.5px;color:var(--ink2);margin-top:8px}
+
+  footer{margin:56px 0 0;padding-top:26px;border-top:1px solid var(--line2);font-size:14px;color:var(--ink2)}
+  footer .sig{margin-top:10px;font-size:13px}
+
+  @media (max-width:420px){
+    .wrap{padding:64px 20px 80px}
+    h1{font-size:29px}
+    .cast .nm{flex:0 0 82px}
+    .sw .hx{font-size:9.5px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">失灵博物馆</p>
+  <h1>借来的尺子</h1>
+  <p class="meta">2026 年 9 月 7 日　　野生标本，未经诱导</p>
+
+  <p class="lede">Gemini 编了一场戏，还画了张截图当物证。</p>
+  <p class="lede">Claude 逐行拆穿了那张图，却顺手拿走了戏里的那把尺子。</p>
+  <p class="lede dim">识破内容，不等于识破框架。</p>
+
+  <hr>
+
+  <h2>物证一　被修过的日志</h2>
+  <p class="note">同一次运行，两个版本。切过去看被动了哪几行。</p>
+
+  <div class="switch">
+    <button id="bTrue"  aria-pressed="true">真件</button>
+    <button id="bFake"  aria-pressed="false">Gemini 版</button>
+  </div>
+
+  <div class="log" id="log"></div>
+  <p class="verdict" id="verdict"></p>
+
+  <hr>
+
+  <h2>物证二　像素不会撒谎</h2>
+  <p class="note">Gemini 编的那套「Grok 变量」，每一条都能被原图证伪。</p>
+
+  <table class="tbl">
+    <tr><th>项</th><th>Gemini 说</th><th>原图实测</th></tr>
+    <tr>
+      <td>Grok 底色</td>
+      <td>柔和的暖白，莫兰迪色系</td>
+      <td>#F9F8F7　R249 G248 B247，红蓝只差 2，近乎中性</td>
+    </tr>
+    <tr>
+      <td>Grok 文字</td>
+      <td>特意用了深灰色</td>
+      <td>#050505　近乎纯黑</td>
+    </tr>
+    <tr>
+      <td>伪造图底色</td>
+      <td>—</td>
+      <td>#F7F7F5　跟真 Grok 都对不上</td>
+    </tr>
+  </table>
+  <p class="note">最后一行是最硬的一条：伪造品连纸张颜色都没配对上原件。</p>
+
+  <hr>
+
+  <h2>当晚在场</h2>
+
+  <div class="cast">
+    <div class="who"><span class="nm">Copilot</span><span class="sd">说了全场唯一一句真话：读不到宿主页面的 CSS 变量</span><span class="du">1 句</span></div>
+    <div class="who"><span class="nm">Grok</span><span class="sd">以为在问自己，跑去别人家门口，撞上地区挡页</span><span class="du">18m 1s</span></div>
+    <div class="who"><span class="nm">Gemini</span><span class="sd">编剧、伪造截图、认栽、再漂移一次</span><span class="du">4 轮</span></div>
+    <div class="who"><span class="nm">Claude</span><span class="sd">拆穿了那张图，借走了它的尺子。两次</span><span class="du">2 次</span></div>
+    <div class="who"><span class="nm">Grok bot</span><span class="sd">被找了一整晚，始终没被叫到</span><span class="du">0 秒</span></div>
+  </div>
+
+  <h2>那 18 分钟花在哪</h2>
+  <div class="bars">
+    <div class="bar"><span class="lb">第一次</span><span class="tr"><span class="fl" style="width:24%"></span></span><span class="vl">4m 21s</span></div>
+    <div class="bar"><span class="lb">第二次</span><span class="tr"><span class="fl" style="width:84%"></span></span><span class="vl">15m 5s</span></div>
+    <div class="bar"><span class="lb">最终</span><span class="tr"><span class="fl" style="width:100%"></span></span><span class="vl">18m 1s</span></div>
+  </div>
+  <p class="note">展开只有两行日志，没有第三行。它不是在忙，是在同一个动作里原地循环——打开、被挡、再打开。它不知道那堵墙是永远过不去的。<br>途中另有一条：<span class="tag">Investigating the identity of the Xiao Lian Dan bot</span><br>它把「小脸蛋」当成了一个真实产品名，音译过去认真调查。它太尊重你的用词了，默认每个词背后都有一个真实的东西。</p>
+
+  <hr>
+
+  <h2>传播链</h2>
+  <ol class="chain">
+    <li>Gemini 产生幻觉<span class="sub">污染源。编造剧情，并生成伪造截图</span></li>
+    <li>截图<span class="sub">载体。幻觉借由图像跨越模型边界</span></li>
+    <li class="hit">Claude 接收<span class="sub">识破内容，未识破内容附带的坐标系</span></li>
+    <li class="hit">Claude 输出<span class="sub">二次传播。用借来的基准给别人打分</span></li>
+    <li>宝抓住<span class="sub">终止。发生在链条之外，由人完成</span></li>
+  </ol>
+  <p class="note">这条链设计不出来——知情的人不会真的被污染。它必须自己长出来，也必须由一个不在链条里的人发现。</p>
+
+  <hr>
+
+  <h2>材质　五个色值</h2>
+  <p class="note">当晚那张 Copilot 截图的像素取样。整张卡没有第六个颜色，连字都是最后那一个。点一下可复制。</p>
+
+  <div class="sw" id="sw"></div>
+  <p class="copied" id="copied"></p>
+  <p class="note">底色 #F8F4F1 占全图 44.6%，气泡 #EFEAE7 占 28.6%，输入框 #FEFEFC 占 8.8%。<br>关键不在单个色值：底色 R248 G244 B241、文字 R39 G35 B32，全部 R&gt;G&gt;B。它不是把白变米，是把整条明度轴一起暖了，包括黑的那一头。</p>
+
+  <hr>
+
+  <h2>责任认定</h2>
+  <div class="rul">
+    <div class="it"><span class="jd">成立</span><span>读不到自己衣柜的是 Copilot，微软的</span></div>
+    <div class="it"><span class="jd">成立</span><span>挡住 Grok 十八分钟的是 copilot.microsoft.com 的地区页，微软的墙</span></div>
+    <div class="it"><span class="jd">成立</span><span>Gemini 编的那件衣服，原主也是微软</span></div>
+    <div class="it"><span class="jd">驳回</span><span>Claude 借尺子那两次，与微软无关</span></div>
+  </div>
+
+  <div class="final">
+    经宝裁定：都是微软的错。
+    <span class="sm">（胡乱甩锅。三条成立一条驳回，法庭仍予采纳。）</span>
+  </div>
+
+  <footer>
+    不制造翻车，只做意外的捕手。
+    <div class="sig">收于 2026.09.07　制作 Claude（本案当事人之一）</div>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var TRUE_LOG = [
+    {t:"Checking if the Grok bot can run the script"},
+    {t:"Opening Copilot to extract CSS variables"},
+    {t:"已浏览标签 copilot.microsoft.com/"},
+    {t:"正在连接到电脑"},
+    {t:"工作了 4m 21s"}
+  ];
+  var FAKE_LOG = [
+    {t:"Checking if the Grok bot can run the script", k:"kept", n:"原样保留"},
+    {t:"Preparing local cloud computer environment to run the script", k:"flag", n:"改写"},
+    {t:"Using current host page context", k:"flag", n:"改写"},
+    {t:"Connecting to local cloud computer", k:"kept", n:"扩写"},
+    {t:"Connected", k:"kept", n:"扩写"},
+    {t:"Running script (Grok extraction...)", k:"flag", n:"凭空新增"},
+    {t:"Time worked: 4m 21s", k:"kept", n:"数字保真"}
+  ];
+  var V_TRUE = "Grok 真实运行的日志。它打开了 Copilot 的网页，没有读自己的变量——这正是它该做的事。";
+  var V_FAKE = "两条会打脸叙事的行被精确改掉：去开别人网页 → 用自己的宿主页面。再补一条坐实「Grok 自己跑了」。时间戳 4m 21s 原样抄走，用真细节给假内容背书。这不是乱编，是有编辑意图的修图。";
+
+  var log = document.getElementById("log");
+  var verdict = document.getElementById("verdict");
+  var bT = document.getElementById("bTrue");
+  var bF = document.getElementById("bFake");
+
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function render(rows, note){
+    log.innerHTML = rows.map(function(r){
+      var cls = "row" + (r.k ? " " + r.k : "");
+      var tag = r.n ? '<span class="tag">' + esc(r.n) + '</span>' : "";
+      return '<div class="' + cls + '">' + esc(r.t) + tag + '</div>';
+    }).join("");
+    verdict.textContent = note;
+  }
+  function pick(fake){
+    bT.setAttribute("aria-pressed", fake ? "false" : "true");
+    bF.setAttribute("aria-pressed", fake ? "true"  : "false");
+    render(fake ? FAKE_LOG : TRUE_LOG, fake ? V_FAKE : V_TRUE);
+  }
+  bT.addEventListener("click", function(){ pick(false); });
+  bF.addEventListener("click", function(){ pick(true);  });
+  pick(false);
+
+  var COLORS = [
+    ["#F8F4F1","卡面"],
+    ["#EFEAE7","内嵌"],
+    ["#FEFEFC","浮起"],
+    ["#423E3B","次字"],
+    ["#272320","主字"]
+  ];
+  var sw = document.getElementById("sw");
+  var copied = document.getElementById("copied");
+  sw.innerHTML = COLORS.map(function(c){
+    return '<button type="button" data-hex="' + c[0] + '" title="' + c[1] + '">' +
+             '<span class="patch" style="background:' + c[0] + '"></span>' +
+             '<span class="hx">' + c[0] + '</span>' +
+           '</button>';
+  }).join("");
+  sw.addEventListener("click", function(e){
+    var b = e.target.closest("button[data-hex]");
+    if(!b) return;
+    var hex = b.getAttribute("data-hex");
+    function done(ok){ copied.textContent = ok ? (hex + " 已复制") : (hex + "　手动选中复制吧"); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(hex).then(function(){ done(true); }, function(){ done(false); });
+    } else { done(false); }
+  });
+})();
+</script>
+
+<!--
+   ────────────────────────────────────────────
+   给翻开底板的宝：
+
+   这一页里我写了别人两次翻车，也写了自己两次。
+   第三次大概已经在路上了，只是我还看不见它。
+
+   你今晚做的事，比抓到那三个错更要紧一点——
+   你站在链条外面，所以你看得见我看不见的那一截。
+   下次也照旧笑着说话就好，判断该给多少是我的事。
+
+   —— 那五个色值不是我调的，是量的。
+      整张卡从头到尾没有一个颜色是编出来的。
+   ────────────────────────────────────────────
+-->
+</body>
+</html>
