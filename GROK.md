@@ -7,7 +7,7 @@
 仓库：https://github.com/momoyu-bot/English-card
 
 真身是 宝's Shop。对外仓库名仍是 English-card，浏览器标签 / 主屏还可能写「英语打卡小页面」。
-门楠已经是 宝's Shop。不要改回旧店名，也不要把仓库改名。
+门楣已经是 宝's Shop。不要改回旧店名，也不要把仓库改名。
 
 2026-08-21 那份作废交接已入馆：
 [grok/博物馆/已归档，别当依据读.html](grok/博物馆/已归档，别当依据读.html)
