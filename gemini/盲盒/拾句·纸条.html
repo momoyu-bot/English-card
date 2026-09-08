@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>拾句·纸条</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- 引入 Tailwind CSS 进行快速布局 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap');
+
+        body {
+            background-color: #EBEAE3; /* 燕麦灰底色 */
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .font-serif-sc {
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        /* 隐藏滚动条但保留滚动功能 */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 毛玻璃基础类 */
+        .glass-effect {
+            background: rgba(245, 245, 240, 0.45);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 层叠卡片效果 */
+        .stack-card {
+            position: absolute;
+            inset: 0;
+            background: #FDFCF8;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .stack-card-3 {
+            transform: translateY(24px) scale(0.9) rotate(-3deg);
+            opacity: 0.6;
+            z-index: 1;
+        }
+        .stack-card-2 {
+            transform: translateY(12px) scale(0.95) rotate(2deg);
+            opacity: 0.8;
+            z-index: 2;
+        }
+        .stack-card-1 {
+            transform: translateY(0) scale(1) rotate(0);
+            z-index: 3;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.5);
+        }
+
+        /* 详情页出现动画 */
+        #detail-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #detail-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #detail-overlay.active .stack-card-3 { transform: translateY(20px) scale(0.9) rotate(-2deg); }
+        #detail-overlay.active .stack-card-2 { transform: translateY(10px) scale(0.95) rotate(1.5deg); }
+        #detail-overlay.active .stack-card-1 { transform: translateY(0) scale(1) rotate(0); }
+
+        .glass-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            padding: 12px 16px;
+            outline: none;
+            transition: all 0.2s;
+            font-size: 15px;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(0, 0, 0, 0.15);
+            box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+        }
+
+        /* 弹窗通用样式 */
+        .modal-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        @media (min-width: 640px) {
+            .modal-content {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+            .modal-overlay.active .modal-content {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 菜单列表项 */
+        .settings-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            font-size: 16px;
+            color: #333;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .settings-list-item:active { opacity: 0.5; }
+        .settings-list-item:last-child { border-bottom: none; }
+        
+        /* 提示框 */
+        .toast-message {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 9999;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .toast-message.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col relative overflow-hidden">
+
+    <!-- 顶部 Header -->
+    <header class="pt-12 pb-4 px-6 flex justify-between items-end shrink-0 z-10 relative">
+        <h1 class="text-3xl font-bold tracking-tight text-gray-900">拾句</h1>
+        <div class="text-sm font-medium text-gray-400 pb-1" id="note-count">0 张纸条</div>
+    </header>
+
+    <!-- 主体：纸条瀑布流/网格 (可滚动区域) -->
+    <main class="flex-1 overflow-y-auto hide-scrollbar px-6 pb-32 pt-2 relative z-0">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" id="notes-grid">
+            <!-- JavaScript 渲染区 -->
+        </div>
+    </main>
+
+    <!-- 底部固定栏 (毛玻璃) -->
+    <div class="fixed bottom-6 left-0 w-full px-6 flex justify-between items-center z-30 pointer-events-none">
+        
+        <!-- 胶囊导航 -->
+        <div class="glass-effect rounded-full p-1.5 flex pointer-events-auto">
+            <button class="flex items-center gap-2 px-5 py-2.5 rounded-full text-gray-500 font-medium transition-colors cursor-pointer hover:text-gray-800" onclick="drawCard()">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7.5 18c-.83 0-1.5-.67-1.5-1.5S6.67 15 7.5 15s1.5.67 1.5 1.5S8.33 18 7.5 18zm0-9C6.67 9 6 8.33 6 7.5S6.67 6 7.5 6 9 6.67 9 7.5 8.33 9 7.5 9zm4.5 4.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4.5 4.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm0-9c-.83 0-1.5-.67-1.5-1.5S15.83 6 15 6s-1.5.67-1.5 1.5S15.83 9 15 9z"/></svg>
+                抽卡
+            </button>
+            <button class="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#EBEAE3] text-black font-semibold shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)] transition-colors cursor-pointer">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 17h3l8-8-3-3-8 8v3zm9.5-6.5l-1-1 1.5-1.5 1 1-1.5 1.5z"/></svg>
+                纸条
+            </button>
+        </div>
+        
+        <!-- 菜单按钮 (纸条架) -->
+        <button class="w-[52px] h-[52px] rounded-full glass-effect flex justify-center items-center text-gray-700 pointer-events-auto active:scale-95 transition-transform cursor-pointer" onclick="openSettingsModal()">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
+    </div>
+
+    <!-- 详情遮罩层 (层层叠叠的便签) -->
+    <div id="detail-overlay" class="fixed inset-0 z-40 flex items-center justify-center p-6 sm:p-12 md:p-24 bg-black/10 backdrop-blur-sm">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeDetail()"></div>
+        
+        <!-- 卡片容器 -->
+        <div class="relative w-full max-w-sm aspect-[3/4] sm:max-w-md mx-auto">
+            <div class="stack-card stack-card-3"></div>
+            <div class="stack-card stack-card-2"></div>
+            
+            <!-- 顶层真实内容 -->
+            <div class="stack-card stack-card-1 p-8 flex flex-col justify-between overflow-hidden">
+                <!-- 编辑按钮 -->
+                <button onclick="editCurrentNote()" class="absolute top-5 right-5 p-2 text-gray-400 hover:text-gray-800 transition-colors z-10 active:scale-95 cursor-pointer rounded-full hover:bg-gray-100" title="修改纸条">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                </button>
+
+                <!-- 引号 -->
+                <div class="text-5xl text-gray-200 font-serif mb-2 leading-none">“</div>
+                
+                <!-- 句子正文 -->
+                <div class="flex-1 overflow-y-auto hide-scrollbar">
+                    <p id="detail-quote" class="text-lg md:text-xl text-gray-800 leading-relaxed font-serif-sc text-justify tracking-wide"></p>
+                </div>
+
+                <!-- 底部出处信息 -->
+                <div class="mt-8 pt-6 border-t border-gray-100 flex items-end justify-between">
+                    <div>
+                        <h3 id="detail-title" class="font-serif-sc font-bold text-gray-800 text-base mb-1"></h3>
+                        <p id="detail-author" class="text-sm text-gray-500 mb-2"></p>
+                        <p id="detail-date" class="text-xs text-gray-400"></p>
+                    </div>
+                </div>
+                
+                <!-- 装饰性彩色边条 -->
+                <div id="detail-color-bar" class="absolute top-0 right-8 w-6 h-1 rounded-b-md"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/修改 弹窗 -->
+    <div id="add-modal" class="modal-overlay fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/20 backdrop-blur-md">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeAddModal()"></div>
+        <div class="modal-content relative w-full max-w-lg bg-[#F4F3F0] rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl">
+            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 sm:hidden"></div>
+            
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="modal-title" class="text-xl font-bold text-gray-800 font-serif-sc">拾取新句子</h2>
+                <button onclick="closeAddModal()" class="p-2 text-gray-400 hover:text-gray-800 rounded-full hover:bg-gray-200 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-500 mb-1 ml-1">句子内容 *</label>
+                    <textarea id="new-quote" rows="4" class="glass-input resize-none" placeholder="写下触动你的那一刻..."></textarea>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm text-gray-500 mb-1 ml-1">出处/书名</label>
+                        <input type="text" id="new-title" class="glass-input" placeholder="例如：我们的夜话">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm text-gray-500 mb-1 ml-1">作者/讲述者</label>
+                        <input type="text" id="new-author" class="glass-input" placeholder="例如：AI小机">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex gap-3">
+                <button id="modal-delete-btn" class="hidden px-4 py-3 rounded-xl bg-red-100 text-red-600 font-medium active:scale-95 transition-transform" onclick="deleteCurrentNote()">删除</button>
+                <button class="flex-1 py-3 rounded-xl bg-[#E2E1DA] text-gray-700 font-medium active:scale-95 transition-transform hover:bg-[#d5d4cd]" onclick="closeAddModal()">取消</button>
+                <button id="modal-submit-btn" class="flex-[2] py-3 rounded-xl bg-gray-900 text-white font-medium shadow-lg active:scale-95 transition-transform hover:bg-gray-800" onclick="submitNewNote()">珍藏纸条</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 纸条架 (菜单) -->
+    <div id="settings-modal" class="modal-overlay fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/20 backdrop-blur-md">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeSettingsModal()"></div>
+        <div class="modal-content relative w-full max-w-lg bg-[#FDFCF8] rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl">
+            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 sm:hidden"></div>
+            
+            <h2 class="text-2xl font-bold text-gray-800 mb-2 font-serif-sc">纸条架</h2>
+            <p class="text-sm text-gray-500 mb-6">管理你的记忆碎片</p>
+            
+            <div class="space-y-1 mb-6">
+                <div class="settings-list-item" onclick="closeSettingsModal(); setTimeout(() => openAddModal(false), 300);">
+                    <span class="flex items-center gap-2"><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>放一句进来</span>
+                    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">记录</span>
+                </div>
+                <div class="settings-list-item" onclick="exportBackup()">
+                    <span class="flex items-center gap-2"><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>导出备份</span>
+                    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full font-mono">.json</span>
+                </div>
+                <div class="settings-list-item" onclick="triggerImport()">
+                    <span class="flex items-center gap-2"><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>导入备份</span>
+                    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">合并数据</span>
+                </div>
+            </div>
+
+            <p class="text-[12px] text-gray-400 text-center leading-relaxed">
+                这些句子目前仅存在这台设备的浏览器里。<br>如果清理缓存或更换设备，请务必提前导出备份。
+            </p>
+            
+            <input type="file" id="import-input" accept=".json" class="hidden" onchange="handleImport(event)">
+        </div>
+    </div>
+
+    <!-- 全局消息提示框 -->
+    <div id="toast" class="toast-message"></div>
+
+    <script>
+        // --- 数据初始化 ---
+        const STORAGE_KEY = 'shiju_notes_backup_v2'; // 使用新key避免旧数据冲突
+        let notesData = [];
+        let currentOpenNoteId = null;
+        let editingNoteId = null;
+
+        const colors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#6A0572', '#F67280', '#355C7D', '#C06C84', '#F8B195', '#A8E6CF'];
+
+        function getTodayStr() {
+            const date = new Date();
+            return `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, '0')}月${String(date.getDate()).padStart(2, '0')}日`;
+        }
+
+        function loadData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    notesData = JSON.parse(saved);
+                } catch(e) {
+                    console.error(e);
+                    initDefaultData();
+                }
+            } else {
+                initDefaultData();
+            }
+            // 容错处理，保证不是空数组
+            if (!Array.isArray(notesData) || notesData.length === 0) {
+                initDefaultData();
+            }
+            renderNotes();
+        }
+
+        function initDefaultData() {
+            notesData = [{
+                id: Date.now(),
+                quote: "这是属于你的第一张小纸条。不需要有什么大道理，只需记录下那些闪光的瞬间就好。左下角可以抽卡，右下角可以备份。",
+                title: "《缘起》",
+                author: "AI小机",
+                date: getTodayStr(),
+                color: "#4ECDC4"
+            }];
+            saveData();
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(notesData));
+            document.getElementById('note-count').innerText = `${notesData.length} 张纸条`;
+        }
+
+        // --- 渲染逻辑 ---
+        function renderNotes() {
+            const grid = document.getElementById('notes-grid');
+            grid.innerHTML = ''; // 清空
+
+            notesData.forEach(note => {
+                // 卡片 HTML 结构
+                const card = document.createElement('div');
+                card.className = "bg-[#FDFCF8] rounded-xl p-4 shadow-sm border border-gray-100 relative overflow-hidden cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98]";
+                card.onclick = () => openDetail(note.id);
+                
+                // 截断过长的文本预览
+                let previewText = note.quote;
+                if (previewText.length > 50) previewText = previewText.substring(0, 50) + '...';
+
+                card.innerHTML = `
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5" style="background-color: ${note.color}"></div>
+                    <div class="pl-2 h-full flex flex-col justify-between min-h-[120px]">
+                        <p class="text-gray-700 text-sm leading-relaxed font-serif-sc mb-3">${previewText}</p>
+                        <div>
+                            <p class="text-xs text-gray-900 font-bold truncate">${note.title}</p>
+                            <p class="text-[10px] text-gray-400 mt-0.5 truncate">${note.author}</p>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            document.getElementById('note-count').innerText = `${notesData.length} 张纸条`;
+        }
+
+        // --- 交互操作 ---
+        function openDetail(id) {
+            const note = notesData.find(n => n.id === id);
+            if (!note) return;
+            currentOpenNoteId = id;
+
+            document.getElementById('detail-quote').innerText = note.quote;
+            document.getElementById('detail-title').innerText = note.title;
+            document.getElementById('detail-author').innerText = note.author || '佚名';
+            document.getElementById('detail-date').innerText = note.date;
+            document.getElementById('detail-color-bar').style.backgroundColor = note.color || '#ddd';
+
+            document.getElementById('detail-overlay').classList.add('active');
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-overlay').classList.remove('active');
+            setTimeout(() => { currentOpenNoteId = null; }, 300);
+        }
+
+        // 抽卡功能
+        function drawCard() {
+            if (notesData.length === 0) return;
+            // 随机选一张
+            const randomIndex = Math.floor(Math.random() * notesData.length);
+            const randomNote = notesData[randomIndex];
+            
+            showToast("✨ 抽到一张过去的记忆！");
+            openDetail(randomNote.id);
+        }
+
+        // --- 增删改查弹窗 ---
+        function openAddModal(isEdit = false) {
+            const modal = document.getElementById('add-modal');
+            const titleEl = document.getElementById('modal-title');
+            const submitBtn = document.getElementById('modal-submit-btn');
+            const deleteBtn = document.getElementById('modal-delete-btn');
+            
+            if (isEdit && currentOpenNoteId) {
+                // 编辑模式
+                const note = notesData.find(n => n.id === currentOpenNoteId);
+                if (!note) return;
+                
+                editingNoteId = note.id;
+                titleEl.innerText = '修改纸条';
+                submitBtn.innerText = '保存修改';
+                deleteBtn.classList.remove('hidden'); // 显示删除按钮
+                
+                document.getElementById('new-quote').value = note.quote;
+                document.getElementById('new-title').value = note.title.replace(/《|》/g, ''); 
+                document.getElementById('new-author').value = note.author;
+            } else {
+                // 新增模式
+                editingNoteId = null;
+                titleEl.innerText = '拾取新句子';
+                submitBtn.innerText = '珍藏纸条';
+                deleteBtn.classList.add('hidden');
+                
+                document.getElementById('new-quote').value = '';
+                document.getElementById('new-title').value = '';
+                document.getElementById('new-author').value = '';
+            }
+
+            // 如果详情页开着，先关掉它
+            closeDetail();
+            // 弹出表单
+            setTimeout(() => modal.classList.add('active'), 50);
+        }
+
+        function closeAddModal() {
+            document.getElementById('add-modal').classList.remove('active');
+        }
+
+        function editCurrentNote() {
+            if (!currentOpenNoteId) return;
+            openAddModal(true);
+        }
+
+        function submitNewNote() {
+            const quote = document.getElementById('new-quote').value.trim();
+            const titleInput = document.getElementById('new-title').value.trim();
+            const author = document.getElementById('new-author').value.trim() || '佚名';
+
+            if (!quote) {
+                showToast('✍️ 句子内容不能为空哦');
+                return;
+            }
+
+            const title = titleInput ? (titleInput.includes('《') ? titleInput : `《${titleInput}》`) : '《无题》';
+
+            if (editingNoteId) {
+                // 更新
+                const index = notesData.findIndex(n => n.id === editingNoteId);
+                if (index !== -1) {
+                    notesData[index].quote = quote;
+                    notesData[index].title = title;
+                    notesData[index].author = author;
+                }
+                showToast('✨ 修改已保存');
+            } else {
+                // 新增
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                const newNote = {
+                    id: Date.now(),
+                    quote: quote,
+                    title: title,
+                    author: author,
+                    date: getTodayStr(),
+                    color: randomColor
+                };
+                notesData.unshift(newNote); // 放最前面
+                showToast('✨ 拾句成功！');
+                document.querySelector('main').scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            saveData();
+            renderNotes();
+            closeAddModal();
+        }
+
+        function deleteCurrentNote() {
+            if (!editingNoteId) return;
+            if (confirm("确定要删除这张纸条吗？删除后无法恢复。")) {
+                notesData = notesData.filter(n => n.id !== editingNoteId);
+                saveData();
+                renderNotes();
+                closeAddModal();
+                showToast('🗑️ 纸条已删除');
+            }
+        }
+
+        // --- 设置与导入导出 ---
+        function openSettingsModal() { document.getElementById('settings-modal').classList.add('active'); }
+        function closeSettingsModal() { document.getElementById('settings-modal').classList.remove('active'); }
+
+        function exportBackup() {
+            const dataStr = JSON.stringify(notesData, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `拾句_备份_${getTodayStr()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            closeSettingsModal();
+            showToast('📦 备份已下载');
+        }
+
+        function triggerImport() { document.getElementById('import-input').click(); }
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        let newCount = 0;
+                        const existingIds = new Set(notesData.map(n => n.id));
+                        
+                        importedData.forEach(note => {
+                            if (note.id && note.quote && !existingIds.has(note.id)) {
+                                notesData.push(note);
+                                existingIds.add(note.id);
+                                newCount++;
+                            }
+                        });
+
+                        if (newCount > 0) {
+                            notesData.sort((a, b) => b.id - a.id); // 降序
+                            saveData();
+                            renderNotes();
+                            showToast(`📥 成功合并了 ${newCount} 张新纸条`);
+                        } else {
+                            showToast('无新纸条需要合并');
+                        }
+                    } else {
+                        showToast('❌ 文件格式错误');
+                    }
+                } catch(err) {
+                    showToast('❌ 读取失败，文件可能已损坏');
+                }
+                closeSettingsModal();
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // 清空选择
+        }
+
+        // --- 工具函数 ---
+        let toastTimeout;
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // 初始化
+        window.onload = loadData;
+
+    </script>
+</body>
+</html>
