@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>纸条架</title>
+  <meta name="description" content="贴自己的句子，空了就抽一张。不是仓库，是签筒。" />
+  <style>
+    :root {
+      --bg: #e8e4db;
+      --paper: #f7f4ee;
+      --ink: #2a2a28;
+      --ink-soft: #6b6860;
+      --ink-faint: #9a968c;
+      --shadow: 0 10px 28px rgba(40, 34, 24, 0.08);
+      --glass: rgba(255, 252, 247, 0.64);
+      --shelf: #d8d3c8;
+      --shelf-edge: #cfc9bc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background: #cfc9bd;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Heiti SC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    body { display: flex; justify-content: center; }
+    button, input, textarea, select { font-family: inherit; }
+    .phone {
+      width: min(430px, 100%);
+      min-height: 100svh;
+      background:
+        radial-gradient(1200px 500px at 50% -10%, rgba(255,255,255,.45), transparent 55%),
+        var(--bg);
+      position: relative;
+      overflow-x: hidden;
+    }
+    .phone::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .35;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.03) 3px),
+        repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(60,50,30,.015) 4px);
+    }
+    header.appbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: 18px 20px 10px;
+      background: linear-gradient(to bottom, rgba(232,228,219,.94), rgba(232,228,219,.7) 70%, transparent);
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+    }
+    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    h1 { font-size: 28px; font-weight: 700; letter-spacing: .04em; flex: 1; }
+    .icon-btn {
+      width: 36px; height: 36px; border: 0; border-radius: 50%;
+      background: rgba(255,255,255,.45);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+      color: var(--ink); display: grid; place-items: center; cursor: pointer;
+      flex-shrink: 0;
+    }
+    .chips {
+      display: flex; gap: 8px; margin-top: 14px; overflow: auto;
+      scrollbar-width: none;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      border: 0; padding: 7px 14px; border-radius: 999px;
+      background: rgba(255,255,255,.38); color: var(--ink-soft);
+      font-size: 13px; cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.4);
+      white-space: nowrap;
+    }
+    .chip.on {
+      background: #fff; color: var(--ink);
+      box-shadow: 0 4px 12px rgba(40,34,24,.06);
+    }
+    main { padding: 6px 0 126px; }
+    .shelf-block { padding: 6px 16px 0; }
+    .shelf-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      align-items: end;
+      min-height: 118px;
+      padding: 8px 4px 0;
+    }
+    .shelf-board {
+      height: 14px;
+      margin: 0 2px 10px;
+      border-radius: 2px 2px 6px 6px;
+      background: linear-gradient(to bottom, #e4dfd4, var(--shelf) 40%, var(--shelf-edge));
+      box-shadow: 0 10px 16px rgba(50,40,20,.08), inset 0 1px 0 rgba(255,255,255,.55);
+    }
+    .slip {
+      appearance: none; border: 0; background: transparent; cursor: pointer;
+      padding: 0; height: 108px; display: flex; align-items: flex-end; justify-content: center;
+      transform-origin: 50% 100%;
+    }
+    .slip:active { transform: translateY(3px) scale(.98); }
+    .slip-body {
+      width: 100%; height: var(--h, 96px);
+      border-radius: 2px 2px 1px 1px;
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 28%), var(--tint, #f3eee4);
+      box-shadow: 2px 3px 0 rgba(40,30,16,.04), 0 8px 14px rgba(40,30,16,.08);
+      overflow: hidden;
+    }
+    .slip-body::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(180deg, transparent 0 11px, rgba(80,60,30,.045) 11px 12px);
+      mask-image: linear-gradient(180deg, transparent 18%, #000 32%);
+    }
+    .tab {
+      position: absolute; top: 10px; right: -1px;
+      width: 8px; height: 22px; border-radius: 2px 0 0 2px;
+      background: var(--tab, #efc56a);
+    }
+    .slip-title {
+      position: absolute; left: 7px; right: 10px; top: 10px;
+      font-size: 10px; line-height: 1.35; letter-spacing: .04em;
+      color: rgba(40,36,30,.78); font-weight: 600;
+      display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .plus-slip .slip-body {
+      background: repeating-linear-gradient(135deg, #f3eee4, #f3eee4 6px, #ebe6db 6px, #ebe6db 7px);
+      display: grid; place-items: center;
+    }
+    .plus-slip .slip-body::before { display: none; }
+    .plus-mark { font-size: 28px; color: rgba(40,36,30,.35); font-weight: 300; }
+
+    .stack-list { padding: 8px 18px 0; display: flex; flex-direction: column; gap: 16px; }
+    .note-card {
+      border: 0; width: 100%; text-align: left; background: transparent;
+      cursor: pointer; color: inherit;
+    }
+    .note-layers {
+      position: relative;
+      background: var(--paper);
+      border-radius: 3px;
+      padding: 28px 22px 20px;
+      box-shadow: var(--shadow);
+    }
+    .note-layers::before, .note-layers::after {
+      content: "";
+      position: absolute; left: 10px; right: 10px; height: 100%;
+      background: #f3efe6; border-radius: 2px; z-index: -1;
+    }
+    .note-layers::before { top: 7px; transform: rotate(.4deg); }
+    .note-layers::after { top: 13px; transform: rotate(-.55deg); background: #efeae0; }
+    .qmark {
+      font-family: "Songti SC", "STSong", "SimSun", serif;
+      font-size: 28px; line-height: 1; color: rgba(40,36,30,.22); margin-bottom: 8px;
+    }
+    .quote {
+      font-family: "Songti SC", "STSong", "SimSun", serif;
+      font-size: 17px; line-height: 1.85; letter-spacing: .04em; color: #2d2b27;
+      white-space: pre-wrap;
+    }
+    .meta { display: flex; gap: 12px; margin-top: 22px; align-items: flex-end; }
+    .cover-mini {
+      width: 46px; height: 64px; border-radius: 2px; flex-shrink: 0;
+      background: var(--tint, #d7c4a4);
+      box-shadow: 0 6px 12px rgba(40,30,16,.12);
+      position: relative; overflow: hidden;
+    }
+    .cover-mini span {
+      position: absolute; inset: 8px 6px;
+      font-size: 8px; line-height: 1.3; color: rgba(255,255,255,.92); font-weight: 600;
+    }
+    .meta-title { font-size: 13px; font-weight: 600; line-height: 1.45; }
+    .meta-sub { margin-top: 3px; font-size: 12px; color: var(--ink-soft); }
+    .meta-foot {
+      margin-top: 8px; display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--ink-faint);
+    }
+    .detail { display: none; padding: 8px 18px 0; }
+    .detail.show { display: block; }
+    .hide { display: none !important; }
+    .back-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .back, .ghost {
+      border: 0; background: rgba(255,255,255,.5); border-radius: 999px;
+      padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--ink-soft);
+    }
+    .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+    .draw {
+      padding: 8px 22px 0;
+      min-height: 520px;
+    }
+    .draw-copy {
+      text-align: center;
+      color: var(--ink-soft);
+      font-size: 13px;
+      line-height: 1.7;
+      margin-bottom: 8px;
+    }
+    .stage {
+      height: 390px;
+      perspective: 1200px;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+    .deck {
+      width: 230px;
+      height: 310px;
+      position: relative;
+      transform-style: preserve-3d;
+    }
+    .deck.shuffling { animation: shuffle .7s ease; }
+    @keyframes shuffle {
+      0% { transform: rotateZ(0); }
+      25% { transform: rotateZ(-4deg) translateX(-8px); }
+      50% { transform: rotateZ(5deg) translateX(10px); }
+      75% { transform: rotateZ(-2deg); }
+      100% { transform: rotateZ(0); }
+    }
+    .ghost-card {
+      position: absolute; inset: 0;
+      border-radius: 14px;
+      background:
+        linear-gradient(160deg, rgba(255,255,255,.55), transparent 40%),
+        #efe8da;
+      box-shadow: 0 10px 20px rgba(40,30,16,.08);
+      border: 1px solid rgba(255,255,255,.5);
+    }
+    .ghost-card:nth-child(1) { transform: rotate(-7deg) translate(-16px, 10px); }
+    .ghost-card:nth-child(2) { transform: rotate(5deg) translate(14px, 6px); }
+    .ghost-card:nth-child(3) { transform: rotate(-2deg) translate(2px, 2px); }
+    .flip {
+      width: 230px; height: 310px;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.7s cubic-bezier(.2,.7,.2,1);
+      cursor: pointer;
+      z-index: 2;
+    }
+    .flip.is-back { transform: rotateY(0deg); }
+    .flip.is-face { transform: rotateY(180deg); }
+    .face {
+      position: absolute; inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .face.back {
+      background:
+        repeating-linear-gradient(135deg, #f3eee4 0 10px, #ebe4d6 10px 11px),
+        #f3eee4;
+      box-shadow: 0 16px 30px rgba(40,30,16,.14);
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.7);
+    }
+    .seal {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: 1px dashed rgba(40,36,30,.28);
+      display: grid; place-items: center;
+      color: rgba(40,36,30,.45);
+      font-family: "Songti SC", "STSong", "SimSun", serif;
+      font-size: 18px;
+      letter-spacing: .2em;
+      background: rgba(255,255,255,.35);
+    }
+    .face.front {
+      transform: rotateY(180deg);
+      background: var(--paper);
+      box-shadow: 0 16px 30px rgba(40,30,16,.14);
+      padding: 22px 18px 16px;
+      display: flex;
+      flex-direction: column;
+    }
+    .face.front.starred {
+      box-shadow: 0 16px 30px rgba(40,30,16,.14), 0 0 0 1px rgba(196,168,90,.55);
+    }
+    .face .quote {
+      font-size: 15px;
+      flex: 1;
+      overflow: auto;
+    }
+    .face .from {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--ink-faint);
+    }
+    .draw-actions {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .draw-btn {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 18px;
+      background: #2a2a28;
+      color: #f7f4ee;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .draw-btn.soft {
+      background: rgba(255,255,255,.62);
+      color: var(--ink-soft);
+    }
+    .draw-btn:disabled { opacity: .45; cursor: default; }
+
+    nav.dock {
+      position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+      width: min(390px, calc(100% - 28px)); height: 64px; border-radius: 999px;
+      background: var(--glass);
+      backdrop-filter: blur(22px) saturate(160%);
+      -webkit-backdrop-filter: blur(22px) saturate(160%);
+      box-shadow: 0 12px 30px rgba(40,30,16,.12), inset 0 0 0 1px rgba(255,255,255,.55);
+      display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: center;
+      padding: 6px 8px 6px 6px; z-index: 30;
+    }
+    .nav-item {
+      border: 0; background: transparent; display: flex; flex-direction: column;
+      align-items: center; gap: 2px; font-size: 11px; color: var(--ink-faint); cursor: pointer;
+    }
+    .nav-item.on { color: var(--ink); font-weight: 600; }
+    .add-fab {
+      width: 52px; height: 52px; border: 0; border-radius: 50%;
+      background: rgba(255,255,255,.78);
+      box-shadow: 0 6px 14px rgba(40,30,16,.08);
+      display: grid; place-items: center; cursor: pointer;
+      font-size: 28px; line-height: 1; color: var(--ink); font-weight: 300;
+    }
+    .empty { text-align: center; color: var(--ink-faint); padding: 40px 24px; font-size: 14px; line-height: 1.7; }
+    .toast {
+      position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%) translateY(8px);
+      background: rgba(40,36,30,.86); color: #f7f4ee; font-size: 12px;
+      padding: 8px 12px; border-radius: 999px; opacity: 0; pointer-events: none;
+      transition: .28s ease; z-index: 50; max-width: 80%;
+    }
+    .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .mask {
+      position: fixed; inset: 0; background: rgba(40,36,28,.28);
+      backdrop-filter: blur(6px); z-index: 40; display: none;
+    }
+    .mask.on { display: block; }
+    .sheet {
+      position: fixed; left: 50%; bottom: 0; transform: translateX(-50%) translateY(110%);
+      width: min(430px, 100%);
+      background: rgba(247,244,238,.94);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 22px 22px 0 0;
+      box-shadow: 0 -12px 40px rgba(40,30,16,.12);
+      padding: 16px 20px calc(22px + env(safe-area-inset-bottom));
+      z-index: 45; transition: transform .32s ease;
+      max-height: 88svh; overflow: auto;
+    }
+    .sheet.on { transform: translateX(-50%) translateY(0); }
+    .grab {
+      width: 36px; height: 4px; border-radius: 999px; background: rgba(40,36,30,.16);
+      margin: 0 auto 14px;
+    }
+    .sheet h2 { font-size: 18px; margin-bottom: 14px; }
+    label { display: block; font-size: 12px; color: var(--ink-soft); margin: 12px 0 6px; }
+    input, textarea, select {
+      width: 100%; border: 0; border-radius: 12px;
+      background: rgba(255,255,255,.7);
+      box-shadow: inset 0 0 0 1px rgba(40,36,30,.06);
+      padding: 11px 12px; font-size: 15px; color: var(--ink);
+    }
+    textarea { min-height: 120px; resize: vertical; line-height: 1.65; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .sheet-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .primary, .danger, .quiet {
+      flex: 1; border: 0; border-radius: 999px; padding: 12px 14px;
+      font-size: 14px; cursor: pointer;
+    }
+    .primary { background: #2a2a28; color: #f7f4ee; }
+    .danger { background: #f3e4e0; color: #8a3d32; }
+    .quiet { background: rgba(255,255,255,.6); color: var(--ink-soft); }
+    .hint { font-size: 12px; color: var(--ink-faint); line-height: 1.6; margin-top: 8px; }
+    .menu-list { display: flex; flex-direction: column; }
+    .menu-row {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; border: 0; background: transparent; text-align: left;
+      padding: 16px 2px; cursor: pointer; color: var(--ink); font-size: 16px;
+      border-bottom: 1px solid rgba(40,36,30,.06);
+    }
+    .menu-row:last-of-type { border-bottom: 0; }
+    .menu-row .meta { margin: 0; font-size: 13px; color: var(--ink-faint); }
+    .sheet.soft {
+      background: #f3eee6;
+    }
+    .hidden-file { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <header class="appbar">
+      <div class="title-row">
+        <h1 id="pageTitle">纸条架</h1>
+        <button class="icon-btn" id="addTop" aria-label="加一张">+</button>
+        <button class="icon-btn" id="menuBtn" aria-label="更多">☰</button>
+      </div>
+      <div class="chips" id="chips"></div>
+    </header>
+
+    <main>
+      <div id="shelfWrap"></div>
+      <div class="stack-list hide" id="listWrap"></div>
+      <div class="detail" id="detailWrap"></div>
+      <div class="draw hide" id="drawWrap"></div>
+    </main>
+
+    <nav class="dock">
+      <button class="nav-item on" data-tab="shelf" id="tabShelf">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        纸条架
+      </button>
+      <button class="nav-item" data-tab="marks" id="tabMarks">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 7h10M7 12h10M7 17h6"/></svg>
+        划线
+      </button>
+      <button class="nav-item" data-tab="draw" id="tabDraw">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6M9 13h4"/></svg>
+        抽一张
+      </button>
+      <button class="add-fab" id="addBtn" aria-label="加一张纸条">+</button>
+    </nav>
+    <div class="toast" id="toast"></div>
+    <div class="mask" id="mask"></div>
+    <div class="sheet soft" id="sheet"></div>
+    <input class="hidden-file" id="fileIn" type="file" accept="application/json,.json,text/plain" />
+  </div>
+
+  <script>
+    const KEY = "bao-tiao-zhi-jia-v1";
+    const PALETTE = [
+      { paper: "#f4efe6", tab: "#d4b36a", tint: "#5c5348" },
+      { paper: "#eef3f4", tab: "#8eb3c4", tint: "#6a8aa0" },
+      { paper: "#f7eee9", tab: "#e08b7a", tint: "#c96b5c" },
+      { paper: "#eef3ea", tab: "#9bb89a", tint: "#6f8f6e" },
+      { paper: "#f3eef2", tab: "#d9a7c2", tint: "#8a5f78" },
+      { paper: "#f1f5ee", tab: "#8fbfa3", tint: "#4f7a62" },
+      { paper: "#eaf1f5", tab: "#7aa7c2", tint: "#234e63" },
+      { paper: "#f3eadc", tab: "#c4a882", tint: "#6b4f32" }
+    ];
+    const $ = (id) => document.getElementById(id);
+    let notes = [];
+    let tab = "shelf";
+    let chip = "全部";
+    let currentId = null;
+    let editingId = null;
+    let lastDrawId = null;
+    let drawing = false;
+
+    function today() {
+      return new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric", month: "long", day: "numeric"
+      }).format(new Date());
+    }
+    function load() {
+      try { notes = JSON.parse(localStorage.getItem(KEY) || "[]"); }
+      catch { notes = []; }
+      if (!Array.isArray(notes)) notes = [];
+    }
+    function save() {
+      localStorage.setItem(KEY, JSON.stringify(notes));
+    }
+    function collections() {
+      const set = new Set(notes.map(n => n.collection).filter(Boolean));
+      return ["全部", "收藏", ...[...set].filter(c => c !== "收藏")];
+    }
+    function filtered() {
+      if (chip === "全部") return notes;
+      if (chip === "收藏") return notes.filter(n => n.star);
+      return notes.filter(n => n.collection === chip);
+    }
+    function toast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.classList.add("on");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("on"), 1600);
+    }
+
+    function renderChips() {
+      $("chips").innerHTML = collections().map(c =>
+        `<button class="chip ${c === chip ? "on" : ""}" data-chip="${c}">${c}</button>`
+      ).join("");
+    }
+
+    function slipButton(n) {
+      const short = (n.title || "未题").slice(0, 8);
+      const h = 80 + (n.title.length + n.quote.length) % 8 * 3;
+      return `<button class="slip" data-open="${n.id}" style="--h:${h}px">
+        <span class="slip-body" style="--tint:${n.paper};--tab:${n.tab}">
+          <span class="tab"></span>
+          <span class="slip-title">${escapeHtml(short)}</span>
+        </span>
+      </button>`;
+    }
+
+    function renderShelf() {
+      const items = filtered();
+      const cells = [
+        ...items.map(slipButton),
+        `<button class="slip plus-slip" id="plusOnShelf" style="--h:86px">
+          <span class="slip-body"><span class="plus-mark">+</span></span>
+        </button>`
+      ];
+      const rows = [];
+      for (let i = 0; i < cells.length; i += 5) rows.push(cells.slice(i, i + 5));
+      $("shelfWrap").innerHTML = rows.map(row => `
+        <section class="shelf-block">
+          <div class="shelf-row">
+            ${row.join("")}
+            ${Array.from({length: Math.max(0, 5 - row.length)}).map(() => "<div></div>").join("")}
+          </div>
+          <div class="shelf-board"></div>
+        </section>`).join("");
+    }
+
+    function cardHTML(n, clickable) {
+      const tag = clickable ? "button" : "article";
+      const extra = clickable ? `class="note-card" data-open="${n.id}"` : `class="note-card"`;
+      const star = n.star ? "已收藏" : "";
+      return `<${tag} ${extra}>
+        <div class="note-layers" style="background:${n.paper}">
+          <div class="qmark">“</div>
+          <p class="quote">${escapeHtml(n.quote)}</p>
+          <div class="meta">
+            <div class="cover-mini" style="background:${n.tint}"><span>${escapeHtml(n.title || "")}</span></div>
+            <div>
+              <div class="meta-title">${escapeHtml(n.title || "未题")}</div>
+              <div class="meta-sub">${escapeHtml(n.sub || "")}</div>
+              <div class="meta-foot">
+                <span>${escapeHtml(n.date || "")}${star ? " · " + star : ""}</span>
+                <span>${escapeHtml(n.collection || "")}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </${tag}>`;
+    }
+
+    function renderList() {
+      const items = filtered();
+      $("listWrap").innerHTML = items.length
+        ? items.map(n => cardHTML(n, true)).join("")
+        : `<p class="empty">还没有句子。右下角加号，贴一张上来。</p>`;
+    }
+
+    function renderDetail(id) {
+      const n = notes.find(x => x.id === id);
+      if (!n) { show("shelf"); return; }
+      currentId = id;
+      $("detailWrap").innerHTML = `
+        <div class="back-row">
+          <button class="back" data-back>返回架子</button>
+          <span style="font-size:12px;color:var(--ink-faint)">${escapeHtml(n.collection || "")}</span>
+        </div>
+        ${cardHTML(n, false)}
+        <div class="actions">
+          <button class="ghost" data-star>${n.star ? "取消收藏" : "收藏这张"}</button>
+          <button class="ghost" data-edit>改一句</button>
+          <button class="ghost" data-del>拿掉</button>
+        </div>`;
+    }
+
+    function renderDraw(state) {
+      const pool = filtered();
+      const scope = chip === "全部" ? "全部纸条" : chip;
+      if (!pool.length) {
+        $("drawWrap").innerHTML = `<p class="empty">这一叠还是空的。<br>先去架子上贴一句，签筒才有东西可抽。</p>`;
+        return;
+      }
+      const n = state && state.note;
+      const face = state && state.face;
+      $("drawWrap").innerHTML = `
+        <p class="draw-copy">${face ? "今晚抽到的是这张。" : "从「" + escapeHtml(scope) + "」里抽一张。<br>背面朝上，点下去就翻开。"}</p>
+        <div class="stage">
+          <div class="deck ${state && state.shuffle ? "shuffling" : ""}" id="deck">
+            <div class="ghost-card"></div>
+            <div class="ghost-card"></div>
+            <div class="ghost-card"></div>
+            <div class="flip ${face ? "is-face" : "is-back"}" id="flip" data-drawcard>
+              <div class="face back"><div class="seal">签</div></div>
+              <div class="face front ${n && n.star ? "starred" : ""}" style="background:${n ? n.paper : "#f7f4ee"}">
+                <div class="qmark">“</div>
+                <p class="quote">${n ? escapeHtml(n.quote) : ""}</p>
+                <div class="from">${n ? escapeHtml([n.title, n.sub].filter(Boolean).join(" · ")) : ""}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="draw-actions">
+          <button class="draw-btn" data-draw ${drawing ? "disabled" : ""}>${face ? "再抽一张" : "抽"}</button>
+          ${n && face ? `<button class="draw-btn soft" data-open="${n.id}">放到划线里看</button>` : ""}
+        </div>
+      `;
+    }
+
+    function pickNote() {
+      const pool = filtered();
+      if (!pool.length) return null;
+      let bag = pool;
+      if (pool.length > 1 && lastDrawId) bag = pool.filter(n => n.id !== lastDrawId);
+      if (!bag.length) bag = pool;
+      return bag[Math.floor(Math.random() * bag.length)];
+    }
+
+    function doDraw() {
+      if (drawing) return;
+      const note = pickNote();
+      if (!note) { renderDraw(); return; }
+      drawing = true;
+      lastDrawId = note.id;
+      renderDraw({ note, face: false, shuffle: true });
+      setTimeout(() => {
+        const flip = $("flip");
+        if (flip) flip.classList.remove("is-back"), flip.classList.add("is-face");
+        const deck = $("deck");
+        if (deck) deck.classList.remove("shuffling");
+        drawing = false;
+      }, 720);
+    }
+
+    function show(which, id) {
+      tab = which;
+      $("tabShelf").classList.toggle("on", which === "shelf");
+      $("tabMarks").classList.toggle("on", which === "marks");
+      $("tabDraw").classList.toggle("on", which === "draw");
+      $("shelfWrap").classList.toggle("hide", which !== "shelf");
+      $("listWrap").classList.toggle("hide", which !== "marks");
+      $("detailWrap").classList.toggle("show", which === "detail");
+      $("drawWrap").classList.toggle("hide", which !== "draw");
+      $("pageTitle").textContent = which === "marks" || which === "detail" ? "划线" : which === "draw" ? "抽一张" : "纸条架";
+      renderChips();
+      if (which === "shelf") renderShelf();
+      if (which === "marks") renderList();
+      if (which === "detail") renderDetail(id);
+      if (which === "draw") renderDraw();
+    }
+
+    function escapeHtml(s) {
+      return String(s || "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+
+    function closeSheet() {
+      $("sheet").classList.remove("on");
+      $("mask").classList.remove("on");
+      editingId = null;
+    }
+    function openSheet(html) {
+      $("sheet").innerHTML = html;
+      $("sheet").classList.add("on");
+      $("mask").classList.add("on");
+    }
+
+    function formSheet(n) {
+      const isEdit = Boolean(n);
+      const cols = [...new Set(notes.map(x => x.collection).filter(Boolean))];
+      const options = ["书里", "和小机", "夜里", "路上", "随手", ...cols]
+        .filter((v, i, a) => a.indexOf(v) === i);
+      const col = n?.collection || "随手";
+      if (!options.includes(col)) options.unshift(col);
+      openSheet(`
+        <div class="grab"></div>
+        <h2>${isEdit ? "改这张纸条" : "贴一张新纸条"}</h2>
+        <label>句子</label>
+        <textarea id="fQuote" placeholder="一句就好，长短都行">${escapeHtml(n?.quote || "")}</textarea>
+        <div class="row2">
+          <div>
+            <label>短名</label>
+            <input id="fTitle" maxlength="18" placeholder="书名，或谁说的" value="${escapeHtml(n?.title || "")}" />
+          </div>
+          <div>
+            <label>放哪一叠</label>
+            <input id="fCol" list="colList" placeholder="书里 / 和小机 / 夜里" value="${escapeHtml(col)}" />
+            <datalist id="colList">${options.map(o => `<option value="${escapeHtml(o)}">`).join("")}</datalist>
+          </div>
+        </div>
+        <label>来处小字</label>
+        <input id="fSub" placeholder="小说 · 某某，或某天和小机聊天" value="${escapeHtml(n?.sub || "")}" />
+        <p class="hint">短名写在脊上。来处小字点开才看见。抽签时从当前这一叠里抽。</p>
+        <div class="sheet-actions">
+          <button class="quiet" data-cancel>先不定</button>
+          <button class="primary" data-save>${isEdit ? "放回去" : "贴上架子"}</button>
+        </div>
+      `);
+      setTimeout(() => $("fQuote")?.focus(), 50);
+    }
+
+    function emptyCount() {
+      return notes.filter(n => !(n.quote || "").trim()).length;
+    }
+    function menuSheet() {
+      openSheet(`
+        <div class="grab"></div>
+        <h2>纸条架</h2>
+        <div class="menu-list">
+          <button class="menu-row" data-addone><span>放一句进来</span><span class="meta">1句</span></button>
+          <button class="menu-row" data-pastepile><span>一次倒一堆</span><span class="meta">粘贴</span></button>
+          <button class="menu-row" data-addempty><span>加一张空纸条</span><span class="meta">${emptyCount()} 张</span></button>
+          <button class="menu-row" data-export><span>导出备份</span><span class="meta">json</span></button>
+          <button class="menu-row" data-importfile><span>导入备份</span><span class="meta">会合并进来</span></button>
+        </div>
+        <p class="hint">改动存在这台设备的浏览器里。换设备、清缓存之前，导一份出来。写错字：点开那张 →「改一句」。</p>
+      `);
+    }
+    function pileSheet() {
+      openSheet(`
+        <div class="grab"></div>
+        <h2>一次倒一堆</h2>
+        <textarea id="dump" placeholder="一行一句。&#10;空一行再写，会当成下一段。&#10;&#10;也可以写成：&#10;句子——短名——来处"></textarea>
+        <p class="hint">默认放进「随手」。之后点开那张就能改字、改短名、换一叠。</p>
+        <div class="sheet-actions">
+          <button class="quiet" data-cancel>先不定</button>
+          <button class="primary" data-dopile>倒进去</button>
+        </div>
+      `);
+    }
+    function parsePile(text) {
+      const blocks = String(text || "").split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+      const lines = blocks.length > 1 ? blocks : String(text || "").split(/\n/).map(s => s.trim()).filter(Boolean);
+      return lines.map(raw => {
+        const parts = raw.split(/——|—|--/).map(s => s.trim()).filter(Boolean);
+        const quote = parts[0] || raw;
+        const title = parts[1] || quote.slice(0, 8) || "未题";
+        const sub = parts[2] || "";
+        return { quote, title, sub, collection: "随手" };
+      }).filter(x => x.quote);
+    }
+    function addEmptySlip() {
+      const skin = paletteFor(notes.length);
+      const id = "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      notes.unshift({
+        id, quote: "", title: "空白", sub: "", collection: "随手",
+        date: today(), star: false, ...skin
+      });
+      save();
+      closeSheet();
+      editingId = id;
+      formSheet(notes[0]);
+      toast("空纸在架子上了，直接改字。");
+    }
+    function downloadBackup() {
+      const payload = {
+        app: "纸条架",
+        savedAt: new Date().toISOString(),
+        notes
+      };
+      const text = JSON.stringify(payload, null, 2);
+      const blob = new Blob([text], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "纸条架-备份.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      closeSheet();
+      toast("备份文件已下载。");
+    }
+    function mergeIncoming(incoming) {
+      const list = Array.isArray(incoming) ? incoming : incoming && incoming.notes;
+      if (!Array.isArray(list)) throw 0;
+      const ids = new Set(notes.map(n => n.id));
+      let add = 0, update = 0;
+      list.forEach(item => {
+        if (!item || typeof item.quote !== "string") return;
+        if (item.id && ids.has(item.id)) {
+          const old = notes.find(n => n.id === item.id);
+          if (old) Object.assign(old, item), update += 1;
+          return;
+        }
+        if (!item.id) item.id = "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        if (!item.paper) Object.assign(item, paletteFor(notes.length + add));
+        notes.unshift(item); add += 1;
+      });
+      save();
+      return { add, update };
+    }
+
+    function paletteFor(i) {
+      return PALETTE[i % PALETTE.length];
+    }
+
+    function saveForm() {
+      const quote = ($("fQuote").value || "").trim();
+      const title = ($("fTitle").value || "").trim() || quote.slice(0, 8) || "未题";
+      const collection = ($("fCol").value || "").trim() || "随手";
+      const sub = ($("fSub").value || "").trim();
+      if (!quote) { toast("先写一句再贴。"); return; }
+      if (editingId) {
+        const n = notes.find(x => x.id === editingId);
+        if (n) { n.quote = quote; n.title = title; n.collection = collection; n.sub = sub; }
+        toast("放回去了。");
+      } else {
+        const skin = paletteFor(notes.length);
+        notes.unshift({
+          id: "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          quote, title, sub, collection,
+          date: today(),
+          star: false,
+          ...skin
+        });
+        toast("贴上了。");
+      }
+      save();
+      closeSheet();
+      if (editingId && tab === "detail") show("detail", editingId);
+      else show(tab === "detail" ? "shelf" : tab);
+    }
+
+    function exportNotes() {
+      const text = JSON.stringify(notes, null, 2);
+      closeSheet();
+      openSheet(`
+        <div class="grab"></div>
+        <h2>倒出来的纸条</h2>
+        <textarea id="dump" style="min-height:220px">${escapeHtml(text)}</textarea>
+        <p class="hint">全选复制，存到备忘录里就好。</p>
+        <div class="sheet-actions">
+          <button class="quiet" data-cancel>关上</button>
+          <button class="primary" data-copy>复制</button>
+        </div>
+      `);
+    }
+
+    function importNotes() {
+      closeSheet();
+      openSheet(`
+        <div class="grab"></div>
+        <h2>把纸条贴回来</h2>
+        <textarea id="dump" placeholder="把上次倒出的文字整段贴这里"></textarea>
+        <p class="hint">会和下方已有的合并。同一张不会重复贴两次。</p>
+        <div class="sheet-actions">
+          <button class="quiet" data-cancel>关上</button>
+          <button class="primary" data-doimport>贴回来</button>
+        </div>
+      `);
+    }
+
+    document.addEventListener("click", (e) => {
+      const chipBtn = e.target.closest("[data-chip]");
+      if (chipBtn) {
+        chip = chipBtn.dataset.chip;
+        if (tab === "detail") show("shelf");
+        else show(tab);
+        return;
+      }
+      const open = e.target.closest("[data-open]");
+      if (open) { show("detail", open.dataset.open); return; }
+      if (e.target.closest("[data-back]")) { show("shelf"); return; }
+      if (e.target.closest("#plusOnShelf") || e.target.closest("#addBtn") || e.target.closest("#addTop") || e.target.closest("[data-addone]")) {
+        editingId = null; formSheet(null); return;
+      }
+      if (e.target.closest("#menuBtn")) { menuSheet(); return; }
+      if (e.target.closest("[data-pastepile]")) { pileSheet(); return; }
+      if (e.target.closest("[data-addempty]")) { addEmptySlip(); return; }
+      if (e.target.closest("[data-importfile]")) { $("fileIn").click(); return; }
+      if (e.target.closest("[data-dopile]")) {
+        const pile = parsePile($("dump").value);
+        if (!pile.length) { toast("没有读到句子。"); return; }
+        pile.reverse().forEach((item, i) => {
+          notes.unshift({
+            id: "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + i,
+            date: today(), star: false, ...paletteFor(notes.length + i), ...item
+          });
+        });
+        save(); closeSheet(); show("shelf"); toast(`倒进去 ${pile.length} 句。`); return;
+      }
+      const nav = e.target.closest("[data-tab]");
+      if (nav) { show(nav.dataset.tab); return; }
+      if (e.target.closest("[data-draw]")) { doDraw(); return; }
+      if (e.target.closest("[data-drawcard]")) {
+        const flip = $("flip");
+        if (flip && flip.classList.contains("is-face")) return;
+        doDraw(); return;
+      }
+      if (e.target.closest("[data-star]")) {
+        const n = notes.find(x => x.id === currentId);
+        if (n) { n.star = !n.star; save(); show("detail", currentId); toast(n.star ? "收进收藏。" : "从收藏拿出来了。"); }
+        return;
+      }
+      if (e.target.closest("[data-edit]")) {
+        const n = notes.find(x => x.id === currentId);
+        editingId = currentId; formSheet(n); return;
+      }
+      if (e.target.closest("[data-del]")) {
+        if (!confirm("这张纸条拿掉？拿掉就从这台设备上消失。")) return;
+        notes = notes.filter(x => x.id !== currentId);
+        save(); toast("拿掉了。"); show("shelf"); return;
+      }
+      if (e.target.closest("[data-cancel]") || e.target.id === "mask") { closeSheet(); return; }
+      if (e.target.closest("[data-save]")) { saveForm(); return; }
+      if (e.target.closest("[data-export]")) { downloadBackup(); return; }
+      if (e.target.closest("[data-import]")) { importNotes(); return; }
+      if (e.target.closest("[data-copy]")) {
+        const dump = $("dump");
+        dump.select();
+        navigator.clipboard.writeText(dump.value).then(() => toast("复制好了。")).catch(() => toast("长按选中复制吧。"));
+        return;
+      }
+      if (e.target.closest("[data-doimport]")) {
+        try {
+          const { add, update } = mergeIncoming(JSON.parse($("dump").value || "[]"));
+          closeSheet(); show("shelf"); toast(`新来 ${add} 张，改写 ${update} 张。`);
+        } catch {
+          toast("这段文字不像倒出来的纸条。");
+        }
+      }
+    });
+
+    $("fileIn").addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      try {
+        const { add, update } = mergeIncoming(JSON.parse(await file.text()));
+        closeSheet(); show("shelf"); toast(`新来 ${add} 张，改写 ${update} 张。`);
+      } catch {
+        toast("这份文件不像纸条架的备份。");
+      }
+    });
+
+    load();
+    show("shelf");
+  </script>
+</body>
+</html>
