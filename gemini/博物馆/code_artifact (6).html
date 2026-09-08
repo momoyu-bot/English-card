@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>拾句·纸条</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&display=swap');
+        
+        :root {
+            --bg-color: #EBEAE4;
+            --glass-bg: rgba(245, 245, 240, 0.5);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            --text-main: #333333;
+            --text-muted: #777777;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        .font-serif-sc {
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        /* 毛玻璃核心类 */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+        }
+
+        #cards-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px;
+        }
+
+        .note-card {
+            position: absolute;
+            width: 85%;
+            max-width: 400px;
+            aspect-ratio: 3 / 4;
+            background: #FAFAFA;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .note-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            background: var(--card-color, #E2E2D4);
+        }
+
+        /* 模态框通用样式 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(235, 234, 228, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            width: 100%;
+            max-width: 420px;
+            background: #FAFAFA;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transform: translateY(20px) scale(0.95);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0) scale(1);
+        }
+
+        .glass-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(30, 30, 30, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            animation: toastSlideDown 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        @keyframes toastSlideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body class="antialiased h-screen w-screen relative">
+    
+    <!-- 顶部标题 -->
+    <div class="absolute top-0 left-0 w-full p-6 z-10 flex justify-between items-center">
+        <h1 class="text-3xl font-serif-sc font-black tracking-wider text-gray-800">拾句</h1>
+    </div>
+
+    <!-- 纸条层叠容器 -->
+    <div id="cards-container" class="pb-20 pt-10">
+        <!-- JS 动态渲染卡片 -->
+    </div>
+
+    <!-- 底部毛玻璃导航栏 -->
+    <div class="fixed bottom-8 left-0 w-full px-6 z-20 flex justify-between items-center max-w-lg mx-auto right-0">
+        <!-- 抽卡 & 菜单 胶囊 -->
+        <div class="glass-panel rounded-full p-1.5 flex gap-2">
+            <button onclick="drawRandomCard()" class="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/70 shadow-sm text-gray-800 font-medium active:scale-95 transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                抽卡
+            </button>
+            <button onclick="openSettings()" class="flex items-center justify-center px-4 py-2.5 rounded-full text-gray-500 hover:bg-white/40 active:scale-95 transition-all">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+        </div>
+        
+        <!-- 新增按钮 -->
+        <button onclick="openAddModal()" class="glass-panel w-14 h-14 rounded-full flex justify-center items-center text-gray-800 active:scale-90 transition-transform">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
+        </button>
+    </div>
+
+    <!-- 全局提示框容器 -->
+    <div id="toast-container"></div>
+
+    <div id="add-overlay" class="modal-overlay">
+        <div class="modal-content relative flex flex-col gap-4">
+            <div class="flex justify-between items-center mb-2">
+                <h2 id="modal-title" class="text-xl font-serif-sc font-bold text-gray-800">拾取新句子</h2>
+                <button onclick="closeAddModal()" class="p-2 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-500 ml-1 mb-1">句子内容 *</label>
+                <textarea id="new-quote" rows="4" class="glass-input resize-none" placeholder="写下触动你的那一刻..."></textarea>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-500 ml-1 mb-1">书名/出处</label>
+                <input type="text" id="new-title" class="glass-input" placeholder="例如：小王子">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-500 ml-1 mb-1">作者/说话人</label>
+                <input type="text" id="new-author" class="glass-input" placeholder="例如：安东尼·德·圣-埃克苏佩里">
+            </div>
+            <div>
+                <div class="flex justify-between items-end mb-1 ml-1">
+                    <label class="block text-sm text-gray-500">标签</label>
+                    <button onclick="aiGenerateTags()" id="ai-tag-btn" class="text-xs text-green-500 hover:text-green-600 flex items-center gap-1 active:scale-95 transition-transform">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg> AI 归类
+                    </button>
+                </div>
+                <input type="text" id="new-tags" class="glass-input" placeholder="例如：励志, 治愈 (逗号分隔)">
+            </div>
+            <div class="mt-4 flex justify-between items-center">
+                <button id="delete-note-btn" onclick="deleteCurrentNote()" class="hidden px-4 py-2 text-red-500 text-sm font-medium hover:bg-red-50 rounded-full transition-colors">
+                    删除纸条
+                </button>
+                <button onclick="submitNewNote()" class="ml-auto px-6 py-2.5 bg-gray-800 text-white rounded-full text-sm font-medium hover:bg-gray-700 active:scale-95 transition-all shadow-md">
+                    珍藏纸条
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="detail-overlay" class="modal-overlay">
+        <div class="modal-content relative flex flex-col h-[70vh]">
+            <button onclick="closeDetail()" class="absolute top-4 left-4 p-2 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <button onclick="editCurrentNote()" class="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+            </button>
+
+            <!-- 修复：补回丢失的彩色装饰条和句子内容容器 -->
+            <div class="flex-1 mt-12 mb-6 overflow-y-auto pr-2">
+                <div id="detail-color-bar" class="w-12 h-1.5 rounded-full mb-6 transition-colors"></div>
+                <div id="detail-quote" class="text-xl md:text-2xl font-serif-sc text-gray-800 leading-loose"></div>
+            </div>
+
+            <!-- 底部信息 -->
+                <div class="border-t border-gray-100 pt-6 relative shrink-0">
+                    <div id="detail-tags" class="absolute right-0 top-6 flex flex-wrap gap-1 max-w-[50%] justify-end"></div>
+                    <h3 id="detail-title" class="font-serif-sc font-bold text-gray-800 text-lg mb-1"></h3>
+                    <p id="detail-author" class="text-sm text-gray-500 mb-2"></p>
+                    <p id="detail-date" class="text-xs text-gray-400 font-mono"></p>
+                </div>
+
+                <div class="mt-8 p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50">
+                    <div class="flex items-center justify-between mb-3 flex-wrap gap-y-2">
+                        <span class="text-xs font-bold text-blue-400 flex items-center gap-1 shrink-0">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            AI 助手
+                        </span>
+                        <div class="flex flex-wrap gap-2 justify-end">
+                            <button onclick="getAiResonance()" id="ai-resonance-btn" class="p-2 bg-white rounded-full text-purple-500 shadow-sm active:scale-95 transition-all" title="共鸣">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                            </button>
+                            <button onclick="getAiDebate()" id="ai-debate-btn" class="p-2 bg-white rounded-full text-rose-500 shadow-sm active:scale-95 transition-all" title="反转思考">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                            </button>
+                            <button onclick="aiRewriteStyle()" id="ai-style-btn" class="p-2 bg-white rounded-full text-fuchsia-500 shadow-sm active:scale-95 transition-all" title="风格重塑">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+                            </button>
+                            <button onclick="aiWriteStory()" id="ai-story-btn" class="p-2 bg-white rounded-full text-cyan-600 shadow-sm active:scale-95 transition-all" title="微小说">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="ai-resonance-box" class="text-sm text-gray-600 hidden mt-3 leading-relaxed font-serif-sc bg-purple-50/50 p-3 rounded-xl shadow-sm border border-purple-100"></div>
+                    <div id="ai-debate-box" class="text-sm text-gray-600 hidden mt-3 leading-relaxed font-serif-sc bg-rose-50/50 p-3 rounded-xl shadow-sm border border-rose-100"></div>
+                    <div id="ai-style-box" class="text-sm text-gray-600 hidden mt-3 leading-relaxed font-serif-sc bg-fuchsia-50/50 p-3 rounded-xl shadow-sm border border-fuchsia-100/80"></div>
+                    <div id="ai-story-box" class="text-sm text-gray-600 hidden mt-3 leading-relaxed font-serif-sc bg-cyan-50/50 p-4 rounded-xl shadow-sm border border-cyan-100/80 relative overflow-hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-overlay" class="modal-overlay">
+                            </button>
+                            <button onclick="getAiScenarios()" id="ai-scenario-btn" class="p-2 bg-white rounded-full text-amber-500 shadow-sm active:scale-95 transition-all" title="应用场景">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path></svg>
+                            </button>
+                            <button onclick="aiRewriteStyle()" id="ai-style-btn" class="p-2 bg-white rounded-full text-fuchsia-500 shadow-sm active:scale-95 transition-all" title="风格重塑">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+                            </button>
+                            <button onclick="aiWriteStory()" id="ai-story-btn" class="p-2 bg-white rounded-full text-cyan-600 shadow-sm active:scale-95 transition-all" title="微小说">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="new-quote" rows="4" class="glass-input resize-none" placeholder="写下触动你的那一刻..."></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-500 ml-1 mb-1">书名/出处</label>
+                    <input type="text" id="new-title" class="glass-input" placeholder="例如：小王子">
+                </div>
+
+                <div>
+                <label class="block text-sm text-gray-500 ml-1 mb-1">作者/说话人</label>
+                <input type="text" id="new-author" class="glass-input" placeholder="例如：安东尼·德·圣-埃克苏佩里">
+            </div>
+            
+            <div>
+                <div class="flex justify-between items-end mb-1 ml-1">
+                    <label class="block text-sm text-gray-500">标签</label>
+                    <button onclick="aiGenerateTags()" id="ai-tag-btn" class="text-xs text-green-500 hover:text-green-600 flex items-center gap-1 active:scale-95">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg> AI 归类
+                    </button>
+                </div>
+                <input type="text" id="new-tags" class="glass-input" placeholder="例如：励志, 治愈 (逗号分隔)">
+            </div>
+        </div>
+
+        <div class="mt-8 flex justify-between items-center">
+                <!-- 隐藏的删除按钮，仅在编辑模式显示 -->
+                <button id="delete-note-btn" onclick="deleteCurrentNote()" class="hidden px-4 py-2.5 text-red-500 text-sm font-medium hover:bg-red-50 rounded-full transition-colors">
+                    <div id="ai-image-box" class="hidden mt-3 rounded-xl overflow-hidden shadow-sm border border-gray-100 bg-white p-1"></div>
+                    <div id="ai-debate-box" class="text-sm text-gray-600 hidden mt-3 leading-relaxed font-serif-sc bg-rose-50/50 p-3 rounded-xl shadow-sm border border-rose-100"></div>
+                    <div id="ai-scenario-box" class="hidden mt-3 flex flex-col gap-2"></div>
+                    <div id="ai-style-box" class="text-sm text-gray-600 hidden mt-3 leading-relaxed font-serif-sc bg-fuchsia-50/50 p-3 rounded-xl shadow-sm border border-fuchsia-100/80"></div>
+                    <div id="ai-story-box" class="text-sm text-gray-600 hidden mt-3 leading-relaxed font-serif-sc bg-cyan-50/50 p-4 rounded-xl shadow-sm border border-cyan-100/80 relative overflow-hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-serif-sc font-bold text-gray-800">纸条架</h2>
+                <button onclick="closeSettings()" class="p-2 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="space-y-2">
+                <div class="flex justify-between items-center p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+                    <span class="text-gray-700 font-medium text-sm">已收录纸条</span>
+                    <span id="stats-count" class="text-gray-400 text-sm font-mono">0 张</span>
+                </div>
+                
+                <button onclick="exportBackup()" class="w-full flex justify-between items-center p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:bg-gray-50 active:scale-95 transition-all">
+                    <span class="text-gray-700 font-medium text-sm">导出备份 (JSON)</span>
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                </button>
+
+                <button onclick="triggerImport()" class="w-full flex justify-between items-center p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:bg-gray-50 active:scale-95 transition-all">
+                    <span class="text-gray-700 font-medium text-sm">导入合并 (JSON)</span>
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                </button>
+                <input type="file" id="import-file" accept=".json" class="hidden" onchange="handleImport(event)">
+            </div>
+            
+            <p class="text-xs text-gray-400 mt-6 text-center">数据安全保存在你当前浏览器的本地存储中。<br>更换设备前，请记得导出备份。</p>
+        </div>
+    </div>
+
+    <script>
+        // 状态管理
+        const STORAGE_KEY = 'shiju_notes_backup_v2';
+        let notesData = [];
+        let currentOpenNoteId = null;
+        let editingNoteId = null;
+        
+        // 音频上下文
+        let currentAudioContext = null;
+        let currentAudioSource = null;
+
+        // 默认初始纸条
+        const defaultNote = {
+            id: 'init_1',
+            quote: '这是属于你的第一张小纸条。不需要有什么大道理，只需记录下那些闪光的瞬间就好。去右上角点击添加，开始你的拾句之旅吧。',
+            title: '《拾句指南》',
+            author: 'AI小机',
+            date: new Date().toLocaleDateString('zh-CN'),
+            tags: ['向导', '灵感'],
+            color: '#81C784',
+            rotation: 0
+        };
+
+        const colors = ['#E57373', '#F06292', '#BA68C8', '#7986CB', '#64B5F6', '#4FC3F7', '#4DB6AC', '#81C784', '#AED581', '#FFD54F', '#FFB74D', '#FF8A65'];
+
+        // 初始化
+        function init() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    notesData = JSON.parse(saved);
+                } catch (e) {
+                    console.error('解析本地数据失败');
+                }
+            }
+            if (!notesData || notesData.length === 0) {
+                notesData = [defaultNote];
+            }
+            renderCards();
+        }
+
+        function saveToLocal() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(notesData));
+        }
+
+        // 渲染 UI
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-20px)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function renderCards() {
+            const container = document.getElementById('cards-container');
+            container.innerHTML = '';
+            
+            // 最多显示顶部 5 张制造层叠感
+            const displayNotes = notesData.slice(0, 5).reverse(); 
+            const total = displayNotes.length;
+
+            if(notesData.length === 0) {
+                container.innerHTML = `<div class="text-gray-400 text-sm mt-20">纸条架空空如也，快去放一张进来吧。</div>`;
+                return;
+            }
+
+            displayNotes.forEach((note, index) => {
+                const zIndex = index;
+                const offset = (total - 1 - index); 
+                const translateY = offset * 25; 
+                const scale = 1 - (offset * 0.05); 
+                
+                // 如果没有角度则随机生成一个微小角度
+                if (typeof note.rotation === 'undefined') {
+                    note.rotation = (Math.random() - 0.5) * 4; 
+                }
+                const rotate = note.rotation;
+
+                const card = document.createElement('div');
+                card.className = 'note-card';
+                card.style.zIndex = zIndex;
+                card.style.setProperty('--card-color', note.color || '#ddd');
+                card.style.transform = `translateY(${translateY}px) scale(${scale}) rotate(${rotate}deg)`;
+                
+                // 卡片内容
+                card.innerHTML = `
+                    <div class="text-4xl text-gray-200 font-serif-sc font-black mb-2 select-none h-6">“</div>
+                    <div class="flex-1 font-serif-sc text-gray-700 leading-loose text-[15px] overflow-hidden mask-image-bottom line-clamp-6">
+                        ${note.quote}
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <div class="text-xs text-gray-400 truncate">${note.title || '未知出处'}</div>
+                    </div>
+                `;
+
+                // 只有最顶层的卡片可以点击
+                if (index === total - 1) {
+                    card.onclick = () => openDetail(note.id);
+                    card.style.cursor = 'pointer';
+                    card.style.boxShadow = '0 20px 40px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,1)';
+                } else {
+                    card.style.cursor = 'default';
+                }
+
+                container.appendChild(card);
+            });
+        }
+
+        function openDetail(id) {
+            const note = notesData.find(n => n.id === id);
+            if (!note) return;
+            currentOpenNoteId = id;
+
+            document.getElementById('detail-quote').innerText = note.quote;
+            document.getElementById('detail-title').innerText = note.title ? `《${note.title}》` : '';
+            document.getElementById('detail-author').innerText = note.author || '';
+            document.getElementById('detail-date').innerText = note.date;
+            document.getElementById('detail-color-bar').style.backgroundColor = note.color || '#ddd';
+
+            // 渲染标签
+            const tagsContainer = document.getElementById('detail-tags');
+            if (tagsContainer) {
+                tagsContainer.innerHTML = (note.tags && note.tags.length > 0) 
+                    ? note.tags.map(t => `<span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-md shadow-sm border border-gray-200">${t}</span>`).join('')
+                    : '';
+            }
+
+            document.getElementById('ai-resonance-box').classList.add('hidden');
+            document.getElementById('ai-resonance-box').innerHTML = '';
+            document.getElementById('ai-debate-box').classList.add('hidden');
+            document.getElementById('ai-debate-box').innerHTML = '';
+            document.getElementById('ai-style-box').classList.add('hidden');
+            document.getElementById('ai-style-box').innerHTML = '';
+            document.getElementById('ai-story-box').classList.add('hidden');
+            document.getElementById('ai-story-box').innerHTML = '';
+            
+            document.getElementById('ai-resonance-btn').innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>`;
+            document.getElementById('ai-debate-btn').innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>`;
+
+            document.getElementById('detail-overlay').classList.add('active');
+        }
+
+        function closeDetail() {
+            if (currentAudioSource) {
+                currentAudioSource.stop();
+                currentAudioSource = null;
+            }
+            document.getElementById('detail-overlay').classList.remove('active');
+            setTimeout(() => { currentOpenNoteId = null; }, 300);
+        }
+
+        function drawRandomCard() {
+            if (notesData.length <= 1) return showToast("📭 纸条还不够多，先去添加几张吧");
+            
+            let randomIndex;
+            do {
+                randomIndex = Math.floor(Math.random() * notesData.length);
+            } while (randomIndex === 0 && notesData.length > 1); // 尽量不抽到第一张(当前展示的)
+
+            // 将抽到的放到数组最前面
+            const drawnNote = notesData.splice(randomIndex, 1)[0];
+            notesData.unshift(drawnNote);
+            saveToLocal();
+            
+            showToast("✨ 抽到一张过去的纸条...");
+            renderCards();
+        }
+
+        function openAddModal() {
+            editingNoteId = null;
+            document.getElementById('modal-title').innerText = '拾取新句子';
+            document.getElementById('new-quote').value = '';
+            document.getElementById('new-title').value = '';
+            document.getElementById('new-author').value = '';
+            document.getElementById('new-tags').value = '';
+            document.getElementById('delete-note-btn').classList.add('hidden');
+            document.getElementById('add-overlay').classList.add('active');
+        }
+
+        function editCurrentNote() {
+            if (!currentOpenNoteId) return;
+            const note = notesData.find(n => n.id === currentOpenNoteId);
+            if (!note) return;
+
+            closeDetail();
+            editingNoteId = note.id;
+            document.getElementById('modal-title').innerText = '修改纸条';
+            document.getElementById('new-quote').value = note.quote;
+            document.getElementById('new-title').value = note.title || '';
+            document.getElementById('new-author').value = note.author || '';
+            document.getElementById('new-tags').value = note.tags ? note.tags.join(', ') : '';
+            
+            document.getElementById('delete-note-btn').classList.remove('hidden');
+            setTimeout(() => { document.getElementById('add-overlay').classList.add('active'); }, 300);
+        }
+
+        function closeAddModal() {
+            document.getElementById('add-overlay').classList.remove('active');
+            editingNoteId = null;
+        }
+
+        function submitNewNote() {
+            const quote = document.getElementById('new-quote').value.trim();
+            const title = document.getElementById('new-title').value.trim();
+            const author = document.getElementById('new-author').value.trim();
+            const tagsStr = document.getElementById('new-tags').value.trim();
+            const tags = tagsStr ? tagsStr.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+
+            if (!quote) {
+                showToast("✍️ 句子内容不能为空哦");
+                return;
+            }
+
+            if (editingNoteId) {
+                // 修改
+                const index = notesData.findIndex(n => n.id === editingNoteId);
+                if (index !== -1) {
+                    notesData[index].quote = quote;
+                    notesData[index].title = title;
+                    notesData[index].author = author;
+                    notesData[index].tags = tags;
+                }
+                showToast("✅ 修改成功");
+            } else {
+                // 新增，插入到最前面
+                const newNote = {
+                    id: 'note_' + Date.now(),
+                    quote: quote,
+                    title: title,
+                    author: author,
+                    tags: tags,
+                    date: new Date().toLocaleDateString('zh-CN'),
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    rotation: (Math.random() - 0.5) * 4
+                };
+                notesData.unshift(newNote);
+                showToast("🔖 已珍藏纸条");
+            }
+
+            saveToLocal();
+            renderCards();
+            closeAddModal();
+        }
+
+        function deleteCurrentNote() {
+            if (!editingNoteId) return;
+            notesData = notesData.filter(n => n.id !== editingNoteId);
+            saveToLocal();
+            showToast("🗑️ 纸条已删除");
+            closeAddModal();
+            renderCards();
+        }
+
+        function openSettings() {
+            document.getElementById('stats-count').innerText = `${notesData.length} 张`;
+            document.getElementById('settings-overlay').classList.add('active');
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-overlay').classList.remove('active');
+        }
+
+        function exportBackup() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(notesData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "shiju_backup_" + new Date().getTime() + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            showToast("📦 备份已导出");
+        }
+
+        function triggerImport() {
+            document.getElementById('import-file').click();
+        }
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        // 合并去重
+                        const existingIds = new Set(notesData.map(n => n.id));
+                        let added = 0;
+                        imported.forEach(note => {
+                            if (note.id && note.quote && !existingIds.has(note.id)) {
+                                notesData.push(note);
+                                added++;
+                            }
+                        });
+                        
+                        // 按日期排序 (简单模拟)
+                        notesData.sort((a, b) => {
+                            if(a.id > b.id) return -1;
+                            if(a.id < b.id) return 1;
+                            return 0;
+                        });
+
+                        saveToLocal();
+                        renderCards();
+                        closeSettings();
+                        showToast(`📥 成功导入并合并了 ${added} 张纸条`);
+                    } else {
+                        showToast("❌ 备份文件格式错误");
+                    }
+                } catch (err) {
+                    showToast("❌ 无法解析文件");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // 清空选择
+        }
+
+        const GEMINI_API_KEY = ""; // 预留接口，实际运行由宿主注入
+
+        async function aiExtractFromImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showToast("📷 正在阅读图像内容...");
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const base64Data = e.target.result.split(',')[1];
+                const mimeType = file.type;
+
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                role: "user",
+                                parts: [
+                                    { text: "请提取这张图片中的核心名言、语录或高亮句子。如果有书名或作者信息，也一并提取。请以 JSON 格式返回，包含 'quote' (句子内容), 'title' (书名或出处, 若无为空), 'author' (作者, 若无为空) 三个字段。除了合法的 JSON，不要输出任何额外文本。" },
+                                    {
+                                        inlineData: {
+                                            mimeType: mimeType,
+                                            data: base64Data
+                                        }
+                                    }
+                                ]
+                            }],
+                            generationConfig: {
+                                responseMimeType: "application/json"
+                            }
+                        })
+                    });
+                    
+                    const data = await res.json();
+                    const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (jsonText) {
+                        // 清理可能存在的 markdown 标记并解析 JSON
+                        const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+                        const parsed = JSON.parse(cleanJson);
+                        if (parsed.quote) document.getElementById('new-quote').value = parsed.quote;
+                        if (parsed.title) document.getElementById('new-title').value = parsed.title;
+                        if (parsed.author) document.getElementById('new-author').value = parsed.author;
+                        showToast("✨ 句子提取成功！");
+                    } else {
+                         showToast("🍃 未能在图片中找到句子");
+                    }
+                } catch(err) {
+                    console.error(err);
+                    showToast("❌ 图像识别失败，请稍后重试");
+                }
+                
+                event.target.value = ''; // 清空选择器以便下次重复上传
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function aiPolishQuote() {
+            const textarea = document.getElementById('new-quote');
+            const btn = document.getElementById('ai-polish-btn');
+            const text = textarea.value.trim();
+            if (!text) return showToast("✍️ 请先输入需要润色的草稿");
+
+            showToast("✨ 正在召唤灵感...");
+            btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 润色中`;
+            
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `请将下面这段直白的话，润色得更加诗意、文艺、有画面感，适合作为书签语录。不要多余的废话，只输出润色后的一句话：\n${text}` }] }]
+                    })
+                });
+                const data = await res.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) {
+                    textarea.value = resultText.trim().replace(/^["“]|["”]$/g, ''); // 去除可能带的引号
+                    showToast("🌸 润色完成");
+                }
+            } catch(e) {
+                showToast("❌ 润色失败，请稍后重试");
+            }
+            btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg> 润色`;
+        }
+
+        async function aiExpandQuote() {
+            const textarea = document.getElementById('new-quote');
+            const btn = document.getElementById('ai-expand-btn');
+            const text = textarea.value.trim();
+            if (!text) return showToast("✍️ 请先输入需要续写的开头");
+
+            showToast("✨ 正在召唤灵感...");
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 续写中`;
+            
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `请顺着下面这句话的意境和风格，自然地续写一到两句，使其成为一段优美且完整的话。只需返回续写后的完整内容（包含原文与续写），不要任何多余的解释：\n"${text}"` }] }]
+                    })
+                });
+                const data = await res.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) {
+                    textarea.value = resultText.trim().replace(/^["“]|["”]$/g, '');
+                    showToast("🌸 续写完成");
+                }
+            } catch(e) {
+                showToast("❌ 续写失败，请稍后重试");
+            }
+            btn.innerHTML = originalIcon;
+        }
+
+        async function aiRewriteStyle() {
+            if (!currentOpenNoteId) return;
+            const note = notesData.find(n => n.id === currentOpenNoteId);
+            const btn = document.getElementById('ai-style-btn');
+            const box = document.getElementById('ai-style-box');
+
+            const styles = ["霓虹闪烁的赛博朋克风", "辞藻华丽的中国古风文言文", "充满戏剧冲突的莎士比亚戏剧风", "犀利幽默的鲁迅杂文风", "纯真治愈的童话绘本风", "冷静客观的硬科幻体"];
+            const randomStyle = styles[Math.floor(Math.random() * styles.length)];
+
+            box.classList.remove('hidden');
+            box.innerHTML = `<span class="animate-pulse flex items-center gap-2"><svg class="w-4 h-4 animate-spin text-fuchsia-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在切换至「${randomStyle}」宇宙...</span>`;
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `请将下面这句名言，完全重写为【${randomStyle}】。要求保留原本的哲理内核，但文风和用词要进行极具张力的彻底颠覆。只输出重写后的句子即可，不要多余的解释。\n原句：“${note.quote}”` }] }]
+                    })
+                });
+                const data = await res.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) {
+                    box.innerHTML = `<div class="text-fuchsia-600 mb-1 text-xs font-bold flex items-center gap-1">🎭 风格重塑：${randomStyle}</div><div class="italic text-gray-800 font-serif-sc mt-2">"${resultText.trim()}"</div>`;
+                }
+            } catch(e) {
+                box.innerHTML = "时空穿越失败，请稍后再试...";
+            }
+            btn.innerHTML = originalIcon;
+        }
+
+        async function aiWriteStory() {
+            if (!currentOpenNoteId) return;
+            const note = notesData.find(n => n.id === currentOpenNoteId);
+            const btn = document.getElementById('ai-story-btn');
+            const box = document.getElementById('ai-story-box');
+
+            if (!box.classList.contains('hidden') && box.innerHTML !== '') return;
+
+            box.classList.remove('hidden');
+            box.innerHTML = `<div class="text-sm text-cyan-600 animate-pulse text-center p-2 flex flex-col items-center gap-2"><svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在为你编织一个故事...</div>`;
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `你是一位感性的微小说家。请以这句名言为核心（必须在文中自然出现这句原话），创作一篇 100 字左右的微小说或散文诗片段。要求极具画面感，情感细腻，氛围感强。排版要优美。\n核心名言：“${note.quote}”` }] }]
+                    })
+                });
+                const data = await res.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) {
+                    box.innerHTML = `<div class="absolute -right-4 -top-4 opacity-10 text-cyan-600"><svg class="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg></div>
+                    <div class="text-cyan-700 mb-2 text-xs font-bold relative z-10 flex items-center gap-1">📖 意境微小说：</div>
+                    <div class="relative z-10 text-gray-700 leading-loose text-justify font-medium">${resultText.replace(/\n/g, '<br/>')}</div>`;
+                }
+            } catch(e) {
+                box.innerHTML = `<div class="text-sm text-gray-400 text-center p-4">作家的墨水用完了，稍后再试吧。</div>`;
+            }
+            btn.innerHTML = originalIcon;
+        }
+
+        async function getAiResonance() {
+            if (!currentOpenNoteId) return;
+            const note = notesData.find(n => n.id === currentOpenNoteId);
+            const btn = document.getElementById('ai-resonance-btn');
+            const box = document.getElementById('ai-resonance-box');
+
+            if (!box.classList.contains('hidden') && box.innerHTML !== '') return;
+
+            box.classList.remove('hidden');
+            box.innerHTML = `<span class="animate-pulse flex items-center gap-2"><svg class="w-4 h-4 animate-spin text-purple-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在共鸣...</span>`;
+            
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `请作为一位温柔的老朋友，对这句名言给出一段50字左右的治愈感悟。不要重复原句。\n原句：“${note.quote}”` }] }]
+                    })
+                });
+                const data = await res.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) {
+                    box.innerHTML = `<div class="text-purple-600 mb-1 text-xs font-bold flex items-center gap-1">✨ AI 共鸣</div><div class="text-gray-700 font-serif-sc mt-2">${resultText.trim()}</div>`;
+                }
+            } catch(e) {
+                box.innerHTML = "网络走神了，稍后再试...";
+            }
+        }
+
+        async function getAiDebate() {
+            if (!currentOpenNoteId) return;
+            const note = notesData.find(n => n.id === currentOpenNoteId);
+            const btn = document.getElementById('ai-debate-btn');
+            const box = document.getElementById('ai-debate-box');
+
+            if (!box.classList.contains('hidden') && box.innerHTML !== '') return;
+
+            box.classList.remove('hidden');
+            box.innerHTML = `<span class="animate-pulse flex items-center gap-2"><svg class="w-4 h-4 animate-spin text-rose-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在反向思考...</span>`;
+            
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `请作为一位犀利的哲学家，对这句名言提出一个反向思考或辩证的观点，打破常规思维。字数在80字以内。\n原句：“${note.quote}”` }] }]
+                    })
+                });
+                const data = await res.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) {
+                    box.innerHTML = `<div class="text-rose-600 mb-1 text-xs font-bold flex items-center gap-1">🤺 反转思考</div><div class="text-gray-700 font-serif-sc mt-2">${resultText.trim()}</div>`;
+                }
+            } catch(e) {
+                box.innerHTML = "思维短路了，稍后再试...";
+            }
+        }
+
+        async function aiGenerateTags() {
+            const quoteText = document.getElementById('new-quote').value.trim();
+            if (!quoteText) return showToast("请先写下句子哦");
+            
+            const btn = document.getElementById('ai-tag-btn');
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 归类中`;
+            
+            try {
+                const payload = {
+                    contents: [{ parts: [{ text: `请为以下句子生成2到3个合适的标签，例如“治愈”、“哲学”、“随笔”等。\n句子：“${quoteText}”` }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: { type: "STRING" }
+                        }
+                    }
+                };
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    const tags = JSON.parse(data.candidates[0].content.parts[0].text);
+                    if (Array.isArray(tags)) {
+                        document.getElementById('new-tags').value = tags.join(', ');
+                        showToast("🏷️ 标签已自动生成");
+                    }
+                }
+            } catch(e) {
+                showToast("归类失败，请手动添加");
+            }
+            btn.innerHTML = originalIcon;
+        }
+
+        // 启动应用
+        window.onload = init;
+    </script>
+</body>
+</html>
