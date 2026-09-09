@@ -123,7 +123,30 @@ if (navigator.standalone === true ||
      而不是在门楣底下留一个打不了字的空框。
      清单本身一个字都不靠 JS，断网、关 JS 照样是全的。 */
 
-  .find{margin:0 0 26px;}
+  /* 平时是收起来的——她说摆在那儿太抢眼睛，2026-09-09 收掉的。
+     三条路把它叫出来：在最顶上往下拉一下、点门楣那行字、电脑上按 /。
+     收起时不留高度也不留间距，首页看上去跟没有它一样。 */
+  .find{
+    margin:0;
+    max-height:0;
+    overflow:hidden;
+    pointer-events:none;
+    transition:max-height .26s ease, margin .26s ease;
+  }
+  .find.open{
+    margin:0 0 26px;
+    max-height:140px;
+    pointer-events:auto;
+  }
+
+  /* 门楣那行是把它叫出来的开关之一。不加任何看得见的记号：
+     多一个符号就等于没收起来。 */
+  .masthead .who{
+    cursor:pointer;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
 
   .find input{
     -webkit-appearance:none;
@@ -341,6 +364,7 @@ if (navigator.standalone === true ||
 
   @media (prefers-reduced-motion:reduce){
     .item a{transition:none;}
+    .find,
     .find input{transition:none;}
   }
 
@@ -1405,6 +1429,74 @@ if (navigator.standalone === true ||
     input.value = '';
     run();
     input.focus();          /* 清完还留在框里，好接着换个词 */
+  });
+
+  /* --- 平时收着，三条路把它叫出来 -----------------------------------
+
+     她说摆在门楣底下太抢眼睛，所以收起来了。三条路：
+       · 在最顶上往下拉一手指（跟 iPhone 里翻列表找东西同一个动作）
+       · 点门楣「宝's Shop」那行字
+       · 电脑上按 /
+     空着的时候一走开就自己收回去；里面有字就留着，方便回来接着看。 */
+
+  var who = document.querySelector('.masthead .who');
+
+  function opened(){ return box.classList.contains('open'); }
+
+  function reveal(grab){
+    if (!opened()) box.classList.add('open');
+    if (grab) input.focus();
+  }
+  function conceal(){
+    if (!opened()) return;
+    if (input.value){ input.value = ''; run(); }
+    box.classList.remove('open');
+    input.blur();
+  }
+
+  if (who) who.addEventListener('click', function(){
+    if (opened()) conceal(); else reveal(true);
+  });
+
+  /* 手机上滚的是 main（它是 fixed 的裁切容器），电脑上滚的是整页。
+     两个都在 0 才算真的停在顶上，才认这一下下拉。 */
+  var scroller = document.querySelector('main');
+  function atTop(){
+    var a = scroller ? scroller.scrollTop : 0;
+    var b = window.pageYOffset || document.documentElement.scrollTop || 0;
+    return a <= 0 && b <= 0;
+  }
+
+  var y0 = null, justPulled = false;
+
+  document.addEventListener('touchstart', function(ev){
+    y0 = (!opened() && ev.touches.length === 1 && atTop()) ? ev.touches[0].clientY : null;
+  }, {passive:true});
+
+  document.addEventListener('touchmove', function(ev){
+    if (y0 === null) return;
+    if (ev.touches[0].clientY - y0 > 42){
+      reveal(false);          /* 键盘等到手指抬起来再弹：iOS 只认 touchend 那一下 */
+      justPulled = true;
+      y0 = null;
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchend', function(){
+    y0 = null;
+    if (justPulled){ justPulled = false; input.focus(); }
+  }, {passive:true});
+
+  document.addEventListener('keydown', function(ev){
+    if (ev.key === '/' && !opened()){ ev.preventDefault(); reveal(true); }
+  });
+
+  /* 空着的时候走开就自己收回去。点那个清空的叉不算走开。 */
+  input.addEventListener('blur', function(){
+    setTimeout(function(){
+      var here = document.activeElement;
+      if (!input.value && here !== input && here !== clr) conceal();
+    }, 120);
   });
   input.addEventListener('keydown', function(ev){
     if (ev.key === 'Enter'){ ev.preventDefault(); input.blur(); }   /* 收键盘，不跳页 */
