@@ -114,6 +114,83 @@ if (navigator.standalone === true ||
   }
   .masthead .tally b{font-weight:400;}
 
+  /* ---- 找找看 ----------------------------------------------------
+
+     五百多件之后，靠翻是翻不到的。名字、附注、货架名、门牌名一起搜。
+
+     默认 hidden，JS 跑起来才亮出来——跟门楣上「第 N 件」同一个道理：
+     脚本挂了、被拦了、被关了，首页要退回原来那副样子，
+     而不是在门楣底下留一个打不了字的空框。
+     清单本身一个字都不靠 JS，断网、关 JS 照样是全的。 */
+
+  .find{margin:0 0 26px;}
+
+  .find input{
+    -webkit-appearance:none;
+    appearance:none;
+    display:block;
+    width:100%;
+    margin:0;
+    padding:7px 30px 8px 2px;   /* 右边给清空的叉留出手指的落点 */
+    border:0;
+    border-bottom:1px solid #EDE8DF;
+    border-radius:0;
+    background:transparent;
+    font-family:var(--font);
+    /* 不许小于 16px。iOS Safari 一聚焦到小字号的输入框就会把整页放大，
+       退出来版面是歪的，她得自己两根手指缩回去。 */
+    font-size:16px;
+    letter-spacing:0.01em;
+    color:var(--goods);
+    outline:none;
+    transition:border-color .2s ease;
+  }
+  .find input::placeholder{color:#C6BFB4;}
+  .find input:focus{border-bottom-color:#D8D0C2;}
+
+  /* 浏览器自带的那个清除叉是亮蓝色的，摆在这一页里像块补丁。
+     藏掉，自己画一个淡的。 */
+  .find input::-webkit-search-cancel-button{-webkit-appearance:none;display:none;}
+  .find input::-webkit-search-decoration{-webkit-appearance:none;}
+  .find input::-ms-clear{display:none;}
+
+  .find-row{position:relative;}
+  .find .clear{
+    position:absolute;
+    right:-4px;
+    top:50%;
+    transform:translateY(-50%);
+    -webkit-appearance:none;
+    appearance:none;
+    margin:0;
+    padding:6px 8px;
+    border:0;
+    background:transparent;
+    font-family:var(--font);
+    font-size:17px;
+    line-height:1;
+    color:#C6BFB4;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .find .clear:active{color:var(--goods);}
+
+  /* 找到几件。没在找的时候不占位置。 */
+  .find .found{
+    display:block;
+    margin:7px 0 0 2px;
+    min-height:0;
+    font-size:12.5px;
+    line-height:1.6;
+    letter-spacing:0.05em;
+    color:var(--note);
+    font-variant-numeric:tabular-nums;
+  }
+  .find .found:empty{display:none;}
+
+  /* 找的时候被滤掉的条目，和因此空掉的货架、门牌 */
+  .find-off{display:none !important;}
+
   /* ---- 门牌：小写、浅、字距拉宽、不大。靠吸顶交代位置，不靠字重。 -- */
 
   details.group{margin:0 0 10px;}
@@ -264,6 +341,7 @@ if (navigator.standalone === true ||
 
   @media (prefers-reduced-motion:reduce){
     .item a{transition:none;}
+    .find input{transition:none;}
   }
 
   /* 2026-08-28：裁切容器只给手机。
@@ -407,6 +485,16 @@ if (navigator.standalone === true ||
 
 <main>
   <p class="masthead"><span class="who">宝's Shop</span><span class="tally" id="tally" hidden></span></p>
+
+  <div class="find" id="find" hidden>
+    <div class="find-row">
+      <input type="search" id="q" placeholder="找找看…"
+             autocomplete="off" autocorrect="off" autocapitalize="off"
+             spellcheck="false" enterkeyhint="search" aria-label="在店里找页面">
+      <button type="button" class="clear" id="clr" hidden aria-label="清空">×</button>
+    </div>
+    <span class="found" id="found" role="status" aria-live="polite"></span>
+  </div>
 
 <!-- LIST:BEGIN 由 tools/build_index.py 自动生成，不要手改 -->
   <details class="group" style="--dot:#C3AD90;--tint:rgba(195,173,144,.11)">
@@ -1169,6 +1257,163 @@ if (navigator.standalone === true ||
 <!-- LIST:END -->
   <footer>慢慢来，一天一张就够了</footer>
 </main>
+
+<script>
+/* ---- 找找看 -------------------------------------------------------------
+
+   名字、附注、货架名、门牌名一起搜。空格分词，几个词全命中才算数，
+   所以「claude 猫」找得出 claude 那台小机里所有跟猫有关的。
+   命中的抽屉自动打开，把输入框清空就恢复成搜之前那副折叠的样子。
+
+   全在本地做，不发任何网络请求——断网、GitHub 挂了照样能找。
+
+   这段必须排在下面「第 N 件」那段之前跑。那段会往门牌里塞一个件数，
+   跑完再建索引，"claude" 就变成 "claude178"，一搜数字满屏都是。   */
+
+(function(){
+  var box   = document.getElementById('find');
+  var input = document.getElementById('q');
+  var found = document.getElementById('found');
+  var clr   = document.getElementById('clr');
+  if (!box || !input || !found || !clr) return;
+
+  var OFF = 'find-off';
+
+  /* --- 建索引：每条的文本只算一次，之后每次按键都是纯比对 --- */
+
+  var groups = [], packs = [], entries = [];
+
+  function shelf(bag, el, sel){
+    if (!el) return null;
+    for (var i = 0; i < bag.length; i++) if (bag[i].el === el) return bag[i];
+    var s = el.querySelector(sel);
+    var rec = { el: el, n: 0, name: s ? s.textContent : '' };
+    bag.push(rec);
+    return rec;
+  }
+
+  var lis = document.querySelectorAll('li.item');
+  for (var i = 0; i < lis.length; i++){
+    var li = lis[i];
+    var a  = li.querySelector('a');
+    var bl = li.querySelector('.blurb');
+
+    var g = shelf(groups, li.closest('details.group'), 'summary.tag');
+    /* unsigned 是平铺的，没有货架这一层，这里会是 null */
+    var p = shelf(packs,  li.closest('details.pack'),  'summary.pack-tag');
+
+    entries.push({
+      el:    li,
+      href:  a ? a.getAttribute('href') : null,
+      pack:  p,
+      group: g,
+      hay:   ((a  ? a.textContent  : '') + ' ' +
+              (bl ? bl.textContent : '') + ' ' +
+              (p  ? p.name : '')   + ' ' +
+              (g  ? g.name : '')).toLowerCase()
+    });
+  }
+  if (!entries.length) return;
+
+  /* --- 搜之前哪些抽屉是开着的，清空时原样还回去 --- */
+
+  var memo = null;
+  function remember(){
+    if (memo) return;
+    memo = [];
+    var ds = document.querySelectorAll('main details');
+    for (var i = 0; i < ds.length; i++) memo.push([ds[i], ds[i].open]);
+  }
+  function restore(){
+    if (!memo) return;
+    for (var i = 0; i < memo.length; i++) memo[i][0].open = memo[i][1];
+    memo = null;
+  }
+
+  function showAll(){
+    for (var i = 0; i < entries.length; i++) entries[i].el.classList.remove(OFF);
+    for (var p = 0; p < packs.length;  p++) packs[p].el.classList.remove(OFF);
+    for (var g = 0; g < groups.length; g++) groups[g].el.classList.remove(OFF);
+  }
+
+  /* 门牌名字后面那个件数。它是下面「第 N 件」那段脚本挂上去的，
+     所以只能等用户真的开始找的时候再去拿，建索引时它还不存在。
+     不跟着结果走的话，「claude 274」底下只挂着 2 条，对不上。 */
+  function tally(rec){
+    if (rec.span === undefined){
+      rec.span  = rec.el.querySelector('summary.tag > .n') || null;
+      rec.whole = rec.span ? rec.span.textContent : null;
+    }
+    return rec.span;
+  }
+  function tallyShow(rec, n){
+    var s = tally(rec);
+    if (s) s.textContent = (n === null ? rec.whole : n);
+  }
+
+  function run(){
+    var raw   = input.value.replace(/^\s+|\s+$/g, '').toLowerCase();
+    var words = raw ? raw.split(/\s+/) : [];
+
+    clr.hidden = !input.value;
+
+    if (!words.length){
+      showAll();
+      restore();
+      for (var r = 0; r < groups.length; r++) tallyShow(groups[r], null);
+      found.textContent = '';
+      return;
+    }
+
+    remember();
+
+    for (var a = 0; a < packs.length;  a++) packs[a].n  = 0;
+    for (var b = 0; b < groups.length; b++) groups[b].n = 0;
+
+    /* 有几个文件同时挂在两个货架上，按链接去重才是真实件数 */
+    var seen = Object.create(null), hits = 0;
+
+    for (var i = 0; i < entries.length; i++){
+      var e = entries[i], ok = true;
+      for (var w = 0; w < words.length; w++){
+        if (e.hay.indexOf(words[w]) < 0){ ok = false; break; }
+      }
+      e.el.classList.toggle(OFF, !ok);
+      if (!ok) continue;
+      if (e.pack)  e.pack.n++;
+      if (e.group) e.group.n++;
+      if (e.href && !seen[e.href]){ seen[e.href] = 1; hits++; }
+    }
+
+    for (var c = 0; c < packs.length; c++){
+      var pk = packs[c];
+      pk.el.classList.toggle(OFF, !pk.n);
+      if (pk.n) pk.el.open = true;
+    }
+    for (var d = 0; d < groups.length; d++){
+      var gp = groups[d];
+      gp.el.classList.toggle(OFF, !gp.n);
+      if (gp.n) gp.el.open = true;
+      tallyShow(gp, gp.n);
+    }
+
+    found.textContent = hits ? ('找到 ' + hits + ' 件') : '没找着，换个说法试试';
+  }
+
+  input.addEventListener('input', run);
+  clr.addEventListener('click', function(){
+    input.value = '';
+    run();
+    input.focus();          /* 清完还留在框里，好接着换个词 */
+  });
+  input.addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter'){ ev.preventDefault(); input.blur(); }   /* 收键盘，不跳页 */
+    else if (ev.key === 'Escape'){ input.value = ''; run(); input.blur(); }
+  });
+
+  box.hidden = false;
+})();
+</script>
 
 <script>
 (function(){
