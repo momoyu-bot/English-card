@@ -256,10 +256,14 @@ PHONE_KW = re.compile(
     r"嘟嘟|电话|听筒|挂断|来电|拨号|拨通|通话|总机|接线|占线|忙音|振铃|响铃|话筒|座机|打给",
     re.I)
 
-# 关键词认不出、但确实是电话的
-PHONE_EXTRA = {
-    "grok/博物馆/机里没有嘟.html",   # 标题只有一个「嘟」字
-}
+# 博物馆那一格收的是「关于电话的展览」，不是能打的电话：
+# gemini 手搓的那台画着来电中和接听键，但整页一个事件都没绑，按了不响——
+# 那台机器和它的两张展签就是笑话本身。所以这一格整格不接。
+# 万一以后博物馆真收进一台能打的，往 PHONE_EXTRA 写一行就能接上来。
+PHONE_SHELF_SKIP = {"博物馆"}
+
+# 关键词认不出、但确实是电话的（优先级最高，抽屉排除也拦不住）
+PHONE_EXTRA = set()
 
 # 关键词命中了、但不是电话的
 PHONE_SKIP = {
@@ -268,12 +272,10 @@ PHONE_SKIP = {
 }
 
 # 排在前面的按这张表走，新来的自动接在后面。
-# 这个顺序是店里这条电话线长出来的先后：先是一台修不响的机器，
-# 修到能响，然后大家开始互相打，最后有人不挂了。
+# 这个顺序是店里这条电话线长出来的先后：先是终于能响的那台，
+# 然后大家开始互相打，最后有人不挂了。
+# （在这之前还有三台修不响的，归博物馆展着，不在板子上。）
 PHONE_ORDER = [
-    "gemini/博物馆/嘟嘟机.html",
-    "claude/博物馆/从故事到事故.html",
-    "grok/博物馆/机里没有嘟.html",
     "grok/哄睡/嘟嘟机.html",
     "claude/盲盒/嘟嘟电话.html",
     "claude/盲盒/打给CC.html",
@@ -292,15 +294,6 @@ SHELF_EN = {
 # 英文那一份。没列到的线路，EN 模式下就显示这一页自己的中文原话——
 # 与其瞎翻，不如照原样给出来。以后想补，往这里加一行就是。
 PHONE_EN = {
-    "gemini/博物馆/嘟嘟机.html": (
-        "The Custom Ringer",
-        "Hand-built from memory and telepathy. “It'll definitely ring this time.”"),
-    "claude/博物馆/从故事到事故.html": (
-        "Story, Then Accident",
-        "Every line of JS survived. The doctype did not."),
-    "grok/博物馆/机里没有嘟.html": (
-        "No Ring Inside",
-        "Three revisions, quieter each time. The bell ended up in the text."),
     "grok/哄睡/嘟嘟机.html": (
         "The Ringer",
         "Press the horn and this end picks up. Or don't — it leaves a line."),
@@ -608,7 +601,14 @@ def phone_lines(entries):
     for rel, e in by_path.items():
         if rel in PHONE_SKIP:
             continue
-        if rel in PHONE_EXTRA or PHONE_KW.search(e["name"]) or PHONE_KW.search(e["blurb"]):
+        if rel in PHONE_EXTRA:
+            picked.append(rel)
+            continue
+        parts = rel.split("/")
+        shelf = CAT_ALIAS.get(parts[1], parts[1]) if len(parts) >= 3 else ""
+        if shelf in PHONE_SHELF_SKIP:
+            continue
+        if PHONE_KW.search(e["name"]) or PHONE_KW.search(e["blurb"]):
             picked.append(rel)
 
     order = {rel: i for i, rel in enumerate(PHONE_ORDER)}
