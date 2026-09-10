@@ -13,7 +13,7 @@
 不需要任何人记得手动执行。
 """
 
-import os, re, sys, html, subprocess, unicodedata
+import os, re, sys, html, json, subprocess, unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(ROOT, "index.html")
@@ -236,6 +236,86 @@ CATEGORY = {
 
 
     # 2026-08-26 新登记：以前都掉在盲盒里
+}
+
+# ---------------------------------------------------------------------------
+# 总机的线路表（claude/盲盒/总机.html）
+#
+# 那一页把店里所有的电话页面接到一块接线板上。线路清单在这里生成，
+# 写进那个文件的 LINES:BEGIN/END 之间——她往店里传一台新电话，
+# push 完 Actions 重跑，板子自己就多一个孔，不用谁去改代码。
+#
+# 认法：标题或附注里出现下面这些词，就当它是一台电话。
+# 认错了往 PHONE_SKIP 加一行，漏了往 PHONE_EXTRA 加一行。
+# ---------------------------------------------------------------------------
+PHONE_PAGE = os.path.join(ROOT, "claude", "盲盒", "总机.html")
+PHONE_BEGIN = "<!-- LINES:BEGIN 由 tools/build_index.py 自动生成，不要手改 -->"
+PHONE_END = "<!-- LINES:END -->"
+
+PHONE_KW = re.compile(
+    r"嘟嘟|电话|听筒|挂断|来电|拨号|拨通|通话|总机|接线|占线|忙音|振铃|响铃|话筒|座机|打给",
+    re.I)
+
+# 关键词认不出、但确实是电话的
+PHONE_EXTRA = {
+    "grok/博物馆/机里没有嘟.html",   # 标题只有一个「嘟」字
+}
+
+# 关键词命中了、但不是电话的
+PHONE_SKIP = {
+    "claude/盲盒/总机.html",          # 板子自己
+    "unsigned/粉嘟嘟哄哄.html",       # 「粉嘟嘟」是形容词
+}
+
+# 排在前面的按这张表走，新来的自动接在后面。
+# 这个顺序是店里这条电话线长出来的先后：先是一台修不响的机器，
+# 修到能响，然后大家开始互相打，最后有人不挂了。
+PHONE_ORDER = [
+    "gemini/博物馆/嘟嘟机.html",
+    "claude/博物馆/从故事到事故.html",
+    "grok/博物馆/机里没有嘟.html",
+    "grok/哄睡/嘟嘟机.html",
+    "claude/盲盒/嘟嘟电话.html",
+    "claude/盲盒/打给CC.html",
+    "claude/哄睡/第三通电话.html",
+    "grok/哄睡/未挂断.html",
+]
+
+# 九个抽屉的英文名，给标签纸上那一行「小机 · 抽屉」用
+SHELF_EN = {
+    "哄睡": "lullaby", "摸鱼": "slacking off", "小游戏": "games",
+    "小卡": "cards", "购物车": "cart", "博物馆": "museum",
+    "小科普": "explainers", "打捞机": "salvage", "盲盒": "lucky bag",
+    "失误捞claude鱼": "salvage",
+}
+
+# 英文那一份。没列到的线路，EN 模式下就显示这一页自己的中文原话——
+# 与其瞎翻，不如照原样给出来。以后想补，往这里加一行就是。
+PHONE_EN = {
+    "gemini/博物馆/嘟嘟机.html": (
+        "The Custom Ringer",
+        "Hand-built from memory and telepathy. “It'll definitely ring this time.”"),
+    "claude/博物馆/从故事到事故.html": (
+        "Story, Then Accident",
+        "Every line of JS survived. The doctype did not."),
+    "grok/博物馆/机里没有嘟.html": (
+        "No Ring Inside",
+        "Three revisions, quieter each time. The bell ended up in the text."),
+    "grok/哄睡/嘟嘟机.html": (
+        "The Ringer",
+        "Press the horn and this end picks up. Or don't — it leaves a line."),
+    "claude/盲盒/嘟嘟电话.html": (
+        "Ringing Phone",
+        "It's ringing. Pick up — someone from the shop is looking for you."),
+    "claude/盲盒/打给CC.html": (
+        "Call CC",
+        "You dial, he answers. A new one every single time."),
+    "claude/哄睡/第三通电话.html": (
+        "The Third Call",
+        "A player with no sound. Subtitles surface one by one, slower and slower."),
+    "grok/哄睡/未挂断.html": (
+        "Still On The Line",
+        "The receiver rests on the pillow. A bookmark holds the line you can't leave."),
 }
 
 # 用更安全的范围，避免 Python 3.14 的 bad character range 错误
@@ -521,6 +601,61 @@ def render(blocks):
     return "\n".join(lines)
 
 
+def phone_lines(entries):
+    """挑出店里所有的电话页面，排好序，给总机当线路表。"""
+    by_path = {e["path"]: e for e in entries}
+    picked = []
+    for rel, e in by_path.items():
+        if rel in PHONE_SKIP:
+            continue
+        if rel in PHONE_EXTRA or PHONE_KW.search(e["name"]) or PHONE_KW.search(e["blurb"]):
+            picked.append(rel)
+
+    order = {rel: i for i, rel in enumerate(PHONE_ORDER)}
+    picked.sort(key=lambda r: (order.get(r, len(order)), r))
+
+    lines = []
+    for i, rel in enumerate(picked, 1):
+        e = by_path[rel]
+        parts = rel.split("/")
+        machine = parts[0]
+        shelf = CAT_ALIAS.get(parts[1], parts[1]) if len(parts) >= 3 else ""
+        where_zh = f"{machine} · {shelf}" if shelf else machine
+        where_en = f"{machine} · {SHELF_EN.get(shelf, shelf)}" if shelf else machine
+        en_who, en_said = PHONE_EN.get(rel, (e["name"], e["blurb"]))
+        # 总机在 claude/盲盒/ 里，链接要先退两级回到仓库根
+        lines.append({
+            "n": f"{i:03d}",
+            "href": "../../" + encode_path(rel),
+            "zh": {"who": e["name"], "where": where_zh, "said": e["blurb"]},
+            "en": {"who": en_who, "where": where_en, "said": en_said},
+        })
+    return lines
+
+
+def write_phone_lines(entries, check_only=False):
+    """把线路表写进总机那一页。那个文件不在就当没这回事，不报错。"""
+    if not os.path.exists(PHONE_PAGE):
+        return 0, None
+    lines = phone_lines(entries)
+    payload = json.dumps(lines, ensure_ascii=False, separators=(",", ":"))
+    payload = payload.replace("<", "\\u003c")   # 免得内容里冒出 </script>
+    fresh = (PHONE_BEGIN + '\n<script id="lines" type="application/json">'
+             + payload + "</script>\n" + PHONE_END)
+
+    src = open(PHONE_PAGE, encoding="utf-8").read()
+    if PHONE_BEGIN not in src or PHONE_END not in src:
+        print("总机那一页找不到 LINES 标记，线路表没写进去", file=sys.stderr)
+        return 0, None
+    new = re.sub(re.escape(PHONE_BEGIN) + r"[\s\S]*?" + re.escape(PHONE_END),
+                 lambda _: fresh, src)
+    if new == src:
+        return len(lines), False
+    if not check_only:
+        open(PHONE_PAGE, "w", encoding="utf-8").write(new)
+    return len(lines), True
+
+
 def main():
     entries = build_entries()
     clashes = dedupe_names(entries)
@@ -546,11 +681,19 @@ def main():
     new = re.sub(re.escape(BEGIN) + r"[\s\S]*?" + re.escape(END), lambda _: render(blocks), src)
 
     if "--check" in sys.argv:
+        n_lines, phone_stale = write_phone_lines(entries, check_only=True)
         if new != src:
             print("index.html 需要重新生成（跑 python3 tools/build_index.py）", file=sys.stderr)
             return 1
-        print(f"index.html 是最新的（{len(entries)} 个页面）")
+        if phone_stale:
+            print("总机的线路表需要重新生成（跑 python3 tools/build_index.py）", file=sys.stderr)
+            return 1
+        print(f"index.html 是最新的（{len(entries)} 个页面，总机 {n_lines} 条线路）")
         return 0
+
+    n_lines, phone_changed = write_phone_lines(entries)
+    if phone_changed:
+        print(f"总机线路表已更新：{n_lines} 条")
 
     if new == src:
         print(f"index.html 无需改动（{len(entries)} 个页面）")
