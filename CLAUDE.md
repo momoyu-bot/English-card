@@ -137,21 +137,37 @@ python3 - <<'SCAN'
 import re, io, subprocess, collections
 files = [f for f in subprocess.run(['git','-c','core.quotepath=false','ls-files','*.html','*.svg','*.md'],
     capture_output=True, text=True).stdout.split('\n') if f]
+
+def tier(ch):
+    """GB2312 一级字库=最常用的 3755 字，二级=次常用，装不下的=生僻"""
+    try:
+        return 1 if ch.encode('gb2312')[0] <= 0xD7 else 2
+    except UnicodeEncodeError:
+        return 3
+
 freq, where = collections.Counter(), collections.defaultdict(list)
 for f in files:
     s = io.open(f, encoding='utf-8', errors='replace').read()
-    for ch in re.findall(r'[一-鿿]', s):
+    for ch in re.findall(r'[\u4e00-\u9fff]', s):
         freq[ch] += 1
-        if len(where[ch]) < 3 and f not in where[ch]: where[ch].append(f)
-for c, n in sorted([(c,n) for c,n in freq.items() if n <= 2], key=lambda x: x[1]):
-    print(f'{c} ×{n}  {where[c][0]}')
+        if len(where[ch]) < 2 and f not in where[ch]: where[ch].append(f)
+
+print('=== GB2312 都装不下的（最可疑）===')
+for c, n in sorted([(c,n) for c,n in freq.items() if tier(c)==3], key=lambda x: x[1]):
+    print(f'  {c} x{n}  {where[c][0]}')
+print('=== 二级字库且出现 <=5 次 ===')
+print('  ' + ' '.join(f'{c}({n})' for c,n in
+      sorted([(c,n) for c,n in freq.items() if tier(c)==2 and n<=5], key=lambda x: x[1])))
 SCAN
 ```
 
 挑出来之后看一眼上下文（`grep -o ".\{22\}某字.\{18\}" 文件`），就能分辨是错字还是
-页面本来就要用的冷僻字——「鳜」「鲂」在钓鱼游戏里是正经鱼名，「堡垒」的「垒」也是对的。
+页面本来就要用的冷僻字。**生僻不等于错**，这几个都是对的、别去动：钓鱼游戏里的
+「鳜」「鲂」「鳑鲏」是正经鱼名，「钢镚」的「镚」、「堡垒」的「垒」也没问题，
+`claude/博物馆/馥芮白连环误认案.html` 里的「苪」「芪」「苫」更是那一页正在讲的东西。
+`claude/摸鱼/宝的摸鱼小屋.html` 里有个繁体「升級」，是繁简混用不是错字，原样留着。
 
-2026-09-11 第一次跑这套，五处真错字全被捞出来：
+2026-09-11 第一次跑这套，五处真错字全被捞出来（当天都已改掉，这里留着当样本）：
 
 | 错 | 对 | 在哪儿 |
 | --- | --- | --- |
