@@ -269,6 +269,10 @@ PHONE_EXTRA = set()
 PHONE_SKIP = {
     "claude/盲盒/总机.html",          # 板子自己
     "unsigned/粉嘟嘟哄哄.html",       # 「粉嘟嘟」是形容词
+    # 附注里的「接线板」命中了关键词，但那一页拆的是板子本身
+    # （八个孔读作插孔、两个孔读作一张脸），不是一台能打的电话。
+    # 同博物馆那一格的道理：孔位留给真能接通的。
+    "claude/小科普/pareidolia_eight_holes_vs_two.html",
 }
 
 # 排在前面的按这张表走，新来的自动接在后面。
