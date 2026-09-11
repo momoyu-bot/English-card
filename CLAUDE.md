@@ -117,6 +117,67 @@ PY
 手工添加的是 LF。同样的内容用两种行尾存出来，肉眼一模一样，`md5` 却不同——
 直接按原始指纹去找重复，会漏掉绝大部分（那 8 组里有 6 组就是这么漏掉的）。
 
+### ⚠️ Grok 会往文件里种错别字（2026-09-11 她当场点名的）
+
+她的原话（当场说的，不是转述）：
+
+> Grok 是个中文「大文盲」，每次帮我改文件或者挪动文件路径的时候，它老写错别字，
+> 而且还会把原来正确的字改成错别字……如果有发现很离谱的错别字一定要先和我说
+
+**所以：看到离谱的错别字，先告诉她，由她决定改不改**（正文受「原文一律不动」那条红线管；
+`<title>` 和 `<meta name="description">` 不算原文，看到错字直接改）。
+她说 Grok 现在「改一版多一版错别字，每一版的错别字还不一样」，别指望它自己修。
+
+**怎么找：错别字几乎都是生僻字，按字频扫就能捞上来。**逐字读三百多个页面不现实，
+但真正的错字用的往往是全仓库只出现一两次的冷僻字——把这些字挑出来人工过一眼，
+几分钟就够：
+
+```bash
+python3 - <<'SCAN'
+import re, io, subprocess, collections
+files = [f for f in subprocess.run(['git','-c','core.quotepath=false','ls-files','*.html','*.svg','*.md'],
+    capture_output=True, text=True).stdout.split('\n') if f]
+freq, where = collections.Counter(), collections.defaultdict(list)
+for f in files:
+    s = io.open(f, encoding='utf-8', errors='replace').read()
+    for ch in re.findall(r'[一-鿿]', s):
+        freq[ch] += 1
+        if len(where[ch]) < 3 and f not in where[ch]: where[ch].append(f)
+for c, n in sorted([(c,n) for c,n in freq.items() if n <= 2], key=lambda x: x[1]):
+    print(f'{c} ×{n}  {where[c][0]}')
+SCAN
+```
+
+挑出来之后看一眼上下文（`grep -o ".\{22\}某字.\{18\}" 文件`），就能分辨是错字还是
+页面本来就要用的冷僻字——「鳜」「鲂」在钓鱼游戏里是正经鱼名，「堡垒」的「垒」也是对的。
+
+2026-09-11 第一次跑这套，五处真错字全被捞出来：
+
+| 错 | 对 | 在哪儿 |
+| --- | --- | --- |
+| 坌缩 | 坍缩 | `claude/博物馆/Clawd造型宪法（Chat版）.html` |
+| 规矙 | 规矩 | `claude/小科普/Clawd造型宪法（Code版）.html` 的附注 |
+| 沠有云可刷新 | 没有云可刷新 | `grok/博物馆/齐马新蓝.html` |
+| 愘住……7 秒 | 憋住……7 秒 | `grok/哄睡/哄睡.html` |
+| 脓子（两处） | 脖子 | `claude/哄睡/最后一片叶子·馆藏卡.html` |
+
+**Grok 自己报错字的时候，字形也会记错。**它说「坍缩被我写成了垒缩」，实际写的是「坌缩」，
+拿它给的字去仓库里搜是搜不到的。按位置找，别按它给的字找。
+
+**它连「改正错字」的那一次都在写错字。**2026-09-11 翻 git 记录翻到这条提交说明：
+
+```
+79a3adb 校正 Clawd 造型宪法两份里的错字：珀瑚→珊瑚、坚缩→坌缩、脓子→脖子
+```
+
+原文是「坍缩」。它先错成「坚缩」，**专门发起一次「校正错字」的提交，把「坚缩」改成了「坌缩」**——
+还是错的，只是换了个错法；珊瑚和脖子那两处倒是真修对了。事后跟她汇报时，它又把
+「坌缩」说成「垒缩」。同一个字，三次，三个都不对。
+
+所以这条要记牢：**它说它修好了，不等于修好了；它报给你的字，也不等于文件里的字。**
+每次它动过的文件，重新跑一遍上面那个扫描。
+
+
 ### ⚠️ 做新页面之前，先查店里有没有同类（2026-09-03 栽过）
 
 宝点名要「雷霆」摸鱼游戏，做完才发现 `gemini/摸鱼/雷霆摸鱼.html` 早就在，
@@ -326,6 +387,19 @@ inline style 优先级更高，所以它们看着好好的。**改完一定要�
 所以判断一页裸没裸，**不要看文件里有没有外套、有没有变量，要看它渲染出来是什么样**：
 用浏览器打开读 `getComputedStyle(document.body).fontFamily`，
 落在 `Times New Roman` / `serif` 上就是裸着。一次栽了 62 个。
+
+**⚠️ 页面打不开的时候，别拿 body 字体去判裸奔（2026-09-11 栽的）。**
+上面那条说「看它渲染出来是什么样」，但那有个前提：页面得真的渲染出来了。
+小科普里 `dijkstra-viz` `neg-cycle` `poisson-popcorn` 三页量出来都是纯 Times New Roman、
+底色透明，看着像典型的裸奔，其实全都穿得好好的——它们是 React 页，最外层那个 div
+自带 `background`、`fontFamily`、`color`，整页被它盖住，body 什么样根本不影响观感。
+之所以量出默认字体，是因为这三页从 `unpkg.com` 取 React，而这个开发环境的网络出不去，
+脚本没加载、`<div id="root">` 是空的——**body 上什么都没有，当然读到浏览器默认值。**
+
+所以量之前先确认页面真的画出来了：看 `document.getElementById('root')` 有没有内容，
+或者截图看是不是一片空白。空白页量出来的字体没有意义。
+顺带：判断 React / Vue 这类页面裸没裸，直接去源码里找最外层容器的 `style={{...}}`，
+里面有 `fontFamily` 和 `background` 就是穿着的，比渲染快也比渲染准。
 
 补的时候只加 `body{font-family:var(--font-sans)}`（底色本来是白的再加
 `background:var(--surface-0)`），**不要碰 margin、padding、max-width**——
