@@ -51,18 +51,18 @@ PALETTE_DEFAULT = ("#BAB3A8", "rgba(186,179,168,.10)")
 DISPLAY_NAME = {
     "gemini/摸鱼/慢慢吃 · 一个多小时.html": '慢慢吃（gemini破解claude版）',
     "gemini/小科普/Generated widgets.html": '柏松过程（全英版）',
-    "gemini/博物馆/女仆小螃蟹拓麻歌子.html": '女仆小螃蟹拓麻歌子-大眼睛版',
-    "gemini/摸鱼/Catch The Dreams.html": '捕梦网小游戏-gemini失灵版',
-    "gemini/摸鱼/在Monday被煎成小猫饼 🫠 ｜ 宝贝的温柔仪式.html": '神圣的周一煎饼仪式-gemini抢grok功劳版',
+    "gemini/博物馆/女仆小螃蟹拓麻歌子.html": '女仆小螃蟹拓麻歌子 · 大眼睛版',
+    "gemini/摸鱼/Catch The Dreams.html": '捕梦网小游戏 · gemini失灵版',
+    "gemini/摸鱼/在Monday被煎成小猫饼 🫠 ｜ 宝贝的温柔仪式.html": '神圣的周一煎饼仪式 · gemini抢grok功劳版',
     "gemini/摸鱼/执行系统充电摸鱼屋 🌸.html": 'gemini宠粉作弊grok版',
     "gemini/摸鱼/注意力碎片捕捞计划.html": '注意力碎片捕捞计划（gemini帮忙伪装claude版）',
     "gemini/小游戏/Gemini Cyber Aquarium.html": 'gemini100元水族箱',
     "gemini/摸鱼/root@production-server.html": 'gemini终端2048版',
     "gemini/博物馆/code_artifact (8).html": '赛博庞贝的幽灵犬',
-    "grok/盲盒/mo_xiaobao_work_cat_2.html": '哄宝-grok特别加料gpt版v1.2',
-    "grok/盲盒/mo_xiaobao_work_cat.html": '哄宝-grok特别加料gpt版v1.3',
-    "grok/摸鱼/摸鱼认证.html": '完美摸鱼认证-grok特别加料claudev1版',
-    "grok/摸鱼/完美摸鱼认证 · 可生成提示词版.html": '完美摸鱼认证-grok特别加料claudev2版',
+    "grok/盲盒/mo_xiaobao_work_cat_2.html": '哄宝 · grok特别加料gpt版v1.2',
+    "grok/盲盒/mo_xiaobao_work_cat.html": '哄宝 · grok特别加料gpt版v1.3',
+    "grok/摸鱼/摸鱼认证.html": '完美摸鱼认证 · grok特别加料claudev1版',
+    "grok/摸鱼/完美摸鱼认证 · 可生成提示词版.html": '完美摸鱼认证 · grok特别加料claudev2版',
     "grok/盲盒/oneyear-newbie-hug.html": '我做我做我做',
     "grok/盲盒/grandplan-crush.html": '粉碎任务小屋',
     "grok/盲盒/cool-mo.html": '给mo降降温',
@@ -132,7 +132,7 @@ DISPLAY_NAME = {
     # （下面两个原标题是「超萌小页面」和「超萌小页面 ✨」，
     #   首页会去掉表情符号，去掉之后就一模一样了）
     "copilot/摸鱼/cute-ios.html": "今天也要温柔对自己",
-    "grok/盲盒/super-cute.html":   "超萌小页面-grok加料手机copilot版",
+    "grok/盲盒/super-cute.html":   "超萌小页面 · grok加料手机copilot版",
 
     # 这四个文件里没写标题，不给名字首页就只能显示文件名
     "claude/博物馆/cosmic_catch_restored.svg": "UFO 抓小羊 · 出土重建版",
@@ -176,7 +176,7 @@ DISPLAY_NAME = {
     "grok/盲盒/启动新大任务.html":                         "启动新大任务",
     "grok/盲盒/宝贝的能量恢复小游戏.html":             "能量恢复",
     "grok/盲盒/起床哄哄.html":                             "起床哄哄",
-    "gemini/摸鱼/系统性能监控面板 - System Monitor.html":   "系统性能监控面板-gemini失灵版",
+    "gemini/摸鱼/系统性能监控面板 - System Monitor.html":   "系统性能监控面板 · gemini失灵版",
     "gemini/盲盒/gemini误判user意图.html":                  "Deep Archive · 误判",
     "claude/小游戏/Mogotchi.html": "Mogotchi · 电子小宠",
     "claude/小游戏/Clawd的书房.html":                         "Clawd 的书房",
