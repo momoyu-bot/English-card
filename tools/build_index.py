@@ -313,6 +313,9 @@ PHONE_EN = {
     "grok/哄睡/未挂断.html": (
         "Still On The Line",
         "The receiver rests on the pillow. A bookmark holds the line you can't leave."),
+    "claude/盲盒/打给猫.html": (
+        "Call the Cat",
+        "It picks up. It's a cat. Two eyes open in the dark and every word needs translating."),
 }
 
 # 用更安全的范围，避免 Python 3.14 的 bad character range 错误
