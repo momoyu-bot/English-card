@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>蓝闪</title>
+  <meta name="description" content="伞底下那抹会透光的蓝，现在停在翅膀上。" />
+  <style>
+    :root {
+      --abyss: #040814;
+      --deep: #07122a;
+      --rib: #0a1838;
+      --blue-abyss: #061433;
+      --blue-ink: #0c2a72;
+      --blue-core: #1a5ad4;
+      --blue-mid: #2f7cff;
+      --blue-glow: #6ec8ff;
+      --blue-flash: #b8e4ff;
+      --amber: #c45c20;
+      --amber-soft: #8b3a12;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--abyss);
+      font-family: "PingFang SC", "Hiragino Sans GB", "Songti SC", "STSong", "Songti", serif;
+      color: #cfe6ff;
+      touch-action: manipulation;
+    }
+    body {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, #12306a 0%, transparent 55%),
+        radial-gradient(ellipse 40% 30% at 82% 88%, rgba(196, 92, 32, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 30% 24% at 12% 92%, rgba(139, 58, 18, 0.16) 0%, transparent 70%),
+        linear-gradient(180deg, #050a18 0%, #040814 100%);
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    .veil {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% 18%, rgba(110, 200, 255, 0.07), transparent 42%),
+        radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.35), transparent 50%);
+    }
+    .hint {
+      position: fixed;
+      left: 0; right: 0;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      text-align: center;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: rgba(207, 230, 255, 0.42);
+      pointer-events: none;
+      transition: opacity 1.2s ease;
+    }
+    .hint.hide { opacity: 0; }
+    .title {
+      position: fixed;
+      top: calc(16px + env(safe-area-inset-top));
+      left: 0; right: 0;
+      text-align: center;
+      pointer-events: none;
+    }
+    .title h1 {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.42em;
+      color: rgba(184, 228, 255, 0.55);
+      text-indent: 0.42em;
+    }
+    .title p {
+      margin-top: 6px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: rgba(184, 228, 255, 0.28);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="veil"></div>
+  <div class="title">
+    <h1>蓝闪</h1>
+    <p>点一下，蓝会亮一点</p>
+  </div>
+  <div class="hint" id="hint">把伞底下的蓝，收进翅膀里</div>
+
+  <script>
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    const hint = document.getElementById("hint");
+    let W = 0, H = 0, dpr = 1;
+    let t = 0;
+    let sparks = [];
+    let touched = false;
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      canvas.style.width = W + "px";
+      canvas.style.height = H + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const palette = {
+      abyss: [6, 20, 51],
+      ink: [12, 42, 114],
+      core: [26, 90, 212],
+      mid: [47, 124, 255],
+      glow: [110, 200, 255],
+      flash: [184, 228, 255],
+    };
+
+    function rgba(arr, a) {
+      return `rgba(${arr[0]},${arr[1]},${arr[2]},${a})`;
+    }
+
+    function lerp(a, b, k) { return a + (b - a) * k; }
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+    class Butterfly {
+      constructor(kind) {
+        this.kind = kind; // "queen" | "mid" | "small"
+        this.reset(true);
+      }
+      reset(initial) {
+        const sizes = { queen: 1, mid: 0.58, small: 0.34 };
+        this.s = sizes[this.kind] * (0.88 + Math.random() * 0.24);
+        this.x = initial ? W * (0.18 + Math.random() * 0.64) : (Math.random() < 0.5 ? -80 : W + 80);
+        this.y = initial ? H * (0.22 + Math.random() * 0.5) : H * (0.15 + Math.random() * 0.6);
+        this.z = this.kind === "queen" ? 1 : (0.45 + Math.random() * 0.7);
+        this.vx = (Math.random() - 0.5) * 0.35;
+        this.vy = (Math.random() - 0.5) * 0.22;
+        this.phase = Math.random() * Math.PI * 2;
+        this.flap = 0.9 + Math.random() * 0.6;
+        this.flash = 0;
+        this.turn = Math.random() * Math.PI * 2;
+        this.tilt = (Math.random() - 0.5) * 0.4;
+        this.life = 1;
+        this.homeX = W * 0.5 + (Math.random() - 0.5) * W * 0.55;
+        this.homeY = H * 0.42 + (Math.random() - 0.5) * H * 0.38;
+        if (this.kind === "queen") {
+          this.homeX = W * 0.5;
+          this.homeY = H * 0.46;
+          this.s = 1.12;
+          this.z = 1.15;
+        }
+      }
+      attract(px, py) {
+        const dx = px - this.x;
+        const dy = py - this.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const force = this.kind === "queen" ? 180 : 110;
+        this.vx += (dx / d) * force / (d + 40) * 0.08;
+        this.vy += (dy / d) * force / (d + 40) * 0.08;
+        this.flash = Math.min(1, this.flash + 0.55 * (80 / (d + 40)));
+        this.flap = 1.8;
+      }
+      step(dt) {
+        this.phase += dt * this.flap * (1.6 + this.flash * 1.4);
+        this.flap += (0.95 - this.flap) * 0.02;
+        this.flash *= 0.96;
+
+        const wander = 0.012;
+        this.vx += Math.sin(this.phase * 0.37 + this.turn) * wander;
+        this.vy += Math.cos(this.phase * 0.29 + this.turn * 1.3) * wander * 0.7;
+
+        this.vx += (this.homeX - this.x) * 0.00035;
+        this.vy += (this.homeY - this.y) * 0.00028;
+
+        this.vx *= 0.985;
+        this.vy *= 0.985;
+
+        const sp = Math.hypot(this.vx, this.vy);
+        const max = this.kind === "queen" ? 1.6 : 2.2;
+        if (sp > max) {
+          this.vx *= max / sp;
+          this.vy *= max / sp;
+        }
+
+        this.x += this.vx * dt * 18;
+        this.y += this.vy * dt * 18;
+        this.y += Math.sin(this.phase * 0.5) * 0.12;
+
+        if (this.x < -120 || this.x > W + 120 || this.y < -100 || this.y > H + 100) {
+          this.homeX = W * (0.2 + Math.random() * 0.6);
+          this.homeY = H * (0.22 + Math.random() * 0.5);
+          if (this.x < -120) this.x = -40;
+          if (this.x > W + 120) this.x = W + 40;
+        }
+      }
+      draw(ctx) {
+        const open = 0.22 + (0.5 + 0.5 * Math.sin(this.phase)) * (0.55 + this.flash * 0.25);
+        const scale = 42 * this.s * this.z;
+        const ang = Math.atan2(this.vy, this.vx + 0.0001) * 0.35 + this.tilt;
+        const shine = 0.35 + this.flash * 0.65 + 0.15 * Math.sin(this.phase * 0.7 + t * 0.8);
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(ang);
+
+        ctx.shadowColor = rgba(palette.glow, 0.25 + this.flash * 0.55);
+        ctx.shadowBlur = 18 + this.flash * 28;
+
+        this.drawWing(ctx, -1, open, scale, shine);
+        this.drawWing(ctx, 1, open, scale, shine);
+        this.drawBody(ctx, scale);
+
+        ctx.restore();
+      }
+      drawWing(ctx, side, open, scale, shine) {
+        ctx.save();
+        ctx.scale(side, 1);
+        ctx.rotate(-open * 0.95);
+
+        const g = ctx.createLinearGradient(0, -scale * 0.7, scale * 1.15, scale * 0.55);
+        g.addColorStop(0, rgba(palette.flash, 0.15 + shine * 0.35));
+        g.addColorStop(0.18, rgba(palette.glow, 0.75 + shine * 0.2));
+        g.addColorStop(0.42, rgba(palette.mid, 0.95));
+        g.addColorStop(0.68, rgba(palette.core, 1));
+        g.addColorStop(0.88, rgba(palette.ink, 1));
+        g.addColorStop(1, rgba(palette.abyss, 0.95));
+
+        ctx.beginPath();
+        ctx.moveTo(scale * 0.06, 0);
+        ctx.bezierCurveTo(scale * 0.18, -scale * 0.62, scale * 0.62, -scale * 0.78, scale * 1.08, -scale * 0.28);
+        ctx.bezierCurveTo(scale * 1.22, -scale * 0.06, scale * 1.12, scale * 0.22, scale * 0.82, scale * 0.38);
+        ctx.bezierCurveTo(scale * 1.05, scale * 0.48, scale * 0.92, scale * 0.78, scale * 0.55, scale * 0.72);
+        ctx.bezierCurveTo(scale * 0.28, scale * 0.66, scale * 0.12, scale * 0.32, scale * 0.06, 0);
+        ctx.closePath();
+        ctx.fillStyle = g;
+        ctx.fill();
+
+        const edge = ctx.createLinearGradient(0, 0, scale, 0);
+        edge.addColorStop(0, rgba(palette.flash, 0));
+        edge.addColorStop(0.35, rgba(palette.glow, 0.18 + shine * 0.22));
+        edge.addColorStop(1, rgba(palette.flash, 0.05));
+        ctx.strokeStyle = edge;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = "lighter";
+        const spec = ctx.createRadialGradient(
+          scale * 0.38, -scale * 0.18, 0,
+          scale * 0.38, -scale * 0.18, scale * 0.55
+        );
+        spec.addColorStop(0, rgba(palette.flash, 0.22 + shine * 0.38));
+        spec.addColorStop(0.45, rgba(palette.glow, 0.08 + shine * 0.1));
+        spec.addColorStop(1, "rgba(110,200,255,0)");
+        ctx.fillStyle = spec;
+        ctx.fill();
+
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = rgba(palette.ink, 0.28);
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(scale * 0.08, 0);
+        ctx.quadraticCurveTo(scale * 0.42, -scale * 0.12, scale * 0.92, -scale * 0.16);
+        ctx.moveTo(scale * 0.1, scale * 0.04);
+        ctx.quadraticCurveTo(scale * 0.4, scale * 0.18, scale * 0.7, scale * 0.32);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+      drawBody(ctx, scale) {
+        ctx.fillStyle = rgba([8, 16, 36], 0.92);
+        ctx.beginPath();
+        ctx.ellipse(0, 2, scale * 0.055, scale * 0.28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = rgba(palette.glow, 0.35);
+        ctx.beginPath();
+        ctx.ellipse(0, -scale * 0.16, scale * 0.04, scale * 0.07, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = rgba(palette.glow, 0.25);
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-scale * 0.02, -scale * 0.22);
+        ctx.quadraticCurveTo(-scale * 0.12, -scale * 0.48, -scale * 0.08, -scale * 0.58);
+        ctx.moveTo(scale * 0.02, -scale * 0.22);
+        ctx.quadraticCurveTo(scale * 0.12, -scale * 0.48, scale * 0.08, -scale * 0.58);
+        ctx.stroke();
+      }
+    }
+
+    const flock = [];
+    function seed() {
+      flock.length = 0;
+      flock.push(new Butterfly("queen"));
+      for (let i = 0; i < 5; i++) flock.push(new Butterfly("mid"));
+      for (let i = 0; i < 9; i++) flock.push(new Butterfly("small"));
+    }
+    seed();
+    window.addEventListener("resize", () => {
+      flock.forEach(b => {
+        b.homeX = clamp(b.homeX, 40, W - 40);
+        b.homeY = clamp(b.homeY, 60, H - 60);
+      });
+    });
+
+    function addSparks(x, y, n) {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 0.4 + Math.random() * 2.2;
+        sparks.push({
+          x, y,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp - 0.3,
+          life: 1,
+          r: 0.6 + Math.random() * 1.8,
+        });
+      }
+    }
+
+    function pulse(x, y) {
+      touched = true;
+      hint.classList.add("hide");
+      flock.forEach(b => b.attract(x, y));
+      addSparks(x, y, 18);
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      pulse(e.clientX, e.clientY);
+    });
+
+    let last = performance.now();
+    function frame(now) {
+      const dt = clamp((now - last) / 16.67, 0.2, 2.2);
+      last = now;
+      t = now / 1000;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const ribs = 18;
+      ctx.save();
+      ctx.translate(W * 0.5, H * 0.02);
+      for (let i = 0; i < ribs; i++) {
+        const a = -Math.PI * 0.72 + (Math.PI * 1.44) * (i / (ribs - 1));
+        ctx.strokeStyle = `rgba(20, 48, 110, ${0.05 + 0.04 * Math.sin(t * 0.4 + i)})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.sin(a) * W * 0.95, Math.cos(a) * H * 0.95);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      const glow = ctx.createRadialGradient(W * 0.5, H * 0.18, 10, W * 0.5, H * 0.18, W * 0.55);
+      glow.addColorStop(0, "rgba(80, 160, 255, 0.07)");
+      glow.addColorStop(1, "rgba(80, 160, 255, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+
+      flock.sort((a, b) => a.z - b.z);
+      flock.forEach(b => {
+        b.step(dt);
+        b.draw(ctx);
+      });
+
+      sparks = sparks.filter(s => s.life > 0.02);
+      sparks.forEach(s => {
+        s.x += s.vx * dt * 1.4;
+        s.y += s.vy * dt * 1.4;
+        s.vy += 0.01;
+        s.life *= 0.96;
+        ctx.beginPath();
+        ctx.fillStyle = rgba(palette.flash, s.life * 0.7);
+        ctx.arc(s.x, s.y, s.r * s.life, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    setTimeout(() => { if (!touched) hint.classList.add("hide"); }, 7000);
+  </script>
+</body>
+</html>
