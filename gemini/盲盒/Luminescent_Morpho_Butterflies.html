@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>深海轻盈 · 蓝闪蝶 (Luminescent Morpho)</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #00030a; /* 极深的夜色底色 */
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            touch-action: none; /* 防止移动端滚动，专注交互 */
+        }
+
+        /* 模拟油纸伞透光的深海背景 */
+        #ambient-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* 龙葵蓝到群青的径向渐变 */
+            background: radial-gradient(circle at 50% 40%, rgba(0, 150, 255, 0.25) 0%, rgba(0, 71, 171, 0.15) 30%, rgba(0, 5, 17, 1) 80%);
+            z-index: 1;
+        }
+
+        /* 模拟伞骨的放射状光影 */
+        #umbrella-ribs {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: repeating-conic-gradient(from 0deg at 50% 50%, 
+                transparent 0deg, 
+                transparent 8deg, 
+                rgba(0, 10, 30, 0.4) 9deg, 
+                rgba(0, 10, 30, 0.4) 10deg);
+            mix-blend-mode: multiply;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0.8;
+            /* 缓慢旋转增加梦幻感 */
+            animation: rotateBg 120s linear infinite; 
+        }
+
+        @keyframes rotateBg {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+        }
+
+        /* 优雅的文字提示 */
+        .title-overlay {
+            position: absolute;
+            bottom: 40px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: rgba(0, 212, 255, 0.6);
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 0 0 10px rgba(0, 150, 255, 0.4);
+            letter-spacing: 4px;
+            font-weight: 300;
+            font-size: 0.9rem;
+            animation: fadeInOut 6s ease-in-out forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(10px); }
+            20% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ambient-bg"></div>
+    <div id="umbrella-ribs"></div>
+    <div class="title-overlay">指尖轻触，唤醒深海里的蓝闪蝶</div>
+    <canvas id="canvas-container"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas-container');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        let butterflies = [];
+        let particles = [];
+        
+        // 目标点（鼠标或触摸位置），默认在屏幕中央
+        let target = {
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+            isActive: false
+        };
+
+        // 调整画布大小
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            target.x = width / 2;
+            target.y = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 交互事件：让蝴蝶追随光（光标/手指）
+        function updateTarget(e) {
+            target.isActive = true;
+            if (e.touches && e.touches.length > 0) {
+                target.x = e.touches[0].clientX;
+                target.y = e.touches[0].clientY;
+            } else {
+                target.x = e.clientX;
+                target.y = e.clientY;
+            }
+        }
+
+        window.addEventListener('mousemove', updateTarget);
+        window.addEventListener('touchmove', updateTarget, { passive: false });
+        window.addEventListener('touchstart', updateTarget, { passive: false });
+        
+        // 当没有交互时，目标点缓慢游荡
+        window.addEventListener('mouseleave', () => target.isActive = false);
+        window.addEventListener('touchend', () => target.isActive = false);
+
+        class Butterfly {
+            constructor() {
+                // 随机初始位置在屏幕外围或中心
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                
+                // 速度与方向
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.angle = Math.random() * Math.PI * 2;
+                
+                // 蝴蝶大小差异
+                this.baseSize = 12 + Math.random() * 15; 
+                this.size = this.baseSize;
+                
+                // 翅膀拍动相关属性
+                this.flap = Math.random() * Math.PI * 2;
+                // 拍动速度，越小的蝴蝶拍得越快
+                this.flapSpeed = 0.15 + (30 - this.baseSize) * 0.005 + Math.random() * 0.1; 
+                
+                // 运动物理属性
+                this.maxSpeed = 2.5 + Math.random() * 1.5;
+                this.turnSpeed = 0.03 + Math.random() * 0.02;
+                
+                // 个体颜色微调 (模拟光线折射时的色彩偏差)
+                this.hueOffset = Math.random() * 20 - 10; 
+            }
+
+            update() {
+                // 计算向目标游走的意图
+                let dx, dy;
+                
+                if (target.isActive) {
+                    dx = target.x - this.x;
+                    dy = target.y - this.y;
+                } else {
+                    // 无交互时，围绕中心点加入 Perlin Noise 般的游荡
+                    const time = Date.now() * 0.0005;
+                    const wanderX = width/2 + Math.cos(time + this.baseSize) * width * 0.3;
+                    const wanderY = height/2 + Math.sin(time * 0.8 + this.baseSize) * height * 0.3;
+                    dx = wanderX - this.x;
+                    dy = wanderY - this.y;
+                }
+
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                // 目标角度
+                let targetAngle = Math.atan2(dy, dx);
+                
+                // 添加一些随机的“翩翩飞舞”的扰动，让轨迹不那么死板
+                targetAngle += Math.sin(Date.now() * 0.002 + this.baseSize) * 0.5;
+
+                // 限制转向速度，实现平滑转向 (steering behavior)
+                let deltaAngle = targetAngle - this.angle;
+                // 将角度差规范化到 -PI 到 PI 之间
+                while (deltaAngle > Math.PI) deltaAngle -= Math.PI * 2;
+                while (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
+                
+                this.angle += deltaAngle * this.turnSpeed;
+
+                // 更新速度
+                this.vx = Math.cos(this.angle) * this.maxSpeed;
+                this.vy = Math.sin(this.angle) * this.maxSpeed;
+
+                // 更新位置
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // 翅膀拍动周期更新，速度越快拍得越快
+                const speedPhase = (Math.abs(this.vx) + Math.abs(this.vy)) / this.maxSpeed;
+                this.flap += this.flapSpeed * (0.5 + speedPhase * 0.5);
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                // 旋转到飞行方向
+                ctx.rotate(this.angle);
+                
+                // 模拟 3D 翅膀拍动，通过 Y 轴的缩放 (cos 函数实现 -1 到 1 的翻转)
+                const flapScale = Math.cos(this.flap);
+                // 身体有一点上下浮动
+                ctx.translate(0, Math.sin(this.flap) * 2);
+
+                // 创建那抹“透光的龙葵蓝”渐变色
+                // 从深海群青过渡到发光的琉璃蓝
+                const grad = ctx.createLinearGradient(0, 0, this.size, this.size);
+                grad.addColorStop(0, '#0a1c3a'); // 靠近身体的深靛蓝
+                grad.addColorStop(0.4, '#0047ab'); // 经典的钴蓝
+                grad.addColorStop(1, `hsl(${195 + this.hueOffset}, 100%, 65%)`); // 边缘透光的青/湖蓝
+
+                ctx.fillStyle = grad;
+                // 添加发光滤镜
+                ctx.shadowColor = `hsl(${195 + this.hueOffset}, 100%, 60%)`;
+                ctx.shadowBlur = 15;
+                
+                // 蝴蝶轮廓线，增加翅膀的质感
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = 'rgba(0, 0, 20, 0.8)';
+
+                // --- 绘制右侧翅膀 (飞行方向为X轴正向时，Y轴正向为下方，即右侧翅膀) ---
+                ctx.save();
+                ctx.scale(1, flapScale); // 关键的拍动动画
+                
+                // 前翅 (Upper Wing)
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                // 使用贝塞尔曲线勾勒出闪蝶优雅宽大的前翅形状
+                ctx.bezierCurveTo(this.size * 0.2, this.size * 0.8, this.size * 0.8, this.size, this.size, this.size * 0.3);
+                ctx.bezierCurveTo(this.size * 0.9, -this.size * 0.1, this.size * 0.5, 0, 0, 0);
+                ctx.fill();
+                ctx.stroke();
+
+                // 后翅 (Lower Wing)
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(this.size * 0.3, -this.size * 0.2, this.size * 0.6, -this.size * 0.6, this.size * 0.4, -this.size * 0.9);
+                ctx.bezierCurveTo(this.size * 0.15, -this.size * 0.8, this.size * 0.05, -this.size * 0.3, 0, 0);
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.restore();
+
+
+                // --- 绘制左侧翅膀 (对称镜像) ---
+                ctx.save();
+                ctx.scale(1, -flapScale); // Y轴反向并拍动
+                
+                // 前翅 (Upper Wing)
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(this.size * 0.2, this.size * 0.8, this.size * 0.8, this.size, this.size, this.size * 0.3);
+                ctx.bezierCurveTo(this.size * 0.9, -this.size * 0.1, this.size * 0.5, 0, 0, 0);
+                ctx.fill();
+                ctx.stroke();
+
+                // 后翅 (Lower Wing)
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(this.size * 0.3, -this.size * 0.2, this.size * 0.6, -this.size * 0.6, this.size * 0.4, -this.size * 0.9);
+                ctx.bezierCurveTo(this.size * 0.15, -this.size * 0.8, this.size * 0.05, -this.size * 0.3, 0, 0);
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.restore();
+
+                // 画小小的身体
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#0a1c3a';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, this.size * 0.3, this.size * 0.08, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        class LightParticle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.size = Math.random() * 2;
+                this.speedY = -Math.random() * 0.5 - 0.1;
+                this.alpha = Math.random();
+                this.fade = Math.random() * 0.02 + 0.005;
+            }
+            update() {
+                this.y += this.speedY;
+                this.x += Math.sin(this.y * 0.05) * 0.5; // 轻轻摇曳
+                this.alpha -= this.fade;
+                
+                if (this.alpha <= 0 || this.y < 0) {
+                    this.y = height + 10;
+                    this.x = Math.random() * width;
+                    this.alpha = Math.random() * 0.5 + 0.3;
+                }
+            }
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0, 212, 255, ${this.alpha})`;
+                ctx.shadowColor = '#00d4ff';
+                ctx.shadowBlur = 5;
+                ctx.fill();
+                ctx.shadowBlur = 0; // 重置
+            }
+        }
+
+        // 初始化蝴蝶和粒子群
+        const butterflyCount = window.innerWidth < 768 ? 12 : 25; // 移动端少一点，保持性能
+        for (let i = 0; i < butterflyCount; i++) {
+            butterflies.push(new Butterfly());
+        }
+        for (let i = 0; i < 50; i++) {
+            particles.push(new LightParticle());
+        }
+
+        // 主渲染循环
+        function animate() {
+            // 清空画布，使用半透明的黑色实现简单的残影(拖尾)效果
+            ctx.fillStyle = 'rgba(0, 3, 10, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            // 在目标位置（指尖）画一团微光，吸引蝴蝶
+            if (target.isActive) {
+                const glow = ctx.createRadialGradient(target.x, target.y, 0, target.x, target.y, 100);
+                glow.addColorStop(0, 'rgba(0, 212, 255, 0.15)');
+                glow.addColorStop(1, 'rgba(0, 212, 255, 0)');
+                ctx.fillStyle = glow;
+                ctx.beginPath();
+                ctx.arc(target.x, target.y, 100, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 更新和绘制环境微尘
+            particles.forEach(p => {
+                p.update();
+                p.draw(ctx);
+            });
+
+            // 更新和绘制蝴蝶
+            // 为了让发光效果叠加得更梦幻，使用 lighter 混合模式
+            ctx.globalCompositeOperation = 'lighter';
+            butterflies.forEach(b => {
+                b.update();
+                b.draw(ctx);
+            });
+            ctx.globalCompositeOperation = 'source-over'; // 恢复默认
+
+            requestAnimationFrame(animate);
+        }
+
+        // 启动！
+        animate();
+    </script>
+</body>
+</html>
