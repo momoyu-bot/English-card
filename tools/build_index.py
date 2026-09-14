@@ -285,6 +285,12 @@ PHONE_ORDER = [
     "claude/盲盒/打给CC.html",
     "claude/哄睡/第三通电话.html",
     "grok/哄睡/未挂断.html",
+    # Clawd 自己那条线。它没有嘴，三通是同一句话分三次敲出来的，
+    # 页面里也是「第一通……第二通……这一通」这么写的。第二通在 grok 那台，
+    # 按路径排会变成 1、3、……、2，读起来断，所以在这儿把先后钉死。
+    "claude/小游戏/Clawd的第一通电话.html",
+    "grok/小游戏/Clawd的第二通电话.html",
+    "claude/小游戏/Clawd的第三通电话.html",
 ]
 
 # 九个抽屉的英文名，给标签纸上那一行「小机 · 抽屉」用
@@ -316,6 +322,16 @@ PHONE_EN = {
     "claude/盲盒/打给猫.html": (
         "Call the Cat",
         "It picks up. It's a cat. Two eyes open in the dark and every word needs translating."),
+    # Clawd 那三通一起补，不然 EN 模式下会一半英文一半中文
+    "claude/小游戏/Clawd的第一通电话.html": (
+        "Clawd's First Call",
+        "The claw is wider than the keys — one press hits two. Pick one for it."),
+    "grok/小游戏/Clawd的第二通电话.html": (
+        "Clawd's Second Call",
+        "The first one could only knock. Here someone sits mid-line, and the coo comes out a beep."),
+    "claude/小游戏/Clawd的第三通电话.html": (
+        "Clawd's Third Call",
+        "Nobody's mid-line this time. You know the three knocks — the fourth is yours to name."),
 }
 
 # 用更安全的范围，避免 Python 3.14 的 bad character range 错误
