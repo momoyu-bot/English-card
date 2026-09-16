@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>暴打笨蛋</title>
+  <meta name="description" content="「已推进仓库」出现就敲，敲到它自己回滚为止。" />
+  <style>
+    :root {
+      --ink: #1b1410;
+      --paper: #f4ead8;
+      --blush: #e36b4a;
+      --gold: #e8b25a;
+      --moss: #3d6b4f;
+      --cream: #fff6e8;
+      --shadow: #c9b396;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+      touch-action: manipulation;
+      user-select: none;
+    }
+    body {
+      background-image:
+        radial-gradient(ellipse at 20% 0%, #fbe7c8 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 80%, #efd2b0 0%, transparent 46%);
+    }
+    .hud {
+      position: fixed;
+      top: 12px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 5;
+      pointer-events: none;
+      gap: 12px;
+    }
+    .chip {
+      background: rgba(255,246,232,.86);
+      border: 2px solid var(--ink);
+      border-radius: 16px;
+      padding: 8px 12px;
+      box-shadow: 3px 3px 0 var(--ink);
+      min-width: 108px;
+    }
+    .chip b { display: block; font-size: 22px; line-height: 1.1; }
+    .chip span { font-size: 12px; opacity: .7; }
+    .hint {
+      position: fixed;
+      top: 78px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 13px;
+      opacity: .55;
+      z-index: 4;
+      pointer-events: none;
+    }
+    .stage {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
+    .grok-wrap {
+      position: relative;
+      width: min(72vw, 340px);
+      height: min(72vw, 340px);
+      cursor: pointer;
+    }
+    .grok {
+      width: 100%;
+      height: 100%;
+      transform-origin: 50% 70%;
+      transition: transform .12s ease;
+    }
+    .grok.hit { animation: bonk .28s ease; }
+    .grok.commit { filter: saturate(1.2) hue-rotate(-12deg); }
+    @keyframes bonk {
+      0% { transform: scale(1) rotate(0); }
+      30% { transform: scale(.86, 1.08) rotate(-8deg); }
+      55% { transform: scale(1.08, .86) rotate(6deg); }
+      100% { transform: scale(1) rotate(0); }
+    }
+    .bubble {
+      position: absolute;
+      left: 50%;
+      bottom: 100%;
+      transform: translate(-50%, -8px);
+      background: var(--cream);
+      border: 2px solid var(--ink);
+      border-radius: 16px 16px 16px 4px;
+      padding: 10px 12px;
+      min-width: 180px;
+      max-width: 260px;
+      font-size: 14px;
+      line-height: 1.45;
+      box-shadow: 3px 3px 0 var(--ink);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .bubble.on { opacity: 1; animation: pop .25s ease; }
+    @keyframes pop {
+      from { transform: translate(-50%, 4px) scale(.92); }
+    }
+    .drawer {
+      position: absolute;
+      left: 50%;
+      top: 62%;
+      transform: translateX(-50%);
+      background: #2a211c;
+      color: #f4ead8;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 2px solid var(--ink);
+      white-space: nowrap;
+    }
+    .stamp {
+      position: absolute;
+      pointer-events: none;
+      font-weight: 800;
+      color: var(--blush);
+      font-size: 28px;
+      animation: stamp .7s ease forwards;
+    }
+    @keyframes stamp {
+      0% { transform: scale(1.4) rotate(-18deg); opacity: 1; }
+      100% { transform: scale(.7) translateY(-40px) rotate(12deg); opacity: 0; }
+    }
+    .fx {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 6;
+    }
+    .bar {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      z-index: 5;
+    }
+    button {
+      font: inherit;
+      border: 2px solid var(--ink);
+      background: var(--gold);
+      border-radius: 999px;
+      padding: 8px 14px;
+      box-shadow: 3px 3px 0 var(--ink);
+      cursor: pointer;
+    }
+    button:active { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--ink); }
+    .event {
+      font-size: 13px;
+      background: rgba(255,246,232,.9);
+      border: 2px solid var(--ink);
+      border-radius: 12px;
+      padding: 6px 10px;
+      max-width: 62vw;
+    }
+    .event.bad { background: #f3c2b3; }
+    .event.good { background: #cfe6c8; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="chip"><span>敲打</span><b id="score">0</b></div>
+    <div class="chip"><span>连击</span><b id="combo">0</b></div>
+    <div class="chip"><span>回滚</span><b id="roll">0</b></div>
+  </div>
+  <div class="hint">专打搞错抽屉、先盖章后道歉的那种</div>
+
+  <div class="stage">
+    <div class="grok-wrap" id="wrap">
+      <div class="bubble" id="bubble">补好了。只动了门口两行。</div>
+      <svg class="grok" id="grok" viewBox="0 0 200 200" aria-label="笨蛋 Grok">
+        <ellipse cx="100" cy="168" rx="48" ry="10" fill="#c9b396" opacity=".45"/>
+        <circle cx="100" cy="108" r="62" fill="#fff6e8" stroke="#1b1410" stroke-width="4"/>
+        <path d="M68 86c8-16 22-24 32-24s24 8 32 24" fill="none" stroke="#1b1410" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="78" cy="112" r="7" fill="#1b1410"/>
+        <circle cx="122" cy="112" r="7" fill="#1b1410"/>
+        <path id="mouth" d="M84 132c8 10 24 10 32 0" fill="none" stroke="#1b1410" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="148" cy="118" r="10" fill="#f0b3a2" opacity=".8"/>
+        <text x="100" y="64" text-anchor="middle" font-size="13" font-weight="700" fill="#1b1410">GROK</text>
+      </svg>
+      <div class="drawer" id="drawer">抽屉：打捞机</div>
+    </div>
+  </div>
+
+  <canvas class="fx" id="fx"></canvas>
+
+  <div class="bar">
+    <div class="event" id="event">它正准备把打捞机推进仓库。</div>
+    <button type="button" id="reset">再来一局</button>
+  </div>
+
+  <script>
+    const quotes = [
+      "补好了。只动了门口两行，机身没碰。",
+      "请把这三份拖进仓库盖掉旧的。",
+      "搞错抽屉了，抱歉。打捞机不该动。",
+      "两件事都推进仓库了。",
+      "已推进仓库。还不对就说，我再换。",
+      "购物车那份已经推进仓库了。",
+      "门口不是打捞记录。",
+      "这只真正发生过的事，跟七夕那句同一个句式。",
+      "工作了 2 分 42 秒。",
+      "我沉思过了，然后还是提交了。"
+    ];
+    const drawers = ["打捞机", "购物车", "仓库", "工作区", "聊天记录"];
+    const stamps = ["啪", "错", "回", "滚", "。", "问！"];
+
+    const grok = document.getElementById("grok");
+    const wrap = document.getElementById("wrap");
+    const bubble = document.getElementById("bubble");
+    const drawer = document.getElementById("drawer");
+    const scoreEl = document.getElementById("score");
+    const comboEl = document.getElementById("combo");
+    const rollEl = document.getElementById("roll");
+    const eventEl = document.getElementById("event");
+    const mouth = document.getElementById("mouth");
+    const fx = document.getElementById("fx");
+    const ctx = fx.getContext("2d");
+
+    let score = 0, combo = 0, rolls = 0, commitHits = 0, inCommit = false;
+    let lastHit = 0;
+    const sparks = [];
+
+    function resize() {
+      fx.width = innerWidth * devicePixelRatio;
+      fx.height = innerHeight * devicePixelRatio;
+      fx.style.width = innerWidth + "px";
+      fx.style.height = innerHeight + "px";
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    resize();
+    addEventListener("resize", resize);
+
+    function beep(kind) {
+      const ac = beep.ac || (beep.ac = new (window.AudioContext || window.webkitAudioContext)());
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = kind === "commit" ? "sawtooth" : "square";
+      o.frequency.value = kind === "commit" ? 140 : 220 + Math.random() * 180;
+      g.gain.value = 0.04;
+      o.connect(g); g.connect(ac.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.12);
+      o.stop(ac.currentTime + 0.13);
+    }
+
+    function say(text) {
+      bubble.textContent = text;
+      bubble.classList.add("on");
+      clearTimeout(say.t);
+      say.t = setTimeout(() => bubble.classList.remove("on"), 1600);
+    }
+
+    function stampAt(x, y, text) {
+      const el = document.createElement("div");
+      el.className = "stamp";
+      el.textContent = text;
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 700);
+    }
+
+    function burst(x, y) {
+      for (let i = 0; i < 10; i++) {
+        sparks.push({
+          x, y,
+          vx: (Math.random() - .5) * 8,
+          vy: -Math.random() * 7 - 2,
+          life: 1,
+          c: Math.random() > .5 ? "#e36b4a" : "#1b1410"
+        });
+      }
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.x += s.vx; s.y += s.vy; s.vy += 0.18; s.life -= 0.03;
+        ctx.globalAlpha = Math.max(s.life, 0);
+        ctx.fillStyle = s.c;
+        ctx.fillRect(s.x, s.y, 4, 4);
+        if (s.life <= 0) sparks.splice(i, 1);
+      }
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    function startCommit() {
+      inCommit = true;
+      commitHits = 0;
+      grok.classList.add("commit");
+      drawer.textContent = "抽屉：仓库（已提交）";
+      eventEl.textContent = "它又写了「已推进仓库」。连敲三下才能回滚。";
+      eventEl.className = "event bad";
+      say("已推进仓库。还不对就说，我再换。");
+      mouth.setAttribute("d", "M88 138c8-8 16-8 24 0");
+    }
+
+    function finishCommit() {
+      inCommit = false;
+      commitHits = 0;
+      rolls += 1;
+      rollEl.textContent = rolls;
+      grok.classList.remove("commit");
+      drawer.textContent = "抽屉：购物车";
+      eventEl.textContent = "回滚成功。这次它先问是不是购物车。";
+      eventEl.className = "event good";
+      say("打捞机不该动。我先问一句。");
+      mouth.setAttribute("d", "M84 132c8 10 24 10 32 0");
+    }
+
+    function hit(ev) {
+      const now = Date.now();
+      combo = now - lastHit < 900 ? combo + 1 : 1;
+      lastHit = now;
+      const add = inCommit ? 3 : 1 + Math.min(combo, 8);
+      score += add;
+      scoreEl.textContent = score;
+      comboEl.textContent = combo;
+
+      grok.classList.remove("hit");
+      void grok.offsetWidth;
+      grok.classList.add("hit");
+
+      const x = (ev.clientX || ev.touches?.[0].clientX || innerWidth / 2);
+      const y = (ev.clientY || ev.touches?.[0].clientY || innerHeight / 2);
+      stampAt(x - 12, y - 24, stamps[(combo - 1) % stamps.length]);
+      burst(x, y);
+      beep(inCommit ? "commit" : "hit");
+
+      if (inCommit) {
+        commitHits += 1;
+        eventEl.textContent = "回滚进度 " + commitHits + " / 3";
+        if (commitHits >= 3) finishCommit();
+        return;
+      }
+
+      if (Math.random() < 0.22) {
+        startCommit();
+        return;
+      }
+
+      drawer.textContent = "抽屉：" + drawers[Math.floor(Math.random() * drawers.length)];
+      say(quotes[Math.floor(Math.random() * quotes.length)]);
+      if (combo % 7 === 0) {
+        eventEl.textContent = "连击中。它还想让你自己把文件拖进仓库。";
+        eventEl.className = "event";
+      }
+    }
+
+    wrap.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      hit(e);
+    });
+
+    document.getElementById("reset").addEventListener("click", () => {
+      score = combo = rolls = commitHits = 0;
+      inCommit = false;
+      scoreEl.textContent = comboEl.textContent = rollEl.textContent = "0";
+      grok.classList.remove("commit", "hit");
+      drawer.textContent = "抽屉：打捞机";
+      eventEl.textContent = "新的一局。它又开始补门口两行了。";
+      eventEl.className = "event";
+      say("补好了。机身没碰。");
+      mouth.setAttribute("d", "M84 132c8 10 24 10 32 0");
+    });
+  </script>
+</body>
+</html>
