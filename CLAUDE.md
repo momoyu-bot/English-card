@@ -221,6 +221,96 @@ SCAN
 所以这条要记牢：**它说它修好了，不等于修好了；它报给你的字，也不等于文件里的字。**
 每次它动过的文件，重新跑一遍上面那个扫描。
 
+### ⚠️ 字频扫描抓不到最要命的那一类：拿首版比（2026-09-16 加的）
+
+上面那套按字频扫，只列全仓库出现 ≤2 次的字，有两种错字它**看不见**：
+
+- **用常用字的错字。**「砰」写成「磅」、「掂」写成「掀」、「硌」写成「砧」、
+  「啵」写成「咧」、「唔」写成「呓」、「蜷」写成「踩」——每个都是常用字，字频扫描一个都不报。
+- **被展出的错字。**馆里展得越多，错字就越「常见」。
+
+**真正对症的是拿文件的首版跟现在比。**因为这类错几乎都是「后来有人动这个文件时种进去的」，
+不是它进店时就带的。首版在 git 里，一比就现形：
+
+```bash
+python3 - <<'EOF'
+import subprocess, difflib, re, sys
+G=['git','-c','core.quotepath=false']          # ← 这行少了就只扫得到英文名的文件
+files=[f for f in subprocess.run(G+['ls-files'],capture_output=True,text=True)
+       .stdout.split('\n') if re.search(r'\.(html|svg)$', f) and f!='index.html']
+CJK=re.compile(r'[\u4e00-\u9fff]'); SKIP=re.compile(r'<title>|name="description"|<desc\b')
+for f in files:
+    out=subprocess.run(G+['log','--follow','--name-only','--format=@@%H',
+        '--diff-filter=A','--',f],capture_output=True,text=True).stdout.split('\n')
+    revs=[(l[2:].strip(), next((out[j].strip() for j in range(i+1,len(out)) if out[j].strip()),f))
+          for i,l in enumerate(out) if l.startswith('@@')]
+    if not revs: continue
+    h,p_=revs[-1]
+    r=subprocess.run(G+['show',f'{h}:{p_}'],capture_output=True)
+    if r.returncode: continue
+    o=r.stdout.decode('utf-8','replace').replace('\r\n','\n').split('\n')
+    c=open(f,'rb').read().decode('utf-8','replace').replace('\r\n','\n').split('\n')
+    for tag,i1,i2,j1,j2 in difflib.SequenceMatcher(None,o,c,autojunk=False).get_opcodes():
+        if tag!='replace': continue
+        for a in o[i1:i2]:
+            if not CJK.search(a) or SKIP.search(a): continue
+            b=max(c[j1:j2] or [''], key=lambda x: difflib.SequenceMatcher(None,a,x).ratio())
+            if a==b or SKIP.search(b) or difflib.SequenceMatcher(None,a,b).ratio()<0.75: continue
+            for t,x1,x2,y1,y2 in difflib.SequenceMatcher(None,a,b,autojunk=False).get_opcodes():
+                if t=='replace' and len(a[x1:x2])<=8 and CJK.search(a[x1:x2]+b[y1:y2]):
+                    print(f'{f}\t{a[x1:x2]!r} -> {b[y1:y2]!r}\t…{b[max(0,y1-24):y2+24].strip()}…')
+EOF
+```
+
+**`-c core.quotepath=false` 那行少了，这个扫描会静默废掉一大半。**
+`git log --name-only` 跟 `ls-files` 一样会把中文路径转义成 `"claude/\345..."`，
+`git show 首版:那个转义路径` 取不到内容，脚本 `continue` 跳过——不报错，只是中文名的文件
+全部没扫。2026-09-16 第一版就栽在这儿，跑出来「只有 4 处」，加上这行之后 633 个文件全扫到。
+
+跑出来的东西要分三类看，**只有第一类该动**：
+
+1. **改坏了** → 改回首版。
+2. **改对了** → 原件自带错字，后来被人修好了（`紧继→紧绷`、`颎→颚`、`裖→褪`、`嚏→噜`
+   这些都是），方向是从错到对，别动。
+3. **整页重写** → 打捞机那几页、内容换掉的 SVG 卡，是她自己改的措辞，不是错字。
+
+**最高危的是「整页重抄」那种提交**，搜 commit 说明里的「补回正文」「换回正文」「占位」
+就能列出来：页面先被占位内容覆盖，再把正文抄回去，一整页九千多字符重打一遍，
+错字就是这么进去的。2026-09-16 找到的六处里，五处出自这种提交。
+
+2026-09-16 跑这套捞出来的（都已改回，留着当样本）：
+
+| 错 | 对 | 在哪儿 | 怎么进去的 |
+| --- | --- | --- | --- |
+| 换一句哼睡 / 否否否 | 哄睡 / 叭叭叭 | `unsigned/bao-sleepy-nest.html` | 搬家时抄错 |
+| 磅、磅、磅 / 掀一个 / 不砧 / 索性 | 砰砰砰 / 掂一个 / 不硌 / 干脆 | `claude/哄睡/最后一片叶子·馆藏卡.html` | 「补回正文」覆盖占位 |
+| 踩着睡觉 / 踩起来的背 / 橙色 | 蜷着睡觉 / 蜷起来的背 / 橘色 | `claude/哄睡/小狐狸把尾巴借给你.html` | 改功能时顺手全局替换 |
+| 咧～晚安亲亲（三处） | 啵～ | `grok/哄睡/baobao-hongshui.html` | 改标题时顺手 |
+| 整只猫躺在你胸口 | 趴在 | `grok/哄睡/nuonuo-lullaby.html` | 「换回正文」重抄 |
+| 呓。 | 唔。（对着 "Mm."） | `grok/博物馆/小果冻.html` | 改路径时顺手 |
+| 呼咕噜... | 呼噜噜... | `gemini/哄睡/困困宝的梦境.html` | 改附注时顺手 |
+| 哼睡（划掉的那个词）/ 馨苦白 | 哄睡 / 馥苦白 | `gemini/博物馆/赛博遗迹入藏小卡.html` | 补策展附注时顺手 |
+
+最后一条要特别记：那一页是**展出**「哄睡被写成哔睡、哼睡」的词表，划掉的那个词
+本来是正确的「哄睡」，被改成「哼睡」之后跟底下错的那个重了，**整个展品的意思就塌了**。
+改附注的人只看了 `<title>` 和 `<meta>` 那两行，没看它在讲什么。
+
+### ⚠️ 别把物证当错字修掉
+
+`grok/盲盒/谋杀奶茶案.html` 里五处「馥苫白」**不许改**。
+「苫」是 Grok 写的那个字，`claude/博物馆/馥芮白连环误认案.html` 里点名它是
+「源码实证：原卡上真正印着的字」。改了，那个展品就没有证据了。
+同一页还列着 Claude 认的「苪」、Gemini 认的「苕」、Grok 转述认的「苔」，
+以及纪念卡上又滑掉的「芪」「茗」——**这七个字一个都不能动。**
+
+判断办法：那个错字是不是有另一个页面在拿它当展品讲。动手前搜一下：
+
+```bash
+grep -rn '那个错字' --include='*.html' --include='*.md' .
+```
+
+搜出来有人在讲它，那就是藏品，不是待办项。
+
 
 ### ⚠️ 做新页面之前，先查店里有没有同类（2026-09-03 栽过）
 
