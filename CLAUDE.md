@@ -558,6 +558,112 @@ smoothly)`、「你的 'hmtl' 魔法正在平稳运行」）。三处一致地�
 - **仓库里那些「有问题」的文件是藏品，不是待办项。**她的原话：
   「我甚至不敢让模型评价自己的笑话，不然我的小馆就少了很多笑话了。」
   看到 bug、看到翻车、看到互相踩，那就是这间馆收的东西，不要顺手修好。
+  **但这条只管博物馆那一格了**——2026-09-17 她按抽屉划了线，见下一节。
+
+### ⚠️ 页面坏了修不修，按抽屉决定（2026-09-17 她当场定的）
+
+她的原话（当场说的，不是转述）：
+
+> 一般来说，无论哪个小机的，博物馆里面的问题一定是留下来的笑话，
+> 购物车、小卡和盲盒不太确定，但是哄睡和小游戏和摸鱼和科普出问题
+> 那就真的是有问题，修。打捞机不用管了，以后也不需要捞了，我现在会上传来着。
+
+所以看到一个页面坏了，先看它在哪个抽屉：
+
+| 抽屉 | 怎么办 |
+| --- | --- |
+| **博物馆** | **不修。**那是留下来的笑话，哪台小机的都一样。 |
+| **哄睡 / 小游戏 / 摸鱼 / 小科普** | **直接修，不用问。**出问题就是真出问题。 |
+| **购物车 / 小卡 / 盲盒** | 她说不确定 → **先问她**。 |
+| **打捞机** | 不用管了。她现在自己会上传，不需要再捞。 |
+
+**修的分寸：只修让它不能用的那一处，别顺手改样子、改文案、改玩法。**
+文案要改动（比如把被吃掉的 `<br>` 补回去），补的是原作者本来的意思，
+不是自己重写一句。
+
+**另外两条她当场定的：**
+
+- **「只在聊天窗里能用的」那一类不用管。**她的原话：「我也没办法啦，不用管了，
+  好像 claude chat 在里面加了可交互的组件，点一下会变成提示词或者加了 api？」
+  扫出来报 `sendPrompt is not defined` 的就是这一类，别去修。
+- **「网不好就白屏」那 218 个先不管。**她的原话：「以后有问题我单独和你说？」
+  所以不要主动去动那 222 个页面的外部引用，等她点名。
+
+### 她自己说的来路，和一件已经丢了的东西（2026-09-17）
+
+> 我感觉它的小文件要么是本身就有问题的，要么就是下载上传到仓库的时候出问题了
+> （因为之前是用它写的打捞机捞它的文件，有些是我从聊天记录直接下载的）
+
+这个判断被实测印证了：两个页面的脚本整段废掉，都是因为字符串里原本的 `<br>`
+变成了真换行（见下面「`<br>` 被吃掉」那条），进店时就带着伤。
+
+> 其实这六百多个文件我之前是一个个点开和玩过的（为了分类），但是当时忘记
+> 做笔记记录哪里有问题了……只能以后我玩的时候出问题的当场修啦
+
+**所以她玩到哪个坏的会当场说，说了就按上面那张表处理。**
+现成的名单在 `claude/小科普/哪些页面打不开.html`，修好一个就去那一页改一条，
+别让它变成过期的清单。
+
+### ⚠️ 「`<br>` 被吃掉」的后果比原先记的重得多（2026-09-17 实测）
+
+上面「批量导入」那节写着要检查 `<br>` 有没有被换成普通换行，记的后果是
+「HTML 里普通换行等于空格——换行效果直接消失」。**那只是它落在正文里的后果。**
+
+**落在 `<script>` 里的字符串上，后果是整页功能全废：**
+
+```js
+messageText.innerHTML = "咕噜咕噜... 身体暖暖的啦！     ← 引号开了
+o((>ω< ))o 没有任何负担哦~";                            ← 才关上
+```
+
+JS 的普通字符串不能跨行，整段脚本当场 `Invalid or unexpected token`，
+**一行都不执行**——页面画得出来，但每个按钮都是死的，控制台不翻开看不出来。
+
+2026-09-17 修掉两个（`gemini/哄睡/宝的专属哄睡小站.html`、
+`gemini/摸鱼/在Monday被煎成小猫饼…html`），都是补回 `<br>`。
+
+**怎么扫：别自己数引号，交给 JS 引擎判。**自己数引号会把正则里的
+`/[a-zA-Z0-9'_-]/` 这种误报成「开了没关」，打捞机那几页全是这种，噪音盖过真货：
+
+```bash
+python3 - <<'EOF'
+import re, io, os, subprocess, tempfile
+G = ['git', '-c', 'core.quotepath=false']
+files = [f for f in subprocess.run(G + ['ls-files', '*.html'],
+         capture_output=True, text=True).stdout.split('\n') if f]
+# 只查真的是 JS 的那些：没写 type，或者 type 明说是 javascript。
+# text/plain（梦境的内嵌底稿）、text/babel（JSX）、application/json 都要跳过，
+# 否则它们全部误报 Unexpected token '<'。
+JS_OK = re.compile(r'^(text/javascript|application/javascript|module)$', re.I)
+for f in files:
+    s = io.open(f, encoding='utf-8', errors='replace').read()
+    for m in re.finditer(r'<script([^>]*)>([\s\S]*?)</script>', s):
+        attrs, code = m.group(1), m.group(2)
+        if re.search(r'\bsrc=', attrs) or not code.strip():
+            continue
+        t = re.search(r'\btype\s*=\s*["\']([^"\']+)["\']', attrs)
+        if t and not JS_OK.match(t.group(1).strip()):
+            continue
+        base = s[:m.start(2)].count('\n') + 1          # 这段脚本在文件里的起始行
+        with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False,
+                                         encoding='utf-8') as fh:
+            fh.write(code); tmp = fh.name
+        r = subprocess.run(['node', '--check', tmp], capture_output=True, text=True)
+        os.unlink(tmp)
+        if r.returncode:
+            err = next((l.strip() for l in r.stderr.split('\n') if 'Error' in l), '')
+            ln = re.search(r'\.js:(\d+)', r.stderr)
+            where = f'文件第 {base + int(ln.group(1)) - 1} 行' if ln else f'脚本起于第 {base} 行'
+            print(f'{f}\t{where}\t{err[:70]}')
+EOF
+```
+
+跑出来是空的就是干净。有输出的逐个翻开看：**多半是字符串里本该是 `<br>`
+的地方变成了真换行**，补回 `<br>` 就好（`innerHTML` 才用 `<br>`；
+如果那处是 `textContent`，用 `\n` 并给元素加 `white-space:pre-line`，
+别擅自改成另一句话）。
+
+反引号（`` ` ``）开头的模板字符串**本来就能跨行**，所以脚本跳过它，别去「修」。
 
 ### 从聊天窗捞出来的页面会「裸奔」（2026-09-07 她当场授权补）
 
