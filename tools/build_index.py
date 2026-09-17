@@ -50,7 +50,7 @@ PALETTE_DEFAULT = ("#BAB3A8", "rgba(186,179,168,.10)")
 # ---------------------------------------------------------------------------
 DISPLAY_NAME = {
     "gemini/摸鱼/慢慢吃 · 一个多小时.html": '慢慢吃（gemini破解claude版）',
-    "gemini/小科普/Generated widgets.html": '柏松过程（全英版）',
+    "gemini/小科普/Generated widgets.html": '泊松过程（全英版）',
     "gemini/博物馆/女仆小螃蟹拓麻歌子.html": '女仆小螃蟹拓麻歌子 · 大眼睛版',
     "gemini/摸鱼/Catch The Dreams.html": '捕梦网小游戏 · gemini失灵版',
     "gemini/摸鱼/在Monday被煎成小猫饼 🫠 ｜ 宝贝的温柔仪式.html": '神圣的周一煎饼仪式 · gemini抢grok功劳版',
