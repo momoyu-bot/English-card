@@ -366,9 +366,26 @@ def prettify(filename):
     return clean(re.sub(r"\.(html?|svg)$", "", filename, flags=re.I).replace("-", " ").replace("_", " "))
 
 
+def _decomment(text):
+    """把 HTML 注释剥掉再去找标题和附注。
+
+    2026-09-19 栽的：A 的嘟嘟机那一页开头写了一段说明，里面提到
+    「只动了三处：<title>（原稿是「嘟嘟机」）换成货架用的名字」——
+    注释里出现的这三个字也是 <title>，正则就从那儿开始一路匹配到真正的
+    </title>，把整段说明连同 <head> 全当成了标题。首页上挂出来一长串。
+    谁以后在注释里讲 <title> 或者 description 都会再炸一次，所以在这儿修。
+
+    前 12000 字节可能正好切在一段注释中间，那就没有 --> 可配；浏览器遇到
+    没闭合的注释也是把后面全部当注释，所以照做，从 <!-- 那儿截断。
+    """
+    text = re.sub(r"<!--[\s\S]*?-->", " ", text)
+    cut = text.find("<!--")
+    return text if cut < 0 else text[:cut]
+
+
 def page_title(path):
     with open(path, encoding="utf-8", errors="replace") as fh:
-        head = fh.read(12000)
+        head = _decomment(fh.read(12000))
     m = re.search(r"<title[^>]*>([\s\S]*?)</title>", head, re.I)
     if not m:
         return ""
@@ -403,7 +420,7 @@ def page_blurb(path):
     """
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
-            head = fh.read(12000)
+            head = _decomment(fh.read(12000))
     except OSError:
         return ""
     m = re.search(
@@ -420,7 +437,7 @@ def svg_blurb(path):
     """SVG 没有 <meta>，它自己的那一行叫 <desc>。读法一样，读不到就空。"""
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
-            head = fh.read(12000)
+            head = _decomment(fh.read(12000))
     except OSError:
         return ""
     m = re.search(r"<desc[^>]*>([\s\S]*?)</desc>", head, re.I)
