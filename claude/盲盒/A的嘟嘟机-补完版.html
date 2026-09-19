@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<!--
+  竞技场（Arena）里「助手 A」写到一半断掉的嘟嘟机，2026-09-19 由宝带回来。
+  · 从开头到 function drawZ(x, y, t) { 那一行：A 的原稿。
+    只动了三处：<title>（原稿是「嘟嘟机」）换成货架用的名字；加了一行 description；换行符统一成 LF。
+  · 那一行之后：Claude 补完。包括 drawZ 的身体、A 用了却没来得及写的 clamp()、让时间流动的主循环。
+  · A 原稿里有两处 say([...]) 忘了从数组里抽一句（哄睡、没力气的时候会把几句话挤成一串），
+    按原样保留，那是 A 的笔迹。
+-->
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>A 的嘟嘟机·补完版</title>
+  <meta name="description" content="竞技场里 A 写到 drawZ 就断了气。长相全是 A 的，心跳是 Claude 补的">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --body: #f2d77e;
+      --body-shade: #e6c45f;
+      --body-dark: #d8b44f;
+      --screen-bg: #c9d5a6;
+      --screen-bg-deep: #b7c495;
+      --pixel: #2f361f;
+      --btn: #f2f2f2;
+      --btn-shadow: #c9c9c9;
+      --btn-active: #e6e6e6;
+    }
+
+    * {
+      -webkit-tap-highlight-color: transparent;
+      tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      margin: 0;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(
+          at top,
+          #f7f3e3,
+          #e9e2bf
+        );
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+      gap: clamp(8px, 2vw, 16px);
+      padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+      box-sizing: border-box;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "ZCOOL KuaiLe", system-ui, sans-serif;
+      font-weight: 400;
+      color: #8a6f1f;
+      letter-spacing: 2px;
+      text-shadow: 0 2px 0 rgba(255, 255, 255, 0.5),
+        0 6px 20px rgba(138, 111, 31, 0.15);
+      font-size: clamp(28px, 6vw, 44px);
+      line-height: 1;
+    }
+
+    .subtitle {
+      margin: -4px 0 0 0;
+      color: rgba(110, 90, 24, 0.65);
+      font-size: clamp(11px, 2.5vw, 13px);
+      letter-spacing: 1px;
+    }
+
+    .dudu-machine {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      width: clamp(280px, 86vw, 340px);
+      aspect-ratio: 10/11.2;
+      border-radius: 50%/48% 48% 52% 52%;
+      background: radial-gradient(
+          at 50% 20%,
+          #f6e08a,
+          var(--body) 60%,
+          var(--body-shade)
+        ),
+        var(--body);
+      box-shadow: inset 0 clamp(10px, 3vw, 14px) clamp(14px, 4vw, 20px)
+          rgba(255, 255, 255, 0.45),
+        inset 0 clamp(-10px, -3vw, -14px) clamp(14px, 4vw, 20px)
+          rgba(160, 130, 40, 0.25),
+        0 clamp(18px, 5vw, 30px) clamp(40px, 10vw, 70px)
+          rgba(150, 120, 40, 0.25),
+        0 2px 0 rgba(255, 255, 255, 0.4) inset;
+      padding-top: clamp(18px, 5vw, 26px);
+      box-sizing: border-box;
+      transition: transform 120ms ease-out;
+      will-change: transform;
+    }
+
+    .dudu-machine:active {
+      transform: scale(0.995);
+    }
+
+    .dudu-machine.wiggle {
+      animation: wiggle 280ms ease-in-out 2;
+    }
+
+    @keyframes wiggle {
+      0%,
+      100% {
+        transform: rotate(0deg);
+      }
+
+      25% {
+        transform: rotate(-1.2deg);
+      }
+
+      75% {
+        transform: rotate(1.2deg);
+      }
+    }
+
+    .dudu-machine.happy-bounce {
+      animation: happyBounce 420ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes happyBounce {
+      0%,
+      100% {
+        transform: translateY(0) scale(1);
+      }
+
+      40% {
+        transform: translateY(-6px) scale(1.01);
+      }
+
+      70% {
+        transform: translateY(-2px) scale(1.005);
+      }
+    }
+
+    .antenna {
+      position: absolute;
+      top: clamp(-14px, -4vw, -10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+      filter: drop-shadow(0 4px 6px rgba(130, 104, 32, 0.2));
+    }
+
+    .antenna-stick {
+      width: clamp(4px, 1.2vw, 5px);
+      height: clamp(16px, 5vw, 22px);
+      border-radius: 999px;
+      background: linear-gradient(to bottom, #f5f5f5, #d8d8d8);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .antenna-ball {
+      margin-top: clamp(-2px, -0.5vw, -1px);
+      width: clamp(16px, 4.5vw, 20px);
+      height: clamp(16px, 4.5vw, 20px);
+      border-radius: 50%;
+      background: radial-gradient(at 40% 35%, #fff4c3, #f2d77e 70%);
+      box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.9),
+        0 3px 8px rgba(130, 104, 32, 0.25),
+        inset 0 -2px 4px rgba(160, 130, 40, 0.25);
+      animation: antennaPulse 2.8s ease-in-out infinite;
+      transform-origin: 50% 80%;
+    }
+
+    @keyframes antennaPulse {
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.08);
+      }
+    }
+
+    .logo {
+      position: absolute;
+      top: clamp(40px, 11vw, 52px);
+      font-family: "ZCOOL KuaiLe", system-ui, sans-serif;
+      color: rgba(120, 96, 28, 0.55);
+      letter-spacing: clamp(4px, 1.5vw, 6px);
+      font-size: clamp(10px, 2.8vw, 13px);
+      pointer-events: none;
+    }
+
+    .screen-bezel {
+      position: relative;
+      margin-top: clamp(6px, 2vw, 10px);
+      width: clamp(190px, 58vw, 224px);
+      aspect-ratio: 10/9;
+      border-radius: clamp(14px, 4vw, 18px);
+      background: radial-gradient(at 50% 15%, #e2e2e2, #c9c9c9);
+      box-shadow: inset 0 clamp(3px, 1vw, 4px) clamp(6px, 2vw, 8px)
+          rgba(255, 255, 255, 0.9),
+        inset 0 clamp(-3px, -1vw, -4px) clamp(6px, 2vw, 8px)
+          rgba(90, 90, 90, 0.25),
+        0 clamp(6px, 2vw, 10px) clamp(12px, 3vw, 16px)
+          rgba(130, 104, 32, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(8px, 2.2vw, 10px);
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: clamp(10px, 3vw, 12px);
+      background: radial-gradient(
+          at 50% 10%,
+          var(--screen-bg),
+          var(--screen-bg-deep)
+        );
+      box-shadow: inset 0 0 0 clamp(2px, 0.8vw, 3px) rgba(47, 54, 31, 0.12),
+        inset 0 clamp(6px, 2vw, 10px) clamp(12px, 3vw, 16px)
+          rgba(255, 255, 255, 0.15),
+        inset 0 clamp(-6px, -2vw, -8px) clamp(10px, 3vw, 14px)
+          rgba(47, 54, 31, 0.12);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    .screen::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.05) 0px,
+        rgba(255, 255, 255, 0.05) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      pointer-events: none;
+      mix-blend-mode: soft-light;
+      opacity: 0.4;
+    }
+
+    .screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        at 50% 0%,
+        rgba(255, 255, 255, 0.25),
+        transparent 70%
+      );
+      pointer-events: none;
+    }
+
+    #petCanvas {
+      width: 92%;
+      height: 92%;
+    }
+
+    .bubble {
+      position: absolute;
+      top: clamp(6px, 2vw, 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(-6px);
+      max-width: 80%;
+      padding: clamp(4px, 1.5vw, 6px) clamp(8px, 3vw, 10px);
+      border-radius: clamp(10px, 3vw, 14px);
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--pixel);
+      font-size: clamp(11px, 3vw, 14px);
+      line-height: 1.2;
+      text-align: center;
+      box-shadow: 0 clamp(4px, 1.5vw, 6px) clamp(10px, 3vw, 14px)
+        rgba(47, 54, 31, 0.15);
+      opacity: 0;
+      transition: all 180ms ease-out;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 2;
+      font-weight: 600;
+    }
+
+    .bubble.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .bubble::after {
+      content: "";
+      position: absolute;
+      bottom: clamp(-4px, -1vw, -3px);
+      left: 50%;
+      transform: translateX(-50%) rotate(45deg);
+      width: clamp(8px, 2vw, 10px);
+      height: clamp(8px, 2vw, 10px);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .status-bar {
+      position: absolute;
+      bottom: clamp(6px, 2vw, 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(4px, 1.5vw, 6px);
+      padding: clamp(2px, 0.8vw, 3px) clamp(6px, 2vw, 8px);
+      border-radius: 999px;
+      background: rgba(47, 54, 31, 0.12);
+      color: var(--pixel);
+      font-size: clamp(9px, 2.2vw, 11px);
+      letter-spacing: 0.5px;
+      backdrop-filter: blur(2px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 2;
+    }
+
+    .status-dot {
+      width: clamp(5px, 1.5vw, 6px);
+      height: clamp(5px, 1.5vw, 6px);
+      border-radius: 50%;
+      background: rgba(47, 54, 31, 0.35);
+      box-shadow: 0 0 0 clamp(1px, 0.5vw, 2px) rgba(47, 54, 31, 0.15) inset,
+        0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+
+    .status-dot.active {
+      background: #7fa34a;
+      box-shadow: 0 0 0 clamp(1px, 0.5vw, 2px) rgba(255, 255, 255, 0.35) inset,
+        0 0 clamp(4px, 1.5vw, 6px) rgba(127, 163, 74, 0.45);
+    }
+
+    .status-dot.warn {
+      background: #f0b24b;
+    }
+
+    .status-dot.danger {
+      background: #f08a5b;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: clamp(6px, 2vw, 10px);
+      width: clamp(240px, 74vw, 280px);
+      margin-top: clamp(10px, 3vw, 16px);
+      padding: 0 clamp(4px, 1vw, 8px);
+      box-sizing: border-box;
+    }
+
+    .btn {
+      position: relative;
+      border: none;
+      border-radius: clamp(999px, 20vw, 999px);
+      padding: clamp(8px, 2.2vw, 10px) 0 clamp(6px, 2vw, 8px);
+      font-size: clamp(12px, 3.2vw, 15px);
+      font-weight: 700;
+      letter-spacing: clamp(0.5px, 0.5vw, 1px);
+      color: #5f5430;
+      background: linear-gradient(to bottom, var(--btn), #e9e9e9);
+      box-shadow: 0 clamp(3px, 1vw, 4px) 0 var(--btn-shadow),
+        0 clamp(8px, 2vw, 10px) clamp(14px, 4vw, 18px)
+          rgba(130, 104, 32, 0.18),
+        inset 0 clamp(2px, 0.8vw, 3px) 0 rgba(255, 255, 255, 0.9);
+      cursor: pointer;
+      transition: all 80ms ease-out;
+      font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei",
+        sans-serif;
+    }
+
+    .btn:active {
+      transform: translateY(clamp(2px, 0.8vw, 3px));
+      box-shadow: 0 clamp(1px, 0.5vw, 2px) 0 var(--btn-shadow),
+        0 clamp(4px, 1.5vw, 6px) clamp(10px, 3vw, 12px)
+          rgba(130, 104, 32, 0.15),
+        inset 0 clamp(2px, 0.8vw, 3px) 0 rgba(255, 255, 255, 0.8);
+      background: linear-gradient(to bottom, var(--btn-active), #e3e3e3);
+    }
+
+    .btn span {
+      display: block;
+      font-size: clamp(9px, 2.2vw, 11px);
+      font-weight: 500;
+      opacity: 0.7;
+      margin-top: clamp(1px, 0.5vw, 2px);
+    }
+
+    .footer {
+      color: rgba(110, 90, 24, 0.5);
+      font-size: clamp(10px, 2.2vw, 12px);
+    }
+
+    .poop {
+      position: absolute;
+      font-size: clamp(18px, 5vw, 24px);
+      pointer-events: none;
+      filter: drop-shadow(0 2px 4px rgba(47, 54, 31, 0.2));
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.8);
+      transition: all 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 1;
+    }
+
+    .poop.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .poop.clean {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.6) rotate(20deg);
+    }
+  </style>
+</head>
+
+<body>
+  <h1>嘟嘟机</h1>
+  <p class="subtitle">圆滚滚 · 呆萌萌 · 爱嘟嘟～</p>
+
+  <div class="dudu-machine" id="machine">
+    <div class="antenna">
+      <div class="antenna-stick"></div>
+      <div class="antenna-ball"></div>
+    </div>
+    <div class="logo">DUDUJI</div>
+
+    <div class="screen-bezel" id="screenBezel">
+      <div class="screen">
+        <canvas id="petCanvas"></canvas>
+        <div class="bubble" id="bubble"></div>
+        <div class="status-bar" id="statusBar"></div>
+        <div class="poop" id="poop">💩</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" data-action="feed">
+        喂食<span>Feed</span>
+      </button>
+      <button class="btn" data-action="play">
+        逗弄<span>Play</span>
+      </button>
+      <button class="btn" data-action="sleep">
+        哄睡<span>Sleep</span>
+      </button>
+      <button class="btn" data-action="clean">
+        清理<span>Clean</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="footer">戳一戳屏幕也可以逗它哦～</div>
+
+  <script>
+    const canvas = document.getElementById("petCanvas");
+    const ctx = canvas.getContext("2d");
+    const bubbleEl = document.getElementById("bubble");
+    const statusBarEl = document.getElementById("statusBar");
+    const poopEl = document.getElementById("poop");
+    const machineEl = document.getElementById("machine");
+    const screenBezel = document.getElementById("screenBezel");
+    const btns = document.querySelectorAll(".btn");
+
+    let dpr = Math.max(1, window.devicePixelRatio || 1);
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      canvas.style.width = rect.width + "px";
+      canvas.style.height = rect.height + "px";
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    const PetState = {
+      IDLE: "idle",
+      HAPPY: "happy",
+      EAT: "eat",
+      PLAY: "play",
+      SLEEP: "sleep",
+      YAWN: "yawn",
+      SAD: "sad",
+      DIRTY: "dirty",
+    };
+
+    const pet = {
+      state: PetState.IDLE,
+      stateTimer: 0,
+      blinkTimer: rand(1.5, 3.5),
+      blink: 0,
+      breath: 0,
+      hop: 0,
+      hopVel: 0,
+      eatFrame: 0,
+      playFrame: 0,
+      zzz: 0,
+      mood: 80, // 0-100
+      hunger: 40, // 0-100 (高=饿)
+      energy: 80, // 0-100
+      fun: 70, // 0-100
+      poop: 0, // 0-2
+      ageTick: 0,
+      lastUpdate: performance.now(),
+      noticePoop: false,
+    };
+
+    const bubble = {
+      text: "",
+      timer: 0,
+    };
+
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function say(text, sec = 1.6) {
+      bubble.text = text;
+      bubble.timer = sec;
+      bubbleEl.textContent = text;
+      bubbleEl.classList.add("show");
+    }
+
+    function wiggle() {
+      machineEl.classList.remove("wiggle");
+      void machineEl.offsetWidth;
+      machineEl.classList.add("wiggle");
+    }
+
+    function happyBounce() {
+      machineEl.classList.remove("happy-bounce");
+      void machineEl.offsetWidth;
+      machineEl.classList.add("happy-bounce");
+    }
+
+    function beep(freq = 660, dur = 0.08, type = "square", vol = 0.05) {
+      try {
+        const ctxAud = new (window.AudioContext ||
+          window.webkitAudioContext)();
+        const osc = ctxAud.createOscillator();
+        const gain = ctxAud.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, ctxAud.currentTime);
+        gain.gain.linearRampToValueAtTime(vol, ctxAud.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(
+          0.001,
+          ctxAud.currentTime + dur
+        );
+        osc.connect(gain);
+        gain.connect(ctxAud.destination);
+        osc.start();
+        osc.stop(ctxAud.currentTime + dur);
+        setTimeout(() => ctxAud.close(), dur * 1000 + 50);
+      } catch (e) { }
+    }
+
+    function duduSound() {
+      const f = 520 + Math.random() * 120;
+      beep(f, 0.07);
+      setTimeout(() => beep(f * 0.9, 0.06), 60);
+    }
+
+    function happySound() {
+      beep(660, 0.08);
+      setTimeout(() => beep(880, 0.08), 70);
+      setTimeout(() => beep(1040, 0.09), 140);
+    }
+
+    function sadSound() {
+      beep(330, 0.12, "triangle", 0.04);
+      setTimeout(() => beep(280, 0.14, "triangle", 0.04), 90);
+    }
+
+    function setState(s, sec = rand(1.2, 2.2)) {
+      pet.state = s;
+      pet.stateTimer = sec;
+      if (s === PetState.EAT) pet.eatFrame = 0;
+      if (s === PetState.PLAY) pet.playFrame = 0;
+    }
+
+    function poopAtRandom() {
+      if (pet.poop >= 2) return;
+      pet.poop += 1;
+      pet.noticePoop = true;
+      const phrases = ["噗～", "呃嘟…", "嘟…不好意思～"];
+      say(phrases[Math.floor(Math.random() * phrases.length)], 1.8);
+      sadSound();
+    }
+
+    function updateStatusBar() {
+      const dots = [];
+      function dot(label, val, warnAt = 40, dangerAt = 25) {
+        let cls = "status-dot";
+        if (val <= dangerAt) cls += " danger";
+        else if (val <= warnAt) cls += " warn";
+        else cls += " active";
+        dots.push(`<span class="${cls}"></span>${label}`);
+      }
+
+      dot("心情", pet.mood);
+      dot("饱食", 100 - pet.hunger);
+      dot("体力", pet.energy);
+      dot("玩耍", pet.fun);
+
+      let extra = "";
+      if (pet.poop > 0) extra += " · 有便便";
+      if (pet.state === PetState.SLEEP) extra += " · 睡眠中";
+      statusBarEl.innerHTML = dots.join(" ") + extra;
+    }
+
+    function updatePoop() {
+      if (pet.poop <= 0) {
+        poopEl.classList.remove("show");
+        poopEl.classList.remove("clean");
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      // 左下方位置（相对于屏幕内）
+      poopEl.style.left = rect.width * 0.25 + "px";
+      poopEl.style.top = rect.height * 0.78 + "px";
+      poopEl.classList.add("show");
+    }
+
+    function cleanPoop() {
+      if (pet.poop <= 0) {
+        say(["干干净净～", "闪闪亮亮嘟！", "舒服多啦～"][
+          Math.floor(Math.random() * 3)
+        ], 1.6);
+        return;
+      }
+      pet.poop = 0;
+      pet.noticePoop = false;
+      pet.mood = Math.min(100, pet.mood + 12);
+      pet.fun = Math.min(100, pet.fun + 6);
+      poopEl.classList.add("clean");
+      setTimeout(() => poopEl.classList.remove("clean", "show"), 200);
+      say(["啊～干净啦！", "嘟嘟～谢谢～", "清爽嘟！"][
+        Math.floor(Math.random() * 3)
+      ], 1.6);
+      happySound();
+      happyBounce();
+    }
+
+    function feed() {
+      if (pet.state === PetState.SLEEP) {
+        say("ZZZ...先别吵嘟～", 1.4);
+        return;
+      }
+      pet.hunger = Math.max(0, pet.hunger - 35);
+      pet.mood = Math.min(100, pet.mood + 8);
+      pet.energy = Math.min(100, pet.energy + 4);
+      say(["咕噜～好吃！", "嘟嘟～美味！", "噜噜～饱啦～"][
+        Math.floor(Math.random() * 3)
+      ], 1.4);
+      setState(PetState.EAT, rand(0.9, 1.3));
+      beep(740, 0.08);
+      setTimeout(() => beep(620, 0.08), 70);
+      happyBounce();
+    }
+
+    function play() {
+      if (pet.state === PetState.SLEEP) {
+        say("呼噜噜...困困嘟", 1.4);
+        return;
+      }
+      if (pet.energy < 20) {
+        say(["没力气啦嘟...", "休息一下嘛～"], 1.5);
+        sadSound();
+        return;
+      }
+      pet.fun = Math.min(100, pet.fun + 28);
+      pet.mood = Math.min(100, pet.mood + 14);
+      pet.energy = Math.max(0, pet.energy - 12);
+      pet.hunger = Math.min(100, pet.hunger + 6);
+      const p = ["耶～玩耍！", "嘟噜噜～！", "转圈圈嘟！", "好玩好玩！"][
+        Math.floor(Math.random() * 4)
+      ];
+      say(p, 1.3);
+      setState(PetState.PLAY, rand(1.2, 1.6));
+      happySound();
+      happyBounce();
+      wiggle();
+    }
+
+    function toggleSleep() {
+      if (pet.state === PetState.SLEEP) {
+        setState(PetState.YAWN, 1.0);
+        pet.energy = Math.min(100, pet.energy + 20);
+        say(["哈～～起床啦嘟！", "精神满满～", "早～嘟！"][
+          Math.floor(Math.random() * 3)
+        ], 1.5);
+        beep(520, 0.08);
+        setTimeout(() => beep(660, 0.08), 80);
+        return;
+      }
+      setState(PetState.SLEEP, rand(3.5, 5.0));
+      say(["呼噜噜～", "困困嘟～晚安～", "ZZZ嘟..."], 1.6);
+      beep(420, 0.1, "triangle", 0.04);
+    }
+
+    function poke() {
+      if (pet.state === PetState.SLEEP) {
+        say("Zzz...别戳啦嘟～", 1.2);
+        beep(380, 0.08, "triangle", 0.03);
+        return;
+      }
+      pet.mood = Math.min(100, pet.mood + 10);
+      pet.fun = Math.min(100, pet.fun + 8);
+      const p = ["嘟！", "嘟嘟～", "嘿嘿～", "痒痒嘟！", "再戳再戳～"][
+        Math.floor(Math.random() * 5)
+      ];
+      say(p, 1.2);
+      duduSound();
+      happyBounce();
+      if (Math.random() < 0.4) {
+        setState(PetState.HAPPY, rand(0.8, 1.2));
+      }
+    }
+
+    btns.forEach((b) =>
+      b.addEventListener("click", () => {
+        const a = b.dataset.action;
+        if (a === "feed") feed();
+        if (a === "play") play();
+        if (a === "sleep") toggleSleep();
+        if (a === "clean") cleanPoop();
+      })
+    );
+
+    screenBezel.addEventListener("click", poke);
+    screenBezel.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      poke();
+    }, { passive: false });
+
+    function drawDudu(t, dt) {
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+      ctx.clearRect(0, 0, w, h);
+
+      const breath = Math.sin(t / 900) * 0.5;
+      pet.breath = breath;
+
+      pet.blinkTimer -= dt;
+      if (pet.blinkTimer <= 0) {
+        pet.blink = 1;
+        pet.blinkTimer = rand(2.5, 5.5);
+        setTimeout(() => (pet.blink = 0), rand(80, 140));
+      }
+
+      let bodyY = Math.sin(t / 1000) * 0.8 + breath * 0.3;
+      let scaleX = 1,
+        scaleY = 1;
+
+      if (pet.state === PetState.HAPPY) {
+        bodyY -= 1.5;
+        scaleY = 1.03;
+        scaleX = 0.985;
+      }
+      if (pet.state === PetState.PLAY) {
+        const p = (pet.playFrame += dt * 6);
+        bodyY -= Math.abs(Math.sin(p)) * 3.5;
+      }
+      if (pet.state === PetState.EAT) {
+        const p = (pet.eatFrame += dt * 10);
+        scaleX = 1 + Math.sin(p) * 0.01;
+        scaleY = 1 - Math.sin(p) * 0.01;
+      }
+      if (pet.state === PetState.SLEEP) {
+        bodyY += 0.5;
+      }
+      if (pet.state === PetState.YAWN) {
+        bodyY += 0.2;
+      }
+      if (pet.state === PetState.SAD || pet.mood < 35) {
+        bodyY += 0.8;
+      }
+
+      const cx = w / 2;
+      const cy = h / 2 + 2 + bodyY;
+
+      // 阴影
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + h * 0.28, w * 0.22, h * 0.05, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#2f361f";
+      ctx.fill();
+      ctx.restore();
+
+      // 身体
+      const gradBody = ctx.createRadialGradient(
+        cx,
+        cy - h * 0.12,
+        h * 0.05,
+        cx,
+        cy,
+        h * 0.32
+      );
+      gradBody.addColorStop(0, "#f3e2a3");
+      gradBody.addColorStop(0.6, "#f2d77e");
+      gradBody.addColorStop(1, "#e6c45f");
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(scaleX, scaleY);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, w * 0.26, h * 0.3, 0, 0, Math.PI * 2);
+      ctx.fillStyle = gradBody;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(120,96,28,0.15)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+
+      // 腮红
+      ctx.globalAlpha = pet.state === PetState.HAPPY || pet.mood > 75 ? 0.22 : 0.12;
+      ctx.beginPath();
+      ctx.ellipse(cx - w * 0.14, cy + h * 0.02, w * 0.05, h * 0.03, -0.3, 0, Math.PI * 2);
+      ctx.fillStyle = "#f29c9c";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + w * 0.14, cy + h * 0.02, w * 0.05, h * 0.03, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // 耳朵
+      function ear(x, flip) {
+        ctx.save();
+        ctx.translate(cx + x, cy - h * 0.22);
+        ctx.rotate(flip ? 0.25 : -0.25);
+        ctx.beginPath();
+        ctx.ellipse(0, -h * 0.05, w * 0.05, h * 0.08, 0, 0, Math.PI * 2);
+        const g = ctx.createRadialGradient(0, -h * 0.07, 2, 0, -h * 0.05, h * 0.08);
+        g.addColorStop(0, "#f6e5a6");
+        g.addColorStop(1, "#f2d77e");
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(120,96,28,0.12)";
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(0, -h * 0.04, w * 0.022, h * 0.04, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(242,156,156,0.45)";
+        ctx.fill();
+        ctx.restore();
+      }
+      ear(-w * 0.16, false);
+      ear(w * 0.16, true);
+
+      // 眼睛
+      const eyeY = cy - h * 0.08;
+      const eyeOffsetX = w * 0.09;
+      const isSleep = pet.state === PetState.SLEEP;
+      const isYawn = pet.state === PetState.YAWN;
+
+      function eye(x) {
+        ctx.save();
+        ctx.translate(cx + x, eyeY);
+        if (isSleep) {
+          ctx.strokeStyle = "#2f361f";
+          ctx.lineWidth = clamp(w * 0.01, 1.5, 2.5);
+          ctx.beginPath();
+          ctx.arc(0, 2, w * 0.05, 0.1 * Math.PI, 0.9 * Math.PI);
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+        const hEye = pet.blink ? h * 0.01 : h * 0.065;
+        const wEye = w * 0.055;
+        const grad = ctx.createLinearGradient(0, -hEye, 0, hEye);
+        grad.addColorStop(0, "#1f2414");
+        grad.addColorStop(1, "#2f361f");
+        ctx.beginPath();
+        ctx.ellipse(0, 0, wEye, hEye, 0, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        if (!pet.blink) {
+          ctx.beginPath();
+          ctx.arc(wEye * 0.25, -hEye * 0.25, w * 0.012, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(wEye * 0.15, -hEye * 0.05, w * 0.006, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(255,255,255,0.6)";
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      eye(-eyeOffsetX);
+      eye(eyeOffsetX);
+
+      // 嘴巴
+      ctx.save();
+      ctx.translate(cx, cy + h * 0.05);
+      ctx.strokeStyle = "#2f361f";
+      ctx.lineWidth = clamp(w * 0.008, 1.5, 2.5);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      if (isSleep) {
+        ctx.arc(0, -1, w * 0.03, 0.2 * Math.PI, 0.8 * Math.PI);
+        ctx.stroke();
+      } else if (isYawn) {
+        ctx.ellipse(0, w * 0.01, w * 0.04, h * 0.05, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(47,54,31,0.85)";
+        ctx.fill();
+        ctx.stroke();
+      } else if (pet.state === PetState.SAD || pet.mood < 35) {
+        ctx.arc(0, w * 0.05, w * 0.05, Math.PI * 1.05, Math.PI * 1.95);
+        ctx.stroke();
+      } else if (pet.state === PetState.HAPPY || pet.state === PetState.PLAY) {
+        ctx.arc(0, -w * 0.01, w * 0.06, 0.05 * Math.PI, 0.95 * Math.PI);
+        ctx.stroke();
+      } else if (pet.state === PetState.EAT) {
+        ctx.arc(0, 0, w * 0.035, 0.1 * Math.PI, 0.9 * Math.PI);
+        ctx.stroke();
+      } else {
+        ctx.arc(0, -w * 0.005, w * 0.05, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // ZZZ
+      if (isSleep) {
+        pet.zzz += dt * 0.05;
+        const z1 = (pet.zzz % 1);
+        const z2 = ((pet.zzz + 0.33) % 1);
+        const z3 = ((pet.zzz + 0.66) % 1);
+        drawZ(cx + w * 0.18, cy - h * 0.28, z1);
+        drawZ(cx + w * 0.24, cy - h * 0.36, z2);
+        drawZ(cx + w * 0.3, cy - h * 0.44, z3);
+      }
+    }
+
+    function drawZ(x, y, t) {
+      // ══════════ A 的原稿停在上面这一行。以下全部由 Claude 补完 ══════════
+      // t 是这个 Z 的相位（0→1）。A 给 zzz 的速度是每秒 +0.05，一圈要 20 秒，
+      // 可它的午觉只睡 3.5~5 秒，照原速 Z 几乎不动。所以这里把相位放快 8 倍
+      // （一圈约 2.5 秒）。A 那行 pet.zzz += dt * 0.05 原样没动。
+      const p = (t * 8) % 1;
+      const w = canvas.getBoundingClientRect().width;
+      ctx.save();
+      ctx.globalAlpha = Math.sin(Math.PI * p) * 0.75; // 淡入 → 最浓 → 淡出
+      ctx.translate(
+        x + Math.sin(p * Math.PI * 2) * w * 0.012, // 边飘边轻轻左右晃
+        y + (0.5 - p) * w * 0.1 // 慢慢往上飘
+      );
+      ctx.rotate(-0.15);
+      ctx.fillStyle = "#2f361f";
+      ctx.font = `700 ${w * (0.05 + p * 0.035)}px "ZCOOL KuaiLe", system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Z", 0, 0);
+      ctx.restore();
+    }
+
+    // A 画眼睛和嘴巴时用了 clamp()，但还没来得及写它。
+    // 少了它，每一帧画到嘴巴那一步都会报错，后面的 ZZZ 也永远画不出来。
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    // ── 心跳：让时间流动起来（这一整段 A 都没来得及写）──
+    // 每秒怎么变都是 Claude 定的，尽量用 A 已经备好的字段和函数
+    const RATE = {
+      hunger: 0.45, // 醒着每秒饿一点；睡着减半
+      fun: 0.4, // 醒着每秒无聊一点；睡着减半
+      energyAwake: 0.25, // 醒着每秒掉一点体力
+      energyAsleep: 4, // 睡着每秒回体力
+    };
+
+    let nextPoopAt = rand(20, 35); // 第一泡便便大约 20~35 秒后
+    let nextChatAt = rand(12, 18); // 下一次自言自语
+    let statusTimer = 0;
+    let lastPoopCount = pet.poop;
+
+    function tick(dt) {
+      const asleep = pet.state === PetState.SLEEP;
+
+      // 气泡：时间到就收起来
+      if (bubble.timer > 0) {
+        bubble.timer -= dt;
+        if (bubble.timer <= 0) bubbleEl.classList.remove("show");
+      }
+
+      // 状态：时间到就回到发呆。
+      // 午觉睡够了自己醒，直接借用 A 写好的起床流程（哈欠、台词、音效都是 A 的）
+      if (pet.state !== PetState.IDLE) {
+        pet.stateTimer -= dt;
+        if (pet.stateTimer <= 0) {
+          if (asleep) toggleSleep();
+          else setState(PetState.IDLE, 0);
+        }
+      }
+
+      // 数值随时间慢慢变
+      const slow = asleep ? 0.5 : 1;
+      pet.hunger = clamp(pet.hunger + RATE.hunger * slow * dt, 0, 100);
+      pet.fun = clamp(pet.fun - RATE.fun * slow * dt, 0, 100);
+      pet.energy = clamp(
+        pet.energy + (asleep ? RATE.energyAsleep : -RATE.energyAwake) * dt,
+        0,
+        100
+      );
+
+      // 心情慢慢靠向「吃饱没、睡够没、玩够没」的平均，有便便会往下拽
+      const target = clamp(
+        (100 - pet.hunger + pet.energy + pet.fun) / 3 - pet.poop * 15,
+        0,
+        100
+      );
+      pet.mood = clamp(
+        pet.mood + (target - pet.mood) * Math.min(1, dt * 0.08),
+        0,
+        100
+      );
+
+      // 便便：醒着的时候隔一阵来一泡（最多两泡是 A 定的上限）
+      pet.ageTick += dt;
+      if (!asleep && pet.ageTick >= nextPoopAt) {
+        nextPoopAt = pet.ageTick + rand(30, 50);
+        poopAtRandom();
+      }
+      if (pet.poop > lastPoopCount) updatePoop();
+      lastPoopCount = pet.poop;
+
+      // 自言自语：发呆的时候，隔一阵说出眼下最要紧的那个需求
+      if (pet.ageTick >= nextChatAt) {
+        nextChatAt = pet.ageTick + rand(14, 22);
+        if (pet.state === PetState.IDLE && bubble.timer <= 0) {
+          if (pet.poop > 0) say("臭臭的…帮我清理嘛～", 1.8);
+          else if (pet.hunger > 70) say("肚子咕咕叫嘟…", 1.6);
+          else if (pet.energy < 25) say("眼皮打架了嘟…", 1.6);
+          else if (pet.fun < 30) say("好无聊嘟～陪我玩嘛", 1.6);
+        }
+      }
+
+      // 状态栏每 0.25 秒刷新一次
+      statusTimer -= dt;
+      if (statusTimer <= 0) {
+        statusTimer = 0.25;
+        updateStatusBar();
+      }
+    }
+
+    function loop(now) {
+      // dt 用秒。切到后台再回来时最多只算 0.1 秒：你走开的时候它也在等你，不会饿坏
+      const dt = Math.min(0.1, Math.max(0, (now - pet.lastUpdate) / 1000));
+      pet.lastUpdate = now;
+      drawDudu(now, dt);
+      tick(dt);
+      requestAnimationFrame(loop);
+    }
+
+    updateStatusBar();
+    say("嘟？你来啦～", 1.8);
+    requestAnimationFrame(loop);
+  </script>
+</body>
+
+</html>
