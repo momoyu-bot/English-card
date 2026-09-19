@@ -427,10 +427,18 @@ Arena 也是一个出处。`pluto` 是个隐喻（未知、冒险、探索），
 - 现有的页一个都不挪。以后哪些是 Arena 的，她自己说。
 - 不要按文风把 `pluto/` 的页挪进小机，也不要把小机的页挪进 `pluto/`。
 - 平铺，一级到底，**不要给它建抽屉**（跟 `unsigned/` 一样）。
-- `pluto/README.md` 是货架门口的铭牌，写给她自己看的，跟 `unsigned/README.md` 一样。
-  **里面的话由她写，别替她写。**现在只有一行 `# pluto`，等她补。
+- `pluto/README.md` 是货架门口的铭牌，跟 `unsigned/README.md` 一样，写给她自己看的。
 
-**生成器里改了三处**（`ORDER` 末尾、`PALETTE` 加一色 `#8F92A8`、`FLAT_FOLDERS` 加 `pluto`），
+**排在 `unsigned` 前面，`unsigned/` 垫底。**她当场说的：
+
+> unsigned 垫底可以嘛，这个文件夹已经不会上传任何文件了
+
+**铭牌是她让 cc 写的**（当场说的）：「pluto 里面的 remead.me 帮我写吧，之前 unsigned.md
+里面的就是 grok 帮我写的，但是最近 grok 老是往我仓库输送错别字，暂时不敢让它接手了」。
+所以 `pluto/README.md` 现在是 cc 写的底子，她随时可以推翻——**别再拿上面那句
+「里面的话由她写」去挡她**。以后要改这块铭牌，直接改，别让 grok 碰。
+
+**生成器里改了三处**（`ORDER` 里 pluto 插在 unsigned 前、`PALETTE` 加一色 `#8F92A8`、`FLAT_FOLDERS` 加 `pluto`），
 外加一处通用的：`group()` 现在会给 `ORDER` 里、磁盘上存在的顶层出一块门牌，
 **哪怕一件都没有**。不然她把文件夹建好了、首页上什么都看不见，会以为没生效。
 空货架点开显示一行 `<p class="soon">还没有页。</p>`（CSS 在 `index.html` 里，

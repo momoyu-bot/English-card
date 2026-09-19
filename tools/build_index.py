@@ -21,7 +21,8 @@ BEGIN = "<!-- LIST:BEGIN 由 tools/build_index.py 自动生成，不要手改 --
 END = "<!-- LIST:END -->"
 
 # 分组顺序。没列到的目录排在后面，按名字排。
-ORDER = ["claude", "gemini", "grok", "copilot", "unsigned", "pluto"]
+# unsigned 垫底：2026-09-19 她当场说的，那一格已经不会再上传任何文件了。
+ORDER = ["claude", "gemini", "grok", "copilot", "pluto", "unsigned"]
 
 # 子目录在首页上归到哪个一级（文件不搬家，文件夹仍记出处）
 # 2026-08-27：model/货架名/文件.html 也一律归到 model，不要让「grok/哄睡」自己开一扇门。
