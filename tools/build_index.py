@@ -21,7 +21,7 @@ BEGIN = "<!-- LIST:BEGIN 由 tools/build_index.py 自动生成，不要手改 --
 END = "<!-- LIST:END -->"
 
 # 分组顺序。没列到的目录排在后面，按名字排。
-ORDER = ["claude", "gemini", "grok", "copilot", "unsigned"]
+ORDER = ["claude", "gemini", "grok", "copilot", "unsigned", "pluto"]
 
 # 子目录在首页上归到哪个一级（文件不搬家，文件夹仍记出处）
 # 2026-08-27：model/货架名/文件.html 也一律归到 model，不要让「grok/哄睡」自己开一扇门。
@@ -36,6 +36,7 @@ PALETTE = {
     "grok":                   ("#ABA2B6", "rgba(171,162,182,.12)"),
     "copilot":                ("#A1B0BE", "rgba(161,176,190,.12)"),
     "unsigned":               ("#B5A79C", "rgba(181,167,156,.12)"),
+    "pluto":                  ("#8F92A8", "rgba(143,146,168,.12)"),
 }
 PALETTE_DEFAULT = ("#BAB3A8", "rgba(186,179,168,.10)")
 
@@ -218,7 +219,9 @@ CAT_ALIAS = {
     "科普": "小科普",
     "失灵博物馆": "博物馆",
 }
-FLAT_FOLDERS = {"unsigned"}
+# 平铺、没有抽屉的顶层。pluto 是 2026-09-19 开的，跟 unsigned 一样一级到底，
+# 不要给它们建抽屉（README 里也写着这条）。
+FLAT_FOLDERS = {"unsigned", "pluto"}
 SKIP_LIST = {
     # 梦境不是货品，是关系表：哪几页是同一件事，宝一条一条认的。
     # 它跟 梦境.md 一起放在仓库根上（页面开着就去 fetch 那份 .md，
@@ -520,6 +523,13 @@ def group(entries):
     for e in entries:
         buckets.setdefault(e["folder"], []).append(e)
 
+    # 货架可以先立起来，页后到：ORDER 里的顶层只要在磁盘上存在，
+    # 就算一件都没有也出一块门牌。不然她把文件夹建好了、首页上什么都看不见，
+    # 会以为没生效。（pluto 2026-09-19 就是这么开张的。）
+    for folder in ORDER:
+        if os.path.isdir(os.path.join(ROOT, folder)):
+            buckets.setdefault(folder, [])
+
     def gkey(folder):
         return (ORDER.index(folder), "") if folder in ORDER else (len(ORDER), folder)
 
@@ -587,7 +597,10 @@ def render(blocks):
         dot, tint = PALETTE.get(folder, PALETTE_DEFAULT)
         lines.append(f'  <details class="group" style="--dot:{dot};--tint:{tint}">')
         lines.append(f'    <summary class="tag">{esc(folder)}</summary>')
-        if folder in FLAT_FOLDERS:
+        if not items:
+            # 空货架：点开一片空白会像坏了，摆一句话在那儿等第一件。
+            lines.append('    <p class="soon">还没有页。</p>')
+        elif folder in FLAT_FOLDERS:
             lines.append('    <ul class="list">')
             render_items(lines, items, step, 6)
             lines.append("    </ul>")
