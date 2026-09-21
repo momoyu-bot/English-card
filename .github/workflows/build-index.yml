@@ -35,43 +35,60 @@ jobs:
           # 下面那一步要去历史里捞完好的生成器，默认只取一个提交不够用。
           fetch-depth: 0
 
-      - name: 生成器还在不在
+      - name: 店务文件还在不在
         id: guard
         run: |
-          # 生成器被整份覆盖成一句占位符的事故发生过两次：
-          #   2026-08-27  29,537 字节 → 21 字节
-          #   2026-09-21  38,405 字节 → 20 字节
-          # 两次都是「改两行货架名单」的活，手上只有整份覆盖这一种动作，
+          # 几个文件被整份覆盖成一句占位符的事故发生过两次：
+          #   2026-08-27  tools/build_index.py  29,537 字节 → 21 字节
+          #   2026-09-21  tools/build_index.py  38,405 字节 → 20 字节
+          # 两次都是小活（改两行货架名单），但手上只有整份覆盖这一种动作，
           # 文件太大写不完，就留一句「稍后补」。店当场停摆，工作流红，
           # 她收到一封全英文的失败邮件。
           #
-          # 这一步在跑之前先认出来，从历史里把上一个完好版本捞回来。
-          # 不红、不发邮件，恢复的事写在提交说明里，她翻记录就看得见。
-          MIN=20000
-          f=tools/build_index.py
-          size=$(wc -c < "$f" 2>/dev/null || echo 0)
-          if [ "$size" -ge "$MIN" ]; then
-            echo "生成器 $size 字节，完好。"
-            exit 0
-          fi
-          echo "::warning::生成器只剩 $size 字节，不是完整的，去历史里捞。"
-          for sha in $(git log --format=%H -- "$f"); do
-            n=$(git cat-file -s "$sha:$f" 2>/dev/null || echo 0)
-            if [ "$n" -ge "$MIN" ]; then
-              git checkout "$sha" -- "$f"
-              {
-                echo "restored=1"
-                echo "from=$sha"
-                echo "was=$size"
-                echo "now=$n"
-              } >> "$GITHUB_OUTPUT"
-              echo "从 $sha 捞回来了（$n 字节）。"
-              exit 0
+          # 下面这几个是「碰坏了她自己找不回来」的：生成器、她手写的梦境
+          # 关系表和它的前台、两份交接笔记。每个配一个下限，都远低于实际
+          # 大小，正常编辑碰不到。掉到线下就是被写残了，从历史里捞回来。
+          #
+          # index.html 不用管：它是生成出来的，下一步就会重算，自己会好。
+          : > /tmp/restored.txt
+          note=""
+          # 写成一行一个 "路径|下限"。不用 here-doc——YAML 块标量里的缩进
+          # 会被原样读进变量，文件名就全带上前导空格了。
+          for item in \
+            "tools/build_index.py|20000" \
+            "梦境.md|8000" \
+            "梦境.html|20000" \
+            "CLAUDE.md|20000" \
+            "GROK.md|3000" \
+          ; do
+            f=${item%|*}; min=${item##*|}
+            size=$(wc -c < "$f" 2>/dev/null || echo 0)
+            if [ "$size" -ge "$min" ]; then continue; fi
+            echo "::warning::$f 只剩 $size 字节（下限 $min），去历史里捞。"
+            got=""
+            for sha in $(git log --format=%H -- "$f"); do
+              n=$(git cat-file -s "$sha:$f" 2>/dev/null || echo 0)
+              if [ "$n" -ge "$min" ]; then
+                git checkout "$sha" -- "$f"
+                printf '%s\n' "$f" >> /tmp/restored.txt
+                note="$note$f 剩 $size 字节，已从 ${sha:0:7} 捞回 $n 字节；"
+                got=1
+                echo "  从 $sha 捞回来了（$n 字节）。"
+                break
+              fi
+            done
+            if [ -z "$got" ]; then
+              # 历史里一个完好版本都没有，那是真的坏了，该红。
+              echo "$f 在历史里也找不到完好版本，需要有人看一眼。" >&2
+              exit 1
             fi
           done
-          # 历史里一个完好版本都没有，那是真的坏了，该红。
-          echo "历史里找不到完好的生成器，需要有人看一眼。" >&2
-          exit 1
+          if [ -s /tmp/restored.txt ]; then
+            {
+              echo "restored=1"
+              echo "note=$note"
+            } >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -89,9 +106,11 @@ jobs:
           set -- index.html "claude/盲盒/总机.html"
           msg="自动更新首页清单和总机线路表"
           if [ -n "${{ steps.guard.outputs.restored }}" ]; then
-            # 生成器是这一趟捞回来的，得跟着交回去，否则下次 push 还是残的。
-            set -- "$@" tools/build_index.py
-            msg="生成器被写成了 ${{ steps.guard.outputs.was }} 字节，已从 ${{ steps.guard.outputs.from }} 捞回完整的那份（${{ steps.guard.outputs.now }} 字节），首页照常重算"
+            # 这一趟捞回来的文件得跟着交回去，否则下次 push 还是残的。
+            while IFS= read -r r; do
+              [ -n "$r" ] && set -- "$@" "$r"
+            done < /tmp/restored.txt
+            msg="店务文件被写残，已从历史捞回：${{ steps.guard.outputs.note }}首页照常重算"
           fi
           if git diff --quiet -- "$@"; then
             echo "清单无变化，不提交"
