@@ -31,6 +31,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 下面那一步要去历史里捞完好的生成器，默认只取一个提交不够用。
+          fetch-depth: 0
+
+      - name: 生成器还在不在
+        id: guard
+        run: |
+          # 生成器被整份覆盖成一句占位符的事故发生过两次：
+          #   2026-08-27  29,537 字节 → 21 字节
+          #   2026-09-21  38,405 字节 → 20 字节
+          # 两次都是「改两行货架名单」的活，手上只有整份覆盖这一种动作，
+          # 文件太大写不完，就留一句「稍后补」。店当场停摆，工作流红，
+          # 她收到一封全英文的失败邮件。
+          #
+          # 这一步在跑之前先认出来，从历史里把上一个完好版本捞回来。
+          # 不红、不发邮件，恢复的事写在提交说明里，她翻记录就看得见。
+          MIN=20000
+          f=tools/build_index.py
+          size=$(wc -c < "$f" 2>/dev/null || echo 0)
+          if [ "$size" -ge "$MIN" ]; then
+            echo "生成器 $size 字节，完好。"
+            exit 0
+          fi
+          echo "::warning::生成器只剩 $size 字节，不是完整的，去历史里捞。"
+          for sha in $(git log --format=%H -- "$f"); do
+            n=$(git cat-file -s "$sha:$f" 2>/dev/null || echo 0)
+            if [ "$n" -ge "$MIN" ]; then
+              git checkout "$sha" -- "$f"
+              {
+                echo "restored=1"
+                echo "from=$sha"
+                echo "was=$size"
+                echo "now=$n"
+              } >> "$GITHUB_OUTPUT"
+              echo "从 $sha 捞回来了（$n 字节）。"
+              exit 0
+            fi
+          done
+          # 历史里一个完好版本都没有，那是真的坏了，该红。
+          echo "历史里找不到完好的生成器，需要有人看一眼。" >&2
+          exit 1
 
       - uses: actions/setup-python@v5
         with:
@@ -46,6 +87,12 @@ jobs:
           # 生成器会写两处：首页清单，和总机那一页的线路表。
           # 只 add index.html 的话，新传进来的电话不会出现在总机上。
           set -- index.html "claude/盲盒/总机.html"
+          msg="自动更新首页清单和总机线路表"
+          if [ -n "${{ steps.guard.outputs.restored }}" ]; then
+            # 生成器是这一趟捞回来的，得跟着交回去，否则下次 push 还是残的。
+            set -- "$@" tools/build_index.py
+            msg="生成器被写成了 ${{ steps.guard.outputs.was }} 字节，已从 ${{ steps.guard.outputs.from }} 捞回完整的那份（${{ steps.guard.outputs.now }} 字节），首页照常重算"
+          fi
           if git diff --quiet -- "$@"; then
             echo "清单无变化，不提交"
             exit 0
@@ -53,7 +100,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- "$@"
-          git commit -m "自动更新首页清单和总机线路表"
+          git commit -m "$msg"
           # 人手如果几乎同时也推了 main，先 rebase 再推。
           # 推被拒只是撞车，不是坏了——多试几次，别为它发一封失败邮件。
           for i in 1 2 3 4 5; do
