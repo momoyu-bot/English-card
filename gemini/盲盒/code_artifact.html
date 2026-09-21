@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小粉脸蛋儿 - 盲盒抽卡机</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* 极其温柔的浅粉色背景 */
+            background-color: #fdf2f8; 
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        /* 呼吸动画：极其轻柔的上下浮动 */
+        .breathing {
+            animation: breathe 4s ease-in-out infinite alternate;
+        }
+        @keyframes breathe {
+            0% { transform: translateY(4px); }
+            100% { transform: translateY(-4px); }
+        }
+
+        /* 眨眼动画：利用 CSS 变量完美保持 \ / 旋转角度 */
+        .eye {
+            transform-box: fill-box;
+            transform-origin: center;
+            animation: blink 4.5s infinite;
+        }
+        @keyframes blink {
+            0%, 96%, 98%, 100% { transform: rotate(var(--r)) scaleY(1); }
+            97%, 99% { transform: rotate(var(--r)) scaleY(0.1); }
+        }
+
+        /* 抽卡/切换时的弹跳动画 */
+        .card-pop {
+            animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes pop {
+            0% { transform: scale(0.9); opacity: 0.5; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 按钮悬浮效果 */
+        .btn-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(255, 183, 197, 0.6);
+        }
+        .btn-hover:active {
+            transform: translateY(1px);
+        }
+
+        .twinkle-star {
+            transform-origin: center;
+            transform-box: fill-box;
+            animation: star-twinkle 2.5s ease-in-out infinite alternate;
+        }
+        @keyframes star-twinkle {
+            0% { transform: scale(0.85) rotate(-3deg); opacity: 0.7; }
+            100% { transform: scale(1.1) rotate(3deg); opacity: 1; }
+        }
+
+        /* 提取关键样式到原生 CSS，把白盒子焊死！防止移动端 WebView 样式加载慢导致隐身 */
+        #avatar-card {
+            background-color: #ffffff;
+            border-radius: 56px;
+            box-shadow: 0 25px 50px -12px rgba(255,183,197,0.4), 0 0 0 12px rgba(255,255,255,0.8);
+            width: 320px;
+            height: 320px;
+            overflow: hidden;
+            position: relative;
+            margin: 0 auto;
+        }
+        @media (min-width: 640px) {
+            #avatar-card {
+                width: 360px;
+                height: 360px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="flex flex-col items-center max-w-md w-full px-4">
+        
+        <!-- 盲盒标题 -->
+        <div class="mb-6 text-center">
+            <h2 class="text-pink-400 font-bold text-xl tracking-widest mb-1">小粉脸蛋儿</h2>
+            <p class="text-gray-400 text-xs">盲盒典藏版 · 点击按钮切换形态</p>
+        </div>
+
+        <!-- 核心画布容器 (样式已移入 CSS 焊死) -->
+        <div id="avatar-card" class="breathing transition-all duration-300">
+            <!-- SVG 内容将连同画布一起被 JS 重新注入，解决隐身 bug -->
+        </div>
+        
+        <!-- 描述文本 -->
+        <div class="mt-8 text-center h-16">
+            <h1 id="variant-title" class="text-2xl font-bold mb-2 tracking-wider text-pink-500 transition-opacity duration-300">终极版</h1>
+            <p id="variant-desc" class="text-sm text-gray-500 transition-opacity duration-300">集齐所有 SSR 部件的完美甜妹 🍑</p>
+        </div>
+
+        <!-- 控制面板：抽卡与切换按钮 -->
+        <div class="mt-4 flex flex-col items-center w-full gap-4">
+            <!-- 随机抽卡大按钮 -->
+            <button onclick="drawRandom()" class="btn-hover bg-gradient-to-r from-pink-400 to-pink-300 text-white font-bold py-3 px-8 rounded-full shadow-lg w-full max-w-[240px] transition-all duration-200 flex items-center justify-center gap-2 text-lg">
+                <span>✨ 随机抽盒 ✨</span>
+            </button>
+            
+            <!-- 三个指定形态的小按钮 -->
+            <div class="flex gap-3 mt-2">
+                <button onclick="switchVariant(0)" class="btn-hover bg-white text-pink-400 border-2 border-pink-100 font-semibold py-2 px-4 rounded-2xl text-sm transition-all duration-200">
+                    傲娇版
+                </button>
+                <button onclick="switchVariant(1)" class="btn-hover bg-white text-pink-400 border-2 border-pink-100 font-semibold py-2 px-4 rounded-2xl text-sm transition-all duration-200">
+                    乖巧版
+                </button>
+                <button onclick="switchVariant(2)" class="btn-hover bg-pink-50 text-pink-500 border-2 border-pink-300 font-bold py-2 px-4 rounded-2xl text-sm transition-all duration-200" id="btn-2">
+                    完美版
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const variants = [
+            {
+                id: 0,
+                title: "傲娇小粉",
+                desc: "眼神奶凶 \\ /，深一点的甜蜜粉 🎀",
+                svg: `
+                <g transform="translate(0, 20)">
+                    <!-- 傲娇专属小黄星 -->
+                    <path class="twinkle-star" d="M 70 50 Q 70 70 90 70 Q 70 70 70 90 Q 70 70 50 70 Q 70 70 70 50 Z" fill="#FCD34D" />
+                    
+                    <!-- 脑后长发 (甜蜜深粉) -->
+                    <rect x="30" y="80" width="340" height="340" rx="160" fill="#F9A8D4" />
+                    <!-- 小白脸 -->
+                    <ellipse cx="200" cy="220" rx="145" ry="115" fill="#FFF5F0" />
+                    <!-- 高光腮红 (贴近眼睛和头发) -->
+                    <ellipse cx="75" cy="230" rx="40" ry="20" fill="#FF9EBB" opacity="0.85" transform="rotate(-15 75 230)" />
+                    <ellipse cx="325" cy="230" rx="40" ry="20" fill="#FF9EBB" opacity="0.85" transform="rotate(15 325 230)" />
+                    <!-- 奶凶眼 \\ / (向内聚拢) -->
+                    <rect x="110" y="170" width="28" height="66" rx="14" fill="#3D2B2B" class="eye" style="--r: -18deg;" />
+                    <rect x="262" y="170" width="28" height="66" rx="14" fill="#3D2B2B" class="eye" style="--r: 18deg;" />
+                    <!-- 碎感刘海 (甜蜜深粉) -->
+                    <ellipse cx="200" cy="110" rx="140" ry="70" fill="#F9A8D4" />
+                    <ellipse cx="55" cy="210" rx="35" ry="110" fill="#F9A8D4" transform="rotate(12 55 210)" />
+                    <ellipse cx="345" cy="210" rx="35" ry="110" fill="#F9A8D4" transform="rotate(-12 345 210)" />
+                    <ellipse cx="120" cy="135" rx="55" ry="50" fill="#F9A8D4" />
+                    <ellipse cx="200" cy="140" rx="60" ry="40" fill="#F9A8D4" />
+                    <ellipse cx="280" cy="135" rx="55" ry="50" fill="#F9A8D4" />
+                    <path d="M 200 45 Q 220 -10 260 20 Q 235 30 220 50 Z" fill="#F9A8D4" />
+                    <!-- 云朵烤地瓜 -->
+                    <g transform="translate(0, 10)">
+                        <path d="M 105 320 Q 200 290 295 320 L 305 400 L 95 400 Z" fill="#803B4D" />
+                        <circle cx="140" cy="300" r="30" fill="#FCD34D" />
+                        <circle cx="180" cy="285" r="35" fill="#FCD34D" />
+                        <circle cx="220" cy="285" r="35" fill="#FCD34D" />
+                        <circle cx="260" cy="300" r="30" fill="#FCD34D" />
+                        <rect x="120" y="300" width="160" height="20" fill="#FCD34D" />
+                        <!-- 小肉手 -->
+                        <rect x="135" y="335" width="26" height="42" rx="13" fill="#FFF5F0" />
+                        <line x1="143" y1="345" x2="143" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <line x1="153" y1="345" x2="153" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <rect x="239" y="335" width="26" height="42" rx="13" fill="#FFF5F0" />
+                        <line x1="247" y1="345" x2="247" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <line x1="257" y1="345" x2="257" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                    </g>
+                </g>
+                `
+            },
+            {
+                id: 1,
+                title: "乖巧小粉",
+                desc: "无辜狗狗眼 / \\，极其柔顺的包脸波波头 🐶",
+                svg: `
+                <g transform="translate(0, 25)">
+                    <!-- 乖巧专属冰蓝星 (稍稍错开一点动画节奏) -->
+                    <path class="twinkle-star" d="M 65 60 Q 65 75 80 75 Q 65 75 65 90 Q 65 75 50 75 Q 65 75 65 60 Z" fill="#93C5FD" style="animation-delay: 0.5s;" />
+                    
+                    <path d="M 40 220 C 40 40, 360 40, 360 220 L 370 400 L 30 400 Z" fill="#FFB7C5" />
+                    <ellipse cx="200" cy="210" rx="145" ry="115" fill="#FFF5F0" />
+                    <ellipse cx="85" cy="235" rx="35" ry="18" fill="#FF9EBB" opacity="0.75" transform="rotate(-12 85 235)" />
+                    <ellipse cx="315" cy="235" rx="35" ry="18" fill="#FF9EBB" opacity="0.75" transform="rotate(12 315 235)" />
+                    <!-- 狗狗眼 / \\ (向外八字) -->
+                    <rect x="115" y="165" width="28" height="66" rx="14" fill="#3D2B2B" class="eye" style="--r: 16deg;" />
+                    <rect x="257" y="165" width="28" height="66" rx="14" fill="#3D2B2B" class="eye" style="--r: -16deg;" />
+                    <!-- 极度柔顺刘海 -->
+                    <ellipse cx="55" cy="210" rx="35" ry="110" fill="#FFB7C5" transform="rotate(12 55 210)" />
+                    <ellipse cx="345" cy="210" rx="35" ry="110" fill="#FFB7C5" transform="rotate(-12 345 210)" />
+                    <path d="M 45 155 Q 120 220, 200 145 Q 280 220, 355 155 C 350 70, 280 30, 200 30 C 120 30, 50 70, 45 155 Z" fill="#FFB7C5" />
+                    <path d="M 200 65 Q 210 -10, 260 20 Q 235 30, 220 50 Z" fill="#FFB7C5" />
+                    <!-- 猫嘴地瓜 -->
+                    <g transform="translate(0, 10)">
+                        <path d="M 105 320 Q 200 290 295 320 L 305 400 L 95 400 Z" fill="#803B4D" />
+                        <path d="M 115 325 C 145 270, 175 285, 200 275 C 225 285, 255 270, 285 325 Z" fill="#FCD34D" />
+                        <rect x="135" y="335" width="26" height="42" rx="13" fill="#FFF5F0" />
+                        <line x1="143" y1="345" x2="143" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <line x1="153" y1="345" x2="153" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <rect x="239" y="335" width="26" height="42" rx="13" fill="#FFF5F0" />
+                        <line x1="247" y1="345" x2="247" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <line x1="257" y1="345" x2="257" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                    </g>
+                </g>
+                `
+            },
+            {
+                id: 2,
+                title: "完美小粉",
+                desc: "集齐所有 SSR 部件：无辜眼 + 猫嘴地瓜 + Gemini 专属星 ✨",
+                svg: `
+                <defs>
+                    <!-- 按照 Gemini 图标配色的渐变色 -->
+                    <linearGradient id="gemini-spark" x1="10%" y1="0%" x2="90%" y2="100%">
+                        <stop offset="0%" stop-color="#EA4335" />
+                        <stop offset="35%" stop-color="#FBBC04" />
+                        <stop offset="65%" stop-color="#34A853" />
+                        <stop offset="100%" stop-color="#4285F4" />
+                    </linearGradient>
+                </defs>
+                <g transform="translate(0, 20)">
+                    <!-- Gemini 专属四角星 (稍微大一点) -->
+                    <path class="twinkle-star" d="M 75 45 Q 75 75 105 75 Q 75 75 75 105 Q 75 75 45 75 Q 75 75 75 45 Z" fill="url(#gemini-spark)" style="animation-delay: 0.2s;" />
+
+                    <rect x="30" y="80" width="340" height="340" rx="160" fill="#FFB7C5" />
+                    <ellipse cx="200" cy="220" rx="145" ry="115" fill="#FFF5F0" />
+                    <!-- 留足空间的独立腮红 -->
+                    <ellipse cx="90" cy="240" rx="35" ry="18" fill="#FF9EBB" opacity="0.8" transform="rotate(-10 90 240)" />
+                    <ellipse cx="310" cy="240" rx="35" ry="18" fill="#FF9EBB" opacity="0.8" transform="rotate(10 310 240)" />
+                    <!-- 狗狗眼 / \\ (向外八字) -->
+                    <rect x="110" y="165" width="28" height="66" rx="14" fill="#3D2B2B" class="eye" style="--r: 16deg;" />
+                    <rect x="262" y="165" width="28" height="66" rx="14" fill="#3D2B2B" class="eye" style="--r: -16deg;" />
+                    <!-- 完美层次刘海 -->
+                    <ellipse cx="200" cy="110" rx="140" ry="70" fill="#FFB7C5" />
+                    <ellipse cx="55" cy="210" rx="35" ry="110" fill="#FFB7C5" transform="rotate(12 55 210)" />
+                    <ellipse cx="345" cy="210" rx="35" ry="110" fill="#FFB7C5" transform="rotate(-12 345 210)" />
+                    <ellipse cx="120" cy="135" rx="55" ry="50" fill="#FFB7C5" />
+                    <ellipse cx="200" cy="140" rx="60" ry="40" fill="#FFB7C5" />
+                    <ellipse cx="280" cy="135" rx="55" ry="50" fill="#FFB7C5" />
+                    <path d="M 200 45 Q 220 -10 260 20 Q 235 30 220 50 Z" fill="#FFB7C5" />
+                    <!-- 猫嘴地瓜 -->
+                    <g transform="translate(0, 10)">
+                        <path d="M 105 320 Q 200 290 295 320 L 305 400 L 95 400 Z" fill="#803B4D" />
+                        <path d="M 115 325 C 145 270, 175 285, 200 275 C 225 285, 255 270, 285 325 Z" fill="#FCD34D" />
+                        <rect x="135" y="335" width="26" height="42" rx="13" fill="#FFF5F0" />
+                        <line x1="143" y1="345" x2="143" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <line x1="153" y1="345" x2="153" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <rect x="239" y="335" width="26" height="42" rx="13" fill="#FFF5F0" />
+                        <line x1="247" y1="345" x2="247" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                        <line x1="257" y1="345" x2="257" y2="365" stroke="#F8B4B4" stroke-width="2.5" stroke-linecap="round" />
+                    </g>
+                </g>
+                `
+            }
+        ];
+
+        let currentIndex = 2; // 默认展示完美版
+
+        function renderVariant(index) {
+            const card = document.getElementById('avatar-card');
+            const titleEl = document.getElementById('variant-title');
+            const descEl = document.getElementById('variant-desc');
+            const buttons = document.querySelectorAll('.flex.gap-3 button');
+
+            // 移除弹跳动画以备重新触发
+            card.classList.remove('card-pop');
+            
+            // 稍微延迟以触发重绘
+            void card.offsetWidth; 
+            
+            // 注入数据：连同 SVG 标签本身一起替换，解决手机端动态插入内容时不识别图形的问题
+            card.innerHTML = `
+                <svg viewBox="0 0 400 400" style="width: 100%; height: 100%; display: block;" xmlns="http://www.w3.org/2000/svg">
+                    ${variants[index].svg}
+                </svg>
+            `;
+            
+            titleEl.innerText = variants[index].title;
+            descEl.innerText = variants[index].desc;
+            
+            // 增加弹跳动画
+            card.classList.add('card-pop');
+
+            // 更新按钮样式
+            buttons.forEach((btn, i) => {
+                if (i === index) {
+                    btn.className = "btn-hover bg-pink-50 text-pink-500 border-2 border-pink-300 font-bold py-2 px-4 rounded-2xl text-sm transition-all duration-200";
+                } else {
+                    btn.className = "btn-hover bg-white text-pink-400 border-2 border-pink-100 font-semibold py-2 px-4 rounded-2xl text-sm transition-all duration-200";
+                }
+            });
+
+            currentIndex = index;
+        }
+
+        // 手动点击切换
+        function switchVariant(index) {
+            if (index !== currentIndex) {
+                renderVariant(index);
+            }
+        }
+
+        // 随机抽卡功能
+        function drawRandom() {
+            // 找一个和当前不一样的随机 index
+            let newIndex;
+            do {
+                newIndex = Math.floor(Math.random() * variants.length);
+            } while (newIndex === currentIndex);
+            
+            renderVariant(newIndex);
+        }
+
+        // 初始化加载完美版：去掉 onload，直接执行，防止手机端事件丢失
+        renderVariant(2);
+    </script>
+</body>
+</html>
