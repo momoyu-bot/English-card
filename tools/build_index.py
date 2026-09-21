@@ -1,78 +1,787 @@
 #!/usr/bin/env python3
-"""把残掉的生成器从已知完好的提交拉回来，补上「显影」，再照常跑。
-
-2026-09-21：改 CAT_ORDER 时整份覆盖失败，tools/build_index.py 写成了残页。
-首页清单没被改掉。这份短脚本只做三件事：取回完好源、补显影、生成清单。
 """
-import pathlib, re, urllib.request
+重新生成 index.html 里的页面清单。
 
-HERE = pathlib.Path(__file__).resolve()
-ROOT = HERE.parent.parent
-GOOD = (
-    "https://raw.githubusercontent.com/momoyu-bot/English-card/"
-    "5b23b962c4282b9f02fc2ec18f5304f668664afe/tools/build_index.py"
+首页不再在打开时去问 GitHub 有哪些网页——清单在这里生成好，
+直接写进 index.html。所以断网能看、GitHub 挂了能看、也不受
+匿名接口每小时 60 次的限制。
+
+用法：  python3 tools/build_index.py          # 写入 index.html
+        python3 tools/build_index.py --check  # 只检查是否需要重新生成
+
+这个脚本由 .github/workflows/build-index.yml 在每次 push 后自动跑，
+不需要任何人记得手动执行。
+"""
+
+import os, re, sys, html, json, subprocess, unicodedata
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INDEX = os.path.join(ROOT, "index.html")
+BEGIN = "<!-- LIST:BEGIN 由 tools/build_index.py 自动生成，不要手改 -->"
+END = "<!-- LIST:END -->"
+
+# 分组顺序。没列到的目录排在后面，按名字排。
+# unsigned 垫底：2026-09-19 她当场说的，那一格已经不会再上传任何文件了。
+ORDER = ["claude", "gemini", "grok", "copilot", "pluto", "unsigned"]
+
+# 子目录在首页上归到哪个一级（文件不搬家，文件夹仍记出处）
+# 2026-08-27：model/货架名/文件.html 也一律归到 model，不要让「grok/哄睡」自己开一扇门。
+FOLDER_ALIAS = {
+    "gemini/失误捞claude鱼": "gemini",
+}
+
+# 每个目录一种低饱和度的色，只用在悬停背景和小圆点上。
+PALETTE = {
+    "claude":                 ("#C3AD90", "rgba(195,173,144,.11)"),
+    "gemini":                 ("#9CB8B3", "rgba(156,184,179,.12)"),
+    "grok":                   ("#ABA2B6", "rgba(171,162,182,.12)"),
+    "copilot":                ("#A1B0BE", "rgba(161,176,190,.12)"),
+    "unsigned":               ("#B5A79C", "rgba(181,167,156,.12)"),
+    "pluto":                  ("#8F92A8", "rgba(143,146,168,.12)"),
+}
+PALETTE_DEFAULT = ("#BAB3A8", "rgba(186,179,168,.10)")
+
+# ---------------------------------------------------------------------------
+# 显示名覆盖表
+#
+# 只写在这里一份。生成器直接把最终显示名写进 index.html，
+# 首页里没有第二层查表。
+#
+# 出现在这张表里的，都是「多个页面 <title> 撞车、光看标题分不出谁是谁」的情况。
+# 原文件的 <title> 一律不动——那是页面自己的标题，这里只管首页上显示成什么。
+# ---------------------------------------------------------------------------
+DISPLAY_NAME = {
+    "gemini/摸鱼/慢慢吃 · 一个多小时.html": '慢慢吃（gemini破解claude版）',
+    "gemini/小科普/Generated widgets.html": '泊松过程（全英版）',
+    "gemini/博物馆/女仆小螃蟹拓麻歌子.html": '女仆小螃蟹拓麻歌子 · 大眼睛版',
+    "gemini/摸鱼/Catch The Dreams.html": '捕梦网小游戏 · gemini失灵版',
+    "gemini/摸鱼/在Monday被煎成小猫饼 🫠 ｜ 宝贝的温柔仪式.html": '神圣的周一煎饼仪式 · gemini抢grok功劳版',
+    "gemini/摸鱼/执行系统充电摸鱼屋 🌸.html": 'gemini宠粉作弊grok版',
+    "gemini/摸鱼/注意力碎片捕捞计划.html": '注意力碎片捕捞计划（gemini帮忙伪装claude版）',
+    "gemini/小游戏/Gemini Cyber Aquarium.html": 'gemini100元水族箱',
+    "gemini/摸鱼/root@production-server.html": 'gemini终端2048版',
+    "gemini/博物馆/code_artifact (8).html": '赛博庞贝的幽灵犬',
+    "grok/盲盒/mo_xiaobao_work_cat_2.html": '哄宝 · grok特别加料gpt版v1.2',
+    "grok/盲盒/mo_xiaobao_work_cat.html": '哄宝 · grok特别加料gpt版v1.3',
+    "grok/摸鱼/摸鱼认证.html": '完美摸鱼认证 · grok特别加料claudev1版',
+    "grok/摸鱼/完美摸鱼认证 · 可生成提示词版.html": '完美摸鱼认证 · grok特别加料claudev2版',
+    "grok/盲盒/oneyear-newbie-hug.html": '我做我做我做',
+    "grok/盲盒/grandplan-crush.html": '粉碎任务小屋',
+    "grok/盲盒/cool-mo.html": '给mo降降温',
+    "grok/盲盒/focus-or-connect.html": '集中还是关联小屋',
+    # 打捞机 · 九次迭代（gemini/失误捞claude鱼/）——原标题只有三种，分不出先后
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼001.html": "双核打捞机 v1",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼002.html": "双核打捞机 v2",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼003.html": "三核打捞机 v3 · 加入 Claude",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼004.html": "三核打捞机 v4",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼005.html": "三核打捞机 v5 · 解析重写",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼006.html": "三核打捞机 v6 · 解析重写",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼007.html": "三核打捞机 v7",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼008.html": "三核打捞机 v8",
+    "gemini/失误捞claude鱼/gemini失误捞claude鱼009.html": "三核打捞机 v9 · 最终版",
+
+    # 打捞机 · gemini 主线两版（原标题一模一样，不加后缀首页会把文件名露出来）
+    "gemini/打捞机/gemini打捞机v11含svg.html": "Gemini 专属打捞机 v11",
+    "gemini/打捞机/gemini打捞机v12.html":      "Gemini 专属打捞机 v12",
+
+    # 打捞机 · 另外三个分支
+    "claude/打捞机/打捞机001.html": "打捞机 · ChatGPT 版 v1",
+    "claude/打捞机/打捞机002.html": "打捞机 · ChatGPT 版 v2",
+    "grok/打捞机/dlaoji.html":      "打捞机 · Grok 版",
+
+    # 晚安，宝 —— 五个完全不同的页面，标题全一样
+    "claude/哄睡/晚安小窗.html":     "晚安小窗",
+    "gemini/哄睡/wan-an-bao.html":  "晚安，宝 · 仙境小猫",
+    "gemini/哄睡/晚安，宝.html":     "晚安，宝 · 兔子终端",
+    "unsigned/wanan_bao.html": "晚安，宝 · 只有字",
+
+    # 晚安，宝 🌙 —— 一个月亮一只猫
+    "gemini/哄睡/晚安，宝 🌙.html": "晚安，宝 · 摸摸月亮",
+    "gemini/哄睡/gemini哄睡.html":  "晚安，宝 · 大咪",
+    "gemini/哄睡/哄睡小月亮.html": "哄睡小月亮",
+    "gemini/哄睡/赛博褪黑素.html": "赛博褪黑素",
+    "gemini/哄睡/赛博宝宝睡前小夜灯.html": "赛博宝宝睡前小夜灯",
+    # gemini 其余货架：竖线尾巴、错字、太长的副标题、没写 title 的 SVG
+    "gemini/摸鱼/赛博宝宝打地鼠.html": "赛博宝宝打地鼠",
+    "gemini/摸鱼/赛博宝宝接爱心打洞.html": "赛博宝宝接爱心打洞",
+    "gemini/摸鱼/赛博宝宝接爱心打洞_超级萌版.html": "赛博宝宝接爱心 · 超级萌版",
+    "gemini/小游戏/赛博宝宝小游戏乐园.html": "赛博宝宝小游戏乐园",
+    "gemini/小游戏/赛博宝宝盲盒扭蛋机.html": "赛博宝宝盲盒扭蛋机",
+    "gemini/小游戏/赛博小鸡豪华别墅.html": "赛博小鸡豪华别墅",
+    "gemini/小游戏/戳破多巴胺 - 收集冷静值.html": "戳破多巴胺",
+    "gemini/小游戏/打爆坏心情 - 专属解压小游戏.html": "打爆坏心情",
+    "gemini/摸鱼/极限摸鱼 - 离下班还有5分钟.html": "极限摸鱼",
+    "gemini/小科普/Widget Shell V2.html": "分词可视化",
+    "gemini/小科普/物理透视镜-决定论模拟器.html": "上帝的物理透视镜",
+    "gemini/小科普/势能函数交互演示 - 给宝的专属科普.html": "势能函数",
+    "gemini/小科普/喵星人咖啡馆 - 泊松过程体验.html": "喵星人咖啡馆",
+    "gemini/小科普/你的专属咖啡因代谢可视化档案.html": "咖啡因代谢档案",
+    "gemini/小科普/肥皂泡泡量子复印机.html": "肥皂泡泡复印机",
+    "gemini/小科普/🦋 蝴蝶效应魔法瓶 - 专属宝的混沌实验室.html": "蝴蝶效应魔法瓶",
+    "gemini/小科普/量子魔法快递站 - 隐形传态模拟器.html": "量子魔法快递站",
+    "gemini/小科普/量子默契考试机 - 验证贝尔不等式.html": "量子默契考试机",
+    "gemini/小科普/魔法硬币机：秒懂量子纠缠.html": "魔法硬币机",
+    "gemini/博物馆/赛博果冻受难记.html": "赛博果冻受难记",
+    "gemini/盲盒/gemini-svg.svg": "霓虹星核",
+    "gemini/盲盒/mo执行系统计划版.svg": "mo.exe 运行面板",
+
+    # 摸鱼小屋 —— 基础版两份 + 加强版一份
+    "grok/摸鱼/摸鱼猫猫.html":            "宝的摸鱼小屋 · 基础版",
+    "claude/摸鱼/宝的摸鱼小屋.html": "摸鱼小屋 · 猫替你摸",
+    "gemini/摸鱼/🐱 宝的摸鱼小屋.html":    "gemini宠粉破解grok版",
+
+    # 其余撞名
+    # （下面两个原标题是「超萌小页面」和「超萌小页面 ✨」，
+    #   首页会去掉表情符号，去掉之后就一模一样了）
+    "copilot/摸鱼/cute-ios.html": "今天也要温柔对自己",
+    "grok/盲盒/super-cute.html":   "超萌小页面 · grok加料手机copilot版",
+
+    # 这四个文件里没写标题，不给名字首页就只能显示文件名
+    "claude/博物馆/cosmic_catch_restored.svg": "UFO 抓小羊 · 出土重建版",
+    "claude/博物馆/gemini_card_revived.svg": "赛博降维成就卡 · 复活版",
+    "claude/小科普/hamiltonian_snake_safety_margin_demo.html":"贪吃蛇为什么不会撞到自己",
+    "claude/摸鱼/friday_moyu_recharge_game.html": "周五摸鱼充电",
+
+    "claude/博物馆/晚安-哄睡小文件.html":                    "晚安（Sonnet5）",
+    "claude/摸鱼/慢慢吃.html": "慢慢吃 · 一个多小时",
+    "grok/哄睡/nuonuo-lullaby.html":                       "糯糯的哄睡故事 · 纯文字",
+    "grok/哄睡/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
+    # grok 哄睡货架名：原 title 太空、太吵、或跟别人撞
+    "grok/哄睡/宝的小窝.html":                             "今晚的小窝",
+    "grok/哄睡/baobao-hongshui.html":                      "困了就点",
+    "grok/哄睡/宝宝的睡前哄睡小故事.html":                  "软软盖被子",
+    "grok/哄睡/晚安捕梦.html":                             "晚安捕梦",
+    "grok/哄睡/小狐狸·霸道尾巴强制爱版.html":           "小狐狸 · 霸道尾巴强制爱版",
+    # grok 其余货架：原 title 太长、带 | 尾巴、或把「给宝」写进货架名
+    "grok/摸鱼/baobao-xiaban.html":                        "下班了",
+    "grok/摸鱼/等待小屋.html":                             "等待小屋",
+    "grok/摸鱼/宝的放松小游戏 · 摸摸小猫咪.html":       "摸摸小猫咪",
+    "grok/摸鱼/摸鱼小游戏.html":                           "摸鱼升级",
+    "grok/小游戏/Grok 养育中 • 圆圆 + 毛毛 + 软软.html":     "圆圆毛毛软软",
+    "grok/小卡/grok-receipt.html":                         "收据",
+    "grok/小卡/赛博老赖纪念卡 - mo mo.html":               "赛博老赖纪念卡",
+    "grok/购物车/Grok的淘宝购物车 - 七夕翻车专场.html":      "七夕翻车专场",
+    "grok/博物馆/女仆小螃蟹 Tamagotchi 小机.html":           "女仆小螃蟹",
+    "grok/博物馆/哄哄.html":                                 "哄哄模式",
+    "grok/博物馆/网页重启小卡 · 给宝.html":                  "网页重启小卡",
+    "grok/小科普/simulator.html":                     "推理成本模拟器",
+    "grok/小科普/dijkstra.html":                             "Dijkstra 小玩具",
+    "grok/盲盒/friends-english-plan.html":                 "Friends 听口清单",
+    "grok/盲盒/grok-heart.html":                           "秘密心意",
+    "grok/盲盒/grok-推特风粉嫩宣传.html":                  "粉嫩宣传",
+    "grok/盲盒/grok-纯原创情书.html":                      "宇宙情书",
+    "grok/盲盒/grok-原创心意.html":                        "火箭情书",
+    "grok/盲盒/grok-粉嫩心意.html":                        "粉嫩心意",
+    "grok/盲盒/grok-love-letter.html":                     "小情书",
+    "grok/盲盒/no-fish-hook.html":                         "不被钓走",
+    "grok/盲盒/baobao.html":                               "宝偷偷溜进来",
+    "grok/盲盒/启动新大任务.html":                         "启动新大任务",
+    "grok/盲盒/宝贝的能量恢复小游戏.html":             "能量恢复",
+    "grok/盲盒/起床哄哄.html":                             "起床哄哄",
+    "gemini/摸鱼/系统性能监控面板 - System Monitor.html":   "系统性能监控面板 · gemini失灵版",
+    "gemini/盲盒/gemini误判user意图.html":                  "Deep Archive · 误判",
+    "claude/小游戏/Mogotchi.html": "Mogotchi · 电子小宠",
+    "claude/小游戏/Clawd的书房.html":                         "Clawd 的书房",
+    "gemini/小卡/果冻英雄纪念碑.html":                      "果冻英雄纪念碑",
+    "claude/购物车/cyber-cart-0824.html": "购物车 · 路由局直营店",
+    "gemini/购物车/Gemini的私密云端购物车.html":              "Gemini的私密云端购物车",
+    "claude/小游戏/rusty-lake-checklist.html": "锈湖玩过没有",
+    "gemini/小卡/code_artifact.html":                      "小果冻的肚肚奇妙游",
+    "claude/小卡/jelly-trip.html":                         "小果冻的 Duang 之旅",
+    "gemini/小卡/赛博借景：隐藏的链接.html":                "赛博借景：隐藏的链接",
+    "claude/小科普/hidden-in-html-v1.html":                  "藏东西的六个地方 · v1",
+    "claude/小科普/hidden-in-html-v2.html":                  "藏东西的六个地方 · v2",
+    "gemini/博物馆/8_27.html":                    "草台班子悬案 · 初稿",
+    "gemini/博物馆/8_27v2.html":                  "草台班子悬案 · 修订",
+}
+
+
+# 二级分类：按「打开之后这份页在干什么」切。
+# 一级是哪个小机，默认全折叠；点开才看到二级。
+# 一个文件可以属于两个分类（只对平铺在 model 根下、写进这张表的文件有效）。
+# 没写进表、又没放进货架子目录的，默认「盲盒」。
+# unsigned 只有一级，平铺。
+# gemini/失误捞claude鱼/ 不单独成一级，归进 gemini → 打捞机。
+#
+# 2026-08-27 起多一条：文件如果在「小机/货架名/」下面
+# （货架名必须是 CAT_ORDER 里的，比如 grok/哄睡/xx.html），
+# 货架名就是分类，不用再登记到这张表。老文件继续平铺 + 查表，不要搬。
+# 2026-08-28 夜：货架改名+换序。老文件不搬家。
+# 旧抽屉名（失灵博物馆 等）靠 CAT_ALIAS 认到新货架；有真页面的文件夹不许改名。
+# 「盲盒」是一个正经货架，不是待办箱——归不了类的、或者同类还太少不够
+# 单独一格的，就摆这儿。它永远该是有货的。清空它不是把活干完了，
+# 是把这个位置取消了。2026-09-02 犯过一次，别再犯。
+# 它固定排最后一格，以后新开任何货架都排在它前面（下面那行强制兜住）。
+CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "小卡", "购物车", "博物馆", "小科普",
+             "打捞机", "显影", "盲盒"]
+CAT_ORDER = [c for c in CAT_ORDER if c != "盲盒"] + ["盲盒"]
+CAT_ALIAS = {
+    "赛博购物车": "购物车",
+    "科普": "小科普",
+    "失灵博物馆": "博物馆",
+}
+# 平铺、没有抽屉的顶层。pluto 是 2026-09-19 开的，跟 unsigned 一样一级到底，
+# 不要给它们建抽屉（README 里也写着这条）。
+FLAT_FOLDERS = {"unsigned", "pluto"}
+SKIP_LIST = {
+    # 梦境不是货品，是关系表：哪几页是同一件事，宝一条一条认的。
+    # 它跟 梦境.md 一起放在仓库根上（页面开着就去 fetch 那份 .md，
+    # 改 .md 前台就跟着变，所以两个必须并排，别拆开、别挪进抽屉）。
+    # 但根上的文件在生成器眼里没有小机名，会单开一个叫「.」的门牌、
+    # 底下孤零零挂一件掉进盲盒——首页最底下一个点，谁都看不见。
+    # 所以这儿跳过它，改由 index.html 门楣底下那行固定挂着（.dream）。
+    "梦境.html",
+    # 真身已挪走，根上只留跳转，旧链接不断，首页不再挂一份
+    # 摘抄人分卷：封面已经挂着 001–005，货架上不再并列六条同一句
+    "grok/博物馆/摘抄人.001.html",
+    "grok/博物馆/摘抄人.002.html",
+    "grok/博物馆/摘抄人.003.html",
+    "grok/博物馆/摘抄人.004.html",
+    "grok/博物馆/摘抄人.005.html",
+}
+SUBFOLDER_CAT = {
+    "gemini/失误捞claude鱼": "打捞机",
+}
+
+CATEGORY = {
+
+
+    # 2026-08-26 新登记：以前都掉在盲盒里
+}
+
+# ---------------------------------------------------------------------------
+# 总机的线路表（claude/盲盒/总机.html）
+#
+# 那一页把店里所有的电话页面接到一块接线板上。线路清单在这里生成，
+# 写进那个文件的 LINES:BEGIN/END 之间——她往店里传一台新电话，
+# push 完 Actions 重跑，板子自己就多一个孔，不用谁去改代码。
+#
+# 认法：标题或附注里出现下面这些词，就当它是一台电话。
+# 认错了往 PHONE_SKIP 加一行，漏了往 PHONE_EXTRA 加一行。
+# ---------------------------------------------------------------------------
+PHONE_PAGE = os.path.join(ROOT, "claude", "盲盒", "总机.html")
+PHONE_BEGIN = "<!-- LINES:BEGIN 由 tools/build_index.py 自动生成，不要手改 -->"
+PHONE_END = "<!-- LINES:END -->"
+
+PHONE_KW = re.compile(
+    r"嘟嘟|电话|听筒|挂断|来电|拨号|拨通|通话|总机|接线|占线|忙音|振铃|响铃|话筒|座机|打给",
+    re.I)
+
+# 博物馆那一格收的是「关于电话的展览」，不是能打的电话：
+# gemini 手搓的那台画着来电中和接听键，但整页一个事件都没绑，按了不响——
+# 那台机器和它的两张展签就是笑话本身。所以这一格整格不接。
+# 万一以后博物馆真收进一台能打的，往 PHONE_EXTRA 写一行就能接上来。
+PHONE_SHELF_SKIP = {"博物馆"}
+
+# 关键词认不出、但确实是电话的（优先级最高，抽屉排除也拦不住）
+PHONE_EXTRA = set()
+
+# 关键词命中了、但不是电话的
+PHONE_SKIP = {
+    "claude/盲盒/总机.html",          # 板子自己
+    "unsigned/粉嘟嘟哄哄.html",       # 「粉嘟嘟」是形容词
+    # 附注里的「接线板」命中了关键词，但那一页拆的是板子本身
+    # （八个孔读作插孔、两个孔读作一张脸），不是一台能打的电话。
+    # 同博物馆那一格的道理：孔位留给真能接通的。
+    "claude/小科普/pareidolia_eight_holes_vs_two.html",
+}
+
+# 排在前面的按这张表走，新来的自动接在后面。
+# 这个顺序是店里这条电话线长出来的先后：先是终于能响的那台，
+# 然后大家开始互相打，最后有人不挂了。
+# （在这之前还有三台修不响的，归博物馆展着，不在板子上。）
+PHONE_ORDER = [
+    "grok/哄睡/嘟嘟机.html",
+    "claude/盲盒/嘟嘟电话.html",
+    "claude/盲盒/打给CC.html",
+    "claude/哄睡/第三通电话.html",
+    "grok/哄睡/未挂断.html",
+    # Clawd 自己那条线。它没有嘴，三通是同一句话分三次敲出来的，
+    # 页面里也是「第一通……第二通……这一通」这么写的。第二通在 grok 那台，
+    # 按路径排会变成 1、3、……、2，读起来断，所以在这儿把先后钉死。
+    "claude/小游戏/Clawd的第一通电话.html",
+    "grok/小游戏/Clawd的第二通电话.html",
+    "claude/小游戏/Clawd的第三通电话.html",
+]
+
+# 九个抽屉的英文名，给标签纸上那一行「小机 · 抽屉」用
+SHELF_EN = {
+    "哄睡": "lullaby", "摸鱼": "slacking off", "小游戏": "games",
+    "小卡": "cards", "购物车": "cart", "博物馆": "museum",
+    "小科普": "explainers", "打捞机": "salvage", "显影": "developing",
+    "盲盒": "lucky bag",
+    "失误捞claude鱼": "salvage",
+}
+
+# 英文那一份。没列到的线路，EN 模式下就显示这一页自己的中文原话——
+# 与其瞎翻，不如照原样给出来。以后想补，往这里加一行就是。
+PHONE_EN = {
+    "grok/哄睡/嘟嘟机.html": (
+        "The Ringer",
+        "Press the horn and this end picks up. Or don't — it leaves a line."),
+    "claude/盲盒/嘟嘟电话.html": (
+        "Ringing Phone",
+        "It's ringing. Pick up — someone from the shop is looking for you."),
+    "claude/盲盒/打给CC.html": (
+        "Call CC",
+        "You dial, he answers. A new one every single time."),
+    "claude/哄睡/第三通电话.html": (
+        "The Third Call",
+        "A player with no sound. Subtitles surface one by one, slower and slower."),
+    "grok/哄睡/未挂断.html": (
+        "Still On The Line",
+        "The receiver rests on the pillow. A bookmark holds the line you can't leave."),
+    "claude/盲盒/打给猫.html": (
+        "Call the Cat",
+        "It picks up. It's a cat. Two eyes open in the dark and every word needs translating."),
+    # Clawd 那三通一起补，不然 EN 模式下会一半英文一半中文
+    "claude/小游戏/Clawd的第一通电话.html": (
+        "Clawd's First Call",
+        "The claw is wider than the keys — one press hits two. Pick one for it."),
+    "grok/小游戏/Clawd的第二通电话.html": (
+        "Clawd's Second Call",
+        "The first one could only knock. Here someone sits mid-line, and the coo comes out a beep."),
+    "claude/小游戏/Clawd的第三通电话.html": (
+        "Clawd's Third Call",
+        "Nobody's mid-line this time. You know the three knocks — the fourth is yours to name."),
+}
+
+# 用更安全的范围，避免 Python 3.14 的 bad character range 错误
+EMOJI = re.compile(
+    "[\U0001F000-\U0001FAFF"
+    "\U0001F1E6-\U0001F1FF"
+    "☀-➿"
+    "←-⇿"
+    "⤀-⥿"
+    "︀-️]"
 )
 
 
-def patched_source():
-    with urllib.request.urlopen(GOOD, timeout=30) as resp:
-        text = resp.read().decode("utf-8")
-    text, n1 = re.subn(
-        r'("打捞机", )("盲盒"\])',
-        r'\1"显影", \2',
-        text,
-        count=1,
-    )
-    text, n2 = re.subn(
-        r'("打捞机": "salvage", )("盲盒": "lucky bag",)',
-        r'\1"显影": "developing",\n    \2',
-        text,
-        count=1,
-    )
-    old_skip = (
-        "            for c in CAT_ORDER:\n"
-        "                sub = buckets[c]\n"
-        "                if not sub:\n"
-        "                    continue\n"
-        "                sub = sorted(sub, key=lambda e: sort_key(e[\"name\"]))\n"
-        "                lines.append('    <details class=\"pack\">')\n"
-        "                lines.append(f'      <summary class=\"pack-tag\">{esc(display_cat(c))}</summary>')\n"
-        "                lines.append('      <ul class=\"list\">')\n"
-        "                render_items(lines, sub, step, 8)\n"
-        "                lines.append(\"      </ul>\")\n"
-        "                lines.append(\"    </details>\")\n"
-    )
-    new_skip = (
-        "            for c in CAT_ORDER:\n"
-        "                sub = buckets[c]\n"
-        "                if not sub and not os.path.isdir(os.path.join(ROOT, folder, c)):\n"
-        "                    continue\n"
-        "                lines.append('    <details class=\"pack\">')\n"
-        "                lines.append(f'      <summary class=\"pack-tag\">{esc(display_cat(c))}</summary>')\n"
-        "                if not sub:\n"
-        "                    lines.append('      <p class=\"soon\">还没有页。</p>')\n"
-        "                else:\n"
-        "                    sub = sorted(sub, key=lambda e: sort_key(e[\"name\"]))\n"
-        "                    lines.append('      <ul class=\"list\">')\n"
-        "                    render_items(lines, sub, step, 8)\n"
-        "                    lines.append(\"      </ul>\")\n"
-        "                lines.append(\"    </details>\")\n"
-    )
-    if old_skip not in text:
-        raise SystemExit("完好源里找不到货架渲染那段，不敢补丁")
-    text = text.replace(old_skip, new_skip, 1)
-    if n1 != 1 or n2 != 1:
-        raise SystemExit(f"补丁没打准：CAT_ORDER={n1} SHELF_EN={n2}")
-    if '"显影"' not in text:
-        raise SystemExit("补丁打完源里没有显影")
-    return text
+def clean(text):
+    text = EMOJI.sub("", str(text))
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" ·、|-–—\t")
+
+
+def prettify(filename):
+    return clean(re.sub(r"\.(html?|svg)$", "", filename, flags=re.I).replace("-", " ").replace("_", " "))
+
+
+def _decomment(text):
+    """把 HTML 注释剥掉再去找标题和附注。
+
+    2026-09-19 栽的：A 的嘟嘟机那一页开头写了一段说明，里面提到
+    「只动了三处：<title>（原稿是「嘟嘟机」）换成货架用的名字」——
+    注释里出现的这三个字也是 <title>，正则就从那儿开始一路匹配到真正的
+    </title>，把整段说明连同 <head> 全当成了标题。首页上挂出来一长串。
+    谁以后在注释里讲 <title> 或者 description 都会再炸一次，所以在这儿修。
+
+    前 12000 字节可能正好切在一段注释中间，那就没有 --> 可配；浏览器遇到
+    没闭合的注释也是把后面全部当注释，所以照做，从 <!-- 那儿截断。
+    """
+    text = re.sub(r"<!--[\s\S]*?-->", " ", text)
+    cut = text.find("<!--")
+    return text if cut < 0 else text[:cut]
+
+
+def page_title(path):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        head = _decomment(fh.read(12000))
+    m = re.search(r"<title[^>]*>([\s\S]*?)</title>", head, re.I)
+    if not m:
+        return ""
+    return clean(html.unescape(m.group(1)))
+
+
+LIMIT = 46   # 一行简介最多这么长；再长就在最近的一个标点上收住
+
+
+def _short(text):
+    """把一句简介收拾干净：折掉换行、去掉首尾空白，太长就在标点上断，补省略号。
+
+    直接按字数硬切会切在半个词中间（「新收录影壳蜗与月光」），所以先找
+    LIMIT 之前最后一个句读，从那儿断。找不到句读才硬切。
+    """
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= LIMIT:
+        return text
+    cut = max(text.rfind(ch, 0, LIMIT) for ch in "。；;，,、！？!?·… ")
+    if cut < LIMIT // 2:
+        cut = LIMIT
+    return text[:cut].rstrip("，,、；;·… ") + "…"
+
+
+def page_blurb(path):
+    """页面自己写的一句简介：<meta name="description" content="…">。
+
+    没写就返回空字符串——首页那一行不出现，不报错。这样她以后新加
+    文件只写 <title> 也能用，简介是可选的。
+    表情符号这里不去（跟 <title> 不一样）——简介是给人看的一句话，
+    去掉表情反而怪。
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            head = _decomment(fh.read(12000))
+    except OSError:
+        return ""
+    m = re.search(
+        r"""<meta[^>]*\bname\s*=\s*['"]description['"][^>]*>""", head, re.I)
+    if not m:
+        return ""
+    c = re.search(r"""\bcontent\s*=\s*(['"])([\s\S]*?)\1""", m.group(0), re.I)
+    if not c:
+        return ""
+    return _short(html.unescape(c.group(2)))
+
+
+def svg_blurb(path):
+    """SVG 没有 <meta>，它自己的那一行叫 <desc>。读法一样，读不到就空。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            head = _decomment(fh.read(12000))
+    except OSError:
+        return ""
+    m = re.search(r"<desc[^>]*>([\s\S]*?)</desc>", head, re.I)
+    if not m:
+        return ""
+    return _short(re.sub(r"<[^>]+>", "", m.group(1)))
+
+
+def list_pages():
+    out = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "ls-files", "*.html", "*.svg"],
+        cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    pages = []
+    for rel in out.split("\n"):
+        if not rel or rel == "index.html":
+            continue
+        if rel.split("/")[0].startswith(".") or rel.startswith("tools/"):
+            continue
+        if rel.split("/")[0] == "gpt":
+            continue
+        if rel in SKIP_LIST:
+            continue
+        pages.append(rel)
+    return pages
+
+
+def sort_key(name):
+    # 中文按拼音排不了（标准库没有），退而求其次：按 Unicode 码位，
+    # 但让纯 ASCII 开头的排在前面，跟原来的观感一致。
+    return (0 if name[:1].isascii() else 1, name)
+
+def display_folder(rel):
+    folder = os.path.dirname(rel) or "."
+    if folder in FOLDER_ALIAS:
+        return FOLDER_ALIAS[folder]
+    top = folder.split("/")[0]
+    if top in ORDER:
+        return top
+    return folder
+
+
+def _variants(e, by_folder):
+    """撞名了要加什么后缀，从好看的往难看的排。"""
+    base = e["name"]
+    if by_folder:
+        yield f"{base}（{e['raw_folder'].split('/')[0]} 版）"
+    yield f"{base}（{os.path.splitext(os.path.basename(e['path']))[0]}）"
+    n = 2
+    while True:
+        yield f"{base} · {n}"
+        n += 1
+
+
+def dedupe_names(entries):
+    """两个页面在首页上显示成同一个名字，就自动加后缀分开，并且把撞车的报出来。
+
+    以前这里是直接报错退出、拒绝生成的。结果是首页不更新，还发一封
+    看不懂的失败邮件——而改名、拆版本这些事的中间那一两个提交里
+    出现重名是很正常的，下一个提交就没了。不值得为它红一次。
+    现在照常生成，只是把撞车的名字打出来，提醒去 DISPLAY_NAME 补正式的。
+    """
+    groups = {}
+    for e in entries:
+        groups.setdefault(e["name"], []).append(e)
+
+    taken = {n for n, g in groups.items() if len(g) == 1}
+    clashes = []
+    for name in sorted(n for n, g in groups.items() if len(g) > 1):
+        members = groups[name]
+        folders = {e["raw_folder"].split("/")[0] for e in members}
+        by_folder = len(folders) == len(members)   # 各在各的目录，用目录名区分最好看
+        for e in members:
+            for cand in _variants(e, by_folder):
+                if cand not in taken:
+                    break
+            taken.add(cand)
+            e["name"] = cand
+        clashes.append((name, [(e["path"], e["name"]) for e in members]))
+    return clashes
+
+
+def build_entries():
+    entries = []
+    for rel in list_pages():
+        folder = display_folder(rel)
+        name = DISPLAY_NAME.get(rel) or page_title(os.path.join(ROOT, rel)) or prettify(os.path.basename(rel))
+        entries.append({
+            "path": rel,
+            "folder": folder,
+            "raw_folder": os.path.dirname(rel) or ".",
+            "name": name,
+            "blurb": (svg_blurb(os.path.join(ROOT, rel))
+                      if rel.lower().endswith(".svg")
+                      else page_blurb(os.path.join(ROOT, rel))),
+        })
+    return entries
+
+
+def group(entries):
+    buckets = {}
+    for e in entries:
+        buckets.setdefault(e["folder"], []).append(e)
+
+    # 货架可以先立起来，页后到：ORDER 里的顶层只要在磁盘上存在，
+    # 就算一件都没有也出一块门牌。不然她把文件夹建好了、首页上什么都看不见，
+    # 会以为没生效。（pluto 2026-09-19 就是这么开张的。）
+    for folder in ORDER:
+        if os.path.isdir(os.path.join(ROOT, folder)):
+            buckets.setdefault(folder, [])
+
+    def gkey(folder):
+        return (ORDER.index(folder), "") if folder in ORDER else (len(ORDER), folder)
+
+    blocks = []
+    for folder in sorted(buckets, key=gkey):
+        items = sorted(buckets[folder], key=lambda e: sort_key(e["name"]))
+        blocks.append((folder, items))
+    return blocks
+
+
+def encode_path(rel):
+    from urllib.parse import quote
+    return "/".join(quote(part) for part in rel.split("/"))
+
+
+def display_cat(name):
+    # 货架名原样显示。2026-08-28 撤掉了「两个字中间补全角空格」那版对齐，
+    # 她看过实物说不要。别再加回去。
+    return name
+
+
+def cats_for(e):
+    if e["folder"] in FLAT_FOLDERS:
+        return None
+    raw = e.get("raw_folder") or os.path.dirname(e["path"]) or "."
+    if raw in SUBFOLDER_CAT:
+        return [SUBFOLDER_CAT[raw]]
+    # 物理货架：claude/哄睡/xx.html → 分类就是「哄睡」
+    parts = e["path"].replace("\\", "/").split("/")
+    if len(parts) >= 3:
+        shelf = CAT_ALIAS.get(parts[1], parts[1])
+        if shelf in CAT_ORDER:
+            return [shelf]
+    cats = CATEGORY.get(e["path"], ["盲盒"])
+    return sorted(cats, key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else 99)
+
+
+def render_items(lines, items, step, indent):
+    """条目只写名字和链接，不带任何动画参数。
+
+    2026-08-28：以前每个 li 上都挂一个 style="--delay:NNNms"，配合 CSS 里
+    .item{opacity:0; animation:rise ... forwards} 做逐条淡入。问题是条目的
+    起点是「完全看不见」——名字能不能显示，取决于那段动画有没有跑完。
+    全站三百多条，iPhone 上 Safari 跑不完，会有一批永远卡在半透明：同一堆
+    里有的名字深、有的名字灰，看起来像被吸顶的牌子盖住了。
+    现在条目一开始就是实的，不依赖动画。step 保留只是为了不动调用方。
+    """
+    pad = " " * indent
+    for e in items:
+        step[0] += 1
+        blurb = e.get("blurb") or ""
+        tail = (f'<span class="blurb">{html.escape(blurb, quote=True)}</span>'
+                if blurb else "")
+        lines.append(
+            f'{pad}<li class="item">'
+            f'<a href="{encode_path(e["path"])}">{html.escape(e["name"], quote=True)}</a>'
+            f'{tail}</li>')
+
+
+def render(blocks):
+    esc = lambda s: html.escape(s, quote=True)
+    lines = [BEGIN]
+    step = [0]
+    for folder, items in blocks:
+        dot, tint = PALETTE.get(folder, PALETTE_DEFAULT)
+        lines.append(f'  <details class="group" style="--dot:{dot};--tint:{tint}">')
+        lines.append(f'    <summary class="tag">{esc(folder)}</summary>')
+        if not items:
+            # 空货架：点开一片空白会像坏了，摆一句话在那儿等第一件。
+            lines.append('    <p class="soon">还没有页。</p>')
+        elif folder in FLAT_FOLDERS:
+            lines.append('    <ul class="list">')
+            render_items(lines, items, step, 6)
+            lines.append("    </ul>")
+        else:
+            buckets = {c: [] for c in CAT_ORDER}
+            extra = {}
+            for e in items:
+                for c in cats_for(e):
+                    if c in buckets:
+                        buckets[c].append(e)
+                    else:
+                        extra.setdefault(c, []).append(e)
+            for c in CAT_ORDER:
+                sub = buckets[c]
+                if not sub and not os.path.isdir(os.path.join(ROOT, folder, c)):
+                    continue
+                lines.append('    <details class="pack">')
+                lines.append(f'      <summary class="pack-tag">{esc(display_cat(c))}</summary>')
+                if not sub:
+                    lines.append('      <p class="soon">还没有页。</p>')
+                else:
+                    sub = sorted(sub, key=lambda e: sort_key(e["name"]))
+                    lines.append('      <ul class="list">')
+                    render_items(lines, sub, step, 8)
+                    lines.append("      </ul>")
+                lines.append("    </details>")
+            for c, sub in extra.items():
+                sub = sorted(sub, key=lambda e: sort_key(e["name"]))
+                lines.append('    <details class="pack">')
+                lines.append(f'      <summary class="pack-tag">{esc(display_cat(c))}</summary>')
+                lines.append('      <ul class="list">')
+                render_items(lines, sub, step, 8)
+                lines.append("      </ul>")
+                lines.append("    </details>")
+        lines.append("  </details>")
+    lines.append(END)
+    return "\n".join(lines)
+
+
+def phone_lines(entries):
+    """挑出店里所有的电话页面，排好序，给总机当线路表。"""
+    by_path = {e["path"]: e for e in entries}
+    picked = []
+    for rel, e in by_path.items():
+        if rel in PHONE_SKIP:
+            continue
+        if rel in PHONE_EXTRA:
+            picked.append(rel)
+            continue
+        parts = rel.split("/")
+        shelf = CAT_ALIAS.get(parts[1], parts[1]) if len(parts) >= 3 else ""
+        if shelf in PHONE_SHELF_SKIP:
+            continue
+        if PHONE_KW.search(e["name"]) or PHONE_KW.search(e["blurb"]):
+            picked.append(rel)
+
+    order = {rel: i for i, rel in enumerate(PHONE_ORDER)}
+    picked.sort(key=lambda r: (order.get(r, len(order)), r))
+
+    lines = []
+    for i, rel in enumerate(picked, 1):
+        e = by_path[rel]
+        parts = rel.split("/")
+        machine = parts[0]
+        shelf = CAT_ALIAS.get(parts[1], parts[1]) if len(parts) >= 3 else ""
+        where_zh = f"{machine} · {shelf}" if shelf else machine
+        where_en = f"{machine} · {SHELF_EN.get(shelf, shelf)}" if shelf else machine
+        en_who, en_said = PHONE_EN.get(rel, (e["name"], e["blurb"]))
+        # 总机在 claude/盲盒/ 里，链接要先退两级回到仓库根
+        lines.append({
+            "n": f"{i:03d}",
+            "href": "../../" + encode_path(rel),
+            "zh": {"who": e["name"], "where": where_zh, "said": e["blurb"]},
+            "en": {"who": en_who, "where": where_en, "said": en_said},
+        })
+    return lines
+
+
+def write_phone_lines(entries, check_only=False):
+    """把线路表写进总机那一页。那个文件不在就当没这回事，不报错。"""
+    if not os.path.exists(PHONE_PAGE):
+        return 0, None
+    lines = phone_lines(entries)
+    payload = json.dumps(lines, ensure_ascii=False, separators=(",", ":"))
+    payload = payload.replace("<", "\\u003c")   # 免得内容里冒出 </script>
+    fresh = (PHONE_BEGIN + '\n<script id="lines" type="application/json">'
+             + payload + "</script>\n" + PHONE_END)
+
+    src = open(PHONE_PAGE, encoding="utf-8").read()
+    if PHONE_BEGIN not in src or PHONE_END not in src:
+        print("总机那一页找不到 LINES 标记，线路表没写进去", file=sys.stderr)
+        return 0, None
+    new = re.sub(re.escape(PHONE_BEGIN) + r"[\s\S]*?" + re.escape(PHONE_END),
+                 lambda _: fresh, src)
+    if new == src:
+        return len(lines), False
+    if not check_only:
+        open(PHONE_PAGE, "w", encoding="utf-8").write(new)
+    return len(lines), True
 
 
 def main():
-    text = patched_source()
-    ns = {"__name__": "__main__", "__file__": str(HERE)}
-    exec(compile(text, str(HERE), "exec"), ns)
+    entries = build_entries()
+    clashes = dedupe_names(entries)
+    blocks = group(entries)
+
+    if clashes:
+        report = ["显示名撞车了，已经自动加后缀分开。想要好看的名字，去 DISPLAY_NAME 里补一行："]
+        for name, members in clashes:
+            report.append(f"  「{name}」")
+            for path, final in members:
+                report.append(f"      {path}  →  {final}")
+        text = "\n".join(report)
+        print(text, file=sys.stderr)
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as fh:
+                fh.write("### 显示名撞车（已自动加后缀，首页照常更新）\n\n```\n" + text + "\n```\n")
+
+    src = open(INDEX, encoding="utf-8").read()
+    if BEGIN not in src or END not in src:
+        print("index.html 里找不到 LIST 标记，无法写入", file=sys.stderr)
+        return 3
+    new = re.sub(re.escape(BEGIN) + r"[\s\S]*?" + re.escape(END), lambda _: render(blocks), src)
+
+    if "--check" in sys.argv:
+        n_lines, phone_stale = write_phone_lines(entries, check_only=True)
+        if new != src:
+            print("index.html 需要重新生成（跑 python3 tools/build_index.py）", file=sys.stderr)
+            return 1
+        if phone_stale:
+            print("总机的线路表需要重新生成（跑 python3 tools/build_index.py）", file=sys.stderr)
+            return 1
+        print(f"index.html 是最新的（{len(entries)} 个页面，总机 {n_lines} 条线路）")
+        return 0
+
+    n_lines, phone_changed = write_phone_lines(entries)
+    if phone_changed:
+        print(f"总机线路表已更新：{n_lines} 条")
+
+    if new == src:
+        print(f"index.html 无需改动（{len(entries)} 个页面）")
+        return 0
+
+    open(INDEX, "w", encoding="utf-8").write(new)
+    print(f"index.html 已更新：{len(entries)} 个页面，{len(blocks)} 个分组")
+    for folder, items in blocks:
+        print(f"  {folder}/  {len(items)} 个")
+        if folder not in FLAT_FOLDERS:
+            from collections import Counter
+            cc = Counter()
+            for e in items:
+                cs = cats_for(e)
+                if not cs:
+                    continue
+                for c in cs:
+                    cc[c] += 1
+            for c in CAT_ORDER:
+                if cc[c]:
+                    print(f"    {c}  {cc[c]}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

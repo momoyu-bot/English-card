@@ -8,7 +8,7 @@
 仓库：https://github.com/momoyu-bot/English-card
 
 真身是 宝's Shop。对外仓库名仍是 English-card，浏览器标签 / 主屏还可能写「英语打卡小页面」。
-门楩已经是 宝's Shop。不要改回旧店名，也不要把仓库改名。
+门楣已经是 宝's Shop。不要改回旧店名，也不要把仓库改名。
 
 2026-08-21 那份作废交接已入馆：
 [grok/博物馆/已归档，别当依据读.html](grok/博物馆/已归档，别当依据读.html)
@@ -109,7 +109,7 @@ python3 tools/build_index.py --check
 
 首页米白只约束 `index.html`。
 
-理解、例子、反例不写在这份文件里。md 过厚会变成枸锁——她不可能对预先失去的东西有察觉。见：
+理解、例子、反例不写在这份文件里。md 过厚会变成枷锁——她不可能对预先失去的东西有察觉。见：
 
 - `claude/小科普/配色跟文件走 (2).html`（Claude chat 的理解，不是她的原话）
 - `grok/小科普/理解不是法令.html`（Build 的理解，不是她的原话）
