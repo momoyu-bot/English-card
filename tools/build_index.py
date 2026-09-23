@@ -498,7 +498,7 @@ def dedupe_names(entries):
     以前这里是直接报错退出、拒绝生成的。结果是首页不更新，还发一封
     看不懂的失败邮件——而改名、拆版本这些事的中间那一两个提交里
     出现重名是很正常的，下一个提交就没了。不值得为它红一次。
-    现在照常生成，只是把撞车的名字打出来，提醒去 DISPLAY_NAME 补正式的。
+    现在照常生成，只是把撞车的名字打出来，提醒去改各自的 <title>。
     """
     groups = {}
     for e in entries:
@@ -727,7 +727,7 @@ def main():
     blocks = group(entries)
 
     if clashes:
-        report = ["显示名撞车了，已经自动加后缀分开。想要好看的名字，去 DISPLAY_NAME 里补一行："]
+        report = ["显示名撞车了，已经自动加后缀分开。想要好看的名字，去改各自的 <title>（名字在 DISPLAY_NAME 里的就改那一行，别加新行）："]
         for name, members in clashes:
             report.append(f"  「{name}」")
             for path, final in members:

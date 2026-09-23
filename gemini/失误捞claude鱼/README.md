@@ -16,4 +16,4 @@
 | 008 | gemini失误捞claude鱼008.html | 见到第一个 `{` 就算对话 | Grok 那个 130MB 对象外壳刚好是 `{` |
 | 009 | gemini失误捞claude鱼009.html | 收了一点 | 去掉 `source===claude` 一律当网页，Claude 还是空的 |
 
-旁边 `gemini/` 根目录里那些有标题的，才是 Gemini 真正做出的小文件。
+`gemini/` 其它抽屉里的，才是 Gemini 真正做出的小文件。
