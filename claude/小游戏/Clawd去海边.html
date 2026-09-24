@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Clawd 去海边</title>
+<meta name="description" content="它一直是横着走的，到了海边才发现，这儿的螃蟹都这么走。追浪、捡贝壳、堆沙堡。">
+<!--
+  cc 做的。2026-09-24 宝问：Clawd 想不想去海边——它是小螃蟹来着。
+
+  Clawd 的底模照《Clawd造型宪法（Code版）》那组矩形，一格没动。
+  它本来就是正面朝人、两只钳子朝两边伸，所以往左往右走，正好就是螃蟹的横着走：
+  整只平移、一步颠一格，腿不画步态。墨镜、草帽、游泳圈都是外挂层。
+  「傍晚」那句是照《Clawd 的一天》第六枚「潮」接的：它是从这片海上岸的。
+
+  浪、湿沙、脚印、小沙蟹、贝壳、漂流瓶每 0.1 秒用 JS 重画一遍；云、星星、小旗用 steps()。
+  捡到的贝壳、堆到第几层的沙堡、扔了几只瓶子，只记在这台设备的浏览器里。
+  整页不取任何外部地址，断网也能开。
+-->
+<style>
+  :root{
+    --bg:#f4eee2; --card:#fbf8f1; --line:#e5dccb; --ink:#2a2620; --ink-2:#786e5e; --ink-3:#aaa18f;
+    --sea:#3a86b8; --clay:#d47f59;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;
+    -webkit-text-size-adjust:100%;padding:calc(var(--safe-top) + 18px) 14px calc(var(--safe-bot) + 34px)}
+  .wrap{max-width:540px;margin:0 auto}
+  h1{font-size:23px;line-height:1.25;font-weight:650;margin:0 0 3px;letter-spacing:-.01em}
+  .sub{margin:0 0 13px;font-size:13.5px;color:var(--ink-2)}
+
+  .stage{border-radius:14px;overflow:hidden;background:#a2d8ee;box-shadow:0 14px 28px -22px rgba(30,60,80,.6)}
+  .stage svg{display:block;width:100%;height:auto;shape-rendering:crispEdges;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+  .line{min-height:3.4em;margin:10px 3px 2px;font-size:14px;line-height:1.7;color:var(--ink)}
+
+  .lab{font-size:12.5px;color:var(--ink-2);margin:12px 0 6px 2px}
+  .lab em{font-style:normal;color:var(--ink-3);margin-left:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chips button{font:inherit;font-size:13.5px;cursor:pointer;background:#fff;color:var(--ink);
+    border:1px solid var(--line);border-radius:99px;padding:5px 13px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .chips button:active{background:#f4f1ea}
+  .chips button:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
+  .chips button[aria-pressed="true"]{background:var(--sea);border-color:var(--sea);color:#fff}
+  .seg{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:99px;overflow:hidden;background:#fff}
+  .seg button{border:0;border-radius:0;padding:6px 15px;background:transparent}
+
+  .shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .shelf .s{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 4px 6px;text-align:center}
+  .shelf svg{display:block;width:30px;height:30px;margin:0 auto 3px;shape-rendering:crispEdges}
+  .shelf b{display:block;font-size:13px;font-weight:600;line-height:1.3}
+  .shelf span{display:block;font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .shelf .s.no b{color:var(--ink-3);font-weight:500}
+  .shelf .s.no span{color:var(--ink-3)}
+  .shelf .s.new{animation:pop .45s steps(3,end)}
+  @keyframes pop{0%{transform:translateY(0)}40%{transform:translateY(-5px)}100%{transform:translateY(0)}}
+  @media (min-width:500px){.shelf{grid-template-columns:repeat(6,1fr)}}
+
+  .bottle{display:flex;gap:8px}
+  .bottle input{flex:1;min-width:0;font:inherit;font-size:16px;padding:8px 12px;border:1px solid var(--line);
+    border-radius:10px;background:#fff;color:var(--ink)}
+  .bottle input:focus{outline:2px solid var(--sea);outline-offset:0;border-color:transparent}
+  .bottle button{font:inherit;font-size:14px;cursor:pointer;border:0;border-radius:10px;padding:0 17px;background:var(--ink);color:#fff;touch-action:manipulation}
+  .count{margin:6px 0 0 3px;font-size:12.5px;color:var(--ink-2);min-height:1.2em}
+
+  /* 画面里跟时间走的东西：全用 steps()，像素不停在半格上 */
+  #hop.small,#mkhop.small{animation:smallhop .36s steps(1,end)}
+  @keyframes smallhop{0%{transform:translateY(0)}25%{transform:translateY(-25px)}50%{transform:translateY(-45px)}75%{transform:translateY(-25px)}100%{transform:translateY(0)}}
+  .tw{animation:tw 1.8s steps(1,end) infinite}
+  @keyframes tw{0%{opacity:1}50%{opacity:0}}
+  .drift{animation:drift 160s steps(160,end) infinite}
+  @keyframes drift{0%{transform:translateX(-50px)}100%{transform:translateX(290px)}}
+  .fa{animation:flip .6s steps(1,end) infinite}
+  .fb{animation:flip .6s steps(1,end) infinite -.3s}
+  @keyframes flip{0%{opacity:1}50%{opacity:0}}
+  .beam{animation:beam 2.4s steps(1,end) infinite}
+  @keyframes beam{0%{opacity:1}30%{opacity:.15}}
+  @media (prefers-reduced-motion:reduce){
+    #hop.small,#mkhop.small,.tw,.drift,.fa,.fb,.beam{animation:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Clawd 去海边</h1>
+  <p class="sub">点沙滩，它就横着走过去。点贝壳，它去捡。</p>
+
+  <div class="stage">
+    <svg id="scene" viewBox="0 0 240 150" role="img" aria-label="海边的沙滩上，Clawd 站在浪花旁边"></svg>
+  </div>
+  <p class="line" id="line" aria-live="polite"></p>
+
+  <div class="lab">玩</div>
+  <div class="chips">
+    <button id="b-chase" aria-pressed="false">追浪</button>
+    <button id="b-build">堆沙堡</button>
+    <button id="b-swim" aria-pressed="false">下海</button>
+    <button id="b-shades" aria-pressed="false">墨镜</button>
+    <button id="b-hat" aria-pressed="false">草帽</button>
+  </div>
+
+  <div class="lab">什么时候</div>
+  <div class="chips seg" id="tod">
+    <button data-t="day" aria-pressed="false">白天</button>
+    <button data-t="dusk" aria-pressed="false">傍晚</button>
+    <button data-t="night" aria-pressed="false">夜里</button>
+  </div>
+
+  <div class="lab">捡到的<em id="total"></em></div>
+  <div class="shelf" id="shelf"></div>
+
+  <div class="lab">漂流瓶</div>
+  <form class="bottle" id="bottle" autocomplete="off">
+    <input id="note" maxlength="40" placeholder="写张纸条，塞进瓶子里" enterkeyhint="send">
+    <button type="submit">扔</button>
+  </form>
+  <p class="count" id="count"></p>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= 画笔 ================= */
+var C='#d47f59', K='#120d1d';
+function n(v){return Math.round(v*100)/100;}
+function r(x,y,w,h,f,a){
+  if(!(w>0&&h>0))return '';
+  return '<rect x="'+n(x)+'" y="'+n(y)+'" width="'+n(w)+'" height="'+n(h)+'" fill="'+f+'"'+(a?' '+a:'')+'/>';
+}
+function g(inner,a){return '<g'+(a?' '+a:'')+'>'+inner+'</g>';}
+function op(v){return 'opacity="'+n(v)+'"';}
+/* 点阵：一行一个字符串，同色相邻的格子并成一条画 */
+function grid(x0,y0,u,rows,pal,a){
+  var s='';
+  rows.forEach(function(row,j){
+    for(var i=0;i<row.length;){
+      var ch=row.charAt(i),k=i;
+      while(k<row.length&&row.charAt(k)===ch)k++;
+      if(ch!=='.'&&pal[ch])s+=r(x0+i*u,y0+j*u,(k-i)*u,u,pal[ch],a);
+      i=k;
+    }
+  });
+  return s;
+}
+function disc(cx,cy,rad,f,a){
+  var s='';
+  for(var y=cy-rad;y<cy+rad;y+=1){
+    var m=y+.5-cy,h=Math.round(Math.sqrt(Math.max(0,rad*rad-m*m)));
+    if(h>0)s+=r(cx-h,y,2*h,1,f,a);
+  }
+  return s;
+}
+function hex(c){return [1,3,5].map(function(i){return parseInt(c.substr(i,2),16);});}
+function mix(a,b,t){
+  var A=hex(a),B=hex(b);
+  return '#'+A.map(function(v,i){var x=Math.round(v+(B[i]-v)*t).toString(16);return x.length<2?'0'+x:x;}).join('');
+}
+function seeded(seed){var s=seed>>>0;return function(){s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function clamp(v,a,b){return v<a?a:v>b?b:v;}
+function pick1(a){return a[Math.floor(Math.random()*a.length)];}
+function $(id){return document.getElementById(id);}
+
+/* ================= Clawd 底模 =================
+   坐标原样取自《Clawd造型宪法（Code版）》的 BASE_OK：
+   壳 147×98、两只钳横着平伸、四条腿左右各两条、两道竖眼条、没有嘴。 */
+var SHELL=r(44,50,147,98,C),
+    LEGS=r(54,148,15,21,C)+r(78,148,15,21,C)+r(143,148,15,21,C)+r(167,148,15,21,C),
+    CLAW_L=r(20,99,24,21,C), CLAW_R=r(191,99,25,21,C);
+var EYES={
+  bar:r(70,78,8,21,K)+r(158,78,8,21,K),
+  smile:r(62,88,8,8,K)+r(70,80,8,11,K)+r(78,88,8,8,K)+r(150,88,8,8,K)+r(158,80,8,11,K)+r(166,88,8,8,K),
+  shut:r(62,86,24,8,K)+r(150,86,24,8,K),
+  squint:r(70,78,8,8,K)+r(78,86,8,8,K)+r(70,94,8,8,K)+r(158,78,8,8,K)+r(150,86,8,8,K)+r(158,94,8,8,K),
+  /* 往旁边看：两道眼条整块挪几格，形状不变 */
+  L:r(63,78,8,21,K)+r(151,78,8,21,K),
+  R:r(77,78,8,21,K)+r(165,78,8,21,K)
+};
+/* 腮红走「壳面纹理」那一档，是贴上去的 */
+var BLUSH=r(48,92,20,12,'#e59a9a')+r(167,92,20,12,'#e59a9a');
+
+/* ---- 穿戴 ---- */
+var SG='#1d1a26';
+var SHADES=r(54,74,40,26,SG)+r(58,100,32,3,SG)+r(142,74,40,26,SG)+r(146,100,32,3,SG)
+  +r(94,79,48,6,SG)+r(44,79,10,5,SG)+r(182,79,9,5,SG)
+  +r(60,78,10,4,'#ffffff',op(.75))+r(60,82,4,4,'#ffffff',op(.4))
+  +r(148,78,10,4,'#ffffff',op(.75))+r(148,82,4,4,'#ffffff',op(.4));
+var HAT=(function(){
+  var A='#efcd76',B='#d6ad52',R='#e0675f',s='';
+  s+=r(34,40,167,10,A)+r(34,48,167,2,B);                 /* 帽檐比壳宽一圈 */
+  s+=r(78,6,79,34,A)+r(84,0,67,6,A);                      /* 帽顶 */
+  for(var y=3;y<26;y+=7)for(var x=86+(y%2?5:0);x<150;x+=11)s+=r(x,y,4,2,B);
+  for(var x2=40;x2<196;x2+=12)s+=r(x2,43,5,2,B);
+  s+=r(78,26,79,9,R)+r(143,19,14,14,'#f7a9a0')+r(147,23,6,6,'#fff4ee'); /* 帽带和一朵小花 */
+  return s;
+})();
+var RING=(function(){
+  var s='',cols=['#ff8fa6','#fff6ef'],i=0;
+  for(var x=30;x<205;x+=25,i++){
+    var end=(x===30||x===180);
+    s+=r(x,end?126:120,25,end?16:28,cols[i%2]);
+  }
+  return s+r(55,145,125,3,'#e87a93',op(.35))+r(46,123,30,3,'#ffffff',op(.6));
+})();
+
+/* ================= 世界 =================
+   画布 240×150。海平线在 y=62，Clawd 的脚踩在 y=128 那一排。
+   岸线斜着：越近越往右，所以它往右横着走就是往海里走。 */
+var W=240,H=150,HZ=62,FY=128,S=.2,ROWS=(H-HZ)/2;
+var LIM_DRY=142, LIM_CHASE=150, SWIM_X=198, BUILD_X=87;
+function shoreX(y){return 70+(y-HZ)*1.25;}
+function persp(y){return (y-HZ)/(FY-HZ);}
+function clawdT(x,y){return 'translate('+n(x-98*S)+' '+n(y-119*S)+') scale('+S+') translate(-20 -50)';}
+
+var PAL={
+  day:{sky:[[0,'#79c2e7'],[15,'#8ccdeb'],[29,'#a2d8ee'],[42,'#b9e2f0'],[53,'#d0ecf2']],
+    sea0:'#3a86b8',sea1:'#46a6c6',shallow:'#8fd6d2',foam:'#fffdf6',line:'#8fd0df',hz:'#d7f1f3',
+    sand:'#efd6a4',sand2:'#e3c38c',sand3:'#f8e7c3',wet:'#d5b27a',print:'#bf975d',
+    hill:'#8db59b',hill2:'#79a488',castle:'#e2bd80',castle2:'#caa165',castleD:'#94704a',
+    lamp:'#fff3b0',drop:'#f2fdff',hole:'#a5845a',gull:'#fbfbf7',gull2:'#cfd3d6',tint:null},
+  dusk:{sky:[[0,'#59498a'],[12,'#7e5796'],[25,'#b26491'],[37,'#dc7f7f'],[48,'#f2a676'],[57,'#f8c486']],
+    sea0:'#5a5791',sea1:'#86699c',shallow:'#c89aa4',foam:'#ffeadb',line:'#d39aa0',hz:'#fbd09a',
+    sand:'#e9bf98',sand2:'#dcaa89',sand3:'#f4d3b0',wet:'#c8958a',print:'#ad7a6a',
+    hill:'#6b5985',hill2:'#5b4b77',castle:'#dcac88',castle2:'#c38f76',castleD:'#8a5f55',
+    lamp:'#ffe7a8',drop:'#fff0e6',hole:'#a0715f',gull:'#4b3552',gull2:'#4b3552',tint:['#ff8a5c',.06]},
+  night:{sky:[[0,'#0d1430'],[16,'#121b3f'],[32,'#18244d'],[48,'#1f2d5c']],
+    sea0:'#0f2141',sea1:'#163255',shallow:'#1d4566',foam:'#7ee6ee',line:'#23507a',hz:'#2b3d6c',
+    sand:'#8a86a0',sand2:'#7c7893',sand3:'#9793ac',wet:'#66637f',print:'#57546f',
+    hill:'#18203c',hill2:'#131a33',castle:'#9894ae',castle2:'#817d99',castleD:'#4d4a64',
+    lamp:'#ffe89a',drop:'#9ff8ff',hole:'#57546d',gull:'#fff',gull2:'#fff',tint:['#0a1030',.3],glow:'#8ff7ff'}
+};
+var tod=(function(){var h=new Date().getHours();return h>=6&&h<17?'day':h>=17&&h<19?'dusk':'night';})();
+var seaRow=[];
+
+/* ================= 贝壳 ================= */
+var KINDS=[
+  {id:'scallop',name:'扇贝',w:28,rows:['..AAA..','.ABABA.','ABABABA','ABABABA','.AAAAA.','..CCC..'],
+   pal:{A:'#f4a58f',B:'#dc7c68',C:'#e89682'},
+   first:'捡到一枚扇贝，粉的。',more:['又一枚扇贝。','扇贝。这枚的纹路细一点。']},
+  {id:'clam',name:'蛤蜊壳',w:25,rows:['..AAAA..','.ABBBBA.','ABAAAABA','AAAAAAAA','.CCCCCC.'],
+   pal:{A:'#f3ead8',B:'#c9b79a',C:'#d8cab0'},
+   first:'捡到半个蛤蜊壳。另外半个，大概还在海里。',more:['又半个蛤蜊壳，还是凑不成一对。','蛤蜊壳。它用钳子敲了敲，是空的。']},
+  {id:'whelk',name:'小海螺',w:18,rows:['...A..','..AB..','.ABAA.','ABAABA','AAABAA','.AAAA.','..AA..'],
+   pal:{A:'#f0dcc4',B:'#b98b62'},
+   first:'捡到一只小海螺。它没有耳朵，还是举起来贴了一下。',more:['小海螺。里面没有住人。','又一只小海螺。']},
+  {id:'glass',name:'海玻璃',w:12,rows:['.AAA.','AABAA','AAAAA','.AAA.'],
+   pal:{A:'#8fd1b3',B:'#e6fff4'},
+   first:'捡到一块海玻璃。以前是个瓶子，被浪磨了很多年。',more:['海玻璃，边都磨圆了。','又一块海玻璃，绿绿的。']},
+  {id:'star',name:'海星',w:9,rows:['...A...','..AAA..','AAABAAA','.AAAAA.','.AA.AA.','A.....A'],
+   pal:{A:'#ef8c55',B:'#f7c08a'},
+   first:'是一只海星，还活着。Clawd 把它放回水里了。',more:['又一只海星，放回去了。']},
+  {id:'cowrie',name:'宝贝',w:8,rows:['.AAAA.','ABAACA','AACAAA','ACAABA','.AAAA.'],
+   pal:{A:'#b87a45',B:'#fff6e6',C:'#f0d7b3'},
+   first:'捡到一枚宝贝！这种贝壳的名字，就叫「宝贝」。',more:['又一枚宝贝。收在最里面。']}
+];
+var GRAY={A:'#cfc6b6',B:'#cfc6b6',C:'#cfc6b6'};
+
+/* ---- 存档：只在这台设备的浏览器里 ---- */
+var KEY='clawd-beach-v1';
+var col={}, castle=0, bottles=0, hadSave=false;
+try{
+  var sv=JSON.parse(localStorage.getItem(KEY)||'null');
+  if(sv&&typeof sv==='object'){hadSave=true;col=sv.c||{};castle=Math.min(4,+sv.castle||0);bottles=+sv.bottles||0;}
+}catch(e){}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify({c:col,castle:castle,bottles:bottles}));}catch(e){}}
+
+/* ================= 场景骨架 ================= */
+var scene=$('scene');
+/* 夜里浪头的蓝光画在罩子上面才亮，但不能盖住 Clawd：
+   给它挖一个 Clawd 形状的洞（mk），每一拍跟着它挪。 */
+scene.innerHTML=
+  '<defs><mask id="mk" maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="150">'
+  +'<rect x="0" y="0" width="240" height="150" fill="#fff"/><g id="mkc"><g id="mkhop"></g></g></mask></defs>'
+  +'<g id="sky"></g><g id="far"></g><g id="sand"></g><g id="sea"></g><g id="seadeco"></g>'
+  +'<g id="props"></g><g id="crabs"></g><g id="castle"></g><g id="prints"></g><g id="shadow"></g>'
+  +'<g id="clawd"><g id="hop"><g id="bob">'
+    +g('','id="hat" opacity="0"')+SHELL+LEGS+g(CLAW_L,'id="cl"')+g(CLAW_R,'id="cr"')
+    +g('','id="blush"')+g(EYES.bar,'id="eyes"')+g(SHADES,'id="shades" opacity="0"')+g(RING,'id="ring" opacity="0"')
+  +'</g></g></g>'
+  +'<g id="front"></g><g id="shells"></g><g id="fx"></g><g id="gull"></g>'
+  +'<rect id="tint" x="0" y="0" width="240" height="150" fill="#000" opacity="0" pointer-events="none"/>'
+  +'<g id="glowS" pointer-events="none"></g><g id="glowB" mask="url(#mk)" pointer-events="none"></g><g id="glow" pointer-events="none"></g>';
+$('hat').innerHTML=HAT;
+function updateMask(){
+  var sil=SHELL+LEGS+CLAW_L+CLAW_R+(hat?HAT:'')+(ringOn?RING:'');
+  $('mkhop').innerHTML=sil.replace(/ opacity="[^"]*"/g,'').replace(/fill="[^"]*"/g,'fill="#000"');
+}
+
+/* ================= 不怎么动的部分：换时间时重画 ================= */
+function cloud(x,y,c,sh){return r(x+5,y,9,2,c)+r(x+2,y+2,17,2,c)+r(x,y+4,24,2,c)+r(x+3,y+6,19,1,sh);}
+function paintStatic(){
+  var P=PAL[tod], s, i, R;
+  seaRow=[];for(i=0;i<ROWS;i++)seaRow.push(mix(P.sea0,P.sea1,i/(ROWS-1)));
+
+  /* 天 */
+  s='';
+  P.sky.forEach(function(b,j){var y1=j+1<P.sky.length?P.sky[j+1][0]:HZ;s+=r(0,b[0],W,y1-b[0],b[1]);});
+  $('sky').innerHTML=s;
+
+  /* 远处：太阳、云、左边一小块岬角和灯塔 */
+  s='';
+  if(tod==='day'){
+    s+=disc(198,20,12,'#fffbe0',op(.4))+disc(198,20,8,'#fff4b8');
+    s+=g(cloud(0,12,'#ffffff','#e3f1f6'),'class="drift" style="animation-delay:-40s"')
+      +g(cloud(0,30,'#ffffff','#e3f1f6'),'class="drift" style="animation-delay:-118s"');
+  }else if(tod==='dusk'){
+    s+=disc(176,60,16,'#ffd08a',op(.3))+disc(176,60,11,'#ffc27a')+disc(176,60,8,'#ffe3a3');
+    s+=r(18,26,44,2,'#f5a28f',op(.75))+r(30,24,20,2,'#f5a28f',op(.75))
+      +r(120,38,58,2,'#f7b08a',op(.6))+r(140,36,24,2,'#f7b08a',op(.6))+r(70,16,30,1,'#c77f9f',op(.7));
+  }
+  s+=r(0,56,30,6,P.hill)+r(4,54,20,2,P.hill)+r(30,58,18,4,P.hill)+r(48,60,14,2,P.hill)+r(0,60,62,2,P.hill2);
+  s+=r(11,45,4,11,'#f4f0e8')+r(11,48,4,2,'#d65a4f')+r(11,52,4,2,'#d65a4f')
+    +r(10,42,6,3,'#3c3a46')+r(11,43,4,1.5,P.lamp)+r(9,41,8,1,'#3c3a46');
+  $('far').innerHTML=s;
+
+  /* 沙子 */
+  s=r(0,HZ,W,H-HZ,P.sand)+r(0,HZ,W,3,P.sand2,op(.5));
+  R=seeded(7);
+  for(i=0;i<170;i++){
+    var dx=Math.floor(R()*W), dy=HZ+3+Math.floor(R()*(H-HZ-3));
+    s+=r(dx,dy,1,1,R()<.5?P.sand2:P.sand3);
+  }
+  s+=r(74,137,3,2,P.sand2)+r(75,136,2,1,P.sand3)+r(128,143,4,2,P.sand2)+r(40,140,2,1,P.sand2);
+  $('sand').innerHTML=s;
+
+  /* 海面上的：白天是碎光，傍晚是太阳的倒影，夜里是月亮的倒影 */
+  s='';R=seeded(11);
+  if(tod==='day'){
+    for(i=0;i<18;i++){
+      var yy=HZ+2+Math.floor(R()*34), xx=Math.round(shoreX(yy)+26+R()*(W-shoreX(yy)-30));
+      s+=r(xx,yy,R()<.5?3:2,1,'#ffffff','class="tw" style="animation-delay:-'+n(R()*1.8)+'s"');
+    }
+  }else{
+    var mx=tod==='dusk'?176:188, mc=tod==='dusk'?'#ffd9a0':'#f3eed2';
+    for(var yy2=HZ+1;yy2<HZ+42;yy2+=2){
+      var wv=Math.max(2,Math.round((1-(yy2-HZ)/48)*(tod==='dusk'?16:8)+R()*4));
+      s+=r(Math.round(mx-wv/2+R()*4-2),yy2,wv,1,mc,op(tod==='dusk'?.7:.45)+(R()<.4?' class="tw" style="animation-delay:-'+n(R()*1.8)+'s"':''));
+    }
+  }
+  $('seadeco').innerHTML=s;
+
+  /* 伞、毛巾、小桶和铲子 */
+  s=r(0,115,44,11,'#000',op(.07));
+  s+=r(3,118,34,7,'#5fa6d6')+r(3,120,34,1,'#ffffff',op(.85))+r(3,123,34,1,'#ffffff',op(.85));
+  s+=r(19.5,92,1.5,31,'#f3ede2');
+  [8,18,26,32,36].forEach(function(w,j){
+    var y=82+j*2, x0=20.25-w/2, x1=x0+w;
+    for(var k=-4;k<=4;k++){
+      var a=Math.max(x0,17.25+6*k), b=Math.min(x1,23.25+6*k);
+      if(b>a)s+=r(a,y,b-a,2,(k+8)%2?'#e8735f':'#fbf2e2');
+    }
+  });
+  for(var k2=0;k2<6;k2++)s+=r(3.25+6*k2,92,4,1,k2%2?'#e8735f':'#fbf2e2');
+  s+=r(19.25,80,2,2,'#e9dcc6');
+  s+=r(39,123,7,5,'#5aa0d8')+r(38,122,9,1,'#4787bd')+r(39,127,7,1,'#4787bd')
+    +r(39,119,1,3,'#3f76a3')+r(45,119,1,3,'#3f76a3')+r(40,118,5,1,'#3f76a3');
+  $('props').innerHTML=s;
+
+  /* 夜里罩一层，灯塔、月亮、星星放在罩子上面，不跟着变暗 */
+  var tint=$('tint');
+  if(P.tint){tint.setAttribute('fill',P.tint[0]);tint.setAttribute('opacity',P.tint[1]);}
+  else tint.setAttribute('opacity','0');
+  s='';
+  if(tod==='night'){
+    R=seeded(3);
+    for(i=0;i<36;i++){
+      var sx=Math.floor(R()*W), sy=Math.floor(R()*54);
+      if(Math.abs(sx-188)<10&&Math.abs(sy-18)<10)continue;
+      s+=r(sx,sy,1,1,R()<.3?'#fff4c8':'#e7ecff',op(.5+R()*.5)+(R()<.35?' class="tw" style="animation-delay:-'+n(R()*1.8)+'s"':''));
+    }
+    s+=disc(188,18,7,'#f6efcf')+disc(191,16,6,'#121b3f');
+    s+=r(11,43,4,1.5,P.lamp)+g(r(15,43,22,1,P.lamp,op(.4))+r(15,42,12,1,P.lamp,op(.22))+r(8,42,10,3,P.lamp,op(.25)),'class="beam"');
+  }
+  $('glowS').innerHTML=s;
+
+  paintCastle();
+  printsDirty=shellsDirty=true;
+}
+
+function paintCastle(){
+  var P=PAL[tod], A=P.castle, B=P.castle2, D=P.castleD, s='';
+  if(castle>=1)s+=r(51,122,18,4,A)+r(53,120,14,2,A)+r(56,118,8,2,A)+r(51,125,18,1,B);
+  if(castle>=3){
+    s+=r(47,113,6,10,A)+r(47,111,2,2,A)+r(51,111,2,2,A)+r(67,113,6,10,A)+r(67,111,2,2,A)+r(71,111,2,2,A)
+      +r(53,117,14,5,A)+r(49,116,2,2,D)+r(69,116,2,2,D)+r(47,122,26,1,B);
+  }
+  if(castle>=2){
+    s+=r(55,108,10,12,A)+r(55,106,2,2,A)+r(59,106,2,2,A)+r(63,106,2,2,A)+r(55,119,10,1,B)
+      +r(58,114,4,5,D)+r(59,110,2,2,D);
+  }
+  if(castle>=4){
+    s+=r(60,97,1,9,'#8b6b4a')
+      +g(r(61,97,6,3,'#e8735f')+r(61,100,3,1,'#e8735f'),'class="fa"')
+      +g(r(61,97,5,2,'#e8735f')+r(61,99,6,2,'#e8735f'),'class="fb"');
+    if((col.scallop||0)>0)s+=r(52,118,3,2,'#f4a58f')+r(53,117,1,1,'#f4a58f');
+    if((col.clam||0)>0)s+=r(66,118,3,2,'#f3ead8');
+  }
+  $('castle').innerHTML=s;
+  $('b-build').textContent=castle>=4?'看沙堡':'堆沙堡';
+}
+
+/* ================= 会动的东西 ================= */
+var cx=116, tx=116, spd=2, moving=false, dirNow=0, lastStamp=116, bobNow=0;
+var chase=false, swim=false, ringOn=false, shades=false, hat=false;
+var busyUntil=0, pending=null, eyeOverride=null, eyeUntil=0, blushUntil=0, blinkUntil=0, nextBlink=0;
+var eyeShown='bar', blushShown=false;
+var wave={ph:'wait',t:0,dur:1.6,from:-2,to:-2,off:-2,A:0,hit:false,n:0,big:false}, wetOff=0, runSpd=3;
+var prints=[], printsDirty=true, shells=[], shellsDirty=true, fx=[], bottleArr=[], gull=null, gullCd=60;
+var crabs=[{hx:80,hy:111},{hx:104,hy:113}].map(function(c){return {hx:c.hx,hy:c.hy,x:c.hx,st:'in',cd:30+Math.random()*60,dir:1,fr:0,peek:0};});
+var legsWetNow=false, floatD=0, lastWetSay=0, walks=0, crabSeen=false, crabFled=0, nightGlowSaid=false, floatSaid=false, hintSaid=0;
+
+/* 点出来的话至少留 4.5 秒；浪、小沙蟹这种自己发生的话（soft）不去顶掉它 */
+var sayHold=0;
+function say(t,soft){
+  var now=performance.now();
+  if(soft&&now<sayHold)return false;
+  $('line').textContent=t;
+  if(!soft)sayHold=now+4500;
+  return true;
+}
+
+function setEyes(k,ms){eyeOverride=k;eyeUntil=performance.now()+(ms||800);}
+function hop(){
+  ['hop','mkhop'].forEach(function(id){var h=$(id);h.classList.remove('small');void h.getBoundingClientRect();h.classList.add('small');});
+}
+['hop','mkhop'].forEach(function(id){$(id).addEventListener('animationend',function(e){if(e.target===$(id))$(id).classList.remove('small');});});
+function raiseClaw(side,ms){
+  var el=side>0?$('cr'):$('cl');
+  el.setAttribute('transform','translate(0 -30)');
+  setTimeout(function(){el.removeAttribute('transform');},ms);
+}
+
+/* ---- 浪：涌上来、停一下、退下去、等一会儿 ---- */
+function go(ph,from,to,dur){wave.ph=ph;wave.t=0;wave.from=from;wave.to=to;wave.dur=dur;}
+function nextWave(){
+  wave.n++;
+  wave.big=(wave.n%6===0)||Math.random()<.06;
+  wave.A=wave.big?54+Math.random()*8:16+Math.random()*24;
+  wave.hit=false;
+  runSpd=2.3+Math.random()*1.5;
+  go('in',wave.off,wave.A,1.2+wave.A/55);
+}
+function updateWave(dt){
+  wave.t+=dt;
+  var k=Math.min(1,wave.t/wave.dur);
+  if(wave.ph==='in'){
+    wave.off=wave.from+(wave.to-wave.from)*(1-(1-k)*(1-k));
+    if(k>=1)go('hold',wave.to,wave.to,.35);
+  }else if(wave.ph==='hold'){
+    if(k>=1){go('out',wave.off,-7,2+wave.A/40);onRecede();}
+  }else if(wave.ph==='out'){
+    wave.off=wave.from+(wave.to-wave.from)*(k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2);
+    if(k>=1)go('wait',-7,-2,1.1+Math.random()*1.5);
+  }else{
+    wave.off=wave.from+(wave.to-wave.from)*k;
+    if(k>=1)nextWave();
+  }
+  wetOff=Math.max(wave.off,wetOff-3*dt);
+}
+function edgeFY(){return shoreX(FY)-wave.off;}
+
+/* 浪退的时候，偶尔在浪头停过的地方留下一样东西 */
+function weightedKind(){
+  var total=0, got=0, w=KINDS.map(function(k){
+    var v=k.w;
+    if(k.id==='cowrie'){for(var q in col)got+=col[q];if(got>=10&&!col.cowrie)v*=4;}
+    total+=v;return v;
+  });
+  var x=Math.random()*total;
+  for(var i=0;i<w.length;i++){x-=w[i];if(x<0)return KINDS[i];}
+  return KINDS[0];
+}
+function onRecede(){
+  if(shells.length>=3||Math.random()>.55)return;
+  var x=Math.round(clamp(edgeFY()+2+Math.random()*8,80,146));
+  for(var i=0;i<shells.length;i++)if(Math.abs(shells[i].x-x)<9)return;
+  shells.push({k:weightedKind(),x:x,y:FY+3+Math.round(Math.random()*4),born:performance.now()});
+  shellsDirty=true;
+}
+
+/* ---- 小沙蟹：Clawd 一走远就钻出来，一靠近就钻回去 ---- */
+var CRAB_A=['.K...K.','.A...A.','CAAAAAC','.BBBBB.','L.L.L.L'], CRAB_B=['.K...K.','.A...A.','CAAAAAC','.BBBBB.','.L.L.L.'];
+var CRAB_PAL={K:'#2a2230',A:'#fbf1dc',B:'#dcc49a',C:'#f7e6c6',L:'#c8ae84'};
+function updateCrabs(){
+  crabs.forEach(function(c){
+    var e=shoreX(c.hy)-wave.off*persp(c.hy);
+    var near=Math.abs(cx-c.x)<22&&floatD<.3, wet=e<c.x+8;
+    if(c.st==='in'){
+      if(c.peek>0)c.peek--;
+      if(c.cd>0){c.cd--;if(c.cd<25&&!c.peek&&Math.random()<.03)c.peek=8;return;}
+      if(!near&&!wet&&Math.abs(cx-c.hx)>32&&Math.random()<.04){
+        c.st='out';c.x=c.hx;c.dir=Math.random()<.5?-1:1;c.peek=0;
+        if(!crabSeen&&say('沙里钻出一只小沙蟹，也是横着走的。',true))crabSeen=true;
+      }
+      return;
+    }
+    if(c.st==='out'){
+      if(near||wet){
+        c.st='back';
+        if(near){crabFled++;if(crabFled===1||Math.random()<.2)say(pick1(['它一靠近，小沙蟹就钻回洞里了。','又跑了。','小沙蟹跑得比它快多了。']),true);}
+        return;
+      }
+      if(Math.random()<.45){
+        if((c.x-c.hx)*c.dir>=11||Math.random()<.07)c.dir*=-1;
+        c.x+=c.dir;c.fr^=1;
+      }
+      if(Math.random()<.004)c.st='back';
+      return;
+    }
+    var d=c.hx-c.x;
+    if(Math.abs(d)<=2){c.st='in';c.x=c.hx;c.cd=50+Math.random()*120;}
+    else{c.x+=d>0?2:-2;c.fr^=1;}
+  });
+}
+function drawCrabs(){
+  var P=PAL[tod], s='';
+  crabs.forEach(function(c){
+    s+=r(c.hx-2,c.hy,5,1.5,P.hole);
+    if(c.st!=='in')s+=grid(Math.round(c.x)-3,c.hy-4,1,c.fr?CRAB_B:CRAB_A,CRAB_PAL);
+    else if(c.peek>0)s+=r(c.hx-2,c.hy-1,1,1,'#2a2230')+r(c.hx+2,c.hy-1,1,1,'#2a2230');
+  });
+  $('crabs').innerHTML=s;
+}
+function nearestCrab(){
+  var best=null,bd=80;
+  crabs.forEach(function(c){if(c.st==='out'){var d=Math.abs(c.x-cx);if(d<bd){bd=d;best=c;}}});
+  return best;
+}
+
+/* ---- 海：一排一排画，岸线每排往左挪一点 ---- */
+var jitT=0;
+function drawSea(){
+  var P=PAL[tod], s='', gl='', off=wave.off, night=tod==='night';
+  var k=Math.min(1,wave.t/wave.dur), crest=-1;
+  if(wave.ph==='wait')crest=6+30*(1-k);else if(wave.ph==='in')crest=6*(1-k);
+  jitT+=.12;
+  for(var i=0;i<ROWS;i++){
+    var y=HZ+i*2, p=persp(y+1), sx=shoreX(y+1);
+    var jv=1.4+1.1*Math.sin(i*.83+jitT)+.6*Math.sin(i*2.1-jitT*1.7);
+    var e=Math.round(sx-off*p+jv*p);
+    var we=Math.round(sx-Math.max(wetOff,8)*p);
+    if(we<e)s+=r(we,y,e-we,2,P.wet);
+    s+=r(e,y,W-e,2,seaRow[i]);
+    var sh=Math.round(sx+7*p);
+    if(sh>e)s+=r(e,y,sh-e,2,P.shallow,op(.8));
+    var l2=Math.round(e+(42+4*Math.sin(jitT*.5))*p);
+    s+=r(l2,y,Math.max(1,Math.round(3*p)),2,P.line,op(.7));
+    if(crest>=0){
+      var cr=Math.round(e+(crest+2)*p);
+      s+=r(cr,y,Math.max(1,Math.round(2*p)),2,P.foam,op(.75));
+      if(night)gl+=r(cr,y,Math.max(1,Math.round(2*p)),2,P.glow,op(.4));
+    }
+    var fw=Math.max(1,Math.round((wave.ph==='out'?1.4:2.8)*p));
+    s+=r(e,y,fw,2,P.foam);
+    s+=r(e+fw+Math.max(1,Math.round(2*p)),y,Math.max(1,Math.round(p)),2,P.foam,op(.5));
+    if(night){
+      gl+=r(e-1,y,fw+2,2,P.glow,op(.25))+r(e,y,fw,2,P.glow,op(.9));
+      /* 蓝眼泪：浪铺在沙上的那一层里，零星亮点 */
+      if(off>2&&Math.random()<.35&&sx-e>2)
+        gl+=r(Math.round(e+Math.random()*(sx-e)),y+Math.round(Math.random()),1,1,P.glow,op(.5+Math.random()*.5));
+    }
+  }
+  var h0=Math.round(shoreX(HZ));
+  s+=r(h0,HZ,W-h0,1,P.hz);
+  $('sea').innerHTML=s;
+  return gl;
+}
+
+/* ---- 脚印：四条腿各按一下，浪一过就没了 ---- */
+var LEG_OFF=[-11.3,-6.5,6.5,11.3];
+function isWet(x){return x>=shoreX(FY)-Math.max(wetOff,8);}
+function stamp(now){
+  var night=tod==='night';
+  LEG_OFF.forEach(function(o){
+    var x=Math.round(cx+o-1), glow=night&&isWet(x);
+    prints.push({x:x,t:now,g:glow});
+    if(glow&&!nightGlowSaid&&say('踩一脚湿沙子，脚印亮了一下。',true))nightGlowSaid=true;
+  });
+  if(prints.length>100)prints.splice(0,prints.length-100);
+  printsDirty=true;
+}
+function drawPrints(){
+  var P=PAL[tod], s='';
+  prints.forEach(function(p){s+=r(p.x,FY,2,1,P.print);});
+  $('prints').innerHTML=s;
+}
+
+function drawShells(now){
+  var s='';
+  shells.forEach(function(sh){
+    s+=grid(sh.x-3,sh.y-5,1,sh.k.rows,sh.k.pal);
+    if(now-sh.born<6000)s+=g(r(sh.x+3,sh.y-9,1,3,'#fff')+r(sh.x+2,sh.y-8,3,1,'#fff'),'class="tw"');
+  });
+  $('shells').innerHTML=s;
+}
+
+/* ---- 水花、沙子、捡起来的贝壳、漂流瓶，都在这一层 ---- */
+function drawFx(){
+  var P=PAL[tod], s='';
+  fx.forEach(function(f){
+    var a=clamp(f.life/f.max,0,1);
+    if(f.sp)s+=grid(Math.round(f.x),Math.round(f.y),1,f.sp.rows,f.sp.pal,op(a));
+    else s+=r(Math.round(f.x),Math.round(f.y),f.w||1,f.h||1,f.c==='drop'?P.drop:f.c,op(Math.min(1,a*1.4)));
+  });
+  bottleArr.forEach(function(b){
+    var q=b.ph==='fly'?1:clamp(persp(b.y),.3,1.1);
+    var x=Math.round(b.x), y=Math.round(b.y+(b.ph==='float'?Math.round(Math.sin(b.t/4))*q:0));
+    s+=r(x,y,7*q,3*q,'#bfe6da',op(.95))+r(x+7*q,y+.5*q,2*q,2*q,'#bfe6da')+r(x+9*q,y+.5*q,1.5*q,2*q,'#b07a4a')
+      +r(x+2*q,y+q,3*q,q,'#fffaf0')+r(x+q,y,4*q,.8*q,'#ffffff',op(.6));
+  });
+  $('fx').innerHTML=s;
+}
+function stepFx(){
+  fx.forEach(function(f){f.x+=f.vx||0;f.y+=f.vy||0;if(f.gr)f.vy+=f.gr;f.life--;});
+  fx=fx.filter(function(f){return f.life>0;});
+  bottleArr.forEach(function(b){
+    b.t++;
+    if(b.ph==='fly'){
+      var k=Math.min(1,b.t/10);
+      b.x=b.x0+(b.x1-b.x0)*k;b.y=b.y0+(b.y1-b.y0)*k-14*Math.sin(Math.PI*k);
+      if(b.t>=10){b.ph='float';b.t=0;splashAt(b.x+5,b.y+2,6);}
+    }else{
+      b.x+=(232-b.x)*.004+.1;b.y+=(HZ+2-b.y)*.012;
+      if(b.y<HZ+4)b.dead=true;
+    }
+  });
+  bottleArr=bottleArr.filter(function(b){return !b.dead;});
+}
+function splashAt(x,y,m){
+  for(var i=0;i<m;i++)fx.push({x:x-4+Math.random()*8,y:y-Math.random()*2,vx:(Math.random()-.5)*1.4,vy:-.8-Math.random()*1.2,gr:.3,life:7+Math.floor(Math.random()*4),max:10,c:'drop'});
+}
+function puff(x,y){
+  for(var i=0;i<5;i++)fx.push({x:x-3+Math.random()*6,y:y,vx:(Math.random()-.5)*1.2,vy:-.5-Math.random()*.8,gr:.15,life:6+Math.floor(Math.random()*3),max:8,c:PAL[tod].castle2});
+}
+
+/* ---- 海鸥 ---- */
+var GULL_UP=['A.......A','.A.....A.','..AABAA..'], GULL_DN=['..AABAA..','.A.....A.','A.......A'];
+function updateGull(){
+  if(!gull){if(tod!=='night'&&--gullCd<=0)gull={x:-12,y:12+Math.random()*22,v:1.1+Math.random()*.6,f:0};return;}
+  gull.x+=gull.v;gull.f++;gull.y+=Math.sin(gull.f/6)*.3;
+  if(gull.x>W+12){gull=null;gullCd=150+Math.random()*260;}
+}
+function drawGull(){
+  if(!gull){$('gull').innerHTML='';return;}
+  var P=PAL[tod];
+  $('gull').innerHTML=grid(Math.round(gull.x),Math.round(gull.y),1,Math.floor(gull.f/3)%2?GULL_UP:GULL_DN,{A:P.gull,B:P.gull2});
+}
+
+/* ================= 每 0.1 秒一拍 ================= */
+var last=performance.now(), tickN=0, glowOn=false;
+var WET=['浪上来了。钳子没来得及举。','脚湿了。它站着没动。','海水凉凉的，它没跑。','一个浪拍过来，它眯起了眼。'];
+var WET_BIG=['大浪！一直冲到了壳上。','好大一个浪。它眯着眼，等水退下去。'];
+var CHASE_HIT=['跑慢了半步。','又被追上了。它好像是故意的。','没跑过，脚又湿了。'];
+var CHASE_DODGE=['躲过去了。','差一点点。','浪退了，它又跟下去。'];
+
+function tick(){
+  var now=performance.now(), dt=Math.min(.25,(now-last)/1000);
+  last=now;tickN++;
+  updateWave(dt);
+  var e=edgeFY();
+
+  /* 追浪：浪退就跟下去，浪来就往回跑 */
+  if(chase&&!pending&&now>busyUntil){
+    if(wave.ph==='in'){tx=clamp(e-30,26,LIM_CHASE);spd=runSpd;}
+    else{tx=clamp(e-9,26,LIM_CHASE);spd=1.6;}
+  }
+
+  /* 走：整只平移，一步颠一格 */
+  moving=false;
+  if(now>busyUntil){
+    var d=tx-cx;
+    if(Math.abs(d)>.01){
+      var st=Math.min(Math.abs(d),floatD>.3?1.2:spd);
+      cx+=d>0?st:-st;moving=true;dirNow=d>0?1:-1;
+    }else{
+      dirNow=0;
+      if(pending){var f=pending;pending=null;f();}
+    }
+  }
+  if(!swim&&ringOn&&cx<=shoreX(FY)-8){ringOn=false;$('ring').setAttribute('opacity','0');updateMask();}
+  floatD=ringOn?clamp((cx-(shoreX(FY)-2))/12,0,1):0;
+  if(floatD>.9&&swim&&!floatSaid&&say('漂着。浪一来，就跟着一上一下。',true))floatSaid=true;
+
+  if(moving&&floatD<.3&&Math.abs(cx-lastStamp)>=5){lastStamp=cx;stamp(now);}
+  /* 浪漫过去的脚印就没了 */
+  var before=prints.length;
+  prints=prints.filter(function(p){return p.x+1<e;});
+  if(prints.length!==before)printsDirty=true;
+
+  /* 被浪追上 */
+  legsWetNow=floatD<.3&&e<cx+12;
+  if(wave.ph==='in'&&legsWetNow&&!wave.hit){
+    wave.hit=true;
+    setEyes('squint',wave.big?1100:700);hop();
+    for(var i=0;i<(wave.big?14:8);i++)
+      fx.push({x:cx-12+Math.random()*24,y:FY-4-Math.random()*(wave.big?14:6),vx:(Math.random()-.5)*1.6,vy:-1.2-Math.random()*1.6,gr:.35,life:9+Math.floor(Math.random()*5),max:14,c:'drop'});
+    if(chase)say(pick1(wave.big?['大浪！跑不过，干脆不跑了。']:CHASE_HIT),true);
+    else if(now-lastWetSay>9000&&say(pick1(wave.big?WET_BIG:WET),true))lastWetSay=now;
+  }
+  if(chase&&wave.ph==='hold'&&!wave.hit&&wave.t<.11&&Math.random()<.35)say(pick1(CHASE_DODGE),true);
+  if(floatD>.5&&wave.big&&wave.ph==='in'&&!wave.hit){wave.hit=true;say('一个大浪，把它抬起来又放下。',true);}
+
+  /* 捡：路过的贝壳顺手捡起来 */
+  for(var j=shells.length-1;j>=0;j--)if(Math.abs(cx-shells[j].x)<=4&&floatD<.3)pickShell(shells[j]);
+
+  updateCrabs();stepFx();updateGull();
+
+  /* 眼睛 */
+  var ek;
+  if(now<eyeUntil&&eyeOverride)ek=eyeOverride;
+  else{
+    if(now>nextBlink){blinkUntil=now+130;nextBlink=now+2600+Math.random()*2800;}
+    if(now<blinkUntil)ek='shut';
+    else if(dirNow>0)ek='R';
+    else if(dirNow<0)ek='L';
+    else{var nc=nearestCrab();ek=nc?(nc.x<cx-6?'L':nc.x>cx+6?'R':'bar'):'bar';}
+  }
+  if(ek!==eyeShown){eyeShown=ek;$('eyes').innerHTML=EYES[ek];}
+  var bl=now<blushUntil;
+  if(bl!==blushShown){blushShown=bl;$('blush').innerHTML=bl?BLUSH:'';}
+
+  /* 位置：走路时一步颠一格；漂着时跟浪一上一下 */
+  if(floatD>=.3)bobNow=Math.round(Math.sin(now/430))+(wave.ph==='in'&&wave.off>10?-1:0);
+  else bobNow=moving&&tickN%2?-1:0;
+  var px=Math.round(cx);
+  $('clawd').setAttribute('transform',clawdT(px,FY+bobNow));
+  if(tod==='night')$('mkc').setAttribute('transform',clawdT(px,FY+bobNow));
+
+  /* 影子 */
+  var P=PAL[tod];
+  $('shadow').innerHTML=floatD>.3?'':tod==='dusk'?r(px-36,FY-1,54,2,'#5a3550',op(.2)):r(px-17,FY-1,34,2,'#000',op(tod==='night'?.14:.1));
+
+  /* 漂着的时候，身体下半截在水里 */
+  var fr='';
+  if(floatD>0){
+    var wl=FY-Math.round(7*floatD), x0=Math.max(px-25,Math.round(e)), x1=px+25;
+    for(var yy=wl;yy<FY+3;yy++)fr+=r(x0,yy,x1-x0,1,seaRow[clamp(Math.floor((yy-HZ)/2),0,ROWS-1)]);
+    if(floatD>.5){
+      var sw=tickN%6<3;
+      fr+=r(px-27,wl,sw?4:3,1,P.foam,op(.9))+r(px+23,wl,sw?3:4,1,P.foam,op(.9))+r(px-5,wl+2,sw?3:0,1,P.foam,op(.5));
+    }
+  }
+  $('front').innerHTML=fr;
+
+  var gl=drawSea();
+  drawCrabs();
+  if(printsDirty){drawPrints();printsDirty=false;}
+  if(shellsDirty||tickN%10===0){drawShells(now);shellsDirty=false;}
+  drawFx();drawGull();
+
+  /* 夜里：浪头、脚印、水花发蓝光。浪头那层挖掉 Clawd，别的直接叠在上面 */
+  if(tod==='night'){
+    $('glowB').innerHTML=gl;gl='';
+    prints.forEach(function(p){if(p.g){var a=1-(now-p.t)/1800;if(a>0)gl+=r(p.x,FY,2,1,P.glow,op(a));else p.g=false;}});
+    if(legsWetNow&&Math.random()<.7)gl+=r(Math.round(cx-12+Math.random()*24),FY-Math.round(Math.random()*2),1,1,P.glow,op(.85));
+    fx.forEach(function(f){if(f.c==='drop')gl+=r(Math.round(f.x),Math.round(f.y),1,1,P.glow,op(.9));});
+    if(floatD>.5)gl+=r(px-27,FY-7,4,1,P.glow,op(.6))+r(px+23,FY-7,4,1,P.glow,op(.6));
+    $('glow').innerHTML=gl;glowOn=true;
+  }else if(glowOn){$('glow').innerHTML=$('glowB').innerHTML='';glowOn=false;}
+}
+
+/* ================= 动作 ================= */
+function goTo(x,fn){
+  tx=clamp(x,22,swim?226:LIM_DRY);pending=fn||null;spd=2;
+}
+function setChase(on){
+  chase=on;$('b-chase').setAttribute('aria-pressed',on?'true':'false');
+  if(!on){spd=2;}
+}
+function setSwim(on){
+  swim=on;
+  var b=$('b-swim');b.setAttribute('aria-pressed',on?'true':'false');b.textContent=on?'上岸':'下海';
+  if(on){ringOn=true;$('ring').setAttribute('opacity','1');floatSaid=false;updateMask();}
+}
+function pickShell(s){
+  var i=shells.indexOf(s);if(i<0)return;
+  shells.splice(i,1);shellsDirty=true;
+  var k=s.k, now=performance.now();
+  raiseClaw(s.x>=cx?1:-1,520);busyUntil=Math.max(busyUntil,now+420);
+  if(k.id==='star')fx.push({sp:k,x:s.x-3,y:s.y-9,vx:2.4,vy:.3,life:16,max:16});
+  else fx.push({sp:k,x:s.x-3,y:s.y-9,vx:0,vy:-.8,life:12,max:12});
+  var first=!col[k.id];
+  col[k.id]=(col[k.id]||0)+1;persist();renderShelf(k.id);
+  say(first?k.first:pick1(k.more));
+  if(k.id==='cowrie'){setEyes('smile',1600);blushUntil=now+2400;hop();}
+  else setEyes('smile',700);
+}
+function fetchShell(s){
+  setChase(false);
+  if(swim)setSwim(false);
+  var side=cx<s.x?-13:13;
+  goTo(s.x+side,function(){if(shells.indexOf(s)>=0)pickShell(s);});
+}
+var CASTLE_LINE=['','先拍一个小沙堆。钳子是平的，拍沙子正好。','堆起一座塔，还掏了个门。','左右各加一座小塔，中间连上墙。','插上小旗，沙堡盖好了。'];
+function build(){
+  setChase(false);
+  if(swim)setSwim(false);
+  goTo(BUILD_X,function(){
+    if(castle>=4){say('它在沙堡前面站了一会儿，没舍得走。');setEyes('smile',1400);return;}
+    var nn=3, i=0;
+    busyUntil=performance.now()+nn*360+120;
+    (function one(){
+      if(i>=nn){
+        castle++;persist();paintCastle();
+        var t=CASTLE_LINE[castle];
+        if(castle===4&&((col.scallop||0)+(col.clam||0))>0)t='插上小旗，墙上嵌了两片贝壳。沙堡盖好了。';
+        say(t);setEyes('smile',900);
+        return;
+      }
+      $('cl').setAttribute('transform','translate(0 -26)');
+      setTimeout(function(){$('cl').removeAttribute('transform');puff(BUILD_X-16,FY-12);i++;setTimeout(one,170);},180);
+    })();
+  });
+}
+function poke(){
+  hop();setEyes('smile',700);
+  say(pick1({day:['蹦了一下。','它眯着眼晒太阳。','戳一下，它就蹦一下。'],
+    dusk:['它看着太阳一点点沉下去。','蹦了一下，影子没跟上。'],
+    night:['嘘，夜里小声点。','月亮很亮。它蹦了一下，又站好了。']}[tod]));
+}
+
+/* ---- 点画面 ---- */
+function toWorld(ev){
+  var m=scene.getScreenCTM();if(!m)return null;
+  var pt=scene.createSVGPoint();pt.x=ev.clientX;pt.y=ev.clientY;
+  return pt.matrixTransform(m.inverse());
+}
+scene.addEventListener('click',function(ev){
+  var pt=toWorld(ev);if(!pt)return;
+  var X=pt.x, Y=pt.y, i;
+  if(X>cx-21&&X<cx+21&&Y>FY-27+bobNow&&Y<FY+2){poke();return;}
+  for(i=0;i<shells.length;i++){var s=shells[i];if(Math.abs(X-s.x)<10&&Math.abs(Y-(s.y-2))<9){fetchShell(s);return;}}
+  for(i=0;i<crabs.length;i++){
+    var c=crabs[i];
+    if(c.st!=='in'&&Math.abs(X-c.x)<8&&Math.abs(Y-(c.hy-2))<7){c.st='back';say(pick1(['嘘——它躲起来了。','小沙蟹钻回洞里了。']));return;}
+  }
+  if(X>44&&X<76&&Y>94&&Y<127){build();return;}
+  if(Y<HZ+3)return;
+  setChase(false);
+  if(swim){
+    if(X<shoreX(FY)-8){setSwim(false);goTo(X);say('上岸，把游泳圈摘了。');}
+    else goTo(X);
+    return;
+  }
+  goTo(X);
+  if(X>LIM_DRY+6){
+    hintSaid++;
+    if(hintSaid===1||hintSaid%4===0)say('再往里，就要游泳圈了。');
+  }else{
+    walks++;
+    if(walks<=3)say(['它一直是横着走的。在海边，没人觉得奇怪。','横着走：看着前面，走的是旁边。','沙子上留下一排小点点，是它的脚印。'][walks-1]);
+  }
+});
+
+/* ---- 按钮 ---- */
+$('b-chase').addEventListener('click',function(){
+  var on=!chase;
+  if(on){if(swim)setSwim(false);pending=null;}
+  setChase(on);
+  if(on)say('追浪：浪退它就跟下去，浪来它就往回跑。');
+  else{tx=cx;say('不追了，站着看浪。');}
+});
+$('b-build').addEventListener('click',build);
+$('b-swim').addEventListener('click',function(){
+  setChase(false);
+  if(!swim){setSwim(true);goTo(SWIM_X);say('套上游泳圈，下海。');}
+  else{setSwim(false);goTo(shoreX(FY)-16);say('上岸，把游泳圈摘了。');}
+});
+$('b-shades').addEventListener('click',function(){
+  shades=!shades;this.setAttribute('aria-pressed',shades?'true':'false');
+  $('shades').setAttribute('opacity',shades?'1':'0');
+  say(shades?'戴上墨镜。看不出它在往哪儿看了。':'摘了墨镜。');
+});
+$('b-hat').addEventListener('click',function(){
+  hat=!hat;this.setAttribute('aria-pressed',hat?'true':'false');
+  $('hat').setAttribute('opacity',hat?'1':'0');updateMask();
+  say(hat?'戴上草帽。帽檐比壳还宽一圈。':'摘了草帽。');
+});
+var TOD_LINE={day:'白天。太阳很大，沙子有点烫。',dusk:'它是从这片海上岸的，傍晚总要回来看一眼。',night:'夜里的浪会发蓝光。踩一脚湿沙子，脚印也亮。'};
+function syncTod(){
+  document.querySelectorAll('#tod button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.t===tod?'true':'false');});
+}
+document.querySelectorAll('#tod button').forEach(function(b){
+  b.addEventListener('click',function(){
+    if(tod===b.dataset.t)return;
+    tod=b.dataset.t;syncTod();paintStatic();say(TOD_LINE[tod]);
+    if(tod==='night')gull=null;
+  });
+});
+
+/* ---- 漂流瓶 ---- */
+function renderCount(){$('count').textContent=bottles?'已经扔出去 '+bottles+' 只了。':'';}
+$('bottle').addEventListener('submit',function(ev){
+  ev.preventDefault();
+  var inp=$('note'), t=inp.value.trim();
+  if(!t){say('先写一句，再塞进瓶子里。');inp.focus();return;}
+  inp.value='';inp.blur();
+  setChase(false);
+  var launch=function(){
+    /* 漂得太靠右就往左扔，不然瓶子一落水就出了画面 */
+    var px=Math.round(cx), side=px+48>224?-1:1;
+    raiseClaw(side,520);busyUntil=Math.max(busyUntil,performance.now()+500);
+    bottleArr.push({ph:'fly',t:0,x0:px+16*side,y0:FY-18,x1:px+(side>0?48:-40),y1:FY-3,x:px+16*side,y:FY-18});
+    if(bottleArr.length>5)bottleArr.shift();
+    bottles++;persist();renderCount();
+    say('瓶子漂走了。纸条上写着：「'+t+'」');
+  };
+  if(floatD>.5)launch();
+  else{if(swim)setSwim(false);goTo(Math.max(Math.min(cx,LIM_DRY),130),launch);}
+});
+
+/* ---- 架子 ---- */
+function renderShelf(flash){
+  var s='', total=0;
+  KINDS.forEach(function(k){
+    var c=col[k.id]||0, w=k.rows[0].length, h=k.rows.length, m=Math.max(w,h)+2;
+    total+=c;
+    s+='<div class="s'+(c?'':' no')+(flash===k.id?' new':'')+'">'
+      +'<svg viewBox="'+n((w-m)/2)+' '+n((h-m)/2)+' '+m+' '+m+'" aria-hidden="true">'+grid(0,0,1,k.rows,c?k.pal:GRAY)+'</svg>'
+      +'<b>'+(c?k.name:'？')+'</b><span>'+(c?(k.id==='star'?'放回 ×':'×')+c:'还没见过')+'</span></div>';
+  });
+  $('shelf').innerHTML=s;
+  $('total').textContent=total?'一共 '+total+' 样':'';
+}
+
+/* ================= 开场 ================= */
+paintStatic();syncTod();renderShelf();renderCount();updateMask();
+say(hadSave&&castle>0?'Clawd 又到海边了。上次堆的沙堡还在。':'Clawd 到海边了。点沙滩，它就横着走过去。');
+
+var timer=setInterval(tick,100);
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){clearInterval(timer);timer=0;}
+  else if(!timer){last=performance.now();timer=setInterval(tick,100);}
+});
+tick();
+})();
+</script>
+</body>
+</html>
