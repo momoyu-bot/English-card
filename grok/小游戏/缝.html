@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>缝</title>
+<meta name="description" content="圆不动。两道缝自己眨、自己瞒。点一下，它看过来。">
+<style>
+  :root {
+    --paper: #f4f0e6;
+    --ink: #241f1c;
+    --mute: #8a8176;
+    --pink: #ff309b;
+    --violet: #9159fe;
+    --soot: #000000;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Songti SC", "STSong", "PMingLiU", "Noto Serif CJK SC", Palatino, "Palatino Linotype", serif;
+  }
+  body {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: calc(28px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom));
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: 0.38em;
+    text-indent: 0.38em;
+  }
+  .deck {
+    margin: 10px 0 0;
+    font-size: 0.92rem;
+    color: var(--mute);
+  }
+  .stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 26rem;
+    padding: 18px 0;
+  }
+  .face-hit {
+    width: min(78vw, 26rem);
+    aspect-ratio: 1;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .face-hit svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .line {
+    min-height: 1.6em;
+    margin: 0 0 18px;
+    font-size: 1.05rem;
+    text-align: center;
+  }
+  .words {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    margin-bottom: 22px;
+  }
+  .words button {
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: none;
+    color: var(--mute);
+    font: inherit;
+    font-size: 1.12rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .words button.on { color: var(--ink); }
+  .words button.on span {
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 2px;
+  }
+  .swatches {
+    display: flex;
+    gap: 16px;
+  }
+  .swatches button {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .swatches button.soot { border: 1px solid rgba(36, 31, 28, 0.2); }
+  .swatches button.on {
+    box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink);
+  }
+  .hint {
+    margin: 16px 0 0;
+    font-size: 0.78rem;
+    color: var(--mute);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <h1>缝</h1>
+  <p class="deck">圆不动。动的是两道缝。</p>
+  <div class="stage">
+    <button class="face-hit" id="hit" type="button" aria-label="小脸蛋。点一下，缝会看向那里">
+      <svg viewBox="-1.22 -1.22 2.44 2.44" aria-hidden="true">
+        <defs>
+          <mask id="holes" maskUnits="userSpaceOnUse" x="-1.22" y="-1.22" width="2.44" height="2.44">
+            <circle cx="0" cy="0" r="1" fill="#fff"/>
+            <rect id="L" fill="#000"/>
+            <rect id="R" fill="#000"/>
+          </mask>
+        </defs>
+        <circle id="ball" cx="0" cy="0" r="1" fill="#ff309b" mask="url(#holes)"/>
+      </svg>
+    </button>
+  </div>
+  <p class="line" id="line" aria-live="polite">缝还在。</p>
+  <div class="words" role="group" aria-label="让缝怎么动">
+    <button type="button" data-act="rest"><span>静</span></button>
+    <button type="button" data-act="blink"><span>眨</span></button>
+    <button type="button" data-act="glance"><span>瞒</span></button>
+    <button type="button" data-act="squint"><span>眣</span></button>
+  </div>
+  <div class="swatches" role="group" aria-label="换一只">
+    <button type="button" class="on" data-color="#ff309b" aria-label="小粉" style="background:#ff309b"></button>
+    <button type="button" data-color="#9159fe" aria-label="小紫" style="background:#9159fe"></button>
+    <button type="button" class="soot" data-color="#000000" aria-label="小黑" style="background:#000"></button>
+  </div>
+  <p class="hint">点圆，缝会看向那里。</p>
+<script>
+(function () {
+  var LEFT = { x: 0.194, y: -0.416, w: 0.194, h: 0.418, rot: -26.2 };
+  var RIGHT = { x: 0.626, y: -0.497, w: 0.129, h: 0.418, rot: -26.2 };
+  var GLANCE = { x: -0.052, y: 0.02 };
+  var SQUINT_G = { x: -0.02, y: 0.028 };
+  var LINES = {
+    rest: "缝还在。",
+    blink: "一下。",
+    blink2: "又一下。",
+    glance: "它看见了。",
+    squint: "不是笑。缝短了一点。"
+  };
+
+  var elL = document.getElementById("L");
+  var elR = document.getElementById("R");
+  var ball = document.getElementById("ball");
+  var hit = document.getElementById("hit");
+  var lineEl = document.getElementById("line");
+  var wordBtns = document.querySelectorAll(".words button");
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", function (e) {
+    reduced = e.matches;
+  });
+
+  var expr = "rest";
+  var gaze = { x: 0, y: 0 };
+  var follow = { x: 0, y: 0 };
+  var blinkId = 0;
+  var holdUntil = 0;
+  var lastBlinkAt = 0;
+  var lineKey = "rest";
+
+  var motion = { gx: 0, gy: 0, squint: 0, blink: 0, seenBlink: 0, blinkStart: 0 };
+
+  function clampMag(x, y, max) {
+    var m = Math.hypot(x, y);
+    if (m <= max || m === 0) return { x: x, y: y };
+    var s = max / m;
+    return { x: x * s, y: y * s };
+  }
+
+  function paint(el, base, sx, sy, blink, squint, rotBias) {
+    var hScale = (1 - 0.78 * blink) * (1 - 0.52 * squint);
+    var wScale = (1 - 0.42 * blink) * (1 - 0.12 * squint);
+    var w = base.w * wScale;
+    var h = Math.max(base.h * hScale, w * 0.72);
+    var rot = base.rot + rotBias * (1 - blink) + squint * -6;
+    var x = base.x + sx;
+    var y = base.y + sy;
+    el.setAttribute("x", String(x - w / 2));
+    el.setAttribute("y", String(y - h / 2));
+    el.setAttribute("width", String(w));
+    el.setAttribute("height", String(h));
+    el.setAttribute("rx", String(Math.min(w, h) / 2));
+    el.setAttribute("transform", "rotate(" + rot + " " + x + " " + y + ")");
+  }
+
+  function setLine(key) {
+    lineKey = key;
+    lineEl.textContent = LINES[key];
+    markWords();
+  }
+
+  function markWords() {
+    wordBtns.forEach(function (btn) {
+      var act = btn.getAttribute("data-act");
+      var on = act === "blink"
+        ? (lineKey === "blink" || lineKey === "blink2")
+        : (expr === act && lineKey !== "blink" && lineKey !== "blink2");
+      btn.classList.toggle("on", on);
+    });
+  }
+
+  function blink() {
+    var now = performance.now();
+    var doubled = now - lastBlinkAt < 700;
+    lastBlinkAt = now;
+    blinkId += 1;
+    setLine(doubled ? "blink2" : "blink");
+    window.setTimeout(function () {
+      if (lineKey === "blink" || lineKey === "blink2") {
+        setLine(expr === "rest" ? "rest" : expr);
+      }
+    }, 520);
+  }
+
+  function showExpr(next) {
+    expr = next;
+    setLine(next === "rest" ? "rest" : next);
+  }
+
+  function hold(ms) {
+    holdUntil = performance.now() + (ms || 7000);
+  }
+
+  function localGaze(clientX, clientY) {
+    var box = hit.getBoundingClientRect();
+    var r = box.width / 2;
+    return clampMag(
+      ((clientX - (box.left + box.width / 2)) / r) * 0.09,
+      ((clientY - (box.top + box.height / 2)) / r) * 0.09,
+      0.07
+    );
+  }
+
+  var last = performance.now();
+  function tick(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    function step(cur, target, speed) {
+      return cur + (target - cur) * (1 - Math.exp(-speed * dt));
+    }
+    if (blinkId !== motion.seenBlink) {
+      motion.seenBlink = blinkId;
+      motion.blinkStart = now;
+    }
+    var blinkTarget = 0;
+    if (motion.blinkStart) {
+      var d = now - motion.blinkStart;
+      if (reduced) blinkTarget = d < 80 ? 1 : 0;
+      else if (d < 110) blinkTarget = d / 110;
+      else if (d < 160) blinkTarget = 1;
+      else if (d < 340) blinkTarget = 1 - (d - 160) / 180;
+    }
+    var commanded = expr === "rest" ? { x: 0, y: 0 } : gaze;
+    var fol = expr === "rest" ? follow : { x: follow.x * 0.2, y: follow.y * 0.2 };
+    var wander = (reduced || expr !== "rest")
+      ? { x: 0, y: 0 }
+      : { x: Math.sin(now / 1700) * 0.016, y: Math.cos(now / 2400) * 0.01 };
+    var desired = clampMag(commanded.x + fol.x + wander.x, commanded.y + fol.y + wander.y, 0.07);
+    var speed = reduced ? 40 : 7;
+    motion.gx = step(motion.gx, desired.x, speed);
+    motion.gy = step(motion.gy, desired.y, speed);
+    motion.squint = step(motion.squint, expr === "squint" ? 1 : 0, reduced ? 40 : 8);
+    motion.blink = step(motion.blink, blinkTarget, reduced ? 40 : 26);
+    var rotBias = motion.gx * -8;
+    paint(elL, LEFT, motion.gx, motion.gy, motion.blink, motion.squint, rotBias);
+    paint(elR, RIGHT, motion.gx, motion.gy, motion.blink, motion.squint, rotBias);
+    requestAnimationFrame(tick);
+  }
+  paint(elL, LEFT, 0, 0, 0, 0, 0);
+  paint(elR, RIGHT, 0, 0, 0, 0, 0);
+  requestAnimationFrame(tick);
+
+  hit.addEventListener("pointermove", function (e) {
+    if (e.pointerType === "touch") return;
+    follow = localGaze(e.clientX, e.clientY);
+  });
+  hit.addEventListener("pointerleave", function () {
+    follow = { x: 0, y: 0 };
+  });
+  hit.addEventListener("pointerdown", function (e) {
+    hold();
+    gaze = localGaze(e.clientX, e.clientY);
+    showExpr("glance");
+    blink();
+  });
+
+  document.querySelectorAll(".words button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      hold();
+      var act = btn.getAttribute("data-act");
+      if (act === "blink") {
+        showExpr("rest");
+        blink();
+        return;
+      }
+      if (act === "glance") gaze = GLANCE;
+      if (act === "squint") gaze = SQUINT_G;
+      showExpr(act);
+    });
+  });
+
+  document.querySelectorAll(".swatches button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".swatches button").forEach(function (b) { b.classList.remove("on"); });
+      btn.classList.add("on");
+      ball.setAttribute("fill", btn.getAttribute("data-color"));
+    });
+  });
+
+  var steps = [
+    { delay: 900, run: function () { showExpr("rest"); } },
+    { delay: 480, run: function () { blink(); } },
+    { delay: 520, run: function () { blink(); } },
+    { delay: 1500, run: function () { gaze = GLANCE; showExpr("glance"); } },
+    { delay: 1300, run: function () { gaze = SQUINT_G; showExpr("squint"); } },
+    { delay: 980, run: function () { blink(); } },
+    { delay: 1100, run: function () { showExpr("rest"); } }
+  ];
+  var step = 0;
+  function loop() {
+    var current = steps[step];
+    step = (step + 1) % steps.length;
+    if (performance.now() >= holdUntil) current.run();
+    window.setTimeout(loop, current.delay);
+  }
+  window.setTimeout(loop, 600);
+  markWords();
+})();
+</script>
+</body>
+</html>
