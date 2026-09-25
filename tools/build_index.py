@@ -13,7 +13,9 @@
 不需要任何人记得手动执行。
 """
 
-import os, re, sys, html, json, subprocess, unicodedata
+import os, re, sys, html, json, subprocess
+from collections import Counter
+from urllib.parse import quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(ROOT, "index.html")
@@ -23,12 +25,6 @@ END = "<!-- LIST:END -->"
 # 分组顺序。没列到的目录排在后面，按名字排。
 # unsigned 垫底：2026-09-19 她当场说的，那一格已经不会再上传任何文件了。
 ORDER = ["claude", "gemini", "grok", "copilot", "pluto", "unsigned"]
-
-# 子目录在首页上归到哪个一级（文件不搬家，文件夹仍记出处）
-# 2026-08-27：model/货架名/文件.html 也一律归到 model，不要让「grok/哄睡」自己开一扇门。
-FOLDER_ALIAS = {
-    "gemini/失误捞claude鱼": "gemini",
-}
 
 # 每个目录一种低饱和度的色，只用在悬停背景和小圆点上。
 PALETTE = {
@@ -42,13 +38,12 @@ PALETTE = {
 PALETTE_DEFAULT = ("#BAB3A8", "rgba(186,179,168,.10)")
 
 # ---------------------------------------------------------------------------
-# 显示名覆盖表
+# 显示名覆盖表（老页面留下的，已冻结）
 #
-# 只写在这里一份。生成器直接把最终显示名写进 index.html，
-# 首页里没有第二层查表。
-#
-# 出现在这张表里的，都是「多个页面 <title> 撞车、光看标题分不出谁是谁」的情况。
-# 原文件的 <title> 一律不动——那是页面自己的标题，这里只管首页上显示成什么。
+# 这里有一行的，首页上就显示这一行，<title> 写什么都不看。
+# 新页面的名字写进自己的 <title>，不往这张表加行；已有的行也别删，
+# 删了那些页的显示名会塌回原来撞车的样子。
+# 想改首页上某个名字：先搜这张表，在表里就改表，不在就改 <title>。
 # ---------------------------------------------------------------------------
 DISPLAY_NAME = {
     "gemini/摸鱼/慢慢吃 · 一个多小时.html": '慢慢吃（gemini破解claude版）',
@@ -196,18 +191,9 @@ DISPLAY_NAME = {
 }
 
 
-# 二级分类：按「打开之后这份页在干什么」切。
-# 一级是哪个小机，默认全折叠；点开才看到二级。
-# 一个文件可以属于两个分类（只对平铺在 model 根下、写进这张表的文件有效）。
-# 没写进表、又没放进货架子目录的，默认「盲盒」。
-# unsigned 只有一级，平铺。
-# gemini/失误捞claude鱼/ 不单独成一级，归进 gemini → 打捞机。
-#
-# 2026-08-27 起多一条：文件如果在「小机/货架名/」下面
-# （货架名必须是 CAT_ORDER 里的，比如 grok/哄睡/xx.html），
-# 货架名就是分类，不用再登记到这张表。老文件继续平铺 + 查表，不要搬。
-# 2026-08-28 夜：货架改名+换序。老文件不搬家。
-# 旧抽屉名（失灵博物馆 等）靠 CAT_ALIAS 认到新货架；有真页面的文件夹不许改名。
+# 二级货架。一级是哪个小机，默认全折叠；点开才看到二级。
+# 分类只看路径第二段：grok/哄睡/xx.html 就是哄睡。
+# 抽屉名认不出的进「盲盒」；gemini/失误捞claude鱼/ 靠 SUBFOLDER_CAT 归打捞机。
 # 「盲盒」是一个正经货架，不是待办箱——归不了类的、或者同类还太少不够
 # 单独一格的，就摆这儿。它永远该是有货的。清空它不是把活干完了，
 # 是把这个位置取消了。2026-09-02 犯过一次，别再犯。
@@ -215,6 +201,7 @@ DISPLAY_NAME = {
 CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "小卡", "购物车", "博物馆", "小科普",
              "打捞机", "显影", "盲盒"]
 CAT_ORDER = [c for c in CAT_ORDER if c != "盲盒"] + ["盲盒"]
+# 旧抽屉名的兼容层，零成本；不要重建这些夹。
 CAT_ALIAS = {
     "赛博购物车": "购物车",
     "科普": "小科普",
@@ -229,9 +216,8 @@ SKIP_LIST = {
     # 改 .md 前台就跟着变，所以两个必须并排，别拆开、别挪进抽屉）。
     # 但根上的文件在生成器眼里没有小机名，会单开一个叫「.」的门牌、
     # 底下孤零零挂一件掉进盲盒——首页最底下一个点，谁都看不见。
-    # 所以这儿跳过它，改由 index.html 门楣底下那行固定挂着（.dream）。
+    # 所以这儿跳过它，改由 index.html 门楣上那枚记号固定挂着（.lamp）。
     "梦境.html",
-    # 真身已挪走，根上只留跳转，旧链接不断，首页不再挂一份
     # 摘抄人分卷：封面已经挂着 001–005，货架上不再并列六条同一句
     "grok/博物馆/摘抄人.001.html",
     "grok/博物馆/摘抄人.002.html",
@@ -243,11 +229,9 @@ SUBFOLDER_CAT = {
     "gemini/失误捞claude鱼": "打捞机",
 }
 
-CATEGORY = {
-
-
-    # 2026-08-26 新登记：以前都掉在盲盒里
-}
+# 空的。它是唯一能让一个文件同挂两档的地方（{"路径": ["哄睡", "小卡"]}），
+# 真要加之前先想想是不是放错抽屉了——换货架是把文件挪到另一个抽屉。
+CATEGORY = {}
 
 # ---------------------------------------------------------------------------
 # 总机的线路表（claude/盲盒/总机.html）
@@ -304,13 +288,12 @@ PHONE_ORDER = [
     "claude/小游戏/Clawd的第三通电话.html",
 ]
 
-# 九个抽屉的英文名，给标签纸上那一行「小机 · 抽屉」用
+# 抽屉的英文名，给标签纸上那一行「小机 · 抽屉」用
 SHELF_EN = {
     "哄睡": "lullaby", "摸鱼": "slacking off", "小游戏": "games",
     "小卡": "cards", "购物车": "cart", "博物馆": "museum",
     "小科普": "explainers", "打捞机": "salvage", "显影": "developing",
     "盲盒": "lucky bag",
-    "失误捞claude鱼": "salvage",
 }
 
 # 英文那一份。没列到的线路，EN 模式下就显示这一页自己的中文原话——
@@ -384,13 +367,18 @@ def _decomment(text):
     return text if cut < 0 else text[:cut]
 
 
-def page_title(path):
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        head = _decomment(fh.read(12000))
-    m = re.search(r"<title[^>]*>([\s\S]*?)</title>", head, re.I)
-    if not m:
+def page_head(path):
+    """页面开头 12000 字节，注释已剥掉。标题和附注都从这一段里找。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return _decomment(fh.read(12000))
+    except OSError:
         return ""
-    return clean(html.unescape(m.group(1)))
+
+
+def page_title(head):
+    m = re.search(r"<title[^>]*>([\s\S]*?)</title>", head, re.I)
+    return clean(html.unescape(m.group(1))) if m else ""
 
 
 LIMIT = 46   # 一行简介最多这么长；再长就在最近的一个标点上收住
@@ -411,7 +399,7 @@ def _short(text):
     return text[:cut].rstrip("，,、；;·… ") + "…"
 
 
-def page_blurb(path):
+def page_blurb(head):
     """页面自己写的一句简介：<meta name="description" content="…">。
 
     没写就返回空字符串——首页那一行不出现，不报错。这样她以后新加
@@ -419,11 +407,6 @@ def page_blurb(path):
     表情符号这里不去（跟 <title> 不一样）——简介是给人看的一句话，
     去掉表情反而怪。
     """
-    try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            head = _decomment(fh.read(12000))
-    except OSError:
-        return ""
     m = re.search(
         r"""<meta[^>]*\bname\s*=\s*['"]description['"][^>]*>""", head, re.I)
     if not m:
@@ -434,13 +417,8 @@ def page_blurb(path):
     return _short(html.unescape(c.group(2)))
 
 
-def svg_blurb(path):
+def svg_blurb(head):
     """SVG 没有 <meta>，它自己的那一行叫 <desc>。读法一样，读不到就空。"""
-    try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            head = _decomment(fh.read(12000))
-    except OSError:
-        return ""
     m = re.search(r"<desc[^>]*>([\s\S]*?)</desc>", head, re.I)
     if not m:
         return ""
@@ -471,13 +449,11 @@ def sort_key(name):
     return (0 if name[:1].isascii() else 1, name)
 
 def display_folder(rel):
+    """首页一级门牌：顶层目录名。小机/货架/文件.html 也归到小机，
+    不让「grok/哄睡」自己开一扇门。"""
     folder = os.path.dirname(rel) or "."
-    if folder in FOLDER_ALIAS:
-        return FOLDER_ALIAS[folder]
     top = folder.split("/")[0]
-    if top in ORDER:
-        return top
-    return folder
+    return top if top in ORDER else folder
 
 
 def _variants(e, by_folder):
@@ -523,16 +499,13 @@ def dedupe_names(entries):
 def build_entries():
     entries = []
     for rel in list_pages():
-        folder = display_folder(rel)
-        name = DISPLAY_NAME.get(rel) or page_title(os.path.join(ROOT, rel)) or prettify(os.path.basename(rel))
+        head = page_head(os.path.join(ROOT, rel))
         entries.append({
             "path": rel,
-            "folder": folder,
+            "folder": display_folder(rel),
             "raw_folder": os.path.dirname(rel) or ".",
-            "name": name,
-            "blurb": (svg_blurb(os.path.join(ROOT, rel))
-                      if rel.lower().endswith(".svg")
-                      else page_blurb(os.path.join(ROOT, rel))),
+            "name": DISPLAY_NAME.get(rel) or page_title(head) or prettify(os.path.basename(rel)),
+            "blurb": svg_blurb(head) if rel.lower().endswith(".svg") else page_blurb(head),
         })
     return entries
 
@@ -560,22 +533,15 @@ def group(entries):
 
 
 def encode_path(rel):
-    from urllib.parse import quote
     return "/".join(quote(part) for part in rel.split("/"))
 
 
-def display_cat(name):
-    # 货架名原样显示。2026-08-28 撤掉了「两个字中间补全角空格」那版对齐，
-    # 她看过实物说不要。别再加回去。
-    return name
-
-
 def cats_for(e):
+    """这一页挂在哪几个抽屉。平铺的顶层（unsigned / pluto）没有抽屉，返回 None。"""
     if e["folder"] in FLAT_FOLDERS:
         return None
-    raw = e.get("raw_folder") or os.path.dirname(e["path"]) or "."
-    if raw in SUBFOLDER_CAT:
-        return [SUBFOLDER_CAT[raw]]
+    if e["raw_folder"] in SUBFOLDER_CAT:
+        return [SUBFOLDER_CAT[e["raw_folder"]]]
     # 物理货架：claude/哄睡/xx.html → 分类就是「哄睡」
     parts = e["path"].replace("\\", "/").split("/")
     if len(parts) >= 3:
@@ -586,19 +552,16 @@ def cats_for(e):
     return sorted(cats, key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else 99)
 
 
-def render_items(lines, items, step, indent):
+def render_items(lines, items, indent):
     """条目只写名字和链接，不带任何动画参数。
 
-    2026-08-28：以前每个 li 上都挂一个 style="--delay:NNNms"，配合 CSS 里
-    .item{opacity:0; animation:rise ... forwards} 做逐条淡入。问题是条目的
-    起点是「完全看不见」——名字能不能显示，取决于那段动画有没有跑完。
-    全站三百多条，iPhone 上 Safari 跑不完，会有一批永远卡在半透明：同一堆
-    里有的名字深、有的名字灰，看起来像被吸顶的牌子盖住了。
-    现在条目一开始就是实的，不依赖动画。step 保留只是为了不动调用方。
+    2026-08-28：以前每个 li 上都挂一个 style="--delay:NNNms" 做逐条淡入，
+    条目的起点是「完全看不见」。iPhone 上 Safari 跑不完几百条动画，
+    会有一批永远卡在半透明，看起来像被吸顶的牌子盖住了。
+    现在条目一开始就是实的，不依赖动画。别加回去。
     """
     pad = " " * indent
     for e in items:
-        step[0] += 1
         blurb = e.get("blurb") or ""
         tail = (f'<span class="blurb">{html.escape(blurb, quote=True)}</span>'
                 if blurb else "")
@@ -611,7 +574,6 @@ def render_items(lines, items, step, indent):
 def render(blocks):
     esc = lambda s: html.escape(s, quote=True)
     lines = [BEGIN]
-    step = [0]
     for folder, items in blocks:
         dot, tint = PALETTE.get(folder, PALETTE_DEFAULT)
         lines.append(f'  <details class="group" style="--dot:{dot};--tint:{tint}">')
@@ -621,42 +583,40 @@ def render(blocks):
             lines.append('    <p class="soon">还没有页。</p>')
         elif folder in FLAT_FOLDERS:
             lines.append('    <ul class="list">')
-            render_items(lines, items, step, 6)
+            render_items(lines, items, 6)
             lines.append("    </ul>")
         else:
-            buckets = {c: [] for c in CAT_ORDER}
-            extra = {}
+            # items 已经按名字排好，分进各抽屉后顺序不变，不用再排
+            buckets = {}
             for e in items:
                 for c in cats_for(e):
-                    if c in buckets:
-                        buckets[c].append(e)
-                    else:
-                        extra.setdefault(c, []).append(e)
-            for c in CAT_ORDER:
-                sub = buckets[c]
+                    buckets.setdefault(c, []).append(e)
+            shelves = CAT_ORDER + sorted(c for c in buckets if c not in CAT_ORDER)
+            for c in shelves:
+                sub = buckets.get(c, [])
+                # 抽屉已经建了、还一件都没有：也出牌子，摆一句话在那儿等第一件
                 if not sub and not os.path.isdir(os.path.join(ROOT, folder, c)):
                     continue
                 lines.append('    <details class="pack">')
-                lines.append(f'      <summary class="pack-tag">{esc(display_cat(c))}</summary>')
+                # 货架名原样显示。2026-08-28 撤掉过「两个字中间补全角空格」的对齐，
+                # 她看过实物说不要。别再加回去。
+                lines.append(f'      <summary class="pack-tag">{esc(c)}</summary>')
                 if not sub:
                     lines.append('      <p class="soon">还没有页。</p>')
                 else:
-                    sub = sorted(sub, key=lambda e: sort_key(e["name"]))
                     lines.append('      <ul class="list">')
-                    render_items(lines, sub, step, 8)
+                    render_items(lines, sub, 8)
                     lines.append("      </ul>")
-                lines.append("    </details>")
-            for c, sub in extra.items():
-                sub = sorted(sub, key=lambda e: sort_key(e["name"]))
-                lines.append('    <details class="pack">')
-                lines.append(f'      <summary class="pack-tag">{esc(display_cat(c))}</summary>')
-                lines.append('      <ul class="list">')
-                render_items(lines, sub, step, 8)
-                lines.append("      </ul>")
                 lines.append("    </details>")
         lines.append("  </details>")
     lines.append(END)
     return "\n".join(lines)
+
+
+def shelf_of(e):
+    """这一页所在的抽屉名；平铺的顶层没有抽屉，返回空串。"""
+    cats = cats_for(e)
+    return cats[0] if cats else ""
 
 
 def phone_lines(entries):
@@ -669,9 +629,7 @@ def phone_lines(entries):
         if rel in PHONE_EXTRA:
             picked.append(rel)
             continue
-        parts = rel.split("/")
-        shelf = CAT_ALIAS.get(parts[1], parts[1]) if len(parts) >= 3 else ""
-        if shelf in PHONE_SHELF_SKIP:
+        if shelf_of(e) in PHONE_SHELF_SKIP:
             continue
         if PHONE_KW.search(e["name"]) or PHONE_KW.search(e["blurb"]):
             picked.append(rel)
@@ -682,9 +640,8 @@ def phone_lines(entries):
     lines = []
     for i, rel in enumerate(picked, 1):
         e = by_path[rel]
-        parts = rel.split("/")
-        machine = parts[0]
-        shelf = CAT_ALIAS.get(parts[1], parts[1]) if len(parts) >= 3 else ""
+        machine = rel.split("/")[0]
+        shelf = shelf_of(e)
         where_zh = f"{machine} · {shelf}" if shelf else machine
         where_en = f"{machine} · {SHELF_EN.get(shelf, shelf)}" if shelf else machine
         en_who, en_said = PHONE_EN.get(rel, (e["name"], e["blurb"]))
@@ -769,14 +726,7 @@ def main():
     for folder, items in blocks:
         print(f"  {folder}/  {len(items)} 个")
         if folder not in FLAT_FOLDERS:
-            from collections import Counter
-            cc = Counter()
-            for e in items:
-                cs = cats_for(e)
-                if not cs:
-                    continue
-                for c in cs:
-                    cc[c] += 1
+            cc = Counter(c for e in items for c in cats_for(e))
             for c in CAT_ORDER:
                 if cc[c]:
                     print(f"    {c}  {cc[c]}")
