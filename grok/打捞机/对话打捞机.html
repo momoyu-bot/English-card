@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>对话打捞机</title>
+<meta name="description" content="把 Claude 对话包切成一篇一篇的 md，打包带走。">
+<style>
+  :root {
+    --ink: #241b16;
+    --paper: #f7f1e6;
+    --card: #fff8ee;
+    --stamp: #b42318;
+    --navy: #2c3d5a;
+    --line: #e2d3bf;
+    --ok: #2f6b4f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100%;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 380px at 0% 0%, #f3d7c4 0%, transparent 55%),
+      radial-gradient(800px 360px at 100% 10%, #d9e3f0 0%, transparent 50%),
+      var(--paper);
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 28px 18px 72px; }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: .03em; }
+  .lead { margin: 0 0 18px; color: #5c5148; line-height: 1.65; }
+  .well {
+    border: 1.5px dashed var(--navy);
+    background: var(--card);
+    border-radius: 18px;
+    min-height: 150px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; text-align: center; padding: 26px 14px; cursor: pointer;
+  }
+  .well.over { border-color: var(--stamp); background: #fff1e8; }
+  .hook { font-size: 32px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 8px; }
+  button {
+    appearance: none; border: 0; border-radius: 999px;
+    padding: 9px 16px; font: inherit; cursor: pointer;
+    background: var(--navy); color: #f7fbff;
+  }
+  button.ghost { background: transparent; color: var(--navy); box-shadow: inset 0 0 0 1.5px var(--navy); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  label.opt { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5c5148; margin-right: 10px; }
+  .meta { font-size: 13px; color: #6a5d52; min-height: 1.5em; margin: 6px 0 10px; }
+  .log {
+    width: 100%; min-height: 280px; max-height: 480px; overflow: auto;
+    border: 1px solid var(--line); border-radius: 14px; background: #fffaf3;
+    padding: 12px 14px; font: 13px/1.65 ui-monospace, "Microsoft YaHei", monospace;
+    white-space: pre-wrap;
+  }
+  .hint { font-size: 12px; color: #7b6c5d; line-height: 1.65; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>对话打捞机</h1>
+  <p class="lead">把 <code>conversations-000.zip</code> 或 <code>conversations.json</code> 丢进来。按一场对话一篇 md 切开，再打成压缩包。不在框里铺全文，免得浏览器再崩溃。</p>
+
+  <div class="well" id="well">
+    <div class="hook">✂️</div>
+    <div>拖到这儿，或点我选文件</div>
+    <div class="hint" style="margin:0">ZIP / JSON 都行</div>
+  </div>
+  <input id="file" type="file" accept=".zip,.json" hidden>
+
+  <div class="row">
+    <label class="opt"><input type="checkbox" id="keepThink" checked>留下思考过程</label>
+    <label class="opt"><input type="checkbox" id="keepTool" checked>留下工具调用</label>
+    <button type="button" class="ghost" id="pick">选文件</button>
+    <button type="button" id="go" disabled>开始切割</button>
+    <button type="button" id="dl" disabled>下载 md 压缩包</button>
+  </div>
+  <div class="meta" id="meta"></div>
+  <div class="log" id="log">还没丢文件。</div>
+  <p class="hint">对话包可能上百兆。切的时候先别开别的大页。若提示内存不足，只丢解压出来的 json，或换电脑内存更大的浏览器再试。</p>
+</main>
+<script>
+const well = document.getElementById("well");
+const fileInput = document.getElementById("file");
+const logEl = document.getElementById("log");
+const meta = document.getElementById("meta");
+const goBtn = document.getElementById("go");
+const dlBtn = document.getElementById("dl");
+let pending = null;
+let zipBlob = null;
+
+function log(s) { logEl.textContent = s; }
+function note(s) { meta.textContent = s; }
+
+function sanitize(name) {
+  return String(name || "未命名")
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60) || "未命名";
+}
+function pad(n, w) { return String(n).padStart(w, "0"); }
+function when(s) {
+  if (!s) return "";
+  return String(s).replace("T", " ").replace(/\.\d+Z$/, " UTC").replace(/Z$/, " UTC");
+}
+function day(s) {
+  const m = String(s || "").match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "日期未知";
+}
+
+function textOf(block) {
+  if (block == null) return "";
+  if (typeof block === "string") return block;
+  if (typeof block.text === "string") return block.text;
+  if (typeof block.thinking === "string") return block.thinking;
+  if (typeof block.content === "string") return block.content;
+  return "";
+}
+
+function renderBlocks(content, keepThink, keepTool) {
+  if (!content) return "";
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) {
+    if (content.type === "thinking" || content.thinking) {
+      return keepThink ? wrapThink(textOf(content)) : "";
+    }
+    return textOf(content);
+  }
+  const parts = [];
+  for (const b of content) {
+    if (!b) continue;
+    const t = b.type || "";
+    if (t === "thinking" || b.thinking) {
+      if (keepThink) parts.push(wrapThink(textOf(b)));
+      continue;
+    }
+    if (t === "tool_use" || t === "tool_call") {
+      if (keepTool) parts.push(wrapTool(b.name || b.tool_name || "工具", b.input || b.arguments || b));
+      continue;
+    }
+    if (t === "tool_result" || t === "tool_result_error") {
+      if (keepTool) parts.push(wrapResult(b.content || b.output || b));
+      continue;
+    }
+    if (t === "image" || t === "file" || t === "document") {
+      const fn = b.file_name || b.filename || b.name || b.title || "附件";
+      parts.push("🖼️ **文件**：`" + fn + "`");
+      continue;
+    }
+    const tx = textOf(b);
+    if (tx) parts.push(tx);
+  }
+  return parts.filter(Boolean).join("\n\n");
+}
+
+function wrapThink(s) {
+  const body = String(s || "").trim();
+  if (!body) return "";
+  return "<details>\n<summary>💭 思考过程</summary>\n\n" + body + "\n\n</details>";
+}
+function wrapTool(name, input) {
+  let body = input;
+  if (typeof body !== "string") {
+    try { body = JSON.stringify(body, null, 2); } catch { body = String(body); }
+  }
+  return "<details>\n<summary>🔧 工具调用：" + name + "</summary>\n\n```json\n" + body + "\n```\n\n</details>";
+}
+function wrapResult(input) {
+  let body = input;
+  if (typeof body !== "string") {
+    try { body = JSON.stringify(body, null, 2); } catch { body = String(body); }
+  }
+  if (body.length > 4000) body = body.slice(0, 4000) + "\n…(截断)";
+  return "<details>\n<summary>📤 工具返回</summary>\n\n```\n" + body + "\n```\n\n</details>";
+}
+
+function attachmentsOf(msg) {
+  const bits = [];
+  const arr = msg.attachments || msg.files || msg.uploaded_files || [];
+  for (const a of arr) {
+    const fn = a.file_name || a.filename || a.name || a.preview_asset?.file_name || "附件";
+    bits.push("🖼️ **文件**：`" + fn + "`");
+  }
+  return bits.join("\n\n");
+}
+
+function messageBody(msg, keepThink, keepTool) {
+  const chunks = [];
+  const att = attachmentsOf(msg);
+  if (att) chunks.push(att);
+  const raw = msg.text || msg.content || msg.content_blocks || msg.contents || "";
+  const rendered = renderBlocks(raw, keepThink, keepTool);
+  if (rendered) chunks.push(rendered);
+  if (!chunks.length && msg.thinking && keepThink) chunks.push(wrapThink(msg.thinking));
+  return chunks.join("\n\n").trim() || "（空消息）";
+}
+
+function who(msg) {
+  const s = String(msg.sender || msg.role || msg.author || "").toLowerCase();
+  if (s.includes("human") || s === "user" || s === "宝") return "宝";
+  if (s.includes("assistant") || s === "claude" || s === "bot") return "Claude";
+  return s || "未知";
+}
+
+function convMessages(conv) {
+  return conv.chat_messages || conv.messages || conv.chats || [];
+}
+
+function toMarkdown(conv, idx, keepThink, keepTool) {
+  const title = conv.name || conv.title || conv.summary || "未命名对话";
+  const created = conv.created_at || conv.createdAt || "";
+  const updated = conv.updated_at || conv.updatedAt || created;
+  const uuid = conv.uuid || conv.id || conv.conversation_id || "";
+  const msgs = convMessages(conv);
+  const lines = [];
+  lines.push("# " + title);
+  lines.push("");
+  lines.push("- **创建时间**：" + when(created));
+  lines.push("- **更新时间**：" + when(updated));
+  lines.push("- **消息数**：" + msgs.length);
+  if (uuid) lines.push("- **UUID**：`" + uuid + "`");
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  msgs.forEach((msg, i) => {
+    lines.push("## **" + who(msg) + "**");
+    lines.push("*" + when(msg.created_at || msg.updated_at || msg.timestamp || "") + "*");
+    lines.push("");
+    lines.push(messageBody(msg, keepThink, keepTool));
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  });
+  const md = lines.join("\n").replace(/\n{4,}/g, "\n\n\n");
+  const fname = pad(idx, 3) + "_" + day(created) + "_" + sanitize(title) + ".md";
+  return { fname, title, created, updated, count: msgs.length, uuid, md };
+}
+
+function listConversations(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.conversations)) return data.conversations;
+  if (Array.isArray(data.chats)) return data.chats;
+  if (data.uuid || data.chat_messages || data.messages) return [data];
+  return null;
+}
+
+/* zip read */
+function u16(v, o) { return v[o] | (v[o + 1] << 8); }
+function u32(v, o) { return (u16(v, o) | (u16(v, o + 2) << 16)) >>> 0; }
+async function inflateRaw(bytes) {
+  if (!bytes.length) return new Uint8Array();
+  const ds = new DecompressionStream("deflate-raw");
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer());
+}
+async function unzip(buf) {
+  const v = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = v.length - 22; i >= 0; i--) {
+    if (u32(v, i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("这不是普通 ZIP");
+  const count = u16(v, eocd + 10);
+  let cd = u32(v, eocd + 16);
+  const files = [];
+  for (let n = 0; n < count; n++) {
+    if (u32(v, cd) !== 0x02014b50) throw new Error("ZIP 目录坏了");
+    const method = u16(v, cd + 10);
+    const comp = u32(v, cd + 20);
+    const nameLen = u16(v, cd + 28);
+    const extraLen = u16(v, cd + 30);
+    const commLen = u16(v, cd + 32);
+    const local = u32(v, cd + 42);
+    const name = new TextDecoder("utf-8").decode(v.slice(cd + 46, cd + 46 + nameLen));
+    const ln = u16(v, local + 26);
+    const le = u16(v, local + 28);
+    const start = local + 30 + ln + le;
+    const blob = v.slice(start, start + comp);
+    const data = method === 0 ? blob : method === 8 ? await inflateRaw(blob) : null;
+    if (!data) throw new Error("ZIP 压缩方式不认识：" + name);
+    files.push({ name, data });
+    cd += 46 + nameLen + extraLen + commLen;
+  }
+  return files;
+}
+
+/* zip write (store) */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xffffffff;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+function dosDate(d) {
+  return ((d.getSeconds() / 2) | 0) | (d.getMinutes() << 5) | (d.getHours() << 11);
+}
+function dosDay(d) {
+  return d.getDate() | ((d.getMonth() + 1) << 5) | ((d.getFullYear() - 1980) << 9);
+}
+function put16(a, n) { a.push(n & 255, (n >> 8) & 255); }
+function put32(a, n) { put16(a, n); put16(a, (n >>> 16)); }
+function buildZip(files) {
+  const now = new Date();
+  const time = dosDate(now), date = dosDay(now);
+  const locals = [];
+  const central = [];
+  let offset = 0;
+  const enc = new TextEncoder();
+  for (const f of files) {
+    const name = enc.encode(f.name);
+    const data = typeof f.data === "string" ? enc.encode(f.data) : f.data;
+    const crc = crc32(data);
+    const local = [];
+    put32(local, 0x04034b50);
+    put16(local, 20); put16(local, 0x0800); put16(local, 0);
+    put16(local, time); put16(local, date);
+    put32(local, crc); put32(local, data.length); put32(local, data.length);
+    put16(local, name.length); put16(local, 0);
+    const head = new Uint8Array(local.length + name.length + data.length);
+    head.set(new Uint8Array(local), 0);
+    head.set(name, local.length);
+    head.set(data, local.length + name.length);
+    locals.push(head);
+    const cd = [];
+    put32(cd, 0x02014b50);
+    put16(cd, 20); put16(cd, 20); put16(cd, 0x0800); put16(cd, 0);
+    put16(cd, time); put16(cd, date);
+    put32(cd, crc); put32(cd, data.length); put32(cd, data.length);
+    put16(cd, name.length); put16(cd, 0); put16(cd, 0);
+    put16(cd, 0); put16(cd, 0); put32(cd, 0); put32(cd, offset);
+    const cdb = new Uint8Array(cd.length + name.length);
+    cdb.set(new Uint8Array(cd), 0);
+    cdb.set(name, cd.length);
+    central.push(cdb);
+    offset += head.length;
+  }
+  const cdStart = offset;
+  let cdSize = 0;
+  central.forEach(x => cdSize += x.length);
+  const end = [];
+  put32(end, 0x06054b50); put16(end, 0); put16(end, 0);
+  put16(end, files.length); put16(end, files.length);
+  put32(end, cdSize); put32(end, cdStart); put16(end, 0);
+  const parts = [...locals, ...central, new Uint8Array(end)];
+  return new Blob(parts, { type: "application/zip" });
+}
+
+async function loadJsonFromFile(f) {
+  note("在读 " + f.name + " …");
+  const buf = await f.arrayBuffer();
+  if (f.name.toLowerCase().endsWith(".zip")) {
+    const files = await unzip(buf);
+    const jsons = files.filter(x => /\.json$/i.test(x.name) && !x.name.endsWith("/"));
+    if (!jsons.length) throw new Error("压缩包里没有 json");
+    jsons.sort((a, b) => {
+      const ac = /conversation/i.test(a.name) ? 0 : 1;
+      const bc = /conversation/i.test(b.name) ? 0 : 1;
+      return ac - bc;
+    });
+    const picked = jsons[0];
+    note("解开了 " + picked.name + "，" + (picked.data.length / 1048576).toFixed(1) + " MB");
+    return new TextDecoder("utf-8").decode(picked.data);
+  }
+  return new TextDecoder("utf-8").decode(new Uint8Array(buf));
+}
+
+async function cut() {
+  if (!pending) return;
+  goBtn.disabled = true;
+  dlBtn.disabled = true;
+  zipBlob = null;
+  const keepThink = document.getElementById("keepThink").checked;
+  const keepTool = document.getElementById("keepTool").checked;
+  try {
+    log("开始读文件。大包会愣一会儿，不是死了。");
+    const raw = await loadJsonFromFile(pending);
+    note("正在解析 JSON …");
+    await new Promise(r => setTimeout(r, 30));
+    const data = JSON.parse(raw);
+    const list = listConversations(data);
+    if (!list) throw new Error("没认出对话列表。也许不是 conversations.json。");
+    list.sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+    note("认出 " + list.length + " 场对话，开始切。");
+    const files = [];
+    const index = ["# 对话目录", "", "共 " + list.length + " 场。", ""];
+    for (let i = 0; i < list.length; i++) {
+      const one = toMarkdown(list[i], i + 1, keepThink, keepTool);
+      files.push({ name: one.fname, data: one.md });
+      index.push((i + 1) + ". [" + one.title + "](" + one.fname + ") · " + day(one.created) + " · " + one.count + " 条");
+      if (i % 20 === 0 || i === list.length - 1) {
+        log("已切 " + (i + 1) + " / " + list.length + "\n最近一篇：" + one.fname);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+    files.unshift({ name: "_INDEX.md", data: index.join("\n") + "\n" });
+    note("在打包 " + files.length + " 个文件 …");
+    zipBlob = buildZip(files);
+    dlBtn.disabled = false;
+    log("切完了。\n对话 " + list.length + " 场。\n压缩包大约 " + (zipBlob.size / 1048576).toFixed(2) + " MB。\n点「下载 md 压缩包」。");
+    note("可以下载了");
+  } catch (err) {
+    const msg = (err && err.message) ? err.message : String(err);
+    log("没切开：" + msg + ( /quota|memory/i.test(msg) ? "\n浏览器内存不够。别开着别的重页，或只丢 json 不丢整份超大 zip。" : "" ));
+    note("失败");
+  } finally {
+    goBtn.disabled = !pending;
+  }
+}
+
+function takeFile(f) {
+  pending = f;
+  zipBlob = null;
+  dlBtn.disabled = true;
+  goBtn.disabled = false;
+  note("已接住：" + f.name + "（" + (f.size / 1048576).toFixed(2) + " MB）");
+  log("文件在手里了。勾好要不要思考 / 工具，再点「开始切割」。");
+}
+
+well.addEventListener("click", () => fileInput.click());
+document.getElementById("pick").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) takeFile(fileInput.files[0]); });
+["dragenter","dragover"].forEach(ev => well.addEventListener(ev, e => { e.preventDefault(); well.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => well.addEventListener(ev, e => { e.preventDefault(); well.classList.remove("over"); }));
+well.addEventListener("drop", e => { const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) takeFile(f); });
+document.getElementById("go").addEventListener("click", cut);
+document.getElementById("dl").addEventListener("click", () => {
+  if (!zipBlob) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = "对话切开.md.zip";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+});
+</script>
+</body>
+</html>
