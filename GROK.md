@@ -146,6 +146,9 @@ python3 tools/build_index.py --check
 - 不要按文风在小机之间挪文件。
 - 导入前比对指纹：`python3 tools/check_dupes.py`（它会先把 CRLF 收成 LF 再比）。
 - 公开仓库。假数据避开真公司名、真人名、真搜索词。
+- **提交署名的邮箱只用她的号 `318139614+momoyu-bot@users.noreply.github.com`**，名字写 momo 就行。
+  **别写 `momo@users.noreply.github.com`**——那是别人的 GitHub 号，GitHub 按邮箱认人，写了贡献者栏就多出陌生人的头像。
+  2026-09-21 写错过一笔，09-27 改回来了；main 从那笔往后的历史换过编号，手上有旧克隆的先重新拉，别强推、别 merge 旧 main。
 - 新页面只用系统字体，不要上传字体文件，不要 Google Fonts。捞回来的作品保持原样。
 - 不要复制文件来假装一页挂两个货架。
 - 升维听她的，她没点名不要自己升。

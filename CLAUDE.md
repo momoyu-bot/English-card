@@ -368,6 +368,23 @@ Grok 帮她上传、挪路径、改标题、补附注的时候，会往文件里
 喂给 `grep` / `cat` / `git show` 时文件根本打不开，**命令不报错、只是安静地返回空**——看起来就像「没找到」。
 因此漏查过两次（2026-09-03、09-16）。`tools/` 里的检查脚本都已经带上了。
 
+### 提交署名：邮箱只用这两个（2026-09-27）
+
+GitHub 按**邮箱**认人，不看名字。邮箱写错，贡献者栏就多出一张陌生人的脸。
+
+- 她的号：`318139614+momoyu-bot@users.noreply.github.com`（名字写 momo 就行）
+- Claude：`noreply@anthropic.com`（Claude 的提交默认就是这个）
+- **别写 `momo@users.noreply.github.com`**：`momo` 这个用户名是别人的 GitHub 号。
+  2026-09-21 有一笔（`grok/显影：第一部的偏移（完整页）`）写成了它，贡献者栏多出一个陌生头像。
+  她 09-27 当场说：「能不能把第四个momo赶走，太丑了，辣眼睛」。
+
+当天把那一笔的邮箱改回她的号，**main 从那一笔往后 87 笔全部换了编号**（内容、时间、名字、说明逐笔核过，一字没变）。
+改之前的原样在分支 `backup/before-momo-fix-2026-09-27`，是反悔用的，别合并、别当新活。
+
+**所以 09-27 之前拉的克隆，推之前先对齐**：`git fetch origin main`，再把自己的提交 `git rebase origin/main`
+（内容相同的旧提交会被自动跳过）。**别 merge 旧的 main、别强推**——merge 一次，87 笔旧提交连同那张脸就全回来了。
+推完看一眼 `https://api.github.com/repos/momoyu-bot/English-card/contributors`，应该只有 momoyu-bot、github-actions[bot]、claude 三个。
+
 ### 做新页面之前，先查店里有没有同类（2026-09-03 栽过）
 
 宝点名要「雷霆」摸鱼游戏，做完才发现 `gemini/摸鱼/雷霆摸鱼.html` 早就在。开工前查过，但踩了上面那个转义的坑。
