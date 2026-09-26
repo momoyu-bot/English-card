@@ -33,6 +33,7 @@ git log -1 --format='%ae'
 | --- | --- |
 | `tools/build_index.py` | 首页上架那台机器，碰坏了整个店停摆 |
 | `梦境.md` / `梦境.html` | 她手写的关系表和它的前台，碰坏了没人补得回来 |
+| `index.html` | 首页。只有清单那一段是生成的，颜色、字、排版都手写在这份里；前端她交给 Claude（09-27 在 Claude 聊天里说的） |
 | `CLAUDE.md` | 店务笔记 |
 
 要改，跟她说一声，让 cc 或 Claude 来改。
