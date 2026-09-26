@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打捞机 · 翻译版 v2（一场一份）</title>
+<meta name="description" content="一场对话一份文件，自动编号、按月分夹；思考和工具折叠起来，正文清清爽爽。">
+<!--
+  打捞机 · 翻译版 v2
+  v1 的基础上：一场对话一份文件（编号_日期_标题）、按月分文件夹、思考和工具调用折叠进 <details>、
+  「合成一本」能按月 / 每 50 场分册。v1 原样留着，别覆盖。
+  给 Claude 官方数据导出用的（2026-08 之后那种：conversations-000.zip、memories-000.zip、
+  projects-000.zip、feedback-000.zip、frames-000.zip、light_metadata-000.zip……）。
+  zip 用浏览器自带的解压器当场拆开，json 翻成人话，再在本机打成一个 zip 交回去。
+  整页没有任何外部地址，不发任何网络请求：断网也能用。
+-->
+<style>
+  :root{
+    --abyss:#08161E;
+    --deep:#0E2733;
+    --water:#143845;
+    --edge:#1F4E5C;
+    --foam:#E9E3D3;
+    --silt:#7C949D;
+    --lamp:#E8703A;
+    --lamp-dim:rgba(232,112,58,.14);
+    --verdigris:#5FA8A0;
+    --rust:#B4543C;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(120% 80% at 50% -10%, #17414F 0%, var(--deep) 38%, var(--abyss) 100%) fixed;
+    color:var(--foam);font-family:var(--sans);font-size:15px;line-height:1.7;min-height:100vh;
+  }
+  a{color:var(--verdigris)}
+  button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+  code{font-family:var(--mono);font-size:.92em}
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 26px 90px}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    padding-bottom:18px;border-bottom:1px solid var(--edge)}
+  .brand h1{margin:0;font-size:30px;letter-spacing:.34em;font-weight:600;text-indent:.34em}
+  .brand .sub{margin:7px 0 0;color:var(--silt);font-size:13px;letter-spacing:.04em}
+  .brand .hull{display:inline-block;margin-left:8px;font-family:var(--mono);font-size:10px;
+    color:var(--lamp);border:1px solid var(--lamp);border-radius:2px;padding:1px 6px;
+    letter-spacing:.14em;vertical-align:2px}
+  .privacy{font-family:var(--mono);font-size:11px;color:var(--verdigris);
+    border:1px solid var(--edge);border-radius:2px;padding:7px 11px;letter-spacing:.06em;white-space:nowrap}
+
+  .dropzone{margin-top:44px;border:1px dashed var(--edge);border-radius:3px;
+    padding:66px 30px;text-align:center;transition:border-color .18s, background .18s, padding .18s;background:rgba(20,56,69,.28)}
+  .dropzone.hot{border-color:var(--lamp);background:var(--lamp-dim)}
+  .dropzone h2{margin:0 0 10px;font-size:19px;font-weight:500;letter-spacing:.06em}
+  .dropzone .lead{margin:0 auto;color:var(--silt);font-size:13px;max-width:60ch}
+  .dropzone .pick{margin-top:24px;background:none;border:1px solid var(--lamp);color:var(--lamp);
+    padding:10px 26px;border-radius:2px;font-family:var(--mono);font-size:12px;letter-spacing:.16em}
+  .dropzone .pick:hover{background:var(--lamp);color:var(--abyss)}
+  .hintlist{margin:30px auto 0;max-width:680px;text-align:left;font-size:12.5px;color:var(--silt);
+    font-family:var(--mono);line-height:2}
+  .hintlist b{color:var(--foam);font-weight:500;display:inline-block;min-width:5.2em}
+  .dropzone.mini{margin-top:26px;padding:18px 20px}
+  .dropzone.mini h2{font-size:14px;margin:0}
+  .dropzone.mini .lead,.dropzone.mini .hintlist{display:none}
+  .dropzone.mini .pick{margin-top:10px;padding:6px 16px}
+
+  #log{display:none;margin-top:28px;border:1px solid var(--edge);border-radius:3px;background:rgba(8,22,30,.5)}
+  #log.on{display:block}
+  .lg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;padding:9px 16px;
+    border-bottom:1px solid rgba(31,78,92,.45);font-family:var(--mono);font-size:12px;align-items:baseline}
+  .lg:last-child{border-bottom:0}
+  .lg .f{color:var(--foam);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lg .f i{font-style:normal;color:var(--silt)}
+  .lg .st{color:var(--silt);white-space:nowrap}
+  .lg.ok .st{color:var(--verdigris)}
+  .lg.bad .st{color:#E4A091}
+  .lg .bar{grid-column:1/-1;height:2px;background:rgba(31,78,92,.6);position:relative}
+  .lg .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--lamp);width:0;transition:width .12s}
+  .lg.ok .bar,.lg.bad .bar{display:none}
+
+  #deck{display:none}
+  #deck.on{display:block}
+  .cells{display:flex;gap:30px;flex-wrap:wrap;margin-top:30px;font-family:var(--mono)}
+  .cell span{display:block;font-size:10px;color:var(--silt);letter-spacing:.18em}
+  .cell strong{font-size:22px;font-weight:500}
+  .toolbar{margin-top:24px;display:flex;gap:10px 12px;align-items:center;flex-wrap:wrap;
+    padding:14px 0;border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+  .lbl{font-family:var(--mono);font-size:10.5px;color:var(--silt);letter-spacing:.16em;margin-left:6px}
+  .lbl:first-child{margin-left:0}
+  .seg{display:flex;border:1px solid var(--edge);border-radius:2px;overflow:hidden}
+  .seg button{background:none;border:0;padding:8px 13px;font-family:var(--mono);font-size:11.5px;
+    color:var(--silt);letter-spacing:.1em}
+  .seg button.sel{background:var(--edge);color:var(--foam)}
+  .act{background:none;border:1px solid var(--lamp);color:var(--lamp);padding:9px 16px;border-radius:2px;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em}
+  .act:hover{background:var(--lamp);color:var(--abyss)}
+  .act[disabled]{opacity:.35;cursor:default}
+  .act[disabled]:hover{background:none;color:var(--lamp)}
+  .act.main{background:var(--lamp);color:var(--abyss)}
+  .act.main:hover{background:#F08A58}
+  .act.ghost{border-color:var(--edge);color:var(--silt)}
+  .act.ghost:hover{background:none;border-color:var(--foam);color:var(--foam)}
+  .spacer{flex:1}
+  .toolbar .mini{width:5.5em;background:rgba(8,22,30,.6);border:1px solid var(--edge);color:var(--foam);
+    padding:7px 10px;border-radius:2px;font-family:var(--sans);font-size:13px}
+  .tip{margin:12px 0 0;font-size:12.5px;color:var(--silt);line-height:1.8}
+  .tip b{color:var(--lamp);font-weight:500}
+
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:30px;margin-top:26px;align-items:start}
+  .sec{margin-bottom:26px}
+  .sec h3{margin:0 0 8px;font-size:12px;font-weight:500;letter-spacing:.12em;font-family:var(--mono);
+    color:var(--silt);display:flex;gap:12px;align-items:baseline}
+  .sec h3 b{color:var(--foam);font-weight:500;font-size:15px;letter-spacing:.06em;font-family:var(--sans)}
+  .sbar{display:flex;gap:10px;align-items:center;margin:4px 0 8px}
+  .sbar input[type=search]{flex:1;min-width:0;background:rgba(8,22,30,.6);border:1px solid var(--edge);color:var(--foam);
+    padding:8px 12px;border-radius:2px;font-family:var(--sans);font-size:13.5px}
+  .sbar input[type=search]::placeholder{color:#5C737C}
+  .chk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--silt);white-space:nowrap;cursor:pointer}
+  .chk input{accent-color:var(--lamp);margin:0}
+  .rows{border:1px solid var(--edge);border-radius:3px;background:rgba(8,22,30,.35);max-height:420px;overflow:auto}
+  .row{display:flex;gap:12px;align-items:baseline;width:100%;text-align:left;background:none;border:0;
+    border-bottom:1px solid rgba(31,78,92,.45);padding:9px 13px;font-size:13.5px;line-height:1.5}
+  .row:last-child{border-bottom:0}
+  .row:hover{background:rgba(20,56,69,.6)}
+  .row.sel{background:var(--lamp-dim)}
+  .row .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .d{font-family:var(--mono);font-size:11px;color:var(--silt);white-space:nowrap}
+  .row .c{font-family:var(--mono);font-size:11px;color:var(--silt);white-space:nowrap;min-width:3.5em;text-align:right}
+  .more{width:100%;background:none;border:0;border-top:1px solid var(--edge);padding:9px;
+    font-family:var(--mono);font-size:11px;color:var(--verdigris);letter-spacing:.1em}
+  .empty{padding:14px;color:var(--silt);font-size:13px}
+  .rawrow{display:flex;gap:12px;align-items:baseline;padding:9px 13px;border-bottom:1px solid rgba(31,78,92,.45);font-size:13px}
+  .rawrow:last-child{border-bottom:0}
+  .rawrow .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rawrow button{background:none;border:1px solid var(--edge);color:var(--silt);padding:3px 10px;
+    border-radius:2px;font-family:var(--mono);font-size:11px}
+  .rawrow button:hover{border-color:var(--foam);color:var(--foam)}
+
+  #pv{position:sticky;top:16px;border:1px solid var(--edge);border-radius:3px;background:rgba(8,22,30,.55);
+    display:flex;flex-direction:column;max-height:calc(100vh - 32px);min-height:220px}
+  #pv .ph{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--edge);flex-wrap:wrap}
+  #pv .ph .t{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #pv .ph button{background:none;border:1px solid var(--edge);color:var(--silt);padding:5px 11px;
+    border-radius:2px;font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+  #pv .ph button:hover{border-color:var(--foam);color:var(--foam)}
+  #pv pre{margin:0;padding:14px 16px;overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.7;
+    color:#BFD3D8;white-space:pre-wrap;word-break:break-word;flex:1}
+  #pv .none{padding:40px 20px;color:var(--silt);text-align:center;font-size:13.5px}
+  #pv .cut{padding:8px 16px;border-top:1px solid var(--edge);font-family:var(--mono);font-size:11px;color:var(--silt)}
+
+  #err{display:none;margin-top:26px;border:1px solid var(--rust);border-radius:3px;padding:14px 18px;
+    font-size:13.5px;color:#E4A091;background:rgba(180,84,60,.08)}
+  #err.on{display:block}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--edge);
+    font-family:var(--mono);font-size:11px;color:#4E656E;letter-spacing:.12em;text-align:center}
+
+  @media (max-width:900px){
+    .cols{grid-template-columns:1fr}
+    #pv{position:static;max-height:70vh}
+  }
+  @media (max-width:640px){
+    .wrap{padding:24px 16px 60px}
+    .brand h1{font-size:23px;letter-spacing:.24em;text-indent:.24em}
+    .privacy{white-space:normal}
+    .hintlist b{display:block;min-width:0}
+    .dropzone{padding:40px 18px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;animation:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <h1>打捞机</h1>
+      <div class="sub">把 Claude 官方导出的那堆 json 翻成人话，一场一份<span class="hull">翻译版 v2</span></div>
+    </div>
+    <div class="privacy">文件不上传 · 全部在本机浏览器内完成</div>
+  </header>
+
+  <div class="dropzone" id="dz">
+    <h2>把导出邮件里下载的那几个 zip 一起拖进来</h2>
+    <p class="lead">conversations-000、memories-000、projects-000……有几个拖几个，一次全选也行，不用先解压。已经解开的 .json 也认。</p>
+    <button class="pick" id="pick">选择文件</button>
+    <input type="file" id="file" accept=".zip,.json,.txt,.md" multiple hidden>
+    <div class="hintlist">
+      <div><b>认什么</b>对话（conversations）、记忆（memories）、项目（projects）、账号、反馈；认不出来的也照样翻成一条条能读的字</div>
+      <div><b>翻成什么</b>md / txt / Word 三选一。一场对话一份文件，自动编号、按月分夹，打成一个 zip；也能接成一本，或按月 / 每 50 场分册</div>
+      <div><b>清爽</b>Claude 的思考、工具调用、作品代码都折叠起来，点开才展开，正文不被淹</div>
+      <div><b>先看再拿</b>翻完先在这一页里点开看，满意再下载</div>
+      <div><b>在哪儿翻</b>全程在你这台电脑的浏览器里，不发任何网络请求，关掉这一页就什么都不剩</div>
+    </div>
+  </div>
+
+  <div id="log"></div>
+
+  <div id="deck">
+    <div class="cells" id="cells"></div>
+    <div class="toolbar">
+      <span class="lbl">格式</span>
+      <div class="seg" id="fmtSeg"><button data-v="md" class="sel">md</button><button data-v="txt">txt</button><button data-v="docx">Word</button></div>
+      <span class="lbl">作品和代码</span>
+      <div class="seg" id="codeSeg"><button data-v="1" class="sel">收进去</button><button data-v="0">只留一行</button></div>
+      <span class="lbl">Claude 的思考</span>
+      <div class="seg" id="thinkSeg"><button data-v="0" class="sel">不要</button><button data-v="1">一起翻</button></div>
+      <span class="lbl">分文件夹</span>
+      <div class="seg" id="monthSeg"><button data-v="1" class="sel">按月</button><button data-v="0">不分</button></div>
+      <span class="lbl">合成一本时</span>
+      <div class="seg" id="bookSeg"><button data-v="one" class="sel">整一本</button><button data-v="month">按月分册</button><button data-v="50">每 50 场一册</button></div>
+      <label class="lbl" for="meName">你在文件里叫</label>
+      <input id="meName" class="mini" value="宝" maxlength="12" spellcheck="false">
+      <span class="spacer"></span>
+      <button class="act main" id="dlPack">打包下载</button>
+      <button class="act" id="dlBook">合成一本</button>
+      <button class="act ghost" id="reset">倒掉重来</button>
+    </div>
+    <p class="tip" id="tip"></p>
+    <div class="cols">
+      <div id="secs"></div>
+      <div id="pv"><div class="none">左边点一条，先在这儿看</div></div>
+    </div>
+  </div>
+
+  <div id="err"></div>
+
+  <footer>翻出来的字只在你这台电脑上</footer>
+</div>
+
+<script>
+"use strict";
+/* ==================================================================
+   0. 小工具
+   ================================================================== */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const tick=()=>new Promise(r=>setTimeout(r,0));
+let lastYield=0;
+async function breathe(){ const now=performance.now(); if(now-lastYield>40){ lastYield=now; await tick(); } }
+const p2=n=>String(n).padStart(2,"0");
+function fmtTime(v){ if(!v) return ""; const d=new Date(v); if(isNaN(d)) return String(v);
+  return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes()); }
+function fmtDay(v){ if(!v) return ""; const d=new Date(v); if(isNaN(d)) return "";
+  return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate()); }
+function fmtBytes(n){ n=Number(n)||0; if(n<1024) return n+" B"; if(n<1048576) return (n/1024).toFixed(n<10240?1:0)+" KB";
+  if(n<1073741824) return (n/1048576).toFixed(1)+" MB"; return (n/1073741824).toFixed(2)+" GB"; }
+function fmtChars(n){ return n>=10000 ? (n/10000).toFixed(1)+" 万字" : n+" 字"; }
+function fmtN(n){ return Number(n).toLocaleString("zh-CN"); }
+const ISO=/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
+function sanitize(s,max){ s=String(s||"").replace(/[\\/:*?"<>|\u0000-\u001F\u007F]/g," ").replace(/\s+/g," ").trim().replace(/^[. ]+|[. ]+$/g,"");
+  if(max&&s.length>max) s=s.slice(0,max).trim(); return s; }
+function baseName(p){ return String(p||"").split(/[\\/]/).pop(); }
+function saveBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); }
+
+/* ==================================================================
+   1. ZIP：不解压到硬盘，直接从压缩包里把每个文件流出来
+   ================================================================== */
+async function bytesAt(file,off,len){ return new Uint8Array(await file.slice(off,off+len).arrayBuffer()); }
+function dv(u8){ return new DataView(u8.buffer,u8.byteOffset,u8.byteLength); }
+
+async function zipList(file){
+  const tailLen=Math.min(file.size,66000);
+  const tail=await bytesAt(file,file.size-tailLen,tailLen);
+  let eocd=-1;
+  for(let i=tail.length-22;i>=0;i--){
+    if(tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x05&&tail[i+3]===0x06){ eocd=i; break; }
+  }
+  if(eocd<0) return null;
+  const v=dv(tail);
+  let count=v.getUint16(eocd+10,true), cdSize=v.getUint32(eocd+12,true), cdOff=v.getUint32(eocd+16,true);
+  if(cdOff===0xFFFFFFFF||cdSize===0xFFFFFFFF||count===0xFFFF){
+    for(let i=eocd-20;i>=0;i--){
+      if(tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x06&&tail[i+3]===0x07){
+        const z64off=Number(v.getBigUint64(i+8,true));
+        const z=await bytesAt(file,z64off,56); const zv=dv(z);
+        if(z[0]===0x50&&z[1]===0x4b&&z[2]===0x06&&z[3]===0x06){
+          count=Number(zv.getBigUint64(32,true)); cdSize=Number(zv.getBigUint64(40,true)); cdOff=Number(zv.getBigUint64(48,true));
+        }
+        break;
+      }
+    }
+  }
+  const cd=await bytesAt(file,cdOff,cdSize); const c=dv(cd); const dec=new TextDecoder("utf-8");
+  const out=[]; let p=0;
+  for(let i=0;i<count&&p+46<=cd.length;i++){
+    if(c.getUint32(p,true)!==0x02014b50) break;
+    const method=c.getUint16(p+10,true);
+    let csize=c.getUint32(p+20,true), usize=c.getUint32(p+24,true);
+    const nlen=c.getUint16(p+28,true), elen=c.getUint16(p+30,true), clen=c.getUint16(p+32,true);
+    let lho=c.getUint32(p+42,true);
+    const name=dec.decode(cd.subarray(p+46,p+46+nlen));
+    if(usize===0xFFFFFFFF||csize===0xFFFFFFFF||lho===0xFFFFFFFF){
+      let e=p+46+nlen; const eEnd=e+elen;
+      while(e+4<=eEnd){
+        const tag=c.getUint16(e,true), sz=c.getUint16(e+2,true);
+        if(tag===0x0001){
+          let q=e+4;
+          if(usize===0xFFFFFFFF){ usize=Number(c.getBigUint64(q,true)); q+=8; }
+          if(csize===0xFFFFFFFF){ csize=Number(c.getBigUint64(q,true)); q+=8; }
+          if(lho===0xFFFFFFFF){ lho=Number(c.getBigUint64(q,true)); }
+          break;
+        }
+        e+=4+sz;
+      }
+    }
+    out.push({name,method,csize,usize,lho});
+    p+=46+nlen+elen+clen;
+  }
+  return out;
+}
+
+async function zipStream(file,ent){
+  const lh=await bytesAt(file,ent.lho,30); const l=dv(lh);
+  if(l.getUint32(0,true)!==0x04034b50) throw new Error("压缩包里这一段的头不对");
+  const nlen=l.getUint16(26,true), elen=l.getUint16(28,true);
+  const start=ent.lho+30+nlen+elen;
+  const raw=file.slice(start,start+ent.csize);
+  if(ent.method===0) return raw.stream();
+  if(ent.method!==8) throw new Error("压缩方式不认识（method "+ent.method+"），先手动解压，再把里面的 json 拖进来");
+  if(typeof DecompressionStream==="undefined") throw new Error("这个浏览器不会当场解压 zip。先手动解压，再把里面的 json 拖进来");
+  return raw.stream().pipeThrough(new DecompressionStream("deflate-raw"));
+}
+
+/* ==================================================================
+   2. 大 json 按块读：顶层数组一条一条切出来，几百 MB 也不用整份进内存
+   ================================================================== */
+class Splitter{
+  constructor(){ this.depth=0; this.inStr=false; this.esc=false; this.objStart=-1; this.done=false; }
+  feed(bytes,base,out){
+    const n=bytes.length;
+    for(let i=0;i<n;i++){
+      const c=bytes[i];
+      if(this.inStr){
+        if(this.esc) this.esc=false;
+        else if(c===0x5C) this.esc=true;
+        else if(c===0x22) this.inStr=false;
+        continue;
+      }
+      if(c===0x22){ this.inStr=true; continue; }
+      if(c===0x7B||c===0x5B){
+        if(this.depth===0) this.objStart=base+i;
+        this.depth++;
+      }else if(c===0x7D||c===0x5D){
+        this.depth--;
+        if(this.depth===0&&this.objStart>=0){ out.push([this.objStart,base+i+1]); this.objStart=-1; }
+        else if(this.depth<0){ this.done=true; return; }
+      }
+    }
+  }
+}
+function jsonHead(bytes){
+  for(let i=0;i<bytes.length;i++){
+    const c=bytes[i];
+    if(c===0x5B) return {pos:i+1,arr:true};
+    if(c===0x7B) return {pos:i,arr:false};
+    if(c===0x20||c===0x0A||c===0x0D||c===0x09) continue;
+    if(i<3&&(c===0xEF||c===0xBB||c===0xBF)) continue;     // BOM
+    return null;
+  }
+  return null;
+}
+const BIG=48*1024*1024;
+// src = {name, size, open:()=>ReadableStream}; onItem(item, i, isWholeObject)
+async function readJson(src,onItem,onProg){
+  if(src.size<BIG){
+    const text=(await new Response(await src.open()).text()).replace(/^\uFEFF/,"");
+    if(onProg) onProg(src.size,src.size);
+    const data=JSON.parse(text);
+    if(Array.isArray(data)){
+      for(let i=0;i<data.length;i++){ await onItem(data[i],i,false); if((i&7)===7) await breathe(); }
+      return {mode:"array",count:data.length};
+    }
+    await onItem(data,0,true);
+    return {mode:"object",count:1};
+  }
+  const reader=(await src.open()).getReader(); const sp=new Splitter(); const dec=new TextDecoder("utf-8");
+  let pending=new Uint8Array(0), pendingBase=0, read=0, started=false, count=0, wholeObj=false; const whole=[];
+  for(;;){
+    const {done,value}=await reader.read();
+    if(done) break;
+    read+=value.length;
+    let bytes=value, base=read-value.length;
+    if(!started){
+      const h=jsonHead(bytes);
+      if(!h) throw new Error("开头不像 json");
+      started=true;
+      if(!h.arr) wholeObj=true;
+      else { bytes=bytes.subarray(h.pos); base+=h.pos; pendingBase=base; }
+    }
+    if(wholeObj){ whole.push(value); if(onProg) onProg(read,src.size); continue; }
+    const merged=new Uint8Array(pending.length+bytes.length); merged.set(pending); merged.set(bytes,pending.length); pending=merged;
+    const ranges=[]; sp.feed(bytes,base,ranges);
+    let consumed=0;
+    for(const [a,b] of ranges){
+      const chunk=pending.subarray(a-pendingBase,b-pendingBase);
+      consumed=b-pendingBase;
+      let item=null;
+      try{ item=JSON.parse(dec.decode(chunk)); }catch(e){ continue; }   // 单条坏了不影响整趟
+      count++;
+      await onItem(item,count-1,false);
+    }
+    if(consumed>0){ pending=pending.slice(consumed); pendingBase+=consumed; }
+    if(onProg) onProg(read,src.size);
+    if(sp.done) break;
+    await breathe();
+  }
+  if(wholeObj){
+    const text=(await new Blob(whole).text()).replace(/^\uFEFF/,"");
+    await onItem(JSON.parse(text),0,true);
+    return {mode:"object",count:1};
+  }
+  return {mode:"array",count};
+}
+
+/* ==================================================================
+   3. 认得导出里的东西：对话 / 记忆 / 项目 / 账号 / 反馈 / 其它
+   ================================================================== */
+const KINDS={
+  conv:    {label:"对话",     folder:"对话",  per:true},
+  memory:  {label:"记忆",     folder:"记忆",  per:true},
+  project: {label:"项目",     folder:"项目",  per:true},
+  user:    {label:"账号",     folder:"",      per:false},
+  feedback:{label:"反馈",     folder:"",      per:false},
+  meta:    {label:"导出信息", folder:"",      per:false},
+  frames:  {label:"frames",   folder:"",      per:false},
+  other:   {label:"其它",     folder:"其它",  per:false},
+};
+const ORDER=["conv","memory","project","user","feedback","meta","frames","other"];
+let DOCS=[], SEEN=new Set(), ASSETS=[], RAW=[], COLL=new Map();
+let STAT={files:0,msgs:0,chars:0};
+const OPT={fmt:"md",code:true,think:false,me:"宝",month:true,book:"one"};
+let SEQW=3;
+
+function kindOf(name){
+  const n=baseName(name).toLowerCase();
+  if(/^conversations?/.test(n)) return "conv";
+  if(/^memor/.test(n)) return "memory";
+  if(/^projects?/.test(n)) return "project";
+  if(/^users?/.test(n)) return "user";
+  if(/^feedback/.test(n)) return "feedback";
+  if(/metadata/.test(n)) return "meta";
+  if(/^frames?/.test(n)) return "frames";
+  return "other";
+}
+function addDoc(d){ d.id=DOCS.length; DOCS.push(d); return d; }
+
+/* ---- 3a. 对话：先瘦身成只剩正文的形状，再按需要翻 ---- */
+function langOf(type,language){
+  const t=String(type||"").toLowerCase();
+  if(t.includes("html")) return "html";
+  if(t.includes("svg")) return "svg";
+  if(t.includes("react")) return "jsx";
+  if(t.includes("mermaid")) return "mermaid";
+  if(t.includes("markdown")) return "md";
+  if(t.includes("code")) return String(language||"").toLowerCase();
+  return String(language||"").toLowerCase();
+}
+function shortJson(x){ try{ return JSON.stringify(x,null,2); }catch(e){ return String(x); } }
+
+function slimTool(b){
+  const name=String(b.name||b.tool_name||"");
+  const inp=(b.input&&typeof b.input==="object")?b.input:{};
+  const cmd=String(inp.command||"").toLowerCase();
+  const isArt=/artifact/i.test(name)||(!!inp.id&&/^(create|update|rewrite)$/.test(cmd));
+  if(isArt){
+    const title=String(inp.title||inp.id||"");
+    const type=String(inp.type||"");
+    if(type.includes("markdown")&&typeof inp.content==="string"&&cmd!=="update")
+      return {k:"doc",title:title||"没名字",s:inp.content};
+    let code="";
+    if(cmd==="update"){
+      if(typeof inp.old_str==="string") code+="--- 原来是 ---\n"+inp.old_str+"\n";
+      if(typeof inp.new_str==="string") code+="+++ 改成了 +++\n"+inp.new_str;
+    }else if(typeof inp.content==="string") code=inp.content;
+    const verb=cmd==="create"?"新建作品":cmd==="update"?"改动作品":cmd==="rewrite"?"重写作品":"作品";
+    return {k:"tool",brief:verb+"「"+(title||"没名字")+"」"+(code?"（"+fmtChars(code.length)+"）":""),code,lang:cmd==="update"?"":langOf(type,inp.language)};
+  }
+  if(typeof inp.query==="string"&&/search/i.test(name)) return {k:"tool",brief:"搜了：「"+inp.query+"」",code:"",lang:""};
+  if(typeof inp.url==="string"&&/fetch|open|browse/i.test(name)) return {k:"tool",brief:"打开了网址："+inp.url,code:"",lang:""};
+  if(typeof inp.code==="string") return {k:"tool",brief:"跑了一段代码（"+fmtChars(inp.code.length)+"）",code:inp.code,lang:"js"};
+  const j=Object.keys(inp).length?shortJson(inp):"";
+  return {k:"tool",brief:"用了工具 "+(name||"（没名字）")+(j?"（"+fmtChars(j.length)+"）":""),code:j,lang:"json"};
+}
+function slimResult(b){
+  const c=b.content; let s="";
+  if(typeof c==="string") s=c;
+  else if(Array.isArray(c)){
+    const lines=[];
+    for(const x of c){
+      if(x==null) continue;
+      if(typeof x==="string") lines.push(x);
+      else if(typeof x.text==="string") lines.push(x.text);
+      else if(x.title||x.url) lines.push("- "+(x.title||"")+(x.url?"  "+x.url:""));
+      else lines.push(shortJson(x));
+    }
+    s=lines.join("\n");
+  }else if(c&&typeof c==="object") s=shortJson(c);
+  return {k:"result",s,err:!!b.is_error};
+}
+function slimConv(c){
+  const msgs=Array.isArray(c.chat_messages)?c.chat_messages:[];
+  const out={name:String(c.name||"").trim(),uuid:String(c.uuid||""),summary:typeof c.summary==="string"?c.summary:"",
+             created:c.created_at||"",updated:c.updated_at||"",msgs:[],nU:0,nA:0,chars:0};
+  for(const m of msgs){
+    if(!m||typeof m!=="object") continue;
+    const sender=String(m.sender||"").toLowerCase();
+    const who=sender==="assistant"?"claude":sender==="human"||sender==="user"||!sender?"you":sender;
+    const parts=[];
+    const blocks=Array.isArray(m.content)?m.content:[];
+    for(const b of blocks){
+      if(!b||typeof b!=="object") continue;
+      const ty=String(b.type||"");
+      if(ty==="text"){ if(typeof b.text==="string"&&b.text.trim()) parts.push({k:"text",s:b.text}); }
+      else if(ty==="thinking"||ty==="redacted_thinking"){
+        let s=typeof b.thinking==="string"?b.thinking:(typeof b.text==="string"?b.text:"");
+        if(!s&&Array.isArray(b.summaries)) s=b.summaries.map(x=>x&&typeof x.summary==="string"?x.summary:"").filter(Boolean).join("\n");
+        if(s.trim()) parts.push({k:"think",s});
+      }
+      else if(ty==="tool_use") parts.push(slimTool(b));
+      else if(ty==="tool_result") parts.push(slimResult(b));
+      else if(typeof b.text==="string"&&b.text.trim()) parts.push({k:"text",s:b.text});
+      else parts.push({k:"other",ty:ty||"不认识的块",s:shortJson(b)});
+    }
+    if(!parts.some(p=>p.k==="text")&&typeof m.text==="string"&&m.text.trim()) parts.unshift({k:"text",s:m.text});
+    for(const a of [].concat(m.attachments||[])){
+      if(!a||typeof a!=="object") continue;
+      parts.push({k:"att",name:String(a.file_name||a.name||a.title||"附件"),
+                  s:typeof a.extracted_content==="string"?a.extracted_content:"",size:a.file_size||0});
+    }
+    const seenF=new Set();
+    for(const f of [].concat(m.files||[],m.files_v2||[])){
+      if(!f||typeof f!=="object") continue;
+      const nm=String(f.file_name||f.name||"文件");
+      if(seenF.has(nm)) continue; seenF.add(nm);
+      parts.push({k:"file",name:nm});
+    }
+    if(!parts.length) continue;
+    const t=m.created_at||m.updated_at||"";
+    if(who==="claude") out.nA++; else out.nU++;
+    for(const p of parts) if(p.k==="text") out.chars+=p.s.length;
+    out.msgs.push({who,t,parts});
+  }
+  if(out.msgs.every(x=>x.t)) out.msgs.sort((a,b)=>(Date.parse(a.t)||0)-(Date.parse(b.t)||0));
+  return out;
+}
+function convBlocks(c,o){
+  const me=o.me||"你";
+  const B=[{t:"h1",s:c.name||"（没名字的对话）"}];
+  const items=[];
+  if(c.created) items.push(["创建时间",fmtTime(c.created)]);
+  if(c.updated&&fmtTime(c.updated)!==fmtTime(c.created)) items.push(["更新时间",fmtTime(c.updated)]);
+  items.push(["消息数",c.msgs.length+"（"+me+" "+c.nU+" · Claude "+c.nA+"）"]);
+  if(c.uuid){ items.push(["UUID",c.uuid]); items.push(["链接","https://claude.ai/chat/"+c.uuid]); }
+  B.push({t:"meta",items});
+  if(c.summary) B.push({t:"quote",s:"摘要：\n"+c.summary});
+  B.push({t:"hr"});
+  for(const m of c.msgs){
+    const who=m.who==="claude"?"Claude":m.who==="you"?me:m.who;
+    B.push({t:"who",s:who,time:m.t?fmtTime(m.t):""});
+    for(const p of m.parts){
+      switch(p.k){
+        case "text": B.push({t:"p",s:p.s}); break;
+        case "think": if(o.think) B.push({t:"details",sum:"💭 思考过程",s:p.s}); break;
+        case "tool":
+          if(o.code&&p.code) B.push({t:"details",sum:"🔧 "+p.brief,s:p.code,lang:p.lang||""});
+          else B.push({t:"note",s:"🔧 "+p.brief});
+          break;
+        case "doc":
+          if(o.code) B.push({t:"details",sum:"📄 作品「"+p.title+"」",s:p.s});
+          else B.push({t:"note",s:"📄 作品「"+p.title+"」（"+fmtChars(p.s.length)+"）"});
+          break;
+        case "result":
+          if(!p.s) break;
+          if(o.code) B.push({t:"details",sum:"📤 工具返回"+(p.err?"（出错了）":""),s:p.s,lang:""});
+          else B.push({t:"note",s:"📤 工具返回了 "+fmtChars(p.s.length)+(p.err?"（出错了）":"")});
+          break;
+        case "att": {
+          const head="📎 附件："+p.name+(p.size?"（"+fmtBytes(p.size)+"）":"");
+          if(o.code&&p.s) B.push({t:"details",sum:head,s:p.s,lang:""});
+          else B.push({t:"note",s:head+(p.s?"，"+fmtChars(p.s.length):""),md:"📎 **附件**：`"+p.name+"`"+(p.size?"（"+fmtBytes(p.size)+"）":"")});
+          break;
+        }
+        case "file": B.push({t:"note",s:"🖼️ 文件："+p.name,md:"🖼️ **文件**：`"+p.name+"`"}); break;
+        case "other":
+          if(o.code&&p.s) B.push({t:"details",sum:"（一块 "+p.ty+"）",s:p.s,lang:"json"});
+          else B.push({t:"note",s:"（一块 "+p.ty+"）"});
+          break;
+      }
+    }
+    B.push({t:"hr"});
+  }
+  return B;
+}
+function convHit(c,q,body){
+  if(c.name.toLowerCase().includes(q)) return true;
+  if(!body) return false;
+  for(const m of c.msgs) for(const p of m.parts){
+    if((p.k==="text"||p.k==="att"||p.k==="doc")&&p.s.toLowerCase().includes(q)) return true;
+  }
+  return false;
+}
+function convDoc(c){
+  if(c.uuid){ if(SEEN.has(c.uuid)) return null; SEEN.add(c.uuid); }
+  const s=slimConv(c);
+  STAT.msgs+=s.msgs.length; STAT.chars+=s.chars;
+  return addDoc({kind:"conv",title:s.name||"（没名字的对话）",day:fmtDay(s.created),t:Date.parse(s.created)||0,
+                 n:s.msgs.length,src:s,render:o=>convBlocks(s,o),hit:(q,body)=>convHit(s,q,body)});
+}
+
+/* ---- 3b. 什么形状都能翻的通用翻译 ---- */
+const KEYNAME={uuid:"编号",id:"编号",name:"名字",title:"标题",created_at:"创建时间",updated_at:"更新时间",deleted_at:"删除时间",
+  content:"内容",text:"正文",description:"说明",summary:"摘要",sender:"发言人",is_private:"私密",is_starter_project:"示例项目",
+  prompt_template:"项目指令",creator:"创建者",full_name:"姓名",email_address:"邮箱",verified_phone_number:"手机号",docs:"资料",
+  filename:"文件名",file_name:"文件名",file_size:"大小",file_type:"类型",account:"账号",conversation_uuid:"所属对话",
+  message_uuid:"所属消息",type:"类型",reasons:"原因",feedback:"反馈",rating:"评分",model:"模型",path:"路径",settings:"设置",
+  export_date:"导出时间",exported_at:"导出时间",timestamp:"时间",last_modified:"最后改动",metadata:"附加信息",
+  conversation_name:"对话名",project_uuid:"所属项目",is_deleted:"已删除",source:"来源",category:"分类",tags:"标签"};
+function keyName(k){ return KEYNAME[k]||k; }
+function rank(x){ if(x==null) return 0; if(typeof x!=="object") return (typeof x==="string"&&(x.length>80||x.includes("\n")))?2:1; return Array.isArray(x)?3:4; }
+function fmtPrim(x){
+  if(typeof x==="boolean") return x?"是":"否";
+  if(typeof x==="string"){
+    if(ISO.test(x)) return fmtTime(x);
+    if(x.startsWith("@@图片：")) return "（图片，已另存到 "+x.slice(5)+"）";
+    return x;
+  }
+  return String(x);
+}
+function genericLines(v,ind,out){
+  const pad="  ".repeat(ind);
+  if(v==null){ out.push(pad+"- （空）"); return; }
+  if(Array.isArray(v)){
+    if(!v.length){ out.push(pad+"- （空列表）"); return; }
+    v.forEach((x,i)=>{
+      if(x&&typeof x==="object"){ out.push(pad+"- 第 "+(i+1)+" 条"); genericLines(x,ind+1,out); }
+      else out.push(pad+"- "+fmtPrim(x));
+    });
+    return;
+  }
+  if(typeof v==="object"){
+    const keys=Object.keys(v); keys.sort((a,b)=>rank(v[a])-rank(v[b]));
+    for(const k of keys){
+      const x=v[k], kn=keyName(k);
+      if(x==null){ out.push(pad+"- "+kn+"：（空）"); continue; }
+      if(typeof x!=="object"){
+        if(typeof x==="string"&&(x.includes("\n")||x.length>80)){
+          out.push(pad+"- "+kn+"：");
+          for(const l of x.split("\n")) out.push(pad+"    "+l);
+        }else out.push(pad+"- "+kn+"："+fmtPrim(x));
+        continue;
+      }
+      if(Array.isArray(x)&&x.length<=12&&x.every(y=>y==null||typeof y!=="object")){
+        out.push(pad+"- "+kn+"："+(x.length?x.map(fmtPrim).join("、"):"（空）")); continue;
+      }
+      out.push(pad+"- "+kn+"："+(Array.isArray(x)?"（"+x.length+" 条）":""));
+      genericLines(x,ind+1,out);
+    }
+    return;
+  }
+  out.push(pad+"- "+fmtPrim(v));
+}
+function anyText(v){ const lines=[]; genericLines(v,0,lines); return lines.join("\n"); }
+
+/* ---- 3c. 记忆：每条一份，标题和正文从字段里认 ---- */
+const TITLE_KEYS=["title","name","filename","file_name","path","key","subject","label","topic"];
+const BODY_KEYS=["content","text","memory","body","markdown","value","summary","description","note"];
+function pickTitleKey(o){ for(const k of TITLE_KEYS){ const x=o[k]; if(typeof x==="string"&&x.trim()&&x.length<200) return k; } return null; }
+function pickBodyKey(o,skip){
+  let best=null,bl=0;
+  for(const k of BODY_KEYS){ if(k!==skip&&typeof o[k]==="string"&&o[k].length>bl){ best=k; bl=o[k].length; } }
+  if(best) return best;
+  for(const k of Object.keys(o)){ if(k!==skip&&typeof o[k]==="string"&&o[k].length>=40&&o[k].length>bl){ best=k; bl=o[k].length; } }
+  return best;
+}
+function memoryDoc(item,i){
+  if(item==null||typeof item!=="object"){
+    const s=String(item), title="记忆 "+(i+1);
+    return addDoc({kind:"memory",title,day:"",t:0,n:s.length,src:item,render:()=>[{t:"h1",s:title},{t:"p",s}],
+                   hit:q=>s.toLowerCase().includes(q)});
+  }
+  const tk=pickTitleKey(item), bk=pickBodyKey(item,tk);
+  const title=tk?String(item[tk]).trim():("记忆 "+(i+1));
+  const body=bk?String(item[bk]):"";
+  const when=item.updated_at||item.last_modified||item.created_at||item.timestamp||"";
+  const rest={}; for(const k of Object.keys(item)){ if(k!==tk&&k!==bk) rest[k]=item[k]; }
+  const restText=Object.keys(rest).length?anyText(rest):"";
+  const render=()=>{
+    const B=[{t:"h1",s:title}];
+    if(restText) B.push({t:"lines",s:restText});
+    if(body){ B.push({t:"hr"}); B.push({t:"p",s:body}); }
+    else if(!restText) B.push({t:"p",s:"（这一条是空的）"});
+    return B;
+  };
+  STAT.chars+=body.length;
+  return addDoc({kind:"memory",title,day:fmtDay(when),t:Date.parse(when)||0,n:body.length,src:item,render,
+                 hit:q=>title.toLowerCase().includes(q)||body.toLowerCase().includes(q)});
+}
+
+/* ---- 3d. 项目 ---- */
+function projectDoc(p,i){
+  const title=String(p.name||"").trim()||("项目 "+(i+1));
+  const docs=Array.isArray(p.docs)?p.docs:[];
+  const known=new Set(["uuid","name","description","is_private","is_starter_project","prompt_template","created_at","updated_at","creator","docs"]);
+  const rest={}; for(const k of Object.keys(p)) if(!known.has(k)) rest[k]=p[k];
+  const render=()=>{
+    const B=[{t:"h1",s:title}]; const meta=[];
+    if(p.created_at) meta.push("创建  "+fmtTime(p.created_at));
+    if(p.updated_at) meta.push("更新  "+fmtTime(p.updated_at));
+    if(typeof p.is_private==="boolean") meta.push(p.is_private?"私密项目":"公开项目");
+    meta.push(docs.length+" 份资料");
+    if(p.uuid) meta.push("https://claude.ai/project/"+p.uuid);
+    B.push({t:"meta",s:meta.join("\n")});
+    if(p.description) B.push({t:"quote",s:p.description});
+    if(p.prompt_template){ B.push({t:"h2",s:"项目指令"}); B.push({t:"p",s:p.prompt_template}); }
+    if(Object.keys(rest).length){ B.push({t:"h2",s:"其它信息"}); B.push({t:"lines",s:anyText(rest)}); }
+    if(docs.length){
+      B.push({t:"h2",s:"资料"});
+      docs.forEach((d,j)=>{
+        if(!d||typeof d!=="object") return;
+        B.push({t:"h3",s:String(d.filename||d.name||("资料 "+(j+1)))+(d.created_at?"  ·  "+fmtTime(d.created_at):"")});
+        const c=typeof d.content==="string"?d.content:"";
+        if(c) B.push({t:"p",s:c}); else B.push({t:"note",s:"（没有内容）"});
+      });
+    }
+    return B;
+  };
+  const hay=(title+"\n"+(p.description||"")+"\n"+(p.prompt_template||"")+"\n"+docs.map(d=>d&&(d.filename||"")+"\n"+(typeof d.content==="string"?d.content:"")).join("\n")).toLowerCase();
+  return addDoc({kind:"project",title,day:fmtDay(p.updated_at||p.created_at),t:Date.parse(p.updated_at||p.created_at)||0,
+                 n:docs.length,src:p,render,hit:q=>hay.includes(q)});
+}
+
+/* ---- 3e. 账号 / 反馈 / 导出信息 / 认不出的：同一份文件里的收成一份 ---- */
+function saveAsset(dataUrl){
+  const m=/^data:image\/([a-z0-9.+-]+);base64,([\s\S]*)$/i.exec(dataUrl); if(!m) return dataUrl;
+  let ext=m[1].toLowerCase(); if(ext==="jpeg") ext="jpg"; if(ext==="svg+xml") ext="svg";
+  let bin; try{ bin=atob(m[2].replace(/\s+/g,"")); }catch(e){ return dataUrl; }
+  const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+  const name="图片/图 "+(ASSETS.length+1)+"."+ext; ASSETS.push({name,data:u8});
+  return "@@图片："+name+"（"+fmtBytes(u8.length)+"）";
+}
+function extractAssets(v){
+  const walk=x=>{
+    if(typeof x==="string") return (x.length>64&&/^data:image\/[a-z0-9.+-]+;base64,/i.test(x))?saveAsset(x):x;
+    if(Array.isArray(x)){ for(let i=0;i<x.length;i++) x[i]=walk(x[i]); return x; }
+    if(x&&typeof x==="object"){ for(const k of Object.keys(x)) x[k]=walk(x[k]); return x; }
+    return x;
+  };
+  return walk(v);
+}
+function collAdd(kind,srcName,item){
+  const key=kind+"|"+srcName; let c=COLL.get(key);
+  if(!c){
+    c={kind,name:srcName,items:[]}; COLL.set(key,c);
+    const title=KINDS[kind].label+((kind==="other"||kind==="frames")?"（"+baseName(srcName)+"）":"");
+    c.doc=addDoc({kind,title,day:"",t:0,n:0,src:c,render:()=>collBlocks(c),
+                  hit:q=>c.items.some(it=>anyText(it).toLowerCase().includes(q))});
+  }
+  c.items.push(extractAssets(item)); c.doc.n=c.items.length;
+}
+function collBlocks(c){
+  const B=[{t:"h1",s:c.doc.title},{t:"meta",s:"来自 "+c.name+"\n"+c.items.length+" 条"}];
+  c.items.forEach((it,i)=>{
+    if(c.items.length>1){ B.push({t:"hr"}); B.push({t:"h2",s:"第 "+(i+1)+" 条"}); }
+    B.push({t:"lines",s:anyText(it)});
+  });
+  return B;
+}
+
+/* ---- 3f. 分发 ---- */
+async function handleItem(kind,srcName,item,i,top){
+  if(top&&item&&typeof item==="object"&&!Array.isArray(item)&&KINDS[kind].per){
+    // 整份是一个对象：把里面最大的那个列表当正主，其余的收成「其它」
+    let bestK=null,bestN=0;
+    for(const k of Object.keys(item)){ const v=item[k]; if(Array.isArray(v)&&v.length>bestN&&v.some(x=>x&&typeof x==="object")){ bestK=k; bestN=v.length; } }
+    if(bestK){
+      const rest={}; for(const k of Object.keys(item)) if(k!==bestK) rest[k]=item[k];
+      if(Object.keys(rest).length) collAdd("other",srcName,rest);
+      const arr=item[bestK];
+      for(let j=0;j<arr.length;j++){ await handleItem(kind,srcName,arr[j],j,false); if((j&7)===7) await breathe(); }
+      return;
+    }
+  }
+  if(item&&typeof item==="object"&&!Array.isArray(item)){
+    if(Array.isArray(item.chat_messages)) kind="conv";
+    else if(Array.isArray(item.docs)&&("prompt_template" in item||"is_private" in item)) kind="project";
+  }
+  if(kind==="conv"&&item&&typeof item==="object") convDoc(item);
+  else if(kind==="memory") memoryDoc(item,i);
+  else if(kind==="project"&&item&&typeof item==="object") projectDoc(item,i);
+  else collAdd(kind==="conv"||kind==="project"?"other":kind,srcName,item);
+}
+
+/* ==================================================================
+   4. 三种落笔：md / txt / Word
+   ================================================================== */
+function fenceFor(s){ let f="```"; while(s.includes(f)) f+="`"; return f; }
+function mdSum(x){ return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+function metaLines(b,kv){ return b.items?b.items.map(([k,v])=>kv(k,v)):b.s.split("\n").map(l=>kv(null,l)); }
+function toMd(B){
+  const out=[];
+  for(const b of B){
+    switch(b.t){
+      case "h1": out.push("# "+b.s+"\n"); break;
+      case "h2": out.push("## "+b.s+"\n"); break;
+      case "h3": out.push("### "+b.s+"\n"); break;
+      case "who": out.push("## **"+b.s+"**"+(b.time?"\n*"+b.time+"*":"")+"\n"); break;
+      case "meta": out.push(metaLines(b,(k,v)=>k?"- **"+k+"**："+v:"- "+v).join("\n")+"\n"); break;
+      case "p": case "lines": out.push(b.s+"\n"); break;
+      case "note": out.push((b.md||b.s)+"\n"); break;
+      case "quote": out.push(b.s.split("\n").map(l=>"> "+l).join("\n")+"\n"); break;
+      case "code": { const f=fenceFor(b.s); out.push(f+(b.lang||"")+"\n"+b.s+"\n"+f+"\n"); } break;
+      case "details": {
+        let body=b.s;
+        if(b.lang!=null){ const f=fenceFor(b.s); body=f+b.lang+"\n"+b.s+"\n"+f; }
+        out.push("<details>\n<summary>"+mdSum(b.sum)+"</summary>\n\n"+body+"\n\n</details>\n");
+      } break;
+      case "hr": out.push("---\n"); break;
+    }
+  }
+  return out.join("\n");
+}
+function toTxt(B){
+  const out=[];
+  for(const b of B){
+    switch(b.t){
+      case "h1": out.push("══════════════════════════════\n"+b.s+"\n══════════════════════════════"); break;
+      case "h2": out.push("—— "+b.s+" ——"); break;
+      case "h3": out.push("· "+b.s); break;
+      case "who": out.push("—— "+b.s+(b.time?"  ·  "+b.time:"")+" ——"); break;
+      case "meta": out.push(metaLines(b,(k,v)=>k?k+"："+v:v).join("\n")); break;
+      case "p": case "lines": out.push(b.s); break;
+      case "note": out.push("〔"+b.s+"〕"); break;
+      case "quote": out.push(b.s.split("\n").map(l=>"│ "+l).join("\n")); break;
+      case "code": out.push("┌────────\n"+b.s+"\n└────────"); break;
+      case "details": out.push("〔"+b.sum+"〕\n"+(b.lang!=null?"┌────────\n"+b.s+"\n└────────":b.s)); break;
+      case "hr": break;
+    }
+  }
+  return out.join("\n\n")+"\n";
+}
+
+const XMLNS='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+function xmlEsc(s){
+  s=String(s);
+  if(s.toWellFormed) s=s.toWellFormed();
+  else s=s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g,(m,p)=>(p||"")+"\uFFFD");
+  return s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g,"")
+          .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function wPara(text,style,rPr){
+  const lines=String(text).split("\n");
+  const runs=lines.map((l,i)=>(i?'<w:r><w:br/></w:r>':'')+'<w:r>'+(rPr?'<w:rPr>'+rPr+'</w:rPr>':'')+'<w:t xml:space="preserve">'+xmlEsc(l)+'</w:t></w:r>').join("");
+  return '<w:p>'+(style?'<w:pPr><w:pStyle w:val="'+style+'"/></w:pPr>':'')+runs+'</w:p>';
+}
+function docxBody(B){
+  const out=[];
+  for(const b of B){
+    switch(b.t){
+      case "h1": out.push(wPara(b.s,"Heading1")); break;
+      case "h2": out.push(wPara(b.s,"Heading2")); break;
+      case "h3": out.push(wPara(b.s,"Heading3")); break;
+      case "who": out.push(wPara(b.s+(b.time?"  ·  "+b.time:""),"Heading2")); break;
+      case "meta": for(const l of metaLines(b,(k,v)=>k?k+"："+v:v)) out.push(wPara(l,"Meta")); break;
+      case "p": for(const para of b.s.split(/\n{2,}/)) out.push(wPara(para,"")); break;
+      case "lines": for(const l of b.s.split("\n")) out.push(wPara(l,"Lines")); break;
+      case "note": out.push(wPara(b.s,"Meta",'<w:i/>')); break;
+      case "quote": for(const para of b.s.split(/\n{2,}/)) out.push(wPara(para,"Quote")); break;
+      case "code": for(const l of b.s.split("\n")) out.push(wPara(l,"Code")); break;
+      case "details":
+        out.push(wPara(b.sum,"Meta",'<w:i/>'));
+        if(b.lang!=null){ for(const l of b.s.split("\n")) out.push(wPara(l,"Code")); }
+        else { for(const para of b.s.split(/\n{2,}/)) out.push(wPara(para,"Quote")); }
+        break;
+      case "hr": out.push('<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="BBBBBB"/></w:pBdr></w:pPr></w:p>'); break;
+    }
+  }
+  return out.join("");
+}
+const DOCX_STYLES='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles '+XMLNS+'>'+
+ '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Microsoft YaHei" w:cs="Calibri"/><w:sz w:val="22"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr></w:rPrDefault>'+
+ '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="300" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'+
+ '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'+
+ '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="360" w:after="160"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>'+
+ '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="280" w:after="100"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:color w:val="1F4E5C"/><w:sz w:val="26"/></w:rPr></w:style>'+
+ '<w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="80"/><w:outlineLvl w:val="2"/></w:pPr><w:rPr><w:b/><w:sz w:val="23"/></w:rPr></w:style>'+
+ '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="480"/></w:pPr><w:rPr><w:i/><w:color w:val="555555"/></w:rPr></w:style>'+
+ '<w:style w:type="paragraph" w:styleId="Code"><w:name w:val="Code"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/><w:ind w:left="240"/></w:pPr><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:eastAsia="Microsoft YaHei" w:cs="Consolas"/><w:sz w:val="17"/></w:rPr></w:style>'+
+ '<w:style w:type="paragraph" w:styleId="Meta"><w:name w:val="Meta"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0"/></w:pPr><w:rPr><w:color w:val="777777"/><w:sz w:val="18"/></w:rPr></w:style>'+
+ '<w:style w:type="paragraph" w:styleId="Lines"><w:name w:val="Lines"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="20"/></w:rPr></w:style>'+
+ '</w:styles>';
+const DOCX_TYPES='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>';
+const DOCX_RELS='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+const DOCX_DOCRELS='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+const ENC=new TextEncoder();
+function makeDocx(B){
+  const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document '+XMLNS+'><w:body>'+docxBody(B)+
+    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1300" w:bottom="1440" w:left="1300" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  return zipBytes([
+    {name:"[Content_Types].xml",data:ENC.encode(DOCX_TYPES)},
+    {name:"_rels/.rels",data:ENC.encode(DOCX_RELS)},
+    {name:"word/_rels/document.xml.rels",data:ENC.encode(DOCX_DOCRELS)},
+    {name:"word/styles.xml",data:ENC.encode(DOCX_STYLES)},
+    {name:"word/document.xml",data:ENC.encode(doc)},
+  ]);
+}
+
+/* ==================================================================
+   5. 打 zip（自己写，不靠外面的库）
+   ================================================================== */
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function dosStamp(d){ return {time:(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1),date:((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()}; }
+// entries: [{name, data, comp?, method?}]，返回所有分片
+function zipParts(entries){
+  const parts=[], cd=[]; let off=0; const {time,date}=dosStamp(new Date());
+  for(const e of entries){
+    const nm=ENC.encode(e.name), crc=crc32(e.data), n=e.data.length;
+    const body=e.comp||e.data, m=e.comp?8:0, cn=body.length;
+    const lh=new Uint8Array(30+nm.length), v=new DataView(lh.buffer);
+    v.setUint32(0,0x04034b50,true); v.setUint16(4,20,true); v.setUint16(6,0x0800,true); v.setUint16(8,m,true);
+    v.setUint16(10,time,true); v.setUint16(12,date,true); v.setUint32(14,crc,true); v.setUint32(18,cn,true); v.setUint32(22,n,true);
+    v.setUint16(26,nm.length,true); v.setUint16(28,0,true); lh.set(nm,30);
+    parts.push(lh,body);
+    const c=new Uint8Array(46+nm.length), cv=new DataView(c.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true); cv.setUint16(8,0x0800,true); cv.setUint16(10,m,true);
+    cv.setUint16(12,time,true); cv.setUint16(14,date,true); cv.setUint32(16,crc,true); cv.setUint32(20,cn,true); cv.setUint32(24,n,true);
+    cv.setUint16(28,nm.length,true); cv.setUint16(30,0,true); cv.setUint16(32,0,true); cv.setUint16(34,0,true); cv.setUint16(36,0,true);
+    cv.setUint32(38,0,true); cv.setUint32(42,off,true); c.set(nm,46);
+    cd.push(c); off+=lh.length+cn;
+  }
+  let cdLen=0; for(const c of cd) cdLen+=c.length;
+  const eocd=new Uint8Array(22), ev=new DataView(eocd.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,entries.length,true); ev.setUint16(10,entries.length,true);
+  ev.setUint32(12,cdLen,true); ev.setUint32(16,off,true);
+  return parts.concat(cd,[eocd]);
+}
+function zipBytes(entries){
+  const parts=zipParts(entries); let n=0; for(const p of parts) n+=p.length;
+  const out=new Uint8Array(n); let o=0; for(const p of parts){ out.set(p,o); o+=p.length; }
+  return out;
+}
+async function deflateRaw(u8){
+  const cs=new CompressionStream("deflate-raw");
+  return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(cs)).arrayBuffer());
+}
+async function makeZipBlob(entries,onProg){
+  const canDeflate=typeof CompressionStream!=="undefined";
+  for(let i=0;i<entries.length;i++){
+    const e=entries[i];
+    if(canDeflate&&e.data.length>=8192){
+      try{ const c=await deflateRaw(e.data); if(c.length<e.data.length) e.comp=c; }catch(err){ /* 压不动就原样放 */ }
+    }
+    if(onProg&&(i&15)===15){ onProg(i+1,entries.length); await tick(); }
+  }
+  return new Blob(zipParts(entries),{type:"application/zip"});
+}
+
+/* ==================================================================
+   6. 页面：进度、清单、预览
+   ================================================================== */
+function fail(html){ const e=$("err"); e.innerHTML=html; e.classList.add("on"); }
+function logLine(name,st){
+  const d=document.createElement("div"); d.className="lg";
+  const parts=name.split(" › ");
+  d.innerHTML='<div class="f">'+esc(parts[0])+(parts[1]?' <i>›</i> '+esc(parts[1]):'')+'</div><div class="st">'+esc(st)+'</div><div class="bar"><i></i></div>';
+  $("log").appendChild(d); $("log").classList.add("on"); return d;
+}
+let lastPaint=0;
+function logProg(line,read,total,extra){
+  const now=performance.now(); if(now-lastPaint<80&&read<total) return; lastPaint=now;
+  const pct=total?Math.min(100,Math.round(read/total*100)):0;
+  line.querySelector(".bar i").style.width=pct+"%";
+  line.querySelector(".st").textContent="已读 "+pct+"%"+(extra?" · "+extra:"");
+}
+function logDone(line,st,cls){ line.querySelector(".st").textContent=st; line.classList.add(cls||"ok"); }
+
+async function ingestFiles(files){
+  $("err").classList.remove("on"); $("err").innerHTML="";
+  $("dz").classList.remove("hot");
+  for(const f of files){
+    if(/\.zip$/i.test(f.name)) await ingestZip(f);
+    else await ingestSource({name:f.name,size:f.size,open:()=>f.stream()},f.name);
+  }
+  finish();
+}
+async function ingestZip(f){
+  const line=logLine(f.name,"正在拆开…");
+  let list=null;
+  try{ list=await zipList(f); }catch(e){ return logDone(line,"读不动："+e.message,"bad"); }
+  if(!list) return logDone(line,"结尾不像 zip","bad");
+  const ents=list.filter(e=>!e.name.endsWith("/"));
+  if(!ents.length) return logDone(line,"是空的","bad");
+  logDone(line,ents.length+" 个文件","ok");
+  for(const e of ents){
+    if(/\.(json|txt|md|csv)$/i.test(e.name)){
+      await ingestSource({name:e.name,size:e.usize,open:()=>zipStream(f,e)},f.name+" › "+e.name);
+    }else{
+      RAW.push({name:e.name,size:e.usize,from:f.name,open:()=>zipStream(f,e)});
+      logDone(logLine(f.name+" › "+e.name,""),"不是 json，原样列在下面（"+fmtBytes(e.usize)+"）","ok");
+    }
+  }
+}
+async function ingestSource(src,shown){
+  const kind=kindOf(src.name);
+  const line=logLine(shown,"正在翻…");
+  const before=DOCS.length, beforeMsgs=STAT.msgs;
+  let items=0;
+  try{
+    if(!/\.json$/i.test(src.name)){
+      const text=await new Response(await src.open()).text();
+      const title=baseName(src.name);
+      addDoc({kind:"other",title,day:"",t:0,n:text.length,src:text,render:()=>[{t:"h1",s:title},{t:"p",s:text}],hit:q=>text.toLowerCase().includes(q)});
+      STAT.files++; logDone(line,fmtChars(text.length),"ok"); return;
+    }
+    const r=await readJson(src,
+      async (item,i,top)=>{ items++; await handleItem(kind,src.name,item,i,top); },
+      (read,total)=>logProg(line,read,total,kind==="conv"?fmtN(DOCS.length-before)+" 个对话":""));
+    STAT.files++;
+    const made=DOCS.length-before, msgs=STAT.msgs-beforeMsgs;
+    if(kind==="conv"||made>1) logDone(line,fmtN(made)+(kind==="conv"?" 个对话 · "+fmtN(msgs)+" 条消息":" 份"),"ok");
+    else logDone(line,(r.mode==="array"?fmtN(r.count)+" 条":"1 份")+"，收成 "+KINDS[DOCS[DOCS.length-1]?DOCS[DOCS.length-1].kind:kind].label,"ok");
+  }catch(e){
+    logDone(line,"没翻成："+(e&&e.message?e.message:e),"bad");
+  }
+}
+
+function finish(){
+  if(!DOCS.length&&!RAW.length){ fail("一份都没翻出来。看看上面每一行后面写的原因；要是 zip 拆不开，先手动解压、再把里面的 .json 拖进来。"); return; }
+  $("dz").classList.add("mini");
+  $("dz").querySelector("h2").textContent="还可以继续把别的 zip 或 json 拖进来";
+  $("deck").classList.add("on");
+  assignSeq(); renderCells(); renderSecs(); renderTip();
+  $("deck").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function count(kind){ let n=0; for(const d of DOCS) if(d.kind===kind) n++; return n; }
+function renderCells(){
+  const cells=[];
+  const nc=count("conv"); if(nc) { cells.push(["对话",fmtN(nc)]); cells.push(["消息",fmtN(STAT.msgs)]); }
+  const nm=count("memory"); if(nm) cells.push(["记忆",fmtN(nm)]);
+  const np=count("project"); if(np) cells.push(["项目",fmtN(np)]);
+  const no=DOCS.length-nc-nm-np; if(no) cells.push(["其它",fmtN(no)]);
+  if(STAT.chars) cells.push(["正文",fmtChars(STAT.chars)]);
+  if(ASSETS.length) cells.push(["图片",fmtN(ASSETS.length)]);
+  $("cells").innerHTML=cells.map(([k,v])=>'<div class="cell"><span>'+k+'</span><strong>'+v+'</strong></div>').join("");
+}
+function renderTip(){
+  const nc=count("conv");
+  $("tip").innerHTML='左边点任意一条，先在右边看。<b>打包下载</b>是一个 zip：一场对话一份文件，文件名是「编号_日期_标题」，按月分好文件夹；记忆一条一份。'+
+    '<b>合成一本</b>默认整一本'+(nc>200?'（你有 '+fmtN(nc)+' 场对话，整一本会很长，建议选「按月分册」或「每 50 场一册」）':'，也可以按月或每 50 场分册')+
+    '。md 里 Claude 的思考、工具调用、作品代码都是折叠着的，点开才展开。';
+}
+
+const PAGE=300; let SEL=null;
+function renderSecs(){
+  const host=$("secs"); host.innerHTML="";
+  for(const k of ORDER){
+    const docs=DOCS.filter(d=>d.kind===k); if(!docs.length) continue;
+    docs.sort((a,b)=>(b.t||0)-(a.t||0)||a.id-b.id);
+    const sec=document.createElement("div"); sec.className="sec";
+    const searchable=docs.length>6||k==="conv";
+    sec.innerHTML='<h3><b>'+KINDS[k].label+'</b><span>'+fmtN(docs.length)+(k==="conv"?" 个":" 份")+'</span></h3>'+
+      (searchable?'<div class="sbar"><input type="search" placeholder="搜'+(k==="conv"?"对话标题":KINDS[k].label)+'">'+
+        (k==="conv"?'<label class="chk"><input type="checkbox"> 连正文一起搜</label>':'')+'</div>':'')+
+      '<div class="rows"></div>';
+    host.appendChild(sec);
+    const rows=sec.querySelector(".rows"), inp=sec.querySelector("input[type=search]"), chk=sec.querySelector(".chk input");
+    const st={q:"",shown:PAGE,body:false};
+    const paint=()=>{
+      const q=st.q.trim().toLowerCase();
+      const list=q?docs.filter(d=>d.hit?d.hit(q,st.body):d.title.toLowerCase().includes(q)):docs;
+      rows.innerHTML="";
+      if(!list.length){ rows.innerHTML='<div class="empty">没有对得上的</div>'; return; }
+      const frag=document.createDocumentFragment();
+      for(const d of list.slice(0,st.shown)){
+        const b=document.createElement("button"); b.className="row"+(SEL===d?" sel":""); b.type="button"; b.dataset.id=d.id;
+        b.innerHTML='<span class="n">'+esc(d.title)+'</span>'+(d.day?'<span class="d">'+d.day+'</span>':'')+
+          (k==="conv"?'<span class="c">'+d.n+' 条</span>':(k==="memory"&&d.n?'<span class="c">'+fmtChars(d.n)+'</span>':(k==="project"?'<span class="c">'+d.n+' 份资料</span>':(d.n>1?'<span class="c">'+d.n+' 条</span>':''))));
+        b.addEventListener("click",()=>select(d,b));
+        frag.appendChild(b);
+      }
+      rows.appendChild(frag);
+      if(list.length>st.shown){
+        const m=document.createElement("button"); m.className="more"; m.type="button";
+        m.textContent="还有 "+fmtN(list.length-st.shown)+" 条，再显示 "+PAGE+" 条";
+        m.addEventListener("click",()=>{ st.shown+=PAGE; paint(); });
+        rows.appendChild(m);
+      }
+    };
+    let timer=0;
+    if(inp) inp.addEventListener("input",()=>{ clearTimeout(timer); timer=setTimeout(()=>{ st.q=inp.value; st.shown=PAGE; paint(); },220); });
+    if(chk) chk.addEventListener("change",()=>{ st.body=chk.checked; paint(); });
+    paint();
+  }
+  if(RAW.length){
+    const sec=document.createElement("div"); sec.className="sec";
+    sec.innerHTML='<h3><b>不是 json 的</b><span>'+RAW.length+' 个 · 原样交给你</span></h3><div class="rows"></div>';
+    const rows=sec.querySelector(".rows");
+    RAW.forEach(r=>{
+      const d=document.createElement("div"); d.className="rawrow";
+      d.innerHTML='<span class="n">'+esc(r.name)+'</span><span class="d">'+fmtBytes(r.size)+'</span><button type="button">下载</button>';
+      d.querySelector("button").addEventListener("click",async()=>{
+        try{ const blob=await new Response(await r.open()).blob(); saveBlob(blob,baseName(r.name)); }
+        catch(e){ fail("这个文件拿不出来："+esc(e.message||e)); }
+      });
+      rows.appendChild(d);
+    });
+    host.appendChild(sec);
+  }
+}
+const PREVIEW_MAX=400000;
+function select(d,btn){
+  SEL=d;
+  document.querySelectorAll(".row.sel").forEach(x=>x.classList.remove("sel"));
+  if(btn) btn.classList.add("sel");
+  paintPreview();
+  if(window.innerWidth<=900) $("pv").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function renderText(d,fmt){ const B=d.render(OPT); return fmt==="txt"?toTxt(B):toMd(B); }
+function paintPreview(){
+  const pv=$("pv"); const d=SEL;
+  if(!d){ pv.innerHTML='<div class="none">左边点一条，先在这儿看</div>'; return; }
+  const fmt=OPT.fmt==="txt"?"txt":"md";
+  let text=renderText(d,fmt); const cut=text.length>PREVIEW_MAX;
+  if(cut) text=text.slice(0,PREVIEW_MAX);
+  pv.innerHTML='<div class="ph"><span class="t"></span><button type="button" id="pvDl">下载这一份</button><button type="button" id="pvCp">复制</button></div><pre></pre>'+
+    (cut?'<div class="cut">这一份太长，这里只先看开头 '+fmtChars(PREVIEW_MAX)+'，下载的是完整的</div>':'')+
+    (OPT.fmt==="docx"?'<div class="cut">现在选的是 Word：预览按 md 的样子给你看，下载下来的是 .docx</div>':'');
+  pv.querySelector(".t").textContent=d.title;
+  pv.querySelector("pre").textContent=text;
+  $("pvDl").addEventListener("click",()=>downloadOne(d));
+  $("pvCp").addEventListener("click",async()=>{
+    const full=renderText(d,fmt);
+    try{ await navigator.clipboard.writeText(full); $("pvCp").textContent="复制好了"; }
+    catch(e){ $("pvCp").textContent="复制不了，选中文字手动复制吧"; }
+    setTimeout(()=>{ const b=$("pvCp"); if(b) b.textContent="复制"; },1800);
+  });
+}
+
+/* ==================================================================
+   7. 拿走：单份 / 打包 / 一本
+   ================================================================== */
+function docBytes(d,fmt){
+  const B=d.render(OPT);
+  if(fmt==="docx") return makeDocx(B);
+  return ENC.encode(fmt==="txt"?toTxt(B):toMd(B));
+}
+function assignSeq(){
+  const convs=DOCS.filter(d=>d.kind==="conv").sort((a,b)=>(a.t||0)-(b.t||0)||a.id-b.id);
+  SEQW=Math.max(3,String(convs.length).length);
+  convs.forEach((d,i)=>{ d.seq=i+1; });
+}
+function convMonth(d){ return d.day?d.day.slice(0,7):"未知日期"; }
+function docFileName(d,fmt,used){
+  const K=KINDS[d.kind]; let dir=K.folder?K.folder+"/":""; let base;
+  if(d.kind==="conv"){
+    if(OPT.month) dir+=convMonth(d)+"/";
+    const seq=d.seq!=null?String(d.seq).padStart(SEQW,"0")+"_":"";
+    base=seq+(d.day||"未知日期")+"_"+(sanitize(d.title,60)||"没名字的对话").replace(/\s+/g,"_");
+  }else if(d.kind==="memory"){
+    const parts=String(d.title).split(/[\\/]+/).map(x=>sanitize(x,60)).filter(Boolean);
+    let last=parts.pop()||"记忆"; last=last.replace(/\.(md|txt|markdown|json)$/i,"")||"记忆";
+    if(parts.length) dir+=parts.join("/")+"/"; base=last;
+  }else base=sanitize(d.title,60)||K.label;
+  let name=dir+base+"."+fmt, n=2;
+  while(used.has(name.toLowerCase())){ name=dir+base+" ("+(n++)+")."+fmt; }
+  used.add(name.toLowerCase()); return name;
+}
+function mime(fmt){ return fmt==="docx"?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":(fmt==="md"?"text/markdown":"text/plain")+";charset=utf-8"; }
+function downloadOne(d){
+  const fmt=OPT.fmt; const used=new Set();
+  saveBlob(new Blob([docBytes(d,fmt)],{type:mime(fmt)}),baseName(docFileName(d,fmt,used)));
+}
+function today(){ return fmtDay(new Date()); }
+function summaryLines(){
+  const L=[]; const nc=count("conv");
+  if(nc) L.push("对话 "+fmtN(nc)+" 个，消息 "+fmtN(STAT.msgs)+" 条");
+  const nm=count("memory"); if(nm) L.push("记忆 "+fmtN(nm)+" 条");
+  const np=count("project"); if(np) L.push("项目 "+fmtN(np)+" 个");
+  for(const k of ["user","feedback","meta","frames","other"]){ const n=count(k); if(n) L.push(KINDS[k].label+" "+n+" 份"); }
+  return L;
+}
+let BUSY=false;
+function busy(on,msg){
+  BUSY=on; for(const id of ["dlPack","dlBook"]) $(id).disabled=on;
+  if(msg!=null) $("tip").innerHTML=esc(msg);
+  if(!on) renderTip();
+}
+async function downloadPack(){
+  if(BUSY) return; busy(true,"正在翻成文件…");
+  try{
+    const fmt=OPT.fmt, used=new Set(), entries=[], index=[];
+    const sorted=[...DOCS].sort((a,b)=>ORDER.indexOf(a.kind)-ORDER.indexOf(b.kind)||(a.t||0)-(b.t||0)||a.id-b.id);
+    let lastKind="";
+    for(let i=0;i<sorted.length;i++){
+      const d=sorted[i]; const name=docFileName(d,fmt,used);
+      entries.push({name,data:docBytes(d,fmt)});
+      if(d.kind!==lastKind){ index.push("","## "+KINDS[d.kind].label,""); lastKind=d.kind; }
+      index.push("- ["+d.title.replace(/[\[\]]/g," ")+"](<"+name.replace(/[<>]/g," ")+">)"+(d.day?"  ·  "+d.day:"")+(d.kind==="conv"?"  ·  "+d.n+" 条":""));
+      if((i&15)===15){ $("tip").textContent="正在翻成文件… "+fmtN(i+1)+" / "+fmtN(sorted.length); await tick(); }
+    }
+    for(const a of ASSETS) entries.push({name:a.name,data:a.data});
+    const head=["# Claude 导出 · 人话版","","翻好时间："+fmtTime(new Date()),"",...summaryLines().map(l=>"- "+l),""];
+    entries.unshift({name:"目录.md",data:ENC.encode(head.concat(index).join("\n")+"\n")});
+    entries.push({name:"说明.txt",data:ENC.encode(
+      "这个包是「打捞机 · 翻译版 v2」在你自己的浏览器里翻出来的，没有经过任何服务器。\n\n"+
+      "对话/      一场对话一份，文件名是「编号_日期_标题」，编号按时间从早到晚"+(OPT.month?"，按月分文件夹":"")+"\n记忆/      一条记忆一份\n项目/      一个项目一份，项目指令和资料都在里面\n"+
+      "其余的（账号、反馈、导出信息……）各一份放在外面\n图片/      json 里夹着的图片，另存出来的\n目录.md    全部文件的清单\n\n"+
+      "格式："+fmt+"　作品和代码："+(OPT.code?"收进去了":"只留了一行")+"　Claude 的思考："+(OPT.think?"一起翻了":"没要")+"\n")});
+    const blob=await makeZipBlob(entries,(i,n)=>{ $("tip").textContent="正在打包… "+fmtN(i)+" / "+fmtN(n); });
+    saveBlob(blob,"Claude导出-人话版-"+today()+".zip");
+    busy(false);
+  }catch(e){ busy(false); fail("打包的时候断了："+esc(e&&e.message?e.message:e)); }
+}
+function bookBlocks(title,docs,sub){
+  const B=[{t:"h1",s:title}];
+  if(sub) B.push({t:"meta",s:sub});
+  for(const d of docs){ B.push({t:"hr"}); for(const b of d.render(OPT)) B.push(b); }
+  return B;
+}
+function bookBytes(B){ const fmt=OPT.fmt; return fmt==="docx"?makeDocx(B):ENC.encode(fmt==="txt"?toTxt(B):toMd(B)); }
+async function downloadBook(){
+  if(BUSY) return; busy(true,"正在接成一本…");
+  try{
+    const fmt=OPT.fmt, mode=OPT.book;
+    const convs=DOCS.filter(d=>d.kind==="conv").sort((a,b)=>(a.t||0)-(b.t||0)||a.id-b.id);
+    const others=DOCS.filter(d=>d.kind!=="conv").sort((a,b)=>ORDER.indexOf(a.kind)-ORDER.indexOf(b.kind)||(a.t||0)-(b.t||0)||a.id-b.id);
+    if(mode==="one"||!convs.length){
+      const B=[{t:"h1",s:"Claude 导出 · 人话版"},{t:"meta",s:["翻好时间  "+fmtTime(new Date())].concat(summaryLines()).join("\n")}];
+      for(const k of ORDER){
+        const docs=DOCS.filter(d=>d.kind===k).sort((a,b)=>(a.t||0)-(b.t||0)||a.id-b.id);
+        if(!docs.length) continue;
+        B.push({t:"hr"},{t:"h1",s:"—— "+KINDS[k].label+" · "+fmtN(docs.length)+" ——"});
+        for(let i=0;i<docs.length;i++){
+          for(const b of docs[i].render(OPT)) B.push(b);
+          B.push({t:"hr"});
+          if((i&31)===31){ $("tip").textContent="正在接成一本… "+KINDS[k].label+" "+fmtN(i+1)+" / "+fmtN(docs.length); await tick(); }
+        }
+      }
+      saveBlob(new Blob([bookBytes(B)],{type:mime(fmt)}),"Claude导出-人话版-"+today()+"."+fmt);
+      busy(false); return;
+    }
+    const groups=[];
+    if(mode==="month"){
+      const m=new Map();
+      for(const d of convs){ const k=convMonth(d); if(!m.has(k)){ m.set(k,[]); groups.push({name:k,docs:m.get(k)}); } m.get(k).push(d); }
+    }else{
+      const N=50;
+      for(let i=0;i<convs.length;i+=N){
+        const part=convs.slice(i,i+N);
+        groups.push({name:String(part[0].seq).padStart(SEQW,"0")+"-"+String(part[part.length-1].seq).padStart(SEQW,"0"),docs:part});
+      }
+    }
+    const entries=[];
+    for(let g=0;g<groups.length;g++){
+      const grp=groups[g];
+      const B=bookBlocks("Claude 对话 · "+grp.name,grp.docs,grp.docs.length+" 场对话  ·  "+(mode==="month"?"这个月的":"第 "+grp.name+" 场")+"\n翻好时间  "+fmtTime(new Date()));
+      entries.push({name:"对话_"+grp.name+"."+fmt,data:bookBytes(B)});
+      $("tip").textContent="正在分册… "+(g+1)+" / "+groups.length; await tick();
+    }
+    if(others.length) entries.push({name:"其它（记忆、项目、账号……）."+fmt,data:bookBytes(bookBlocks("Claude 导出 · 对话以外的",others,summaryLines().join("\n")))});
+    for(const a of ASSETS) entries.push({name:a.name,data:a.data});
+    const blob=await makeZipBlob(entries,(i,n)=>{ $("tip").textContent="正在打包… "+fmtN(i)+" / "+fmtN(n); });
+    saveBlob(blob,"Claude导出-分册-"+today()+".zip");
+    busy(false);
+  }catch(e){ busy(false); fail("接的时候断了："+esc(e&&e.message?e.message:e)); }
+}
+
+/* ==================================================================
+   8. 接线
+   ================================================================== */
+const dz=$("dz"), fileIn=$("file");
+$("pick").addEventListener("click",e=>{ e.stopPropagation(); fileIn.click(); });
+dz.addEventListener("click",e=>{ if(e.target.tagName!=="BUTTON") fileIn.click(); });
+fileIn.addEventListener("change",()=>{ const fs=[...fileIn.files]; fileIn.value=""; if(fs.length) ingestFiles(fs); });
+let dragDepth=0;
+document.addEventListener("dragenter",e=>{ e.preventDefault(); dragDepth++; dz.classList.add("hot"); });
+document.addEventListener("dragover",e=>{ e.preventDefault(); });
+document.addEventListener("dragleave",e=>{ e.preventDefault(); if(--dragDepth<=0){ dragDepth=0; dz.classList.remove("hot"); } });
+document.addEventListener("drop",e=>{
+  e.preventDefault(); dragDepth=0; dz.classList.remove("hot");
+  const fs=[...(e.dataTransfer&&e.dataTransfer.files||[])]; if(fs.length) ingestFiles(fs);
+});
+function wireSeg(id,key,parse){
+  $(id).addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    $(id).querySelectorAll("button").forEach(x=>x.classList.toggle("sel",x===b));
+    OPT[key]=parse(b.dataset.v);
+    if(SEL) paintPreview();
+  });
+}
+wireSeg("fmtSeg","fmt",v=>v);
+wireSeg("codeSeg","code",v=>v==="1");
+wireSeg("thinkSeg","think",v=>v==="1");
+wireSeg("monthSeg","month",v=>v==="1");
+wireSeg("bookSeg","book",v=>v);
+$("meName").addEventListener("input",()=>{ OPT.me=$("meName").value.trim()||"你"; if(SEL) paintPreview(); });
+$("dlPack").addEventListener("click",downloadPack);
+$("dlBook").addEventListener("click",downloadBook);
+$("reset").addEventListener("click",()=>{
+  DOCS=[]; SEEN=new Set(); ASSETS=[]; RAW=[]; COLL=new Map(); STAT={files:0,msgs:0,chars:0}; SEL=null;
+  $("log").innerHTML=""; $("log").classList.remove("on"); $("deck").classList.remove("on");
+  $("err").classList.remove("on"); $("secs").innerHTML=""; paintPreview();
+  dz.classList.remove("mini"); dz.querySelector("h2").textContent="把导出邮件里下载的那几个 zip 一起拖进来";
+  window.scrollTo({top:0,behavior:"smooth"});
+});
+</script>
+</body>
+</html>
