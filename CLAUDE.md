@@ -87,6 +87,9 @@ grep -rn '要引用的那句' --include='*.html' --include='*.md' .
 小脸蛋的宪法两份任选：`grok/小科普/小脸蛋造型宪法（Chat版） (6).html`、
 `claude/小科普/小脸蛋造型宪法（实测版） (1).html`（序号是上传时带的，原样留着）。
 
+**2026-09-26 她转来 chat 的话，加了 momoyu 系列的两只**：火红狐狸 StashYu、暹罗 FetchMo，会出现在各个小文件的角落。
+同样这四句，把 Clawd 换成它们。宪法在 `claude/小科普/momoyu造型宪法.html`（总 README 梦境那条下面也挂了一行指路）。
+
 ## 店的结构
 
 - **四台小机** `claude/` `gemini/` `grok/` `copilot/`，抽屉同一套，首页也按这个顺序：
