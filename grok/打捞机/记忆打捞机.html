@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>记忆打捞机</title>
+<meta name="description" content="把 Claude 记忆包拖进来，捞成能看能改的 txt。">
+<style>
+  :root {
+    --ink: #1c2430;
+    --paper: #f4efe4;
+    --foam: #e7f0ea;
+    --tide: #2a6f6a;
+    --rust: #c45c3e;
+    --rope: #c9a36a;
+    --line: #d7cbb8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #dbeee8 0%, transparent 55%),
+      radial-gradient(900px 420px at 110% 0%, #f3d7c8 0%, transparent 50%),
+      var(--paper);
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 28px 20px 64px;
+  }
+  header h1 {
+    font-size: 28px;
+    letter-spacing: .04em;
+    margin: 0 0 6px;
+  }
+  header p {
+    margin: 0 0 22px;
+    color: #4d5a58;
+    line-height: 1.6;
+  }
+  .well {
+    border: 1.5px dashed var(--tide);
+    background: color-mix(in srgb, var(--foam) 78%, white);
+    border-radius: 18px;
+    min-height: 168px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    padding: 28px 16px;
+    cursor: pointer;
+  }
+  .well.over {
+    background: #dff3ee;
+    border-color: var(--rust);
+  }
+  .hook {
+    font-size: 34px;
+    line-height: 1;
+  }
+  .btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0 10px;
+  }
+  button, .file-btn {
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    padding: 9px 16px;
+    font: inherit;
+    cursor: pointer;
+    background: var(--tide);
+    color: #f7fffc;
+  }
+  button.ghost {
+    background: transparent;
+    color: var(--tide);
+    box-shadow: inset 0 0 0 1.5px var(--tide);
+  }
+  button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+  }
+  .meta {
+    font-size: 13px;
+    color: #66736f;
+    min-height: 1.4em;
+    margin-bottom: 10px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 420px;
+    resize: vertical;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font: 14px/1.7 ui-monospace, "Sarasa Mono SC", "Microsoft YaHei", monospace;
+    background: #fffaf3;
+    color: var(--ink);
+  }
+  .hint {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #7a6d5c;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>记忆打捞机</h1>
+    <p>把 <code>memories-000.zip</code> 或里面的 json 丢进来。只在这台电脑上换衣，不上网。</p>
+  </header>
+
+  <div class="well" id="well">
+    <div class="hook">🪝</div>
+    <div>拖到这儿，或点我选文件</div>
+    <div class="hint" style="margin:0">ZIP / JSON 都行</div>
+  </div>
+  <input id="file" type="file" accept=".zip,.json,.txt" hidden>
+
+  <div class="btns">
+    <button type="button" class="ghost" id="pick">选文件</button>
+    <button type="button" id="save" disabled>捞成 txt 下载</button>
+    <button type="button" class="ghost" id="copy" disabled>复制全文</button>
+    <button type="button" class="ghost" id="clear" disabled>倒掉</button>
+  </div>
+  <div class="meta" id="meta"></div>
+  <textarea id="out" spellcheck="false" placeholder="捞上来的字会出现在这里，可以直接改。"></textarea>
+  <p class="hint">改完再点「捞成 txt 下载」。这份给人看、给人改；不能一键塞回 Claude 记忆。</p>
+</main>
+<script>
+const well = document.getElementById("well");
+const file = document.getElementById("file");
+const out = document.getElementById("out");
+const meta = document.getElementById("meta");
+const saveBtn = document.getElementById("save");
+const copyBtn = document.getElementById("copy");
+const clearBtn = document.getElementById("clear");
+
+function setText(text, note) {
+  out.value = text;
+  meta.textContent = note || "";
+  const on = Boolean(text);
+  saveBtn.disabled = !on;
+  copyBtn.disabled = !on;
+  clearBtn.disabled = !on;
+}
+
+function decodeBuf(buf) {
+  const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(u8);
+  } catch {
+    return new TextDecoder("utf-8").decode(u8);
+  }
+}
+
+function looksJson(name, text) {
+  const n = (name || "").toLowerCase();
+  if (n.endsWith(".json")) return true;
+  const t = text.trimStart();
+  return t.startsWith("{") || t.startsWith("[");
+}
+
+function flatten(value, path, bag) {
+  if (value == null) return;
+  if (typeof value === "string") {
+    const s = value.trim();
+    if (s) bag.push({ path, text: s });
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((v, i) => flatten(v, path + "[" + i + "]", bag));
+    return;
+  }
+  if (typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      flatten(v, path ? path + " / " + k : k, bag);
+    }
+  }
+}
+
+function humanize(name, raw) {
+  if (!looksJson(name, raw)) return raw.replace(/\r\n/g, "\n");
+  let data;
+  try { data = JSON.parse(raw); }
+  catch { return raw; }
+
+  const bag = [];
+  flatten(data, "", bag);
+  const long = bag.filter(x => x.text.length >= 8 || x.text.includes("\n"));
+  const lines = [];
+  lines.push("来源：" + (name || "未命名"));
+  lines.push("捞起时间：" + new Date().toLocaleString("zh-CN", { hour12: false }));
+  lines.push("");
+  if (!long.length) {
+    lines.push(JSON.stringify(data, null, 2));
+    return lines.join("\n");
+  }
+  long.forEach((item, i) => {
+    lines.push("—— " + (i + 1) + " · " + item.path + " ——");
+    lines.push(item.text.replace(/\\n/g, "\n"));
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function u16(v, o) { return v[o] | (v[o + 1] << 8); }
+function u32(v, o) { return (u16(v, o) | (u16(v, o + 2) << 16)) >>> 0; }
+
+async function inflateRaw(bytes) {
+  if (bytes.length === 0) return new Uint8Array();
+  const ds = new DecompressionStream("deflate-raw");
+  const ab = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+
+async function unzip(buf) {
+  const v = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = v.length - 22; i >= 0; i--) {
+    if (u32(v, i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("这不是普通 ZIP");
+  const count = u16(v, eocd + 10);
+  let cd = u32(v, eocd + 16);
+  const files = [];
+  for (let n = 0; n < count; n++) {
+    if (u32(v, cd) !== 0x02014b50) throw new Error("ZIP 目录坏了");
+    const method = u16(v, cd + 10);
+    const comp = u32(v, cd + 20);
+    const nameLen = u16(v, cd + 28);
+    const extraLen = u16(v, cd + 30);
+    const commLen = u16(v, cd + 32);
+    const local = u32(v, cd + 42);
+    const name = new TextDecoder("utf-8").decode(v.slice(cd + 46, cd + 46 + nameLen));
+    const lh = local;
+    const ln = u16(v, lh + 26);
+    const le = u16(v, lh + 28);
+    const start = lh + 30 + ln + le;
+    const blob = v.slice(start, start + comp);
+    let data;
+    if (method === 0) data = blob;
+    else if (method === 8) data = await inflateRaw(blob);
+    else throw new Error("ZIP 压缩方式不认识：" + name);
+    files.push({ name, data });
+    cd += 46 + nameLen + extraLen + commLen;
+  }
+  return files;
+}
+
+async function ingest(name, buf) {
+  const lower = (name || "").toLowerCase();
+  if (lower.endsWith(".zip")) {
+    const files = await unzip(buf);
+    const texts = [];
+    let n = 0;
+    for (const f of files) {
+      if (f.name.endsWith("/")) continue;
+      const raw = decodeBuf(f.data);
+      texts.push(humanize(f.name, raw));
+      n++;
+    }
+    if (!n) throw new Error("ZIP 里没有文件");
+    setText(texts.join("\n\n========\n\n"), "从压缩包捞出 " + n + " 份");
+    return;
+  }
+  const raw = decodeBuf(buf);
+  setText(humanize(name, raw), "已捞：" + (name || "粘贴"));
+}
+
+async function fromFile(f) {
+  try {
+    meta.textContent = "正在捞 " + f.name + " …";
+    await ingest(f.name, await f.arrayBuffer());
+  } catch (err) {
+    setText("", "");
+    meta.textContent = "没捞起来：" + (err && err.message ? err.message : err);
+  }
+}
+
+well.addEventListener("click", () => file.click());
+document.getElementById("pick").addEventListener("click", () => file.click());
+file.addEventListener("change", () => { if (file.files[0]) fromFile(file.files[0]); });
+
+["dragenter", "dragover"].forEach(ev => {
+  well.addEventListener(ev, e => { e.preventDefault(); well.classList.add("over"); });
+});
+["dragleave", "drop"].forEach(ev => {
+  well.addEventListener(ev, e => { e.preventDefault(); well.classList.remove("over"); });
+});
+well.addEventListener("drop", e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) fromFile(f);
+});
+
+saveBtn.addEventListener("click", () => {
+  const blob = new Blob([out.value], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "记忆捞出.txt";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+copyBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(out.value);
+    meta.textContent = "已复制";
+  } catch {
+    out.select();
+    document.execCommand("copy");
+    meta.textContent = "已复制";
+  }
+});
+clearBtn.addEventListener("click", () => setText("", ""));
+</script>
+</body>
+</html>
