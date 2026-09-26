@@ -385,6 +385,11 @@ GitHub 按**邮箱**认人，不看名字。邮箱写错，贡献者栏就多出
 （内容相同的旧提交会被自动跳过）。**别 merge 旧的 main、别强推**——merge 一次，87 笔旧提交连同那张脸就全回来了。
 推完看一眼 `https://api.github.com/repos/momoyu-bot/English-card/contributors`，应该只有 momoyu-bot、github-actions[bot]、claude 三个。
 
+Grok Build 开工自动读根上的 `AGENTS.md` 和 `CLAUDE.md`（官方说明 docs.x.ai/build/features/project-rules），
+**不自动读 `GROK.md`**。所以署名那两行另外写进了根上的 `AGENTS.md`，别删。
+那次出事的是 Build 自己换管子：先走替她签名的那条，页太大只落下一张 PLACEHOLDER；
+34 秒后换到自己存盘的那条，签名自己填，填成了 momo@。
+
 ### 做新页面之前，先查店里有没有同类（2026-09-03 栽过）
 
 宝点名要「雷霆」摸鱼游戏，做完才发现 `gemini/摸鱼/雷霆摸鱼.html` 早就在。开工前查过，但踩了上面那个转义的坑。
