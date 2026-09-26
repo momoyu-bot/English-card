@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FetchMo 去海边</title>
+<meta name="description" content="今天你当一回海。浪小一点，它就往前挪一步；浪大了，它退回毛巾上，假装什么都没发生。">
+<!--
+  FetchMo 去海边 · Claude 做的 · 2026-09-26
+  今天只有 FetchMo 一只。Clawd 去过的海边，它也来了。
+  身子照 claude/小科普/momoyu造型宪法.html 的格子一格一格抄；
+  动的只有位置和眼睛，帽子、浪、泡泡都叠在外面。
+-->
+<style>
+  :root {
+    --page: #F6F1E9; --ink: #3A332B; --ink-2: #7A7064; --ink-3: #ABA092; --line: #E2D8CA;
+    --sea: #3E86B5; --sea-2: #2F6F99;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; padding: calc(34px + env(safe-area-inset-top, 0px)) 16px 40px; }
+  h1 { font-size: 25px; line-height: 1.3; margin: 0; font-weight: 700; letter-spacing: .01em; }
+  .lede { margin: 4px 0 16px; color: var(--ink-2); font-size: 15px; }
+  .scene { display: flex; justify-content: center; }
+  canvas {
+    display: block; border-radius: 12px; cursor: pointer;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .line { margin: 16px 2px 0; font-size: 16px; min-height: 1.7em; }
+  .sub { margin: 2px 2px 0; font-size: 14px; color: var(--ink-2); min-height: 1.7em; }
+  .btns { display: flex; gap: 10px; margin-top: 14px; }
+  .btn {
+    flex: 1 1 0; font: inherit; font-size: 16px; line-height: 1.2; padding: 12px 0; border-radius: 999px;
+    border: 1.5px solid var(--sea); background: #FFFFFF; color: var(--sea-2); cursor: pointer;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+  }
+  .btn.main { background: var(--sea); color: #FFFFFF; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn:focus-visible, .helpbtn:focus-visible, canvas:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .help { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; min-height: 32px; }
+  .helpbtn {
+    font: inherit; font-size: 13px; line-height: 1.3; padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink-2); cursor: pointer;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .helpbtn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--page); }
+  .hint { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+  footer { margin-top: 36px; font-size: 12px; color: var(--ink-3); letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>FetchMo 去海边</h1>
+  <p class="lede">今天你当一回海。</p>
+  <div class="scene"><canvas id="cv" tabindex="0" role="img" aria-label="早上的海边。FetchMo 戴着一顶蓝色小帽，坐在毛巾上看海。点一下画面，就是一个小浪。"></canvas></div>
+  <p class="line" id="line" aria-live="polite"></p>
+  <p class="sub" id="sub" aria-live="polite"></p>
+  <div class="btns">
+    <button class="btn main" id="small" type="button">小浪</button>
+    <button class="btn" id="big" type="button">大浪</button>
+    <button class="btn main" id="again" type="button" hidden>再来一天</button>
+  </div>
+  <div class="help">
+    <button class="helpbtn" id="help" type="button" aria-pressed="false">Claude 帮帮忙</button>
+    <span class="hint" id="hint" aria-live="polite"></span>
+  </div>
+  <footer>Claude 做的 · 2026.09.26</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var W = 48, H = 30;
+  var RM = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  /* ---------- FetchMo 本体：逐格照抄 momoyu 造型宪法，不重画、不加格减格 ---------- */
+  var CAT = {
+    rows: [
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      ".....X.MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ],
+    pal: { M: "#F3E7D6", X: "#4E382E", E: "#79C0F0" },
+    line: "#4E382E",
+    eyes: [[8, 5], [16, 5]]
+  };
+
+  /* 眼睛槽位：照宪法那张表，从每只眼 2×2 的左上角数格子 */
+  function eyeCells(kind, x, y, right, dir) {
+    switch (kind) {
+      case 'open':    return [[[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]], 'eye'];
+      case 'blink':   return [[[x, y + 1], [x + 1, y + 1]], 'line'];
+      case 'happy':   return [[[x - 1, y + 1], [x, y], [x + 1, y], [x + 2, y + 1]], 'line'];
+      case 'sleep':   return [[[x - 1, y], [x, y + 1], [x + 1, y + 1], [x + 2, y]], 'line'];
+      case 'glance':  return [[[x + dir, y], [x + 1 + dir, y], [x + dir, y + 1], [x + 1 + dir, y + 1]], 'eye'];
+      case 'squeeze': return right ? [[[x + 1, y - 1], [x, y], [x + 1, y + 1]], 'line'] : [[[x, y - 1], [x + 1, y], [x, y + 1]], 'line'];
+      case 'dot':     return [[[x + (right ? 0 : 1), y + 1]], 'eye'];
+    }
+    return [[], 'eye'];
+  }
+  function catGrid(kind, dir) {
+    var g = CAT.rows.map(function (r) {
+      return r.split('').map(function (k) { return k === '.' ? null : CAT.pal[k === 'E' ? 'M' : k]; });
+    });
+    CAT.eyes.forEach(function (e, i) {
+      var res = eyeCells(kind, e[0], e[1], i === 1, dir);
+      var col = res[1] === 'eye' ? CAT.pal.E : CAT.line;
+      res[0].forEach(function (c) { if (g[c[1]] && c[0] >= 0 && c[0] < 20) g[c[1]][c[0]] = col; });
+    });
+    return g;
+  }
+
+  /* ---------- 海边 ---------- */
+  var CAT_TOP = 16, FEET = CAT_TOP + 11, FLOOR = CAT_TOP + 12;
+  var EDGE = 13, SMALL = 4, BIG = 12;
+  var TOWEL_END = 21;
+
+  var COL = {
+    sky: {
+      dawn:    ['#C9D6E8', '#E8D6DD', '#F7DDC8'],
+      morning: ['#BCDDEF', '#D9ECF3', '#F4E8D6'],
+      day:     ['#AED8EF', '#CDE8F4', '#EAF4F4']
+    },
+    sun: { dawn: '#FFD7A0', morning: '#FFE4AA', day: '#FFF0C2' },
+    deep: ['#3E86B5', '#4A93C2', '#5AA1CE'],
+    shallow: '#79C0F0',   /* 浅水和它的眼睛是同一个色号 */
+    foam: '#F4FBFF',
+    dune: '#CDB27F', sand: '#D8C198', speck: '#CDB48A', wet: '#C4AA80',
+    grass: '#86A874', grassDark: '#6B8F5E',
+    towel: ['#F2B8B0', '#FBF6EE'], towelEdge: ['#E0A39A', '#EAE1D3'],   /* 粉的那条，是它腮红的色号 */
+    shadowDry: '#C8AF86', shadowWet: '#B39A72',
+    gull: '#6A7886', sparkle: '#EAF6FC', bubble: '#FFFFFF',
+    hat: '#A9D2E6', band: '#FBF8F2', brim: '#7FB5D1'
+  };
+  var SUN = ['.XXX.', 'XXXXX', 'XXXXX', 'XXXXX', '.XXX.'], SUN_X = 39;
+  var GULL = [['X...X', '.X.X.', '..X..'], ['.....', 'XX.XX', '..X..']];
+  var GRASS = [[0, 9, 0], [1, 8, 1], [1, 9, 0], [2, 9, 1], [4, 9, 0], [5, 8, 0], [5, 9, 1], [6, 9, 0], [8, 9, 1], [9, 8, 0], [9, 9, 0]];
+  var SPARKS = [[[30, 12], [44, 14], [36, 17]], [[40, 12], [33, 15], [46, 18]]];
+
+  /* 帽子叠在外面：拿掉以后，底下还是那张格子图 */
+  var HAT = [];
+  (function () {
+    var x;
+    for (x = 11; x <= 14; x++) HAT.push([x, -1, 'hat']);
+    for (x = 10; x <= 15; x++) HAT.push([x, 0, 'hat']);
+    for (x = 10; x <= 15; x++) HAT.push([x, 1, 'band']);
+    for (x = 9; x <= 16; x++) HAT.push([x, 2, 'brim']);
+  })();
+  var RIBBON = [[[9, 1], [8, 0]], [[9, 1], [9, 0]]];
+
+  function shoreBase(y) { return 24 + Math.round((y - 11) * 0.5); }
+  function reach(y, s) { return Math.round(s * (0.4 + 0.6 * (y - 11) / 18)); }
+  function waterline(y, s) { return shoreBase(y) - reach(y, s); }
+  function speck(x, y) { return (((x * 73856093) ^ (y * 19349663)) >>> 0) % 11 === 0; }
+
+  /* ---------- 状态 ---------- */
+  var S = {};
+  function fresh(day) {
+    var home = day > 0 ? 3 : 1;
+    return {
+      day: day, home: home, catX: home, dy: 0, eyes: 'open', dir: 1, hatDrop: 0, s: 0, peak: 0,
+      busy: false, brave: false, after: 0, done: false, step: 2, justRetreated: false,
+      saidWet: false, saidTowel: false, advances: 0, sunY: 10, bubbles: [], splash: []
+    };
+  }
+  Object.assign(S, fresh(0));
+  S.help = false;
+  var ribbon = 0, sparkle = 0, gull = null;
+
+  function pawRight() { return S.catX + 16; }
+  function reaches(s) { return waterline(FEET, s) <= pawRight(); }
+
+  /* ---------- 画 ---------- */
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var cell = 7;
+  function prep() {
+    var dpr = Math.max(1, window.devicePixelRatio || 1);
+    var cw = W * cell, ch = H * cell;
+    cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+    var bw = Math.round(cw * dpr), bh = Math.round(ch * dpr);
+    if (cv.width !== bw) cv.width = bw;
+    if (cv.height !== bh) cv.height = bh;
+    var k = cell * dpr;
+    function R(v) { return Math.round(v * k); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return {
+      fill: function (c) { ctx.fillStyle = c; },
+      cell: function (x, y) {
+        if (x < 0 || y < 0 || x >= W || y >= H) return;
+        ctx.fillRect(R(x), R(y), R(x + 1) - R(x), R(y + 1) - R(y));
+      }
+    };
+  }
+
+  function draw() {
+    var p = prep(), x, y, i, j;
+    var stage = S.sunY >= 8 ? 'dawn' : S.sunY >= 5 ? 'morning' : 'day';
+    var sky = COL.sky[stage];
+
+    for (y = 0; y <= 10; y++) {
+      p.fill(y <= 3 ? sky[0] : y <= 7 ? sky[1] : sky[2]);
+      for (x = 0; x < W; x++) p.cell(x, y);
+    }
+    p.fill(COL.sun[stage]);
+    for (j = 0; j < 5; j++) for (i = 0; i < 5; i++) if (SUN[j][i] === 'X') p.cell(SUN_X + i, S.sunY + j);
+    if (gull) {
+      p.fill(COL.gull);
+      for (j = 0; j < 3; j++) for (i = 0; i < 5; i++) if (GULL[gull.f][j][i] === 'X') p.cell(gull.x + i, 3 + j);
+    }
+    GRASS.forEach(function (g) { p.fill(g[2] ? COL.grassDark : COL.grass); p.cell(g[0], g[1]); });
+
+    for (y = 10; y < H; y++) {
+      var base = shoreBase(y), wl = y >= 11 ? waterline(y, S.s) : W;
+      for (x = 0; x < W; x++) {
+        var c;
+        if (y === 10) { if (x > 9) continue; c = COL.dune; }
+        else if (x < wl) {
+          if (y <= 12) c = COL.dune;
+          else if (x >= base - 6) c = COL.wet;
+          else c = speck(x, y) ? COL.speck : COL.sand;
+        } else if (x === wl) c = COL.foam;
+        else if (x <= base + 2) c = COL.shallow;
+        else c = y <= 13 ? COL.deep[0] : y <= 19 ? COL.deep[1] : COL.deep[2];
+        p.fill(c); p.cell(x, y);
+      }
+    }
+
+    p.fill(COL.sparkle);
+    SPARKS[sparkle].forEach(function (s) { if (s[0] >= waterline(s[1], S.s) + 3) p.cell(s[0], s[1]); });
+    p.fill(COL.bubble);
+    S.bubbles.forEach(function (b) { if (b.x < waterline(b.y, S.s)) p.cell(b.x, b.y); });
+
+    for (x = 0; x <= TOWEL_END; x++) {
+      var k = Math.floor(x / 3) % 2;
+      p.fill(COL.towel[k]); p.cell(x, FEET);
+      p.fill(COL.towelEdge[k]); p.cell(x, FLOOR);
+    }
+
+    var ox = S.catX, oy = CAT_TOP + S.dy;
+    if (S.catX > S.home + 1) {
+      var wlf = waterline(FLOOR, S.s), wetFrom = shoreBase(FLOOR) - 6;
+      for (x = ox + 6; x <= ox + 16; x++) {
+        if (x <= TOWEL_END || x >= wlf) continue;
+        p.fill(x >= wetFrom ? COL.shadowWet : COL.shadowDry); p.cell(x, FLOOR);
+      }
+    }
+
+    var g = catGrid(S.eyes, S.dir);
+    for (y = 0; y < 13; y++) for (x = 0; x < 20; x++) if (g[y][x]) { p.fill(g[y][x]); p.cell(ox + x, oy + y); }
+
+    var hy = oy + S.hatDrop;
+    HAT.forEach(function (h) { p.fill(COL[h[2]]); p.cell(ox + h[0], hy + h[1]); });
+    p.fill(COL.band);
+    RIBBON[S.done ? 0 : ribbon].forEach(function (r) { p.cell(ox + r[0], hy + r[1]); });
+
+    if (S.s > 0 && S.dy === 0) {
+      var w = waterline(FEET, S.s);
+      for (x = w; x <= shoreBase(FEET) + 2; x++) {
+        var cx = x - ox;
+        if (cx >= 0 && cx < 20 && g[11][cx]) { p.fill(x === w ? COL.foam : COL.shallow); p.cell(x, FEET); }
+      }
+    }
+    p.fill(COL.foam);
+    S.splash.forEach(function (s) { p.cell(s[0], s[1]); });
+  }
+
+  /* ---------- 动：只挪位置、只换眼睛；浪一格一格走，不做缓动 ---------- */
+  function pause(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function setEyes(kind, dir) { S.eyes = kind; if (dir !== undefined) S.dir = dir; draw(); }
+  function blink() {
+    if (RM) { setEyes('open'); return Promise.resolve(); }
+    setEyes('blink');
+    return pause(140).then(function () { if (S.eyes === 'blink') setEyes('open'); });
+  }
+
+  async function wave(sMax, onStep, hold) {
+    S.peak = sMax;
+    if (RM) {
+      S.s = sMax; if (onStep) onStep(sMax); draw();
+      await pause(700);
+      S.s = 0; draw();
+      return;
+    }
+    for (var s = 1; s <= sMax; s++) { S.s = s; if (onStep) onStep(s); draw(); await pause(60); }
+    await pause(hold || 240);
+    for (var t = sMax - 1; t >= 0; t--) { S.s = t; draw(); await pause(95); }
+  }
+
+  async function walk(target, fast) {
+    if (RM) { S.catX = target; S.dy = 0; draw(); return; }
+    var d = target > S.catX ? 1 : -1, n = 0;
+    while (S.catX !== target) {
+      S.catX += d; S.dy = n % 2 === 0 ? -1 : 0; draw();
+      await pause(fast ? 50 : 120); n++;
+    }
+    S.dy = 0; draw();
+  }
+
+  function addBubbles() {
+    if (RM) return;
+    [23, 25, 27, 29].forEach(function (y) {
+      if (Math.random() < 0.8) S.bubbles.push({ x: waterline(y, S.peak) + (Math.random() < 0.5 ? 0 : 1), y: y, life: 2 + Math.floor(Math.random() * 5) });
+    });
+    draw();
+  }
+  function splash() {
+    if (RM) return;
+    var w = waterline(FEET, S.s);
+    S.splash = [[w - 1, FEET - 2], [w + 1, FEET - 3]];
+    draw();
+    setTimeout(function () { S.splash = []; draw(); }, 320);
+  }
+
+  /* ---------- 字 ---------- */
+  var $line = document.getElementById('line'), $sub = document.getElementById('sub');
+  var $small = document.getElementById('small'), $big = document.getElementById('big');
+  var $again = document.getElementById('again'), $help = document.getElementById('help'), $hint = document.getElementById('hint');
+  function say(a, b) { $line.textContent = a; $sub.textContent = b || ''; }
+  function intro() {
+    if (S.day === 0) say('FetchMo 第一次来海边。', '它在离海最远的地方铺好毛巾，看了很久。');
+    else say('又是一个早上。', '毛巾还铺在老地方。它比昨天坐得靠前一点。');
+  }
+  function advanceLines(next) {
+    if (S.justRetreated) { S.justRetreated = false; return ['这回它走得快一点。', '路它认识了。']; }
+    if (next >= EDGE - 1) return ['近到能看清海的颜色了。', '和它眼睛是同一种蓝，只是大了很多很多。'];
+    if (!S.saidWet && next + 16 >= shoreBase(FEET) - 6) { S.saidWet = true; return ['脚底下的沙子变凉了。', '颜色也深了一点。']; }
+    if (!S.saidTowel && next >= 6) { S.saidTowel = true; return ['它回头看了一眼毛巾。', '还在。它接着往前走。', true]; }
+    if (S.advances === 0) return ['浪过来，又回去了。', '它盯着浪退走的地方，往前挪了一步。'];
+    if (S.advances === 1) return ['海好像没有要过来的意思。', '它又挪了一步。'];
+    return ['风把帽子上的带子吹得一抖一抖。', '它又往前挪了一步。'];
+  }
+
+  function wavesToTouch() {
+    var x = S.catX, n = 1;
+    while (x + 16 < waterline(FEET, SMALL)) { x = Math.min(EDGE, x + S.step); n++; }
+    return n;
+  }
+  function hint() {
+    if (!S.help) { $hint.textContent = ''; return; }
+    if (S.done) { $hint.textContent = S.busy ? '' : '今天到这儿啦。'; return; }
+    if (!S.brave) {
+      var n = wavesToTouch();
+      $hint.textContent = n <= 1 ? '下一个小浪，就碰到它的爪子了。'
+        : '再来 ' + n + ' 个小浪，浪就能碰到它的爪子。大浪我先帮你拦着。';
+      return;
+    }
+    $hint.textContent = '再来 ' + Math.max(1, 2 - S.after) + ' 个浪，太阳就全出来了。';
+  }
+  function setButtons() {
+    var fin = S.done && !S.busy;
+    $small.hidden = fin; $big.hidden = fin; $again.hidden = !fin;
+    $small.disabled = S.busy; $big.disabled = S.busy;
+  }
+
+  /* ---------- 你是海 ---------- */
+  function begin() {
+    S.busy = true;
+    S.sunY = Math.max(2, S.sunY - 1);
+    setButtons(); draw();
+  }
+  async function end() {
+    S.busy = false;
+    if (S.brave && S.after >= 2 && !S.done) { await ending(); return; }
+    setButtons(); hint();
+  }
+
+  async function smallWave() {
+    if (S.busy || S.done) return;
+    begin();
+    if (S.brave) {
+      await wave(SMALL, function (s) { if (reaches(s)) setEyes('happy'); });
+      say('它不躲了。', '浪来它眯眼，浪走它盯着湿湿的爪子。');
+      S.after++;
+      await pause(600);
+      setEyes('open');
+    } else if (reaches(SMALL)) {
+      var felt = false;
+      await wave(SMALL, function (s) {
+        if (!felt && reaches(s)) { felt = true; setEyes('squeeze'); splash(); say('凉的。', ''); }
+      }, 520);
+      await pause(700);
+      setEyes('happy');
+      say('凉的。', '它想了一会儿，决定这件事可以。');
+      S.brave = true;
+      await pause(1100);
+      setEyes('open');
+    } else {
+      setEyes('glance', 1);
+      await wave(SMALL);
+      addBubbles();
+      var next = Math.min(EDGE, S.catX + S.step);
+      var l = advanceLines(next);
+      await pause(250);
+      if (l[2]) { setEyes('glance', -1); await pause(750); }
+      setEyes('open');
+      await walk(next);
+      S.advances++;
+      say(l[0], l[1]);
+    }
+    await end();
+  }
+
+  function safeS() {
+    var s = BIG;
+    while (s > 0 && waterline(FEET, s) <= pawRight() + 1) s--;
+    return s;
+  }
+
+  async function bigWave() {
+    if (S.busy || S.done) return;
+    begin();
+    var guard = S.help && !S.brave;
+    var sMax = guard ? safeS() : BIG;
+    say('哗——', '');
+    if (!reaches(sMax)) {
+      setEyes('dot');
+      await wave(sMax);
+      addBubbles();
+      if (guard && sMax < BIG) say('哗——浪在它跟前一格停住了。', '是 Claude 拦的，它不知道。');
+      else say('哗——', '隔着老远，它也把眼睛瞪圆了。');
+      await pause(900);
+      await blink();
+    } else if (!S.brave) {
+      var run = null;
+      await wave(sMax, function (s) {
+        if (!run && waterline(FEET, s) - pawRight() <= 3) { setEyes('dot'); run = walk(S.home, true); }
+      });
+      if (run) await run;
+      addBubbles();
+      say('它一口气退回了毛巾上。', '');
+      await pause(900);
+      await blink();
+      say('它一口气退回了毛巾上。', '然后坐好，假装刚才什么都没发生。');
+      S.step = 3; S.justRetreated = true;
+    } else {
+      var hop = null;
+      await wave(sMax, function (s) {
+        if (!hop && waterline(FEET, s) - pawRight() <= 2) { setEyes('dot'); hop = walk(Math.max(S.home, S.catX - 3), true); }
+      });
+      if (hop) await hop;
+      say('大浪。', '它往后跳了三格——');
+      await pause(600);
+      setEyes('happy');
+      await walk(EDGE);
+      say('大浪。', '它往后跳了三格，又自己走回来了。');
+      S.after++;
+      await pause(500);
+      setEyes('open');
+    }
+    await end();
+  }
+
+  async function ending() {
+    S.busy = true; S.done = true; setButtons(); hint();
+    await pause(500);
+    say('太阳全出来了。', '');
+    while (S.sunY > 2) { S.sunY--; draw(); await pause(RM ? 0 : 180); }
+    await pause(900);
+    setEyes('glance', -1);
+    await pause(800);
+    setEyes('open');
+    await walk(S.home);
+    await pause(400);
+    S.hatDrop = 1;
+    setEyes('sleep');
+    say('它回到毛巾上，把帽子往下拉了一点。', '睡着了。今天的海，它认识了。');
+    S.busy = false;
+    setButtons(); hint();
+  }
+
+  function restart() {
+    var help = S.help, day = S.day + 1;
+    Object.assign(S, fresh(day));
+    S.help = help;
+    intro(); draw(); setButtons(); hint();
+  }
+
+  /* ---------- 没人碰它的时候 ---------- */
+  function idle() {
+    setTimeout(async function () {
+      if (!S.busy && !S.done && S.eyes === 'open') {
+        if (Math.random() < 0.3) {
+          setEyes('glance', 1);
+          await pause(900);
+          if (!S.busy && !S.done && S.eyes === 'glance') setEyes('open');
+        } else {
+          await blink();
+        }
+      }
+      idle();
+    }, 2600 + Math.random() * 2900);
+  }
+  function gullLater() { setTimeout(flyGull, 7000 + Math.random() * 9000); }
+  function flyGull() {
+    gull = { x: W, f: 0, n: 0 };
+    var t = setInterval(function () {
+      gull.x--; gull.n++;
+      if (gull.n % 2 === 0) gull.f ^= 1;
+      if (gull.x < -5) { clearInterval(t); gull = null; draw(); gullLater(); return; }
+      draw();
+    }, 150);
+  }
+
+  /* ---------- 开场 ---------- */
+  function layout() {
+    var w = cv.parentElement.clientWidth;
+    cell = Math.max(4, Math.min(12, Math.floor(w / W)));
+    draw();
+  }
+  $small.addEventListener('click', smallWave);
+  $big.addEventListener('click', bigWave);
+  $again.addEventListener('click', restart);
+  $help.addEventListener('click', function () {
+    S.help = !S.help;
+    $help.setAttribute('aria-pressed', String(S.help));
+    hint();
+  });
+  cv.addEventListener('click', smallWave);
+  cv.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); smallWave(); }
+  });
+  window.addEventListener('resize', layout);
+
+  intro(); layout(); setButtons(); hint();
+  if (!RM) {
+    setInterval(function () {
+      if (!S.done) ribbon ^= 1;
+      sparkle ^= 1;
+      S.bubbles = S.bubbles.filter(function (b) { return --b.life > 0; });
+      draw();
+    }, 520);
+    idle();
+    gullLater();
+  }
+})();
+</script>
+</body>
+</html>
