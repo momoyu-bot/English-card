@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>藏与叼</title>
+<meta name="description" content="StashYu 把东西藏进抽屉，FetchMo 要一样一样叼回来。它藏得越多，你越得看仔细。">
+<meta name="theme-color" content="#F4EEE4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<!-- momoyu 系列 · 小游戏。两只的格子图照抄自 claude/小科普/momoyu造型宪法.html，一格没改。
+     它们只平移、只换眼睛；时间函数用 steps()。cc 做的 · 2026.09 -->
+<style>
+  :root{
+    --page:#F4EEE4; --ink:#2B2622; --ink-2:#7A6F66; --ink-3:#A79C92; --line:#E1D6C8;
+    --btn:#2B2622; --btn-ink:#F4EEE4;
+    --wood:#7A5B43; --wood-2:#5E4634; --inside:#4A3527; --front:#E6CFAE; --front-2:#F0DDBF; --handle:#5A4230;
+    --shelf:#9C7B60; --shelf-2:#7A5B43; --chip:#FFFFFF;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){ --page:#1B1816; --ink:#EDE5DB; --ink-2:#A89D93; --ink-3:#736A62; --line:#2E2925; --btn:#EDE5DB; --btn-ink:#1B1816; --chip:#2A2521; }
+  }
+  :root[data-theme="dark"]{ --page:#1B1816; --ink:#EDE5DB; --ink-2:#A89D93; --ink-3:#736A62; --line:#2E2925; --btn:#EDE5DB; --btn-ink:#1B1816; --chip:#2A2521; }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--page); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+    line-height:1.6; padding-top:env(safe-area-inset-top);
+    -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none;
+  }
+  .wrap{max-width:420px;margin:0 auto;padding:30px 16px 48px}
+  .kicker{font-size:12px;letter-spacing:.2em;color:var(--ink-3);margin:0 0 6px}
+  h1{font-size:24px;font-weight:600;letter-spacing:.06em;margin:0 0 6px}
+  .lede{margin:0 0 20px;font-size:14px;color:var(--ink-2)}
+
+  .board{position:relative}
+  .shelf{position:relative;height:64px;margin:0 6px;overflow:hidden}
+  .shelf::after{content:"";position:absolute;left:0;right:0;bottom:0;height:8px;background:var(--shelf);border-bottom:3px solid var(--shelf-2);border-radius:2px 2px 0 0}
+  .fig{position:absolute;bottom:8px;left:0;transition:left .34s steps(4);z-index:1}
+  .fig svg{display:block}
+  .fig.hop{animation:hop .34s steps(3) 1}
+  @keyframes hop{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
+
+  .cabinet{
+    display:grid; grid-template-columns:repeat(var(--cols,3),1fr); gap:6px;
+    background:var(--wood); border:3px solid var(--wood-2); border-top:0; border-radius:0 0 8px 8px; padding:8px;
+  }
+  .dr{
+    position:relative; overflow:hidden; aspect-ratio:1.55; border:0; padding:0; margin:0; border-radius:3px;
+    background:var(--inside); cursor:pointer; font:inherit; color:inherit;
+  }
+  .dr .item{position:absolute;left:0;right:0;top:0;height:62%;display:flex;align-items:center;justify-content:center}
+  .dr .item svg{display:block}
+  .dr .front{position:absolute;inset:0;background:var(--front);transition:transform .22s steps(3),background .2s steps(2)}
+  .dr .front::after{content:"";position:absolute;left:50%;top:50%;width:26%;height:4px;margin:-2px 0 0 -13%;background:var(--handle);border-radius:2px}
+  .dr.open .front{transform:translateY(64%)}
+  .dr.hit .front{background:var(--front-2)}
+  .dr:disabled{cursor:default}
+  .dr:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+  .status{display:flex;justify-content:space-between;align-items:center;margin:12px 6px 0;font-size:13px;color:var(--ink-2);letter-spacing:.04em;min-height:20px}
+  .lives{display:flex;gap:6px;align-items:center}
+  .lives svg{transition:opacity .2s steps(1)}
+  .lives .lost{opacity:.18}
+
+  .msg{margin:22px 0 0;min-height:3.2em;font-size:16px;letter-spacing:.03em}
+  .prompt{display:none;align-items:center;gap:10px;margin:8px 0 0;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:var(--chip);width:max-content;font-size:14px}
+  .prompt.on{display:inline-flex}
+  .prompt svg{display:block}
+  .btn{
+    display:inline-block;margin:18px 0 0;padding:10px 22px;border:0;border-radius:999px;
+    background:var(--btn);color:var(--btn-ink);font:inherit;font-size:15px;letter-spacing:.1em;cursor:pointer;
+  }
+  .btn[hidden]{display:none}
+  .foot{margin:44px 0 0;font-size:11px;color:var(--ink-3);letter-spacing:.1em;display:flex;justify-content:space-between;align-items:flex-end;border-top:1px solid var(--line);padding-top:10px}
+  .foot .pair{display:flex;align-items:flex-end;gap:3px;margin-top:-1px}
+  .foot .pair svg{display:block}
+
+  @media (prefers-reduced-motion:reduce){
+    .fig,.dr .front,.lives svg{transition:none}
+    .fig.hop{animation:none}
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="kicker">momoyu 系列 · 小游戏</p>
+  <h1>藏与叼</h1>
+  <p class="lede">StashYu 负责藏，FetchMo 负责叼回来。它藏的时候 FetchMo 不许看，所以藏在了哪儿，得靠你记。</p>
+
+  <section class="board" aria-label="抽屉柜">
+    <div class="shelf" id="shelf">
+      <div class="fig" id="fox"></div>
+      <div class="fig" id="cat"></div>
+    </div>
+    <div class="cabinet" id="cabinet" style="--cols:3"></div>
+    <div class="status">
+      <span class="lives" id="lives" aria-label="剩下的机会"></span>
+      <span id="score">叼回来 0 片</span>
+    </div>
+  </section>
+
+  <p class="msg" id="msg">它藏一样，你记一样。藏完了，告诉 FetchMo 去哪个抽屉叼。</p>
+  <div class="prompt" id="prompt"><span>叼回来</span><span id="want"></span><span id="wantName"></span></div>
+  <button class="btn" id="btn" type="button">开始</button>
+
+  <p class="foot"><span>momoyu 系列 · 宝的小店<br>cc 做的 · 2026.09</span><span class="pair" id="footpair"></span></p>
+</main>
+
+<script>
+/* momoyu 本体：两张格子图逐格照抄自 claude/小科普/momoyu造型宪法.html，不重画。
+   能换的只有眼睛那两小块；腮红、贴纸白边都是叠在外面的，拿掉就是本体。 */
+var MOMO = (function () {
+  var FOX = { key: 'fox', name: 'StashYu', rows: [
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM...CC..",
+    ".MMMMMMMMMMMM..CCCC.",
+    ".MMEEMMMMEEMM..MMMM.",
+    ".MMEEMMMMEEMM..MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......"],
+    pal: { M: '#E2552B', C: '#FFF3E3', D: '#3B2520' }, eye: '#3B2520', line: '#3B2520',
+    eyes: [[3, 4], [9, 4]], blush: [[2, 6], [11, 6]], blushColor: '#F59A8C', glance: 1 };
+  var CAT = { key: 'cat', name: 'FetchMo', rows: [
+    "....................",
+    "........X........X..",
+    ".......XXX......XXX.",
+    "........MMMMMMMMMM..",
+    ".......MMMMMMMMMMMM.",
+    ".......MEEMMMMMMEEM.",
+    ".....X.MEEMXXXXMEEM.",
+    "....X..MMMMMXXMMMMM.",
+    "....X...MMMMMMMMMM..",
+    "....X...MMMMMMMMMM..",
+    ".....X...MMMMMMMM...",
+    "......XXXXXM..MXX..."],
+    pal: { M: '#F3E7D6', X: '#4E382E' }, eye: '#79C0F0', line: '#4E382E',
+    eyes: [[8, 5], [16, 5]], blush: [[8, 7], [17, 7]], blushColor: '#F2B8B0', glance: -1 };
+  var W = 20, H = 12, NS = 'http://www.w3.org/2000/svg';
+  var EXPR = {
+    normal:  function () { return { c: 'eye',  cells: [[0, 0], [1, 0], [0, 1], [1, 1]] }; },
+    blink:   function () { return { c: 'line', cells: [[0, 1], [1, 1]] }; },
+    happy:   function () { return { c: 'line', cells: [[-1, 1], [0, 0], [1, 0], [2, 1]] }; },
+    asleep:  function () { return { c: 'line', cells: [[-1, 0], [0, 1], [1, 1], [2, 0]] }; },
+    glance:  function (i, g) { return { c: 'eye', cells: [[g, 0], [g + 1, 0], [g, 1], [g + 1, 1]] }; },
+    wink:    function (i) { return i === 0 ? EXPR.normal() : EXPR.happy(); },
+    squeeze: function (i) { return { c: 'line', cells: i === 0 ? [[0, -1], [1, 0], [0, 1]] : [[1, -1], [0, 0], [1, 1]] }; },
+    dazed:   function (i) { return { c: 'eye', cells: i === 0 ? [[1, 1]] : [[0, 1]] }; }
+  };
+  function el(t, a) { var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); return e; }
+  function cellsPath(cells) {
+    var d = ''; for (var i = 0; i < cells.length; i++) d += 'M' + cells[i][0] + ' ' + cells[i][1] + 'h1v1h-1z'; return d;
+  }
+  function runsPath(rows, pred) {
+    var d = '';
+    for (var y = 0; y < rows.length; y++) {
+      var r = rows[y], x = 0;
+      while (x < r.length) {
+        if (pred(r.charAt(x))) { var s = x; while (x < r.length && pred(r.charAt(x))) x++; d += 'M' + s + ' ' + y + 'h' + (x - s) + 'v1h-' + (x - s) + 'z'; }
+        else x++;
+      }
+    }
+    return d;
+  }
+  function outlineCells(rows) {
+    var body = {}, out = [];
+    for (var y = 0; y < rows.length; y++) for (var x = 0; x < W; x++) if (rows[y].charAt(x) !== '.') body[x + ',' + y] = 1;
+    for (var yy = -1; yy <= H; yy++) for (var xx = -1; xx <= W; xx++) {
+      if (body[xx + ',' + yy]) continue;
+      var hit = false;
+      for (var dy = -1; dy <= 1 && !hit; dy++) for (var dx = -1; dx <= 1; dx++) if (body[(xx + dx) + ',' + (yy + dy)]) { hit = true; break; }
+      if (hit) out.push([xx, yy]);
+    }
+    return out;
+  }
+  function make(who, o) {
+    o = o || {};
+    var S = (who === 'cat' || who === CAT) ? CAT : FOX;
+    var N = o.scale || 3, st = !!o.sticker, pad = st ? 1 : 0;
+    var vw = W + 2 * pad, vh = H + 2 * pad;
+    var svg = el('svg', { viewBox: (-pad) + ' ' + (-pad) + ' ' + vw + ' ' + vh, width: vw * N, height: vh * N,
+      'shape-rendering': 'crispEdges', role: 'img', 'aria-label': S.name, 'class': 'momo momo-' + S.key });
+    if (st) svg.appendChild(el('path', { d: cellsPath(outlineCells(S.rows)), fill: o.stickerColor || '#FFFFFF', 'class': 'sticker' }));
+    var body = el('g', { 'class': 'body' });
+    for (var k in S.pal) (function (key) {
+      body.appendChild(el('path', { d: runsPath(S.rows, function (ch) { return ch === key || (key === 'M' && ch === 'E'); }), fill: S.pal[key] }));
+    })(k);
+    svg.appendChild(body);
+    if (o.blush) svg.appendChild(el('path', { d: cellsPath(S.blush), fill: S.blushColor, 'class': 'blush' }));
+    var eyes = el('g', { 'class': 'eyes' }); svg.appendChild(eyes);
+    var cur = 'normal';
+    function setEyes(name) {
+      if (!EXPR[name]) name = 'normal';
+      cur = name;
+      while (eyes.firstChild) eyes.removeChild(eyes.firstChild);
+      for (var i = 0; i < 2; i++) {
+        var spec = EXPR[name](i, S.glance), o0 = S.eyes[i], cells = [];
+        for (var j = 0; j < spec.cells.length; j++) cells.push([o0[0] + spec.cells[j][0], o0[1] + spec.cells[j][1]]);
+        eyes.appendChild(el('path', { d: cellsPath(cells), fill: spec.c === 'eye' ? S.eye : S.line }));
+      }
+    }
+    setEyes(o.eyes || 'normal');
+    var api = { svg: svg, who: S, setEyes: setEyes, eyes: function () { return cur; }, base: o.eyes || 'normal', timer: null };
+    return api;
+  }
+  /* 偶尔眨一下眼：只动眼睛那两小块 */
+  function blinker(m, reduced) {
+    if (m.timer) clearTimeout(m.timer);
+    if (reduced) return;
+    (function loop() {
+      m.timer = setTimeout(function () {
+        if (m.eyes() === m.base && m.base !== 'asleep') {
+          m.setEyes('blink');
+          setTimeout(function () { if (m.eyes() === 'blink') m.setEyes(m.base); }, 130);
+        }
+        loop();
+      }, 2200 + Math.random() * 3200);
+    })();
+  }
+  function stopBlink(m) { if (m.timer) { clearTimeout(m.timer); m.timer = null; } }
+  /* 旁边的小东西：一色像素小图 */
+  function icon(rows, color, N, cls) {
+    var w = 0; for (var i = 0; i < rows.length; i++) w = Math.max(w, rows[i].length);
+    var svg = el('svg', { viewBox: '0 0 ' + w + ' ' + rows.length, width: w * N, height: rows.length * N, 'shape-rendering': 'crispEdges', 'aria-hidden': 'true', 'class': cls || 'pix' });
+    svg.appendChild(el('path', { d: runsPath(rows, function (ch) { return ch !== '.'; }), fill: color }));
+    return svg;
+  }
+  var SIDE = {
+    zz:   { color: '#7E93C9', rows: ["....XXXX", ".......X", "XXX...X.", "..X..X..", "X...XXXX", "XXX....."] },
+    note: { color: '#C0587A', rows: ["..XX", "..X.", "..X.", "XXX.", "XX.."] },
+    star: { color: '#E1A93A', rows: [".X.", "XXX", ".X."] },
+    fish: { color: '#5E9BC9', rows: [".XX.X", "XXXXX", ".XX.X"] }
+  };
+  return { FOX: FOX, CAT: CAT, EXPR: EXPR, make: make, blinker: blinker, stopBlink: stopBlink, icon: icon, SIDE: SIDE, el: el, runsPath: runsPath, cellsPath: cellsPath };
+})();
+</script>
+<script>
+(function(){
+  var REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  var W=function(ms){ return REDUCED?Math.min(ms,80):ms; };
+
+  var ITEMS=[
+    {k:'fish', name:'鱼',   rows:MOMO.SIDE.fish.rows, color:MOMO.SIDE.fish.color},
+    {k:'star', name:'星星', rows:MOMO.SIDE.star.rows, color:MOMO.SIDE.star.color},
+    {k:'note', name:'音符', rows:MOMO.SIDE.note.rows, color:MOMO.SIDE.note.color},
+    {k:'zz',   name:'瞌睡', rows:MOMO.SIDE.zz.rows,   color:MOMO.SIDE.zz.color},
+    {k:'moon', name:'月亮', rows:[".XXX.","XX...","X....","XX...",".XXX."], color:'#E8C25A'},
+    {k:'leaf', name:'叶子', rows:["....X","..XXX",".XXX.","XXX..","X...."], color:'#7FB07A'},
+    {k:'heart',name:'心',   rows:[".X.X.","XXXXX",".XXX.","..X.."], color:'#D96B8A'},
+    {k:'jelly',name:'果冻', rows:[".XXX.","XXXXX","XXXXX","X.X.X"], color:'#A88BD9'}
+  ];
+  var LEVELS=[
+    {cols:3,rows:2,items:2,show:1000},
+    {cols:3,rows:2,items:3,show:950},
+    {cols:3,rows:3,items:3,show:900},
+    {cols:3,rows:3,items:4,show:850},
+    {cols:4,rows:3,items:4,show:800},
+    {cols:4,rows:3,items:5,show:750},
+    {cols:4,rows:3,items:6,show:700}
+  ];
+
+  var shelf=document.getElementById('shelf'), cab=document.getElementById('cabinet');
+  var foxEl=document.getElementById('fox'), catEl=document.getElementById('cat');
+  var msg=document.getElementById('msg'), prompt=document.getElementById('prompt'), want=document.getElementById('want'), wantName=document.getElementById('wantName');
+  var btn=document.getElementById('btn'), livesEl=document.getElementById('lives'), scoreEl=document.getElementById('score');
+  var fox=MOMO.make('fox',{scale:4}), cat=MOMO.make('cat',{scale:4});
+  foxEl.appendChild(fox.svg); catEl.appendChild(cat.svg);
+  MOMO.blinker(fox,REDUCED); MOMO.blinker(cat,REDUCED);
+  var fp=document.getElementById('footpair');
+  fp.appendChild(MOMO.make('fox',{scale:2}).svg); fp.appendChild(MOMO.make('cat',{scale:2}).svg);
+
+  var FIGW=80;
+  function shelfW(){ return shelf.clientWidth; }
+  function home(){ foxEl.style.left='0px'; catEl.style.left=Math.max(0,shelfW()-FIGW)+'px'; }
+  /* 轮不到谁，谁就走到架子外面等着（只平移，架子会把它遮住） */
+  function foxOut(){ foxEl.style.left=(-FIGW-12)+'px'; }
+  function catOut(){ catEl.style.left=(shelfW()+12)+'px'; }
+  function foxHome(){ foxEl.style.left='0px'; }
+  function catHome(){ catEl.style.left=Math.max(0,shelfW()-FIGW)+'px'; }
+  function moveTo(el,drawer){
+    var r=drawer.getBoundingClientRect(), s=shelf.getBoundingClientRect();
+    var x=(r.left+r.width/2)-s.left-FIGW/2;
+    x=Math.max(0,Math.min(shelfW()-FIGW,x));
+    el.style.left=Math.round(x)+'px';
+  }
+  function hop(el){ el.classList.remove('hop'); void el.offsetWidth; el.classList.add('hop'); }
+  function shuffle(a){ a=a.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+  function iconOf(it,N){ return MOMO.icon(it.rows,it.color,N||3); }
+
+  var level=0, score=0, lives=3, best=0, drawers=[], content=[], queue=[], target=null, phase='idle';
+  try{ best=parseInt(localStorage.getItem('momoyu-fetch-best')||'0',10)||0; }catch(e){}
+
+  function drawLives(){
+    livesEl.innerHTML='';
+    for(var i=0;i<3;i++){ var s=iconOf(ITEMS[0],3); if(i>=lives) s.setAttribute('class','lost'); livesEl.appendChild(s); }
+  }
+  function setScore(){ scoreEl.textContent='叼回来 '+score+' 片'; }
+  function say(t){ msg.textContent=t; }
+  function ask(it){ want.innerHTML=''; want.appendChild(iconOf(it,3)); wantName.textContent=it.name; prompt.classList.add('on'); }
+  function noAsk(){ prompt.classList.remove('on'); }
+  function setAll(disabled){ for(var i=0;i<drawers.length;i++) drawers[i].disabled=disabled; }
+
+  function buildCabinet(L){
+    cab.innerHTML=''; cab.style.setProperty('--cols',L.cols); drawers=[]; content=[];
+    for(var i=0;i<L.cols*L.rows;i++){
+      var d=document.createElement('button'); d.type='button'; d.className='dr'; d.setAttribute('aria-label','第 '+(i+1)+' 个抽屉');
+      var item=document.createElement('span'); item.className='item';
+      var front=document.createElement('span'); front.className='front';
+      d.appendChild(item); d.appendChild(front);
+      (function(idx){ d.addEventListener('click',function(){ onTap(idx); }); })(i);
+      cab.appendChild(d); drawers.push(d); content.push(null);
+    }
+    setAll(true);
+  }
+  function fill(idx,it){
+    var slot=drawers[idx].firstChild; slot.innerHTML=''; content[idx]=it||null;
+    if(it) slot.appendChild(iconOf(it,3));
+  }
+  function open(idx,ms,cb){
+    drawers[idx].classList.add('open');
+    setTimeout(function(){ drawers[idx].classList.remove('open'); if(cb) cb(); },W(ms));
+  }
+
+  function startLevel(){
+    var L=LEVELS[Math.min(level,LEVELS.length-1)];
+    var show=Math.max(520, L.show-(level>=LEVELS.length? (level-LEVELS.length+1)*50 : 0));
+    buildCabinet(L); noAsk(); foxHome(); catOut();
+    var picks=shuffle(ITEMS).slice(0,L.items), spots=shuffle(drawers.map(function(_,i){return i;})).slice(0,L.items);
+    for(var i=0;i<picks.length;i++) fill(spots[i],picks[i]);
+    phase='stash';
+    say(level===0?'StashYu 在藏。别眨眼。':'第 '+(level+1)+' 轮。StashYu 在藏。');
+    fox.base='normal'; fox.setEyes('normal'); cat.base='normal'; cat.setEyes('normal');
+    var k=0;
+    setTimeout(function step(){
+      if(k>=spots.length){
+        foxHome();
+        setTimeout(function(){ catHome(); },W(380));
+        setTimeout(function(){ fox.setEyes('glance'); fox.base='glance'; cat.setEyes('glance'); cat.base='glance'; },W(760));
+        setTimeout(beginFetch,W(1150));
+        return;
+      }
+      var idx=spots[k]; moveTo(foxEl,drawers[idx]);
+      setTimeout(function(){
+        hop(foxEl); fox.setEyes('squeeze');
+        open(idx,show,function(){ fox.setEyes('normal'); k++; setTimeout(step,W(260)); });
+      },W(380));
+    },W(600));
+  }
+
+  function beginFetch(){
+    phase='fetch'; queue=shuffle(drawers.map(function(_,i){return i;}).filter(function(i){return !!content[i];}));
+    fox.base='normal'; fox.setEyes('normal'); cat.base='normal'; cat.setEyes('normal');
+    say('藏好了。FetchMo：去哪儿叼？');
+    foxOut();
+    nextAsk();
+  }
+  function nextAsk(){
+    if(!queue.length){ return levelClear(); }
+    target=queue[0]; ask(content[target]); setAll(false);
+  }
+  function onTap(idx){
+    if(phase!=='fetch'||target===null) return;
+    setAll(true); var it=content[idx];
+    if(idx===target){
+      moveTo(catEl,drawers[idx]);
+      setTimeout(function(){ hop(catEl); cat.setEyes('happy'); drawers[idx].classList.add('hit'); },W(340));
+      open(idx,820,function(){
+        drawers[idx].classList.remove('hit'); fill(idx,null); score++; setScore();
+        if(score>best){ best=score; try{ localStorage.setItem('momoyu-fetch-best',String(best)); }catch(e){} }
+        queue.shift(); cat.setEyes('normal'); target=null;
+        say(queue.length? ['叼到了。','叼回来一片。','嘴里稳稳的。','这片也叼回来了。'][score%4] : '叼齐了。');
+        setTimeout(nextAsk,W(360));
+      });
+    }else{
+      moveTo(catEl,drawers[idx]);
+      setTimeout(function(){ cat.setEyes('dazed'); fox.setEyes('blink'); },W(340));
+      open(idx,820,function(){
+        lives--; drawLives(); fox.setEyes('normal');
+        if(lives<=0){ return gameOver(); }
+        cat.setEyes('normal');
+        say(it? '这格里是'+it.name+'，不是它。再想想。' : '这格是空的。再想想。');
+        setTimeout(function(){ setAll(false); },W(200));
+      });
+    }
+  }
+  function levelClear(){
+    noAsk(); target=null; phase='between';
+    catHome(); setTimeout(foxHome,W(200));
+    setTimeout(function(){ fox.setEyes('happy'); fox.base='happy'; cat.setEyes('happy'); cat.base='happy'; },W(560));
+    setTimeout(function(){ fox.base='normal'; cat.base='normal'; level++; startLevel(); },W(1700));
+  }
+  function gameOver(){
+    phase='over'; noAsk(); target=null; setAll(true);
+    catHome(); setTimeout(foxHome,W(200));
+    fox.setEyes('normal'); cat.setEyes('asleep');
+    var t='今天叼回来 '+score+' 片。';
+    if(score>0&&score>=best) t+=' 最好的一次。'; else if(best>0) t+=' 最好的一次是 '+best+' 片。';
+    say(t); btn.textContent='再来一局'; btn.hidden=false;
+  }
+  function start(){
+    btn.hidden=true; level=0; score=0; lives=3; setScore(); drawLives(); startLevel();
+  }
+  btn.addEventListener('click',start);
+  window.addEventListener('resize',function(){ if(phase==='idle'||phase==='over') home(); });
+
+  buildCabinet(LEVELS[0]); drawLives(); home();
+  cat.setEyes('glance'); cat.base='glance';
+})();
+</script>
+</body>
+</html>
