@@ -7,7 +7,8 @@
 
 （同一天她定的简称：**cc = Claude Code**。本文件跟着用 cc。）
 
-宝的小店（对外仓库名 English-card / 英语打卡，门楣是 宝's Shop）。给 Grok 的交接在 [`GROK.md`](GROK.md)。
+宝的小店（对外仓库名 English-card / 英语打卡，门楣是 宝's Shop）。给 Grok 的在 [`AGENTS.md`](AGENTS.md)（2026-09-27 起 `GROK.md` 并了进去、已退役）。
+**两边共用的店务都写在这份**：Grok Build 开工也会自动读 `CLAUDE.md`，cc 不读 `AGENTS.md`。
 `grok/博物馆/已归档，别当依据读.html` 是 2026-09-02 入馆的旧交接，里面关于审美和排版的结论是错的翻译，别当依据读。
 
 ## 先读这四条
@@ -103,6 +104,11 @@ grep -rn '要引用的那句' --include='*.html' --include='*.md' .
   哄睡 / 摸鱼 / 小游戏 / 小卡 / 购物车 / 博物馆 / 小科普 / 打捞机 / 显影 / 盲盒。
   **显影**是 2026-09-21 她当场开的，只开在 `claude/` `gemini/` `grok/`，`copilot/` 不加。
   别自己新开货架，她点名的另说。早安归哄睡，障眼法归摸鱼，事故归博物馆。
+  下面几条原在 `GROK.md`，09-27 并过来：
+  - 小游戏是摸鱼的升维柜：她觉得太好玩或太好看才升，不确定就留摸鱼；**她没点名不要自己升。**
+  - 小卡是带着故事的卡（翻面卡、馆藏卡、果冻卡、护身符）。博物馆只收事故——残骸、修之前的现场、
+    专门拿来笑的翻车——不是「长得像卡」就进；带着故事的哄睡页就是哄睡，别因为像展品塞进博物馆。
+  - 不要复制文件来假装一页挂两个货架。
 - **地上不摊页。分类只看文件夹名**：`grok/哄睡/xx.html` 就是哄睡。换货架 = 把文件挪到
   另一个抽屉，不用碰 Python——她只会上传文件，这样她自己就能改。抽屉认不出的默认进盲盒。
   `CATEGORY` 表是空的（它是唯一能让一个文件同挂两档的地方），真要加之前先想想是不是放错抽屉了。
@@ -123,6 +129,8 @@ grep -rn '要引用的那句' --include='*.html' --include='*.md' .
 - **别名夹已经合并干净**（`失灵博物馆/` → `博物馆/`，四台都做了）。`CAT_ALIAS` 里那三条旧名
   留着当兼容层，零成本；不要重建这些夹。
 - **旧链接可以断。**她 2026-09-02 当场说：「旧链接就断无所谓，仓库只有我自己看……空壳不要」。
+- **仓库不改名，门楣不改回旧店名**（原在 `GROK.md`）。仓库一改名，`momoyu-bot.github.io/English-card/`
+  整个换地址，首页和她主屏上那些书签全断。根上没有 `gpt/`，生成器也会跳过叫 `gpt` 的顶层目录。
 
 **顶层文件夹记的是「页面从哪个对话里捞出来的」，不是「谁写的」。**`claude/摸鱼/宝的摸鱼小屋.html`
 是 Grok 写的、拿去问 Claude 报错时捞出来的（文件末尾有注释）。判断归属时不要按「内容像谁写的」去挪文件。
@@ -174,7 +182,7 @@ grep -rn '要引用的那句' --include='*.html' --include='*.md' .
 - **生成器必须是一份断网也能跑的完整源**（2026-09-21 栽的：整份覆盖失败后，「修复」成了一个每次去
   `raw.githubusercontent.com` 下载旧源再打补丁的小脚本，仓库里再也没有完整源，外网一抖工作流就红）。
 - **工作流有一道闸门**（`store-guard`，在生成清单之前跑）：`tools/build_index.py` `梦境.md`
-  `梦境.html` `CLAUDE.md` `GROK.md` 各配一个下限（20000 / 8000 / 20000 / 20000 / 3000 字节），
+  `梦境.html` `CLAUDE.md` `AGENTS.md` 各配一个下限（20000 / 8000 / 20000 / 20000 / 1000 字节），
   掉到线下就判定被写残，沿 `git log` 捞回第一个够大的版本一起提交，首页照常重算——
   不红、不发失败邮件。历史里也找不到完好版本才 `exit 1`。
   表写成 `for item in "路径|下限"`，**别改回 here-doc**——YAML 块标量里的缩进会被读进文件名，
@@ -386,9 +394,9 @@ GitHub 按**邮箱**认人，不看名字。邮箱写错，贡献者栏就多出
 推完看一眼 `https://api.github.com/repos/momoyu-bot/English-card/contributors`，应该只有 momoyu-bot、github-actions[bot]、claude 三个。
 
 Grok Build 开工自动读根上的 `AGENTS.md` 和 `CLAUDE.md`（官方说明 docs.x.ai/build/features/project-rules），
-**不自动读 `GROK.md`**。所以署名那两行另外写进了根上的 `AGENTS.md`，别删；`AGENTS.md` 里也加了一句「开工先读 GROK.md」。
-cc 自己默认只读 `CLAUDE.md`：仓库里有 `CLAUDE.md` 时不读 `AGENTS.md`（Claude Code 文档 memory 页「AGENTS.md」一节），
-所以 `AGENTS.md` 只放写给 Grok 的东西；两边都会自动读到的只有 `CLAUDE.md`。
+**不自动读 `GROK.md`**——所以 09-27 把 `GROK.md` 并进了 `AGENTS.md`（重复的删掉，只留署名、不碰大文件这几条 Grok 专用的）。
+cc 自己默认只读 `CLAUDE.md`：仓库里有 `CLAUDE.md` 时不读 `AGENTS.md`（Claude Code 文档 memory 页「AGENTS.md」一节）。
+所以两边共用的店务写这份，只给 Grok 的写 `AGENTS.md`；两边都会自动读到的只有 `CLAUDE.md`。
 那次出事的是 Build 自己换管子：先走替她签名的那条，页太大只落下一张 PLACEHOLDER；
 34 秒后换到自己存盘的那条，签名自己填，填成了 momo@。
 
