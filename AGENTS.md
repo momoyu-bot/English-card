@@ -18,3 +18,7 @@ git log -1 --format='%ae'
 - **别自己拼邮箱。**`momo@users.noreply.github.com` 是别人的 GitHub 号，
   写了，店的贡献者栏就会多出一张陌生人的脸（2026-09-21 出过一次，09-27 才请走）。
 - Claude 的保存照旧署 `Claude <noreply@anthropic.com>`，不用改成上面这个。
+
+## 交接笔记
+
+给 Grok 的交接在 `GROK.md`，开工先打开读一遍。它不在自动读取的名单里，不点名就读不到。

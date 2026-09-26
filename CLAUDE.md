@@ -386,7 +386,9 @@ GitHub 按**邮箱**认人，不看名字。邮箱写错，贡献者栏就多出
 推完看一眼 `https://api.github.com/repos/momoyu-bot/English-card/contributors`，应该只有 momoyu-bot、github-actions[bot]、claude 三个。
 
 Grok Build 开工自动读根上的 `AGENTS.md` 和 `CLAUDE.md`（官方说明 docs.x.ai/build/features/project-rules），
-**不自动读 `GROK.md`**。所以署名那两行另外写进了根上的 `AGENTS.md`，别删。
+**不自动读 `GROK.md`**。所以署名那两行另外写进了根上的 `AGENTS.md`，别删；`AGENTS.md` 里也加了一句「开工先读 GROK.md」。
+cc 自己默认只读 `CLAUDE.md`：仓库里有 `CLAUDE.md` 时不读 `AGENTS.md`（Claude Code 文档 memory 页「AGENTS.md」一节），
+所以 `AGENTS.md` 只放写给 Grok 的东西；两边都会自动读到的只有 `CLAUDE.md`。
 那次出事的是 Build 自己换管子：先走替她签名的那条，页太大只落下一张 PLACEHOLDER；
 34 秒后换到自己存盘的那条，签名自己填，填成了 momo@。
 
