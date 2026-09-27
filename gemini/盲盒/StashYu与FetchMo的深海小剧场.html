@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StashYu & FetchMo - Code Ocean</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            /* 采用宪法里提到的深色主题背景，凸显像素的明亮感 */
+            background-color: #131816; 
+            overflow: hidden;
+            font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        }
+        canvas {
+            display: block;
+            /* 严格贯彻宪法：不许平滑，保持像素锐利 */
+            image-rendering: pixelated; 
+        }
+        #ui {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #75827B; /* 宪法深色模式里的 ink-3 */
+            font-size: 13px;
+            text-align: center;
+            pointer-events: none;
+            opacity: 0.8;
+            line-height: 1.8;
+        }
+        #ui b {
+            color: #E4EBE7; /* 宪法深色模式里的 ink */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="ocean"></canvas>
+    <div id="ui">
+        <b>StashYu & FetchMo</b> <br>
+        严格遵循《造型宪法》构建的纯代码小剧场<br>
+        [ 动效仅限位置平移 | 整数倍缩放 | 点击生成气泡音效 ]
+    </div>
+
+    <script>
+        const canvas = document.getElementById('ocean');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        let width, height;
+        let time = 0; // 全局时间轴
+
+        // 关闭 Canvas 原生抗锯齿，尊重像素
+        ctx.imageSmoothingEnabled = false;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            ctx.imageSmoothingEnabled = false;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Web Audio API (零文件的现场音效)
+        let audioCtx;
+        function playBloop() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300 + Math.random() * 200, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(700, audioCtx.currentTime + 0.1);
+
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        const DATA = {
+            fox: {
+                rows: [
+                    ".D..........D.......",
+                    ".DM........MD.......",
+                    ".MCM......MCM...CC..",
+                    ".MMMMMMMMMMMM..CCCC.",
+                    ".MMEEMMMMEEMM..MMMM.",
+                    ".MMEEMMMMEEMM..MMMMM",
+                    "CCCCCCDDCCCCCC.MMMMM",
+                    "..CCCCCCCCCC..MMMMM.",
+                    "....MMCCMM...MMMMM..",
+                    "....MMCCMM..MMMMM...",
+                    "....MMMMMM.MMMMM....",
+                    "....DDMMDDMMMM......",
+                    "...................."
+                ],
+                pal: { M: "#E2552B", C: "#FFF3E3", D: "#3B2520", E: "#3B2520" },
+                line: "#3B2520",
+                eyes: [[3,4], [9,4]], // 宪法规定的左上角坐标
+                blush: { cells: [[2,6], [11,6]], color: "#F59A8C" }
+            },
+            cat: {
+                rows: [
+                    "....................",
+                    "........X........X..",
+                    ".......XXX......XXX.",
+                    "........MMMMMMMMMM..",
+                    ".......MMMMMMMMMMMM.",
+                    ".......MEEMMMMMMEEM.",
+                    ".....X.MEEMXXXXMEEM.",
+                    "....X..MMMMMXXMMMMM.",
+                    "....X...MMMMMMMMMM..",
+                    "....X...MMMMMMMMMM..",
+                    ".....X...MMMMMMMM...",
+                    "......XXXXXM..MXX...",
+                    "...................."
+                ],
+                pal: { M: "#F3E7D6", X: "#4E382E", E: "#79C0F0" },
+                line: "#4E382E",
+                eyes: [[8,5], [16,5]], // 宪法规定的左上角坐标
+                blush: { cells: [[8,7], [17,7]], color: "#F2B8B0" }
+            }
+        };
+
+        const CHAR_W = 20;
+        const CHAR_H = 13;
+
+        // 根据时间轴获取眨眼状态
+        function isBlinking(t, offset) {
+            // 每隔一段时间眨眼，持续很短的时间
+            return (t + offset) % 200 < 10;
+        }
+
+        // 获取渲染网格
+        function getCharacterGrid(name, blinking) {
+            const ch = DATA[name];
+            // 拷贝一份初始网格
+            let grid = ch.rows.map(row => row.split(''));
+
+            // 宪法：先将眼睛 2x2 区域涂回身子颜色(M)
+            ch.eyes.forEach(([ex, ey]) => {
+                grid[ey][ex] = 'M';
+                grid[ey][ex+1] = 'M';
+                grid[ey+1][ex] = 'M';
+                grid[ey+1][ex+1] = 'M';
+
+                // 宪法：再根据表情涂色
+                if (blinking) {
+                    // 眨眼：(0,1)(1,1) 线条色
+                    grid[ey+1][ex] = 'LINE';
+                    grid[ey+1][ex+1] = 'LINE';
+                } else {
+                    // 平常：四个格子都是眼睛色(E)
+                    grid[ey][ex] = 'E';
+                    grid[ey][ex+1] = 'E';
+                    grid[ey+1][ex] = 'E';
+                    grid[ey+1][ex+1] = 'E';
+                }
+            });
+
+            // 叠加宪法规定的腮红 (算在外面的小东西)
+            ch.blush.cells.forEach(([bx, by]) => {
+                grid[by][bx] = 'BLUSH';
+            });
+
+            return grid;
+        }
+
+        function drawCharacter(name, x, y, scale, blinking) {
+            const ch = DATA[name];
+            const grid = getCharacterGrid(name, blinking);
+
+            // 绘制贴纸白边 (深色底保护)
+            // 宪法：给整只加一圈一格宽的白边（贴纸描边）
+            ctx.fillStyle = '#FFFFFF';
+            for (let r = 0; r < CHAR_H; r++) {
+                for (let c = 0; c < CHAR_W; c++) {
+                    if (grid[r][c] !== '.') {
+                        // 绘制周围 8 个方向的白底，形成描边
+                        for(let dr=-1; dr<=1; dr++) {
+                            for(let dc=-1; dc<=1; dc++) {
+                                ctx.fillRect(x + (c+dc)*scale, y + (r+dr)*scale, scale, scale);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 绘制本体像素
+            for (let r = 0; r < CHAR_H; r++) {
+                for (let c = 0; c < CHAR_W; c++) {
+                    const key = grid[r][c];
+                    if (key === '.') continue;
+
+                    if (key === 'LINE') ctx.fillStyle = ch.line;
+                    else if (key === 'BLUSH') ctx.fillStyle = ch.blush.color;
+                    else ctx.fillStyle = ch.pal[key];
+                    
+                    ctx.fillRect(x + c * scale, y + r * scale, scale, scale);
+                }
+            }
+        }
+
+        const bubbles = [];
+        class Bubble {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 6 + 2;
+                this.speed = Math.random() * 1.5 + 0.5;
+                this.wobbleSpeed = Math.random() * 0.03 + 0.01;
+                this.timeOffset = Math.random() * Math.PI * 2;
+            }
+            update() {
+                this.y -= this.speed;
+                this.x += Math.sin(time * this.wobbleSpeed + this.timeOffset) * 1.2;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(163, 176, 169, 0.4)'; // 宪法深色 ink-2 变透明
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        }
+
+        function animate() {
+            // 背景填充 (宪法深色模式底色)
+            ctx.fillStyle = '#131816';
+            ctx.fillRect(0, 0, width, height);
+
+            // 更新和绘制气泡
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                bubbles[i].update();
+                bubbles[i].draw();
+                if (bubbles[i].y < -20) bubbles.splice(i, 1);
+            }
+            // 缓慢生成环境气泡
+            if (Math.random() < 0.03) {
+                bubbles.push(new Bubble(Math.random() * width, height + 20));
+            }
+
+            // --- 舞台布置 ---
+            // 宪法：大小只许整数倍。计算动态的整数缩放比例
+            const scale = Math.max(2, Math.floor(width / 60)); 
+            
+            // 宪法动效风险分级【零】：整只上下跳、左右晃... 整块平移，身子一格不用改。
+            // 使用 Math.round 确保偏移量也是像素块的整数倍，绝不拉糊！
+            const floatFox = Math.round(Math.sin(time * 0.03) * 2) * scale;
+            const floatCat = Math.round(Math.sin(time * 0.03 + 1) * 2) * scale; // 错开呼吸频率
+
+            // 两只一起出现时，狐狸在左，暹罗在右
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            // 计算两只角色的绘制起点
+            const foxX = centerX - (CHAR_W * scale) - (2 * scale);
+            const catX = centerX + (2 * scale);
+            const startY = centerY - (CHAR_H * scale) / 2;
+
+            // 根据时间轴决定是否眨眼
+            const foxBlink = isBlinking(time, 0);
+            const catBlink = isBlinking(time, 50);
+
+            // 绘制角色
+            drawCharacter('fox', foxX, startY + floatFox, scale, foxBlink);
+            drawCharacter('cat', catX, startY + floatCat, scale, catBlink);
+
+            // 绘制脚底的舞台倒影/阴影 (算在外面的背景)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(foxX, startY + (CHAR_H * scale) + 2*scale, CHAR_W * scale, scale);
+            ctx.fillRect(catX, startY + (CHAR_H * scale) + 2*scale, CHAR_W * scale, scale);
+
+            time++;
+            requestAnimationFrame(animate);
+        }
+
+        // 交互：点击生成气泡和音效
+        window.addEventListener('mousedown', (e) => {
+            playBloop();
+            for(let i=0; i<4; i++) {
+                bubbles.push(new Bubble(e.clientX + (Math.random()*40-20), e.clientY + (Math.random()*40-20)));
+            }
+        });
+
+        // Action!
+        animate();
+    </script>
+</body>
+</html>
