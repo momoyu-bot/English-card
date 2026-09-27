@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>虔诚许愿小萌物 · 短片</title>
+<meta name="description" content="四只小萌物，一只许一个愿。一分多钟的小短片，带八音盒的声音。愿望说出来就不灵了。">
+<!--
+  整部片子是一张 canvas 按时间一帧一帧画出来的：render(t) 给定第几秒，就画出那一格。
+  同目录的 虔诚许愿小萌物.mp4 是用同一个 render(t) 每秒 30 格逐格截下来、再配上同一份音符表合成的，
+  所以网页里看到的和视频里的是同一部。改了这一页，视频要重新导一遍才跟得上。
+  字幕不写在脚本里：底下「字幕本」那几行就是字幕，data-t 是它在这一场里出现和消失的秒数。
+  改字幕直接改那几行。
+  四只照店里的造型宪法画，底模不动，只换眼睛、整块挪位置，外面叠东西：
+    Clawd  → claude/小科普/Clawd造型宪法（Code版）.html（踩角站姿；许愿时钳子整块往上挪、眼睛换「用力」）
+    小脸蛋 → claude/小科普/小脸蛋造型宪法（实测版） (1).html（sRGB 色、反斜杠缝、缝是挖空的；夜里在外面加一圈浅色的环）
+    StashYu / FetchMo → claude/小科普/momoyu造型宪法.html（逐格照抄；夜里加一圈贴纸白边）
+  八音盒的曲子是 cc 自己写的，不是哪首现成的歌。
+-->
+<style>
+  :root{
+    --night:#120f24; --night-2:#1b1734; --ink:#ece3cf; --ink-2:#a79dbd; --ink-3:#7d7496;
+    --gold:#f2d58a; --line:#2c2748;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--night);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.7;-webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:calc(30px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))}
+
+  header{text-align:center;margin-bottom:20px}
+  .tag{font-size:12px;letter-spacing:.18em;color:var(--ink-3)}
+  h1{
+    margin:6px 0 8px;font-weight:600;font-size:32px;line-height:1.25;letter-spacing:.1em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--gold);
+  }
+  .lede{margin:0;color:var(--ink-2);font-size:14.5px}
+
+  /* 播放器：不跑 JS 就不出现，只剩下面的字幕本 */
+  .player{display:none}
+  .js .player{display:block}
+  .player{width:100%;max-width:min(100%, calc((100vh - 120px) * 9 / 16));margin:0 auto 26px}
+  @supports (height:100svh){
+    .player{max-width:min(100%, calc((100svh - 120px) * 9 / 16))}
+  }
+  .screen{
+    position:relative;border-radius:14px;overflow:hidden;background:#0c0a18;
+    aspect-ratio:9/16;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  .screen canvas{display:block;width:100%;height:100%}
+  .big{
+    position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);
+    width:74px;height:74px;border-radius:50%;border:0;padding:0;cursor:pointer;
+    background:rgba(18,15,36,.62);color:var(--gold);font:inherit;font-size:26px;line-height:74px;text-align:center;
+    box-shadow:0 0 0 1px rgba(242,213,138,.35);
+  }
+  .big.again{width:auto;padding:0 20px;border-radius:99px;height:46px;line-height:46px;font-size:15px;letter-spacing:.08em}
+  .playing .big{display:none}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin:10px 2px 2px;font-size:12.5px;color:var(--ink-3)}
+  .ctrl button{
+    font:inherit;font-size:12.5px;color:var(--ink);background:transparent;cursor:pointer;
+    border:1px solid #3a3360;border-radius:99px;padding:4px 13px;
+  }
+  .ctrl button:active{background:#241f40}
+  .ctrl .time{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .ctrl .sp{flex:1}
+  input[type=range]{width:100%;margin:6px 0 4px;accent-color:#f2d58a;height:26px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chips button{
+    font:inherit;font-size:12.5px;color:var(--ink-2);background:transparent;cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:3px 11px;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  }
+  .chips button.on{color:var(--gold);border-color:#5a4d7a}
+  .save{display:inline-block;margin-top:12px;font-size:12.5px;color:var(--ink-3);text-decoration:none;border-bottom:1px dashed #4a4270}
+
+  /* 字幕本：也是片子里的字幕本身 */
+  .script{margin:8px 0 0;padding:20px 18px 8px;border-radius:14px;background:var(--night-2)}
+  .script h2{margin:0 0 12px;font-size:13px;font-weight:500;letter-spacing:.16em;color:var(--ink-3);text-align:center}
+  .sc{margin:0 0 16px}
+  .sc h3{
+    margin:0 0 4px;font-size:13px;font-weight:400;color:var(--ink-2);
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .sc h3 .no{
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--gold);font-size:14px;
+  }
+  .sc p{margin:0;padding:3px 0 3px 10px;border-left:2px solid transparent;color:var(--ink);font-size:14.5px}
+  .js .sc p{cursor:pointer}
+  .sc p.on{border-left-color:var(--gold);color:var(--gold)}
+  footer{margin:26px 0 0;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.9}
+</style>
+</head>
+<body>
+<script>document.documentElement.className='js';</script>
+<div class="wrap">
+  <header>
+    <div class="tag">小萌物 · 短片</div>
+    <h1>虔诚许愿小萌物</h1>
+    <p class="lede">四只小萌物，一只许一个愿。<br>愿望说出来就不灵了。</p>
+  </header>
+
+  <div class="player" id="player">
+    <div class="screen" id="screen">
+      <canvas id="film" width="360" height="640" role="img" aria-label="虔诚许愿小萌物：四只小萌物依次许愿的小短片"></canvas>
+      <button class="big" id="big" type="button" aria-label="播放">▶</button>
+    </div>
+    <div class="ctrl">
+      <button type="button" id="pp">播放</button>
+      <span class="time" id="time">0:00 / 0:00</span>
+      <span class="sp"></span>
+      <button type="button" id="snd" aria-pressed="true">声音 开</button>
+    </div>
+    <input type="range" id="seek" min="0" max="800" step="1" value="0" aria-label="进度">
+    <div class="chips" id="chips"></div>
+    <a class="save" href="虔诚许愿小萌物.mp4" download>把这部短片存下来（视频）</a>
+  </div>
+
+  <section class="script" id="script">
+    <h2>字 幕 本</h2>
+    <div class="sc" data-scene="intro" data-dur="6">
+      <h3><span class="no">序</span>四只，四个愿望</h3>
+      <p data-t="3.3-5.8">每一只，都许得很认真。</p>
+    </div>
+    <div class="sc" data-scene="ep1" data-dur="14" data-card="第一愿" data-sub="Clawd · 流星">
+      <h3><span class="no">第一愿</span>Clawd · 流星</h3>
+      <p data-t="0.5-3.4">听说对着流星许愿，要赶在它消失之前说完。</p>
+      <p data-t="3.7-6.2">Clawd 刚把钳子举起来，它就没了。</p>
+      <p data-t="6.5-9.2">那就先把愿望写好，等下一颗。</p>
+      <p data-t="9.6-10.9">来了。</p>
+      <p data-t="11.1-13.7">流星好像，眨了一下眼。</p>
+    </div>
+    <div class="sc" data-scene="ep2" data-dur="16" data-card="第二愿" data-sub="小脸蛋 · 生日蜡烛" data-tone="light">
+      <h3><span class="no">第二愿</span>小脸蛋 · 生日蜡烛</h3>
+      <p data-t="0.5-3.2">吹蜡烛之前，要先许愿。</p>
+      <p data-t="3.4-5.6">三颗一起低下头，许得很认真。</p>
+      <p data-t="5.8-7.6">许完了。该吹了。</p>
+      <p data-t="7.8-9.3">……没有嘴。</p>
+      <p data-t="9.5-11.7">那就一起盯着蜡烛看。</p>
+      <p data-t="11.9-13.7">盯到蜡烛自己不好意思，灭了。</p>
+      <p data-t="13.8-15.8">黑的那颗说，是它吹的。</p>
+    </div>
+    <div class="sc" data-scene="ep3" data-dur="14" data-card="第三愿" data-sub="StashYu · 许愿树" data-tone="light">
+      <h3><span class="no">第三愿</span>StashYu · 许愿树</h3>
+      <p data-t="0.5-3.2">许愿树上，挂满了别人的愿望。</p>
+      <p data-t="3.4-5.8">StashYu 闭上眼睛，想了很久。</p>
+      <p data-t="6.0-8.0">挂上去了。</p>
+      <p data-t="8.3-10.8">尾巴里，又悄悄存了一份。</p>
+      <p data-t="11.0-13.7">万一树忘了呢。</p>
+    </div>
+    <div class="sc" data-scene="ep4" data-dur="15" data-card="第四愿" data-sub="FetchMo · 孔明灯">
+      <h3><span class="no">第四愿</span>FetchMo · 孔明灯</h3>
+      <p data-t="0.5-3.0">孔明灯飞得越高，愿望越灵。</p>
+      <p data-t="3.2-5.4">FetchMo 对着它，许了一个很长的愿。</p>
+      <p data-t="5.6-8.0">松开。它慢慢飞上去——</p>
+      <p data-t="8.4-10.6">——被叼回来了。</p>
+      <p data-t="10.8-12.2">……再放一次。</p>
+      <p data-t="12.4-14.8">这次，它使劲忍住了。</p>
+    </div>
+    <div class="sc" data-scene="fin" data-dur="15" data-card="终" data-sub="同一个地址">
+      <h3><span class="no">终</span>同一个地址</h3>
+      <p data-t="0.5-3.4">四个愿望，从四个地方飞出去。</p>
+      <p data-t="3.8-6.2">最后，寄到了同一个地址。</p>
+      <p data-t="6.6-9.0">愿望说出来就不灵了。</p>
+      <p data-t="9.3-12.0">不过收件人是谁，你大概猜得到。</p>
+    </div>
+  </section>
+
+  <footer>
+    四只都照各自的造型宪法画：底模不动，只换眼睛、整块挪位置。<br>
+    曲子和画面都是一格一格写出来的 · cc 做的 · 2026.09
+  </footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+var W=360, H=640, TAU=Math.PI*2;
+var cv=document.getElementById('film'), ctx=cv.getContext('2d');
+var S=1;
+var SANS='-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei","WenQuanYi Zen Hei",sans-serif';
+var SERIF='"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun","Noto Sans CJK SC","WenQuanYi Zen Hei",serif';
+
+/* ---------- 场次和字幕：从下面的字幕本里读 ---------- */
+var SCENES=[], TOTAL=0;
+Array.prototype.forEach.call(document.querySelectorAll('.sc'),function(el){
+  var sc={id:el.dataset.scene, dur:+el.dataset.dur, card:el.dataset.card||'', sub:el.dataset.sub||'',
+          light:el.dataset.tone==='light', start:TOTAL, caps:[], el:el};
+  Array.prototype.forEach.call(el.querySelectorAll('p[data-t]'),function(p){
+    var a=p.dataset.t.split('-');
+    sc.caps.push({t0:+a[0], t1:+a[1], text:p.textContent.trim(), el:p});
+  });
+  TOTAL+=sc.dur; SCENES.push(sc);
+});
+
+/* ---------- 画笔 ---------- */
+function setup(pxW){
+  pxW=Math.max(180,Math.round(pxW));
+  cv.width=pxW; cv.height=Math.round(pxW*H/W); S=cv.width/W;
+}
+function px(v){return Math.round(v*S);}
+function R(x,y,w,h,c,a){
+  if(a!==undefined){ if(a<=0) return; ctx.globalAlpha=a>1?1:a; }
+  ctx.fillStyle=c;
+  var X=px(x), Y=px(y);
+  ctx.fillRect(X,Y,px(x+w)-X,px(y+h)-Y);
+  if(a!==undefined) ctx.globalAlpha=1;
+}
+function hexA(h,a){
+  var n=parseInt(h.slice(1),16);
+  return 'rgba('+(n>>16&255)+','+(n>>8&255)+','+(n&255)+','+a+')';
+}
+function glow(x,y,r,c,a){
+  if(a<=0) return;
+  var g=ctx.createRadialGradient(x*S,y*S,0,x*S,y*S,r*S);
+  g.addColorStop(0,hexA(c,a)); g.addColorStop(.4,hexA(c,a*.4)); g.addColorStop(1,hexA(c,0));
+  ctx.fillStyle=g; ctx.fillRect((x-r)*S,(y-r)*S,2*r*S,2*r*S);
+}
+function clamp(v){return v<0?0:v>1?1:v;}
+function lerp(a,b,p){return a+(b-a)*p;}
+function smooth(p){p=clamp(p);return p*p*(3-2*p);}
+function inR(t,a,b){return t>=a&&t<b;}
+/* 整块跳一下：前一半抬起，后一半落回，没有中间帧 */
+function hop(t,t0,h,d){d=d||.3;return inR(t,t0,t0+d/2)?-h:0;}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function starField(seed,n,y0,y1){
+  var r=rng(seed), a=[];
+  for(var i=0;i<n;i++) a.push({x:Math.floor(r()*356), y:Math.floor(y0+r()*(y1-y0)), s:r()<.22?3:2,
+    a:[.5,.7,.9][Math.floor(r()*3)], tw:r()<.45?Math.floor(r()*3):-1});
+  return a;
+}
+function stars(arr,t){
+  arr.forEach(function(s){
+    var a=s.a;
+    if(s.tw>=0) a=(Math.floor(t/1.2+s.tw/3)%2)?.25:.9;
+    R(s.x,s.y,s.s,s.s,'#e9e1c8',a);
+  });
+}
+function spark(x,y,s,c,a){ R(x-s/2,y-s*1.5,s,s*3,c,a); R(x-s*1.5,y-s/2,s*3,s,c,a); }
+function glyph(rows,x,y,cell,c,a){
+  for(var r=0;r<rows.length;r++) for(var k=0;k<rows[r].length;k++)
+    if(rows[r][k]==='X') R(x+k*cell,y+r*cell,cell,cell,c,a);
+}
+var Q=['.XXX.','X...X','....X','...X.','..X..','.....','..X..'];
+var DROP=['.X.','.X.','XXX','XXX','.X.'];
+
+/* ---------- Clawd：照 Code 版宪法的数，踩角站姿 ---------- */
+var CL_C='#d47f59', CL_K='#120d1d';
+var CL_EYES={
+  bar:[[70,78,8,21],[158,78,8,21]],
+  dot:[[66,81,16,16],[154,81,16,16]],
+  smile:[[62,88,8,8],[70,80,8,11],[78,88,8,8],[150,88,8,8],[158,80,8,11],[166,88,8,8]],
+  shut:[[62,86,24,8],[150,86,24,8]],
+  squint:[[70,78,8,8],[78,86,8,8],[70,94,8,8],[158,78,8,8],[150,86,8,8],[158,94,8,8]]
+};
+/* x,y 是宪法坐标系的原点；k 是缩放；lift 是钳子整块往上挪几格（宪法单位） */
+function clawd(x,y,k,o){
+  o=o||{}; var dy=o.dy||0, lift=o.lift||0;
+  function r(a,b,w,h,c){R(x+a*k,y+b*k+dy,w*k,h*k,c);}
+  r(44,50,147,98,CL_C);
+  r(20,99-lift,24,21,CL_C); r(191,99-lift,25,21,CL_C);
+  r(44,148,15,21,CL_C); r(68,148,15,21,CL_C); r(152,148,15,21,CL_C); r(176,148,15,21,CL_C);
+  (CL_EYES[o.eyes||'bar']).forEach(function(e){r(e[0],e[1],e[2],e[3],CL_K);});
+  if(o.blush){ r(48,92,20,12,'#e59a9a'); r(167,92,20,12,'#e59a9a'); }
+}
+
+/* ---------- 小脸蛋：实测版宪法，缝是挖空的 ---------- */
+var FACE=['#FF309B','#9159FE','#000000'];
+function slit(cx,cy,w,h,deg){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(deg*Math.PI/180);
+  var x=-w/2, y=-h/2, rr=w/2;
+  ctx.moveTo(x,y+rr); ctx.arc(x+rr,y+rr,rr,Math.PI,0); ctx.lineTo(x+w,y+h-rr); ctx.arc(x+rr,y+h-rr,rr,0,Math.PI); ctx.closePath();
+  ctx.restore();
+}
+function face(cx,cy,r,col,rot,ring){
+  ctx.setTransform(S,0,0,S,0,0); ctx.translate(cx,cy); ctx.rotate((rot||0)*Math.PI/180);
+  if(ring){
+    ctx.beginPath(); ctx.arc(0,0,r+1.6,0,TAU); ctx.arc(0,0,r-.2,0,TAU);
+    ctx.fillStyle=ring; ctx.fill('evenodd');
+  }
+  ctx.beginPath(); ctx.arc(0,0,r,0,TAU);
+  slit(.194*r,-.416*r,.194*r,.418*r,-26.2);
+  slit(.626*r,-.497*r,.129*r,.418*r,-26.5);
+  ctx.fillStyle=col; ctx.fill('evenodd');
+  ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* ---------- StashYu 和 FetchMo：momoyu 宪法的格子图，逐格照抄 ---------- */
+var FOX={rows:[".D..........D.......",".DM........MD.......",".MCM......MCM...CC..",".MMMMMMMMMMMM..CCCC.",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."],
+  pal:{M:'#E2552B',C:'#FFF3E3',D:'#3B2520',E:'#3B2520'}, body:'#E2552B', line:'#3B2520', eye:'#3B2520',
+  eyes:[[3,4],[9,4]], blush:[[2,6],[11,6]], blushC:'#F59A8C', dir:1};
+var CAT={rows:["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.",".....X.MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."],
+  pal:{M:'#F3E7D6',X:'#4E382E',E:'#79C0F0'}, body:'#F3E7D6', line:'#4E382E', eye:'#79C0F0',
+  eyes:[[8,5],[16,5]], blush:[[8,7],[17,7]], blushC:'#F2B8B0', dir:-1};
+var N4=[[0,0],[1,0],[0,1],[1,1]];
+function eyeCells(ch,e,i){
+  switch(e){
+    case 'blink':  return {c:[[0,1],[1,1]], k:ch.line};
+    case 'happy':  return {c:[[-1,1],[0,0],[1,0],[2,1]], k:ch.line};
+    case 'asleep': return {c:[[-1,0],[0,1],[1,1],[2,0]], k:ch.line};
+    case 'squeeze':return {c:i?[[1,-1],[0,0],[1,1]]:[[0,-1],[1,0],[0,1]], k:ch.line};
+    case 'blank':  return {c:i?[[0,1]]:[[1,1]], k:ch.eye};
+    case 'glance': return {c:N4.map(function(p){return [p[0]+ch.dir,p[1]];}), k:ch.eye};
+    case 'up':     return {c:N4.map(function(p){return [p[0],p[1]-1];}), k:ch.eye};
+    default:       return {c:N4, k:ch.eye};
+  }
+}
+/* x,y 是格子图左上角；cell 是一格几点。o.add 是叠在外面的格子 [列,行,色] */
+function momo(ch,x,y,cell,o){
+  o=o||{};
+  var g=[], r, c;
+  for(r=-1;r<=13;r++){ g[r]=[]; for(c=-1;c<=20;c++) g[r][c]=null; }
+  for(r=0;r<13;r++) for(c=0;c<20;c++){ var k=ch.rows[r][c]; if(k!=='.') g[r][c]=ch.pal[k]; }
+  ch.eyes.forEach(function(p,i){
+    N4.forEach(function(q){ g[p[1]+q[1]][p[0]+q[0]]=ch.body; });
+    var e=eyeCells(ch,o.eyes||'normal',i);
+    e.c.forEach(function(q){ g[p[1]+q[1]][p[0]+q[0]]=e.k; });
+  });
+  if(o.blush) ch.blush.forEach(function(p){ g[p[1]][p[0]]=ch.blushC; });
+  (o.add||[]).forEach(function(a){ if(g[a[1]]) g[a[1]][a[0]]=a[2]; });
+  if(o.sticker){
+    var out=[];
+    for(r=-1;r<=12;r++) for(c=-1;c<=20;c++){
+      if(g[r][c]) continue;
+      var hit=false;
+      for(var dr=-1;dr<=1&&!hit;dr++) for(var dc=-1;dc<=1;dc++){
+        var rr=g[r+dr]; if(rr&&rr[c+dc]){hit=true;break;}
+      }
+      if(hit) out.push([c,r]);
+    }
+    out.forEach(function(p){ R(x+p[0]*cell,y+p[1]*cell,cell,cell,o.sticker); });
+  }
+  for(r=-1;r<=12;r++){
+    c=-1;
+    while(c<=20){
+      var col=g[r][c];
+      if(!col){c++;continue;}
+      var c2=c; while(c2+1<=20&&g[r][c2+1]===col) c2++;
+      R(x+c*cell,y+r*cell,(c2-c+1)*cell,cell,col);
+      c=c2+1;
+    }
+  }
+}
+var STICK='#dcd4ec', RING='#cfc6e6';
+
+/* 四只排一排（片头和片尾用）。p 是许愿的那股劲：0 平常，1 虔诚，2 许完开心 */
+function lineup(t,base,p,night,appear){
+  var vis=function(i){return !appear||t>=appear[i];};
+  var bump=function(i){return appear?hop(t,appear[i],6,.24):0;};
+  if(vis(0)){
+    var ce=p===1?'squint':p===2?'smile':(inR(t,1.0,1.15)?'shut':'bar');
+    clawd(24,base-169*.3,.3,{eyes:ce,lift:p===1?36:0,blush:p===2,dy:bump(0)+(p===2?hop(t,9.1,4,.3):0)});
+  }
+  if(vis(1)){
+    [118,149,180].forEach(function(cx,i){
+      var rot=p===1?15:0, dy=bump(1)+(p===0?hop(t,2.5+i*.12,4,.24):0)+(p===2?hop(t,9.2+i*.1,4,.3):0);
+      face(cx,base-13+dy,13,FACE[i],rot,night?RING:null);
+    });
+  }
+  if(vis(2)){
+    var fe=p===1?'squeeze':p===2?'happy':(inR(t,1.6,1.75)?'blink':'normal');
+    momo(FOX,209,base-36+bump(2)+(p===2?hop(t,9.3,3,.3):0),3,{eyes:fe,blush:p===2,sticker:night?STICK:null});
+  }
+  if(vis(3)){
+    var ke=p===1?'squeeze':p===2?'happy':(inR(t,2.1,2.25)?'blink':'normal');
+    momo(CAT,271,base-36+bump(3)+(p===2?hop(t,9.4,3,.3):0),3,{eyes:ke,blush:p===2,sticker:night?STICK:null});
+  }
+  if(p===1){
+    [[56,base-52],[149,base-44],[239,base-50],[299,base-50]].forEach(function(q,i){
+      var on=(Math.floor(t/.4)+i)%2;
+      spark(q[0],q[1],on?2:1.4,'#f2d58a',on?.95:.5);
+    });
+  }
+}
+
+/* ---------- 字 ---------- */
+function text(s,x,y,font,c,a,align){
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.globalAlpha=clamp(a); ctx.font=font; ctx.fillStyle=c;
+  ctx.textAlign=align||'center'; ctx.textBaseline='middle';
+  ctx.fillText(s,x,y);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+var PUNCT='，。、！？；：…—」』）';
+function wrap(s,max){
+  if(ctx.measureText(s).width<=max) return [s];
+  var best=-1, mid=s.length/2;
+  for(var i=1;i<s.length-1;i++){
+    if('，。？！…—'.indexOf(s[i])>=0 && PUNCT.indexOf(s[i+1])<0){
+      if(best<0||Math.abs(i+1-mid)<Math.abs(best-mid)) best=i+1;
+    }
+  }
+  if(best>0){
+    var a=s.slice(0,best), b=s.slice(best);
+    if(ctx.measureText(a).width<=max&&ctx.measureText(b).width<=max) return [a,b];
+  }
+  var out=[], line='';
+  for(var j=0;j<s.length;j++){
+    var t=line+s[j];
+    if(ctx.measureText(t).width>max&&line){
+      if(PUNCT.indexOf(s[j])>=0){ out.push(line.slice(0,-1)); line=line.slice(-1)+s[j]; }
+      else { out.push(line); line=s[j]; }
+    } else line=t;
+  }
+  if(line) out.push(line);
+  return out;
+}
+function caption(s,a){
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.font='500 16px '+SANS; ctx.textAlign='center'; ctx.textBaseline='middle';
+  var lines=wrap(s,296), lh=25, y0=590-(lines.length-1)*lh/2;
+  ctx.globalAlpha=clamp(a); ctx.lineJoin='round';
+  lines.forEach(function(ln,i){
+    ctx.lineWidth=4.5; ctx.strokeStyle='rgba(12,10,24,.78)'; ctx.strokeText(ln,180,y0+i*lh);
+    ctx.fillStyle='#fffaf0'; ctx.fillText(ln,180,y0+i*lh);
+  });
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function vignette(){
+  var g=ctx.createLinearGradient(0,540*S,0,H*S);
+  g.addColorStop(0,'rgba(12,10,24,0)'); g.addColorStop(1,'rgba(12,10,24,.42)');
+  ctx.fillStyle=g; ctx.fillRect(0,540*S,W*S,100*S);
+}
+
+/* ---------- 序 ---------- */
+var ST={intro:starField(3,46,10,470), ep1:starField(11,54,10,420), ep4:starField(44,50,10,440), fin:starField(77,56,10,420)};
+function sIntro(t){
+  R(0,0,360,640,'#1b1836'); R(0,0,360,150,'#16132f'); R(0,380,360,120,'#201c40');
+  stars(ST.intro,t);
+  R(0,500,360,140,'#2b2540'); R(0,500,360,3,'#3d3456');
+  text('小 萌 物 · 短 片',180,196,'12px '+SANS,'#8a80a6',1);
+  text('虔诚许愿小萌物',180,236,'600 31px '+SERIF,'#f2d58a',1);
+  text('四只小萌物，四个愿望。',180,276,'14px '+SANS,'#a79dbd',1);
+  lineup(t,500,t>=3.3?1:0,true);
+}
+
+/* ---------- 第一愿 · Clawd · 流星 ---------- */
+function meteor(x,y,dx,dy,len,a){
+  for(var i=9;i>=1;i--){
+    var f=i/10, s=i>5?2:3;
+    R(x-dx*len*f-s/2,y-dy*len*f-s/2,s,s,'#f7ebbf',a*(1-f)*.9);
+  }
+  R(x-2,y-2,4,4,'#fffbe8',a);
+}
+function sEp1(t){
+  R(0,0,360,430,'#1b1836'); R(0,0,360,140,'#16132f'); R(0,300,360,130,'#211d42');
+  stars(ST.ep1,t);
+  R(0,430,360,72,'#1d2a52');
+  var wv=Math.floor(t/.7)%2?3:0;
+  [[18,444,22],[96,458,30],[176,440,18],[236,472,26],[300,452,20],[40,482,16],[140,488,24]].forEach(function(w){R(w[0]+wv,w[1],w[2],2,'#2a3a6c');});
+  R(0,500,360,140,'#3f3552'); R(0,500,360,3,'#4d4262');
+  [[40,540],[250,560],[320,590],[110,610]].forEach(function(p){R(p[0],p[1],4,2,'#5a4e6e');});
+
+  /* 第一颗：一闪就没 */
+  if(inR(t,2.6,3.2)){ var p=(t-2.6)/.6; meteor(lerp(30,330,p),lerp(80,180,p),.949,.316,54,1); }
+  /* 第二颗：到 Clawd 头顶上慢下来，眨一下 */
+  var p2=(t-10)/2;
+  if(p2>0&&p2<1){
+    var q=p2+.09*Math.sin(TAU*p2), mx=lerp(20,340,q), my=lerp(60,150,p2);
+    meteor(mx,my,.962,.27,46,1);
+    if(inR(t,10.9,11.35)){ var on=Math.floor((t-10.9)/.15)%2===0; spark(mx,my,on?4:3,'#fffbe8',1); glow(mx,my,40,'#f7ebbf',.5); }
+  }
+
+  var lift=0, eyes='bar';
+  if(inR(t,2.75,4.9)) lift=36;
+  if(inR(t,9.5,12.1)) lift=40;
+  if(inR(t,1.2,1.35)||inR(t,8.4,8.55)) eyes='shut';
+  if(inR(t,2.75,3.55)) eyes='squint';
+  if(inR(t,3.55,4.9)) eyes='dot';
+  if(inR(t,9.5,11.9)) eyes='squint';
+  if(t>=11.9) eyes='smile';
+  var k=.75, ox=180-117.5*k, oy=532-169*k, dy=hop(t,12.1,6,.3);
+  clawd(ox,oy,k,{eyes:eyes,lift:lift,blush:t>=11.9,dy:dy});
+  if(inR(t,3.55,4.4)) glyph(Q,ox+117.5*k-7,oy+50*k-30+dy,3,'#a79dbd',1);
+
+  /* 纸：拿在右钳上，跟钳子一起动 */
+  if(t>=6.4){
+    var L=lift*k, px0=ox+208*k, py0=oy+54*k-L+dy;
+    R(px0,py0,38,46,'#f3ead8'); R(px0,py0,38,3,'#d8ccb0'); R(px0,py0+43,38,3,'#d8ccb0');
+    var w1=Math.min(27,Math.max(0,Math.floor((t-7.0)/.12)*4.5)), w2=Math.min(22.5,Math.max(0,Math.floor((t-7.7)/.12)*4.5)), w3=Math.min(13.5,Math.max(0,Math.floor((t-8.3)/.12)*4.5));
+    if(w1) R(px0+6,py0+10,w1,3,'#6d6a8a');
+    if(w2) R(px0+6,py0+19,w2,3,'#6d6a8a');
+    if(w3) R(px0+6,py0+28,w3,3,'#6d6a8a');
+  }
+}
+
+/* ---------- 第二愿 · 小脸蛋 · 生日蜡烛 ---------- */
+var CANDLES=[248,272,296], OUT=[11.2,11.5,11.8];
+function flame(cx,base,s,f){
+  R(cx-3*s,base-12*s,6*s,12*s,'#f4a236');
+  R(cx-1.5*s,base-8*s,3*s,6*s,'#fff3b0');
+  R(cx-1.5*s+(f?1:-1),base-15*s,3*s,3*s,'#f4a236');
+}
+function sEp2(t){
+  R(0,0,360,500,'#efe3cf');
+  for(var x=10;x<360;x+=26) R(x,0,4,500,'#e8dac2');
+  /* 彩旗 */
+  for(var i=0;i<12;i++){
+    var fx=8+i*30, fy=Math.round(90+22*(1-Math.pow((fx+8-180)/180,2)));
+    R(fx,fy-2,30,2,'#b09a7c');
+    var cc=['#e59a9a','#f2d58a','#9fc7b8','#b9a7e0'][i%4];
+    R(fx+4,fy,16,4,cc); R(fx+6,fy+4,12,4,cc); R(fx+8,fy+8,8,4,cc); R(fx+10,fy+12,4,3,cc);
+  }
+  /* 桌子 */
+  R(0,500,360,10,'#8c6645'); R(0,510,360,130,'#b98a5e'); R(0,510,360,3,'#a07548');
+  /* 蛋糕 */
+  R(214,496,116,5,'#f7f1e6');
+  R(226,456,92,40,'#f6e3c6'); R(226,474,92,6,'#e07a8a');
+  R(224,452,96,8,'#fffaf0');
+  [[232,6],[254,9],[282,5],[306,8]].forEach(function(d){R(d[0],460,6,d[1],'#fffaf0');});
+  [[238,486,'#9fc7b8'],[262,488,'#f2d58a'],[292,485,'#b9a7e0'],[306,489,'#9fc7b8']].forEach(function(d){R(d[0],d[1],3,3,d[2]);});
+  CANDLES.forEach(function(cx,i){
+    R(cx-2.5,432,5,20,'#8fb8e8'); R(cx-2.5,436,5,3,'#ffffff'); R(cx-2.5,444,5,3,'#ffffff');
+    var out=OUT[i];
+    if(t<out){
+      var staring=t>=10.4, s=staring?(t>=out-.3?.55:.8):1;
+      var f=Math.floor(t*(staring?12:5))%2;
+      glow(cx,425,24,'#ffd27a',staring?.22:.32);
+      flame(cx,432,s,f);
+    } else if(t<out+1.8){
+      var u=t-out;
+      for(var j=0;j<4;j++){
+        var su=u-j*.18; if(su<0) continue;
+        R(cx-2+(j%2?2:-2)+Math.round(Math.sin(su*4+j)*2),428-su*22-j*4,4,4,'#b8b0a8',clamp(1-su/1.4)*.9);
+      }
+    }
+  });
+
+  /* 三颗 */
+  var shift=t>=10.4?18:t>=10.0?12:t>=9.6?6:0;
+  [38,104,170].forEach(function(cx,i){
+    var rot=0;
+    if(inR(t,2.0+i*.15,4.8+i*.1)) rot=18;
+    if(inR(t,9.6,12.2)) rot=-10;
+    var dy=hop(t,7.9+i*.15,7,.26);
+    if(i===2){ dy+=hop(t,14.0,10,.28)+hop(t,14.4,10,.28); }
+    face(cx+shift,470+dy,30,FACE[i],rot,null);
+    if(inR(t,7.9+i*.15,9.3)) glyph(Q,cx+shift-7,404,3,'#8c7f9c',1);
+    if(inR(t,2.4,4.8)){ var on=(Math.floor(t/.4)+i)%2; spark(cx+shift,426,on?2.6:1.8,'#e0a33a',on?.95:.55); }
+  });
+  if(inR(t,14.0,15.2)){ var on2=Math.floor(t/.2)%2; spark(170+shift+22,418,on2?2.6:1.8,'#e0a33a',.95); }
+}
+
+/* ---------- 第三愿 · StashYu · 许愿树 ---------- */
+var TAGS=[[40,8],[58,14],[124,10],[146,6],[166,12]];
+function tag(x,y,c,a){ R(x-3,y,7,12,c,a); R(x-1,y+3,3,1,'#f3b0a0',a); }
+function sEp3(t){
+  R(0,0,360,520,'#f7dcc0'); R(0,150,360,150,'#f4cfae'); R(0,300,360,120,'#f0c09c'); R(0,420,360,100,'#eab090');
+  /* 太阳落在树和狐狸中间，按行叠出来的圆 */
+  for(var yy=-30;yy<30;yy+=4){ var hw=Math.round(Math.sqrt(900-(yy+2)*(yy+2))/2)*2; R(166-hw,470+yy,hw*2,4,'#fbe6a6'); }
+  for(var x=0;x<360;x+=4){ var h=Math.round((34+16*Math.sin(x/38)+8*Math.sin(x/17))/4)*4; R(x,520-h,4,h,'#d6a07f'); }
+  R(0,520,360,120,'#7fa36b'); R(0,520,360,4,'#93b77c');
+  [[20,548],[130,566],[236,552],[320,578],[70,600]].forEach(function(p){R(p[0],p[1],3,6,'#6c9159');R(p[0]+4,p[1]+2,3,4,'#6c9159');});
+  /* 树 */
+  R(78,300,20,224,'#7a5639'); R(70,516,36,8,'#7a5639'); R(28,318,152,7,'#7a5639'); R(84,300,4,200,'#8a6446');
+  [[14,196,176,112,'#5f8a55'],[30,176,60,24,'#5f8a55'],[96,166,64,34,'#5f8a55'],[4,226,14,60,'#5f8a55'],[188,222,12,62,'#5f8a55'],
+   [40,186,30,14,'#77a468'],[108,176,40,14,'#77a468'],[24,212,40,18,'#77a468'],[130,214,34,16,'#77a468'],[70,240,30,14,'#77a468'],
+   [20,288,164,22,'#4e7648']].forEach(function(b){R(b[0],b[1],b[2],b[3],b[4]);});
+  TAGS.forEach(function(g,i){
+    var dx=(Math.floor(t/.6+i*.37)%2)?1:-1;
+    R(g[0]+(dx>0?1:0),325,1,g[1],'#b58a3a'); tag(g[0]+dx,325+g[1],'#d6473b');
+  });
+
+  /* StashYu 的那张 */
+  var fx=222, fy=524-72;
+  if(t>=3.3){
+    var tx, ty, hang=false;
+    if(t<5.8){ tx=276; ty=414+(Math.floor(t/.5)%2?-3:0); }
+    else if(t<7.0){ var p=smooth((t-5.8)/1.2); tx=lerp(276,104,p); ty=lerp(414,341,p)-70*Math.sin(Math.PI*p); }
+    else { hang=true; var dx2=(Math.floor(t/.6+.5)%2)?1:-1; tx=104+dx2; ty=341; }
+    if(hang) R(104+(dx2>0?1:0),325,1,16,'#b58a3a');
+    tag(tx,ty,'#d6473b');
+    R(tx-1,ty+12,3,3,'#e8b64a');
+    if(inR(t,7.0,7.5)){ var on=Math.floor(t/.12)%2; spark(104,334,on?2.4:1.6,'#fff5c8',.95); }
+  }
+  var e='normal';
+  if(inR(t,1.6,1.75)||inR(t,9.8,9.95)) e='blink';
+  if(inR(t,3.4,4.6)) e='asleep';
+  if(inR(t,4.6,5.8)) e='squeeze';
+  if(inR(t,8.2,8.8)) e='glance';
+  if(t>=11.0) e='happy';
+  var add=[];
+  if(t>=8.6) add=[[17,0,'#d6473b'],[18,0,'#d6473b'],[17,1,'#d6473b'],[18,1,'#d6473b']];
+  var dy=hop(t,5.8,6,.3)+hop(t,11.1,6,.3);
+  momo(FOX,fx,fy+dy,6,{eyes:e,blush:t>=11.0,add:add});
+  if(inR(t,8.6,9.1)){ var on3=Math.floor(t/.12)%2; spark(fx+18*6,fy+dy-8,on3?3:2,'#fff5c8',.95); }
+}
+
+/* ---------- 第四愿 · FetchMo · 孔明灯 ---------- */
+/* 灯：x,y 是左上角，28 宽 36 高 */
+function lantern(x,y,lit){
+  if(lit) glow(x+14,y+19,62,'#ffc36b',.42);
+  R(x+3,y,22,4,'#b85f2a');
+  R(x,y+4,28,28,lit?'#f5a54a':'#b86d38');
+  R(x+7,y+10,14,18,lit?'#fbd88a':'#c98450');
+  R(x+8,y+4,2,28,lit?'#e08a3a':'#9c5a2c'); R(x+18,y+4,2,28,lit?'#e08a3a':'#9c5a2c');
+  R(x+3,y+32,22,4,'#b85f2a');
+  if(lit) R(x+11,y+36,6,4,'#fff3b0');
+}
+function sEp4(t){
+  R(0,0,360,524,'#131130'); R(0,200,360,160,'#18163a'); R(0,360,360,164,'#1f1c45');
+  stars(ST.ep4,t);
+  /* 远处别人的灯 */
+  [[60,300,.9],[300,250,1.2],[210,380,.7]].forEach(function(l,i){
+    var ly=l[1]-((t*6*l[2]+i*20)%160);
+    glow(l[0],ly,10,'#ffc36b',.35); R(l[0]-1,ly-1,3,3,'#f5a54a');
+  });
+  for(var x=0;x<360;x+=4){ var h=Math.round((30+14*Math.sin(x/46+1)+6*Math.sin(x/19))/4)*4; R(x,524-h,4,h,'#262249'); }
+  R(0,524,360,116,'#2b2540'); R(0,524,360,3,'#3a3156');
+
+  var cx0=70, cy0=524-72, dx=0, dy=0;
+  /* 跳起来叼：整只挪位置，身子不重画 */
+  var J=[[8.2,22,-120],[8.3,48,-250],[8.4,71,-352],[8.55,66,-250],[8.65,62,-120],[8.75,60,0],[8.82,60,-6],[8.9,60,0]];
+  if(t>=8.2){ for(var i=0;i<J.length;i++) if(t>=J[i][0]){dx=J[i][1];dy=J[i][2];} }
+  if(inR(t,12.2,14.4)) dx+=(Math.floor(t*12)%2)?3:-3;
+  var catX=cx0+dx, catY=cy0+dy;
+
+  var lit=t>=1.6, lx, ly, held=false;
+  if(t<5.5){ lx=210; ly=484; }
+  else if(t<8.4){ var p=clamp((t-5.5)/2.7); p=1-Math.pow(1-p,1.4); lx=210+8*Math.sin(p*5); ly=484-330*p; }
+  else if(t<10.8){ held=true; }
+  else { var p2=clamp((t-10.8)/4.2), hx=catX+61, hy=catY+54; lx=hx+44*smooth(p2*3)+6*Math.sin(p2*6); ly=lerp(hy,-70,Math.pow(p2,1.15)); }
+  if(held){ lx=catX+61; ly=catY+54; }
+
+  if(inR(t,1.6,2.0)){ var on=Math.floor(t/.1)%2; spark(224,476,on?3.5:2.4,'#fff3b0',.95); }
+  var e='normal';
+  if(inR(t,1.2,1.35)) e='blink';
+  if(inR(t,1.7,2.4)) e='happy';
+  if(inR(t,3.2,5.4)) e='squeeze';
+  if(inR(t,5.8,8.2)) e='up';
+  if(inR(t,8.9,10.8)) e='happy';
+  if(inR(t,10.8,12.2)) e='blank';
+  if(inR(t,12.2,14.4)) e='squeeze';
+  if(t>=14.4) e='up';
+  momo(CAT,catX,catY,6,{eyes:e,blush:inR(t,8.9,10.8),sticker:STICK});
+  if(held) R(catX+75,catY+48,2,7,'#d9a441');
+  lantern(lx,ly,lit);
+  if(inR(t,8.4,8.7)){ var on2=Math.floor(t/.1)%2; spark(catX+75,catY+44,on2?3.5:2.4,'#fff3b0',.95); }
+  if(inR(t,12.4,14.4)) glyph(DROP,catX+126,catY-6+((Math.floor(t/.3)%2)?3:0),3,'#8fc3ea',1);
+}
+
+/* ---------- 终 · 同一个地址 ---------- */
+function roof(){
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.beginPath(); ctx.moveTo(0,480); ctx.lineTo(34,440); ctx.lineTo(326,440); ctx.lineTo(360,480); ctx.closePath();
+  ctx.fillStyle='#2b2540'; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.setTransform(1,0,0,1,0,0);
+  for(var x=18;x<360;x+=16) R(x,442,3,38,'#352d4b');
+  ctx.restore();
+  ctx.setTransform(1,0,0,1,0,0);
+  R(28,434,304,6,'#3d3456'); R(0,480,360,6,'#4a3e5e'); R(0,486,360,154,'#231e36');
+}
+function sFin(t){
+  R(0,0,360,486,'#131130'); R(0,160,360,160,'#18163a'); R(0,320,360,166,'#1f1c45');
+  stars(ST.fin,t);
+  roof();
+  var lit=t>=6.0, pulse=lit?(.85+.15*(Math.floor(t/.5)%2)):0;
+  if(lit) glow(180,514,96,'#ffd27a',.34*pulse);
+  R(110,500,140,26,lit?'#fff2d4':'#f3e3c2'); R(110,500,140,2,'#d9c39b');
+  text("宝's Shop",180,514,'600 13px '+SANS,'#7a3b2a',1);
+  [29,329].forEach(function(lx){ R(lx,490,2,4,'#d9a441'); R(lx-7,494,16,14,'#d6473b'); R(lx-4,508,10,2,'#d9a441'); });
+  R(160,556,40,84,'#2f2744'); R(170,568,20,14,lit?'#f7c56a':'#3a3156');
+  if(lit) glow(180,575,30,'#ffc36b',.3);
+
+  /* 四样东西从四个方向飞过来 */
+  var SRC=[[24,70],[18,400],[340,110],[336,410]], TX=180, TY=212;
+  if(t<3.45){
+    SRC.forEach(function(s,i){
+      var p=smooth((t-.4)/3.0), bx=lerp(s[0],TX,p), by=lerp(s[1],TY,p);
+      var nx=-(TY-s[1]), ny=(TX-s[0]), nl=Math.sqrt(nx*nx+ny*ny)||1, bend=30*Math.sin(Math.PI*p)*(i%2?-1:1);
+      bx+=nx/nl*bend; by+=ny/nl*bend;
+      glow(bx,by,22,'#f7ebbf',.35);
+      if(i===0){ spark(bx,by,2.4,'#fffbe8',1); }
+      else if(i===1){ R(bx-3,by-3,6,6,p<.5?'#cfc6be':'#f2d58a'); R(bx-1,by-6,3,3,p<.5?'#cfc6be':'#f2d58a',.7); }
+      else if(i===2){ R(bx,by-6,1,4,'#d9a441'); R(bx-3,by-2,7,10,'#d6473b'); }
+      else { R(bx-4,by-4,9,10,'#f5a54a'); R(bx-2,by-1,5,5,'#fbd88a'); }
+    });
+  } else if(t<6.0){
+    var q=t<4.0?0:smooth((t-4.0)/2.0), sx=TX, sy=lerp(TY,514,q);
+    var big=t<4.0?(Math.floor(t/.1)%2?5:4):3.4;
+    glow(sx,sy,t<4.0?70:44,'#f7ebbf',t<4.0?.6:.45);
+    spark(sx,sy,big,'#fffbe8',1);
+  } else if(t<6.5){
+    glow(180,514,120*(1-(t-6.0)/.5)+40,'#fff3c4',.5*(1-(t-6.0)/.5));
+  }
+
+  /* 四只上屋顶 */
+  if(t>=6.4){
+    var ph=t<9.0?1:2;
+    lineup(t,434,ph,true,[6.4,6.6,6.8,7.0]);
+  }
+
+  /* 片尾 */
+  if(t>=12.2){
+    var a=clamp((t-12.2)/.8);
+    ctx.fillStyle='rgba(12,10,24,'+(.9*a)+')'; ctx.fillRect(0,0,W*S,H*S);
+    var b=clamp((t-12.6)/.8);
+    text('虔诚许愿小萌物',180,284,'600 27px '+SERIF,'#f2d58a',b);
+    text('完',180,328,'16px '+SERIF,'#ece3cf',b);
+    text("宝's Shop · cc 做的 · 2026.09",180,372,'12px '+SANS,'#7d7496',b);
+    [[150,236],[214,240],[120,300],[244,296]].forEach(function(q,i){
+      var on=(Math.floor(t/.5)+i)%2; spark(q[0],q[1],on?2:1.4,'#f2d58a',b*(on?.9:.45));
+    });
+  }
+}
+
+var DRAW={intro:sIntro, ep1:sEp1, ep2:sEp2, ep3:sEp3, ep4:sEp4, fin:sFin};
+
+function sceneAt(t){
+  for(var i=0;i<SCENES.length;i++) if(t<SCENES[i].start+SCENES[i].dur) return SCENES[i];
+  return SCENES[SCENES.length-1];
+}
+function render(t,poster){
+  t=Math.max(0,Math.min(TOTAL-1e-4,t));
+  var sc=sceneAt(t), lt=t-sc.start;
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1;
+  ctx.fillStyle='#0c0a18'; ctx.fillRect(0,0,cv.width,cv.height);
+  DRAW[sc.id](lt);
+  vignette();
+  if(sc.card && sc.id!=='fin' || (sc.id==='fin' && lt<3.2)){
+    var ca=Math.min(clamp((lt-.2)/.4),clamp((2.8-lt)/.4));
+    if(ca>0){
+      text(sc.card,22,56,'600 22px '+SERIF,sc.light?'#7a3b2a':'#f2d58a',ca,'left');
+      text(sc.sub,22,84,'13px '+SANS,sc.light?'#8c6645':'#a79dbd',ca,'left');
+    }
+  }
+  if(!poster) sc.caps.forEach(function(c){
+    if(lt>=c.t0&&lt<c.t1) caption(c.text,Math.min(clamp((lt-c.t0)/.2),clamp((c.t1-lt)/.2)));
+  });
+  /* 场与场之间暗一下 */
+  var fin=sc===SCENES[SCENES.length-1];
+  var f=Math.min(sc===SCENES[0]?clamp(lt/.5):clamp(lt/.35), fin?1:clamp((sc.dur-lt)/.35));
+  if(f<1){ ctx.fillStyle='rgba(12,10,24,'+(1-f)+')'; ctx.fillRect(0,0,cv.width,cv.height); }
+}
+
+/* ---------- 声音：一份音符表，网页和视频共用 ---------- */
+function sceneStart(id){ for(var i=0;i<SCENES.length;i++) if(SCENES[i].id===id) return SCENES[i].start; return 0; }
+function buildEvents(){
+  var ev=[];
+  function mf(m){return 440*Math.pow(2,(m-69)/12);}
+  function add(t,m,d,v,w,s){ ev.push({t:+t.toFixed(4), f:mf(m), d:d, v:v, w:w||'bell', s:s||1}); }
+  /* 八音盒华尔兹，一拍 0.6 秒，十六小节一轮 */
+  var MEL=[[76,1],[79,1],[84,1],[83,2],[79,1],[81,1],[79,1],[76,1],[79,3],
+           [77,1],[81,1],[86,1],[84,2],[81,1],[79,1],[76,1],[74,1],[76,3],
+           [76,1],[79,1],[84,1],[86,2],[84,1],[83,1],[81,1],[79,1],[81,3],
+           [77,1],[76,1],[74,1],[79,2],[76,1],[74,1],[76,1],[74,1],[72,3]];
+  var CH={C:[48,64,67],G:[43,62,67],Am:[45,60,64],F:[41,60,65],Dm:[50,62,65],Em:[40,59,64]};
+  var BARS=['C','G','Am','C','Dm','F','G','C','C','G','Em','Am','Dm','C','G','C'];
+  var B=.6, M0=.3, END=sceneStart('fin')+12.2;
+  function fade(t){ return t<END-.8?1:clamp((END+.8-t)/1.6); }
+  for(var L=0;;L++){
+    var base=M0+L*48*B; if(base>END+1) break;
+    var b=0;
+    MEL.forEach(function(n){ var t=base+b*B; if(t<END+.8) add(t,n[0],Math.min(1.8,.9+n[1]*.45),.1*fade(t)); b+=n[1]; });
+    BARS.forEach(function(name,i){
+      var t=base+i*3*B, c=CH[name];
+      if(t<END+.8){ add(t,c[0],1.6,.07*fade(t)); add(t+B,c[1],.8,.03*fade(t)); add(t+B,c[2],.8,.025*fade(t));
+        add(t+2*B,c[1],.8,.03*fade(t)); add(t+2*B,c[2],.8,.025*fade(t)); }
+    });
+  }
+  function S_(id,list){ var s0=sceneStart(id); list.forEach(function(x){ add(s0+x[0],x[1],x[2],x[3],x[4],x[5]); }); }
+  S_('intro',[[3.3,79,1.4,.07],[3.38,84,1.4,.07],[3.46,88,1.6,.07]]);
+  var w1=[]; for(var k=0;k<9;k++) w1.push([7.0+k*.2,90+(k%3),.05,.035,'blip',1]);
+  S_('ep1',[[2.6,96,.5,.07,'blip',.5],[3.55,72,.16,.06,'blip',1.3],[10.0,91,1.3,.05,'blip',.6],
+            [10.95,96,.9,.08],[11.07,100,1.0,.08],[11.9,84,1.2,.07],[12.0,88,1.2,.07],[12.1,91,1.4,.07]].concat(w1));
+  S_('ep2',[[2.0,76,1.3,.06],[2.15,79,1.3,.06],[2.3,83,1.5,.06],
+            [7.9,79,.12,.05,'blip',1.25],[8.05,81,.12,.05,'blip',1.25],[8.2,83,.12,.05,'blip',1.25],
+            [9.6,60,.08,.05,'blip',1],[10.0,62,.08,.05,'blip',1],[10.4,64,.08,.05,'blip',1],
+            [11.2,67,.26,.09,'blip',.5],[11.5,69,.26,.09,'blip',.5],[11.8,71,.26,.09,'blip',.5],
+            [14.0,84,.12,.06,'blip',1.3],[14.4,86,.12,.06,'blip',1.3]]);
+  S_('ep3',[[3.4,79,1.3,.06],[3.5,83,1.3,.06],[3.6,86,1.5,.06],
+            [5.8,79,.9,.06],[5.9,83,.9,.06],[6.0,86,.9,.06],[6.1,91,1.2,.06],
+            [7.0,88,1.4,.08],[8.6,91,.12,.06,'blip',1.25],
+            [11.0,84,1.2,.07],[11.1,88,1.2,.07],[11.2,91,1.4,.07]]);
+  S_('ep4',[[1.6,76,1.2,.06],[1.7,83,1.4,.06],[3.2,79,1.3,.06],[3.3,83,1.3,.06],[3.4,86,1.5,.06],
+            [5.5,72,1.4,.05],[5.8,79,1.4,.05],[6.1,84,1.6,.05],
+            [8.2,67,.2,.08,'blip',2],[8.4,88,.1,.06,'blip',1],[8.75,55,.16,.08,'blip',.7],
+            [10.8,64,.22,.05,'blip',.8],
+            [12.3,70,.07,.03,'blip',1],[12.55,71,.07,.03,'blip',1],[12.8,70,.07,.03,'blip',1],[13.05,71,.07,.03,'blip',1],
+            [13.3,70,.07,.03,'blip',1],[13.55,71,.07,.03,'blip',1],[13.8,70,.07,.03,'blip',1],[14.05,71,.07,.03,'blip',1],
+            [14.4,91,1.4,.06]]);
+  S_('fin',[[.4,72,1.2,.05],[.5,76,1.2,.05],[.6,79,1.2,.05],[.7,84,1.4,.05],
+            [3.4,84,1.6,.07],[3.46,88,1.6,.07],[3.52,91,1.6,.07],[3.58,96,1.8,.07],
+            [6.0,72,1.8,.06],[6.0,79,1.8,.05],[6.0,84,1.8,.05],[6.0,88,1.8,.05],
+            [6.4,79,.1,.05,'blip',1.2],[6.6,83,.1,.05,'blip',1.2],[6.8,86,.1,.05,'blip',1.2],[7.0,91,.1,.05,'blip',1.2],
+            [12.2,60,2.8,.07],[12.2,67,2.8,.06],[12.25,72,2.8,.06],[12.3,76,2.8,.06],[12.35,84,3.0,.06]]);
+  ev.sort(function(a,b){return a.t-b.t;});
+  return ev;
+}
+var EVENTS=buildEvents();
+
+var AC=null, master=null, pumpId=null, audioT0=0, nextIdx=0;
+function voice(e,when){
+  var g=AC.createGain(); g.connect(master);
+  g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.006);
+  g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+  if(e.w==='bell'){
+    [[1,1],[2,.25],[3,.06]].forEach(function(h){
+      var o=AC.createOscillator(), hg=AC.createGain();
+      o.type='sine'; o.frequency.value=e.f*h[0]; hg.gain.value=h[1];
+      o.connect(hg); hg.connect(g); o.start(when); o.stop(when+e.d+.05);
+    });
+  } else {
+    var o=AC.createOscillator(); o.type='triangle';
+    o.frequency.setValueAtTime(e.f,when);
+    if(e.s!==1) o.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d);
+    o.connect(g); o.start(when); o.stop(when+e.d+.05);
+  }
+}
+function pump(){
+  if(!master) return;
+  var filmNow=filmT0+(AC.currentTime-audioT0), horizon=filmNow+.35;
+  while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<horizon){
+    var e=EVENTS[nextIdx++];
+    if(e.t>=filmT0-.01) voice(e,Math.max(AC.currentTime,audioT0+(e.t-filmT0)));
+  }
+}
+function audioStart(t){
+  if(!soundOn) return;
+  try{
+    if(!AC){ var C=window.AudioContext||window.webkitAudioContext; if(!C) return; AC=new C(); }
+    if(AC.state==='suspended') AC.resume();
+    audioStop();
+    master=AC.createGain(); master.gain.value=3.2; master.connect(AC.destination);
+    audioT0=AC.currentTime+.06;
+    nextIdx=0; while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<t) nextIdx++;
+    pump(); pumpId=setInterval(pump,80);
+  }catch(err){ master=null; }
+}
+function audioStop(){
+  if(pumpId){clearInterval(pumpId);pumpId=null;}
+  if(master){
+    var m=master; master=null;
+    try{ m.gain.setTargetAtTime(0,AC.currentTime,.03); setTimeout(function(){try{m.disconnect();}catch(e){}},400); }catch(e){}
+  }
+}
+
+/* ---------- 播放器 ---------- */
+var player=document.getElementById('player'), screen=document.getElementById('screen'),
+    big=document.getElementById('big'), pp=document.getElementById('pp'), snd=document.getElementById('snd'),
+    seek=document.getElementById('seek'), timeEl=document.getElementById('time'), chips=document.getElementById('chips');
+var playing=false, cur=0, filmT0=0, perfT0=0, raf=0, soundOn=true, started=false, POSTER=4.8;
+seek.max=Math.round(TOTAL*10);
+function fmt(s){ s=Math.floor(s); return Math.floor(s/60)+':'+('0'+s%60).slice(-2); }
+SCENES.forEach(function(sc){
+  var b=document.createElement('button'); b.type='button';
+  b.textContent=sc.card?sc.card.replace('第','').replace('愿',''):'序';
+  if(sc.id==='fin') b.textContent='终';
+  b.addEventListener('click',function(){ go(sc.start); });
+  sc.chip=b; chips.appendChild(b);
+  sc.caps.forEach(function(c){ c.el.addEventListener('click',function(){ go(sc.start+c.t0); }); });
+});
+function clock(){
+  if(master&&AC) return filmT0+Math.max(0,AC.currentTime-audioT0);
+  return filmT0+(performance.now()-perfT0)/1000;
+}
+var lastOn=null, lastChip=null;
+function ui(){
+  timeEl.textContent=fmt(cur)+' / '+fmt(TOTAL);
+  seek.value=Math.round(cur*10);
+  pp.textContent=playing?'暂停':'播放';
+  var sc=sceneAt(cur), lt=cur-sc.start, on=null;
+  if(started) sc.caps.forEach(function(c){ if(lt>=c.t0&&lt<c.t1) on=c.el; });
+  if(on!==lastOn){ if(lastOn) lastOn.classList.remove('on'); if(on) on.classList.add('on'); lastOn=on; }
+  var chip=started?sc.chip:null;
+  if(chip!==lastChip){ if(lastChip) lastChip.classList.remove('on'); if(chip) chip.classList.add('on'); lastChip=chip; }
+  player.classList.toggle('playing',playing);
+  if(!playing){
+    var end=cur>=TOTAL-.05;
+    big.textContent=end?'↺ 再看一遍':'▶';
+    big.classList.toggle('again',end);
+    big.setAttribute('aria-label',end?'再看一遍':'播放');
+  }
+}
+function tick(){
+  if(!playing) return;
+  cur=clock();
+  if(cur>=TOTAL){ cur=TOTAL; render(cur); pause(); return; }
+  render(cur); ui();
+  raf=requestAnimationFrame(tick);
+}
+function play(){
+  if(cur>=TOTAL-.05) cur=0;
+  started=true; playing=true;
+  filmT0=cur; perfT0=performance.now();
+  audioStart(cur);
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(tick);
+  ui();
+}
+function pause(){
+  if(playing) cur=Math.min(TOTAL,clock());
+  playing=false; audioStop(); cancelAnimationFrame(raf);
+  ui();
+}
+function go(t){
+  started=true;
+  cur=Math.max(0,Math.min(TOTAL,t));
+  if(playing){ audioStop(); filmT0=cur; perfT0=performance.now(); audioStart(cur); }
+  render(cur); ui();
+}
+screen.addEventListener('click',function(){ playing?pause():play(); });
+pp.addEventListener('click',function(){ playing?pause():play(); });
+snd.addEventListener('click',function(){
+  soundOn=!soundOn;
+  snd.textContent=soundOn?'声音 开':'声音 关'; snd.setAttribute('aria-pressed',soundOn?'true':'false');
+  if(playing){ cur=clock(); filmT0=cur; perfT0=performance.now(); if(soundOn) audioStart(cur); else audioStop(); }
+});
+seek.addEventListener('input',function(){ go(seek.value/10); });
+document.addEventListener('visibilitychange',function(){ if(document.hidden&&playing) pause(); });
+
+function fit(){
+  var w=screen.clientWidth||360, dpr=Math.min(3,window.devicePixelRatio||1);
+  setup(w*dpr);
+  if(started) render(cur); else render(POSTER,true);
+}
+window.addEventListener('resize',fit);
+fit(); ui();
+
+/* 导视频用的口子：给定宽度和第几秒，画出那一格 */
+window.FILM={W:W,H:H,TOTAL:TOTAL,events:EVENTS,canvas:cv,
+  setup:function(pxW){ setup(pxW); }, render:function(t){ render(t); }};
+})();
+</script>
+</body>
+</html>
