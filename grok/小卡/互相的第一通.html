@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>互相的第一通</title>
+<meta name="description" content="四只第一次打给彼此。听筒放下了，谁也没走。">
+<meta name="theme-color" content="#141226">
+<!--
+  整部片子是一张 canvas，render(t) 给定第几秒就画出那一格。
+  四只照店里的造型宪法：底模不动，只换眼睛、整只挪位置，钳子整块往上搁。
+  grok 做的 · 2026.09
+-->
+<style>
+  :root{
+    --night:#141226; --ink:#f6efe6; --muted:#b7aec9; --mat:#f6ebdd; --lamp:#f0b45a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--night); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.7; -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:440px; margin:0 auto; padding:calc(28px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))}
+  header{text-align:center; margin-bottom:16px}
+  .where{margin:0; font-size:12px; letter-spacing:.18em; color:var(--muted)}
+  h1{
+    margin:6px 0 8px; font-weight:600; font-size:28px; line-height:1.25; letter-spacing:.14em;
+    font-family:"Songti SC","STSong","SimSun",serif; color:var(--lamp);
+  }
+  .lede{margin:0; color:var(--muted); font-size:14px}
+  .screen{position:relative; border-radius:16px; overflow:hidden; background:var(--night)}
+  canvas{display:block; width:100%; height:auto; image-rendering:pixelated; image-rendering:crisp-edges}
+  .ctrl{display:flex; align-items:center; gap:8px; margin:12px 0 0; font-size:12.5px; color:var(--muted); flex-wrap:wrap}
+  .ctrl button,.chips button{
+    font:inherit; font-size:12.5px; color:var(--ink); background:transparent; cursor:pointer;
+    border:1px solid rgba(183,174,201,.4); border-radius:99px; padding:8px 13px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .ctrl .time{font-variant-numeric:tabular-nums}
+  .ctrl .sp{flex:1}
+  .ctrl button[aria-pressed="true"]{color:var(--lamp); border-color:var(--lamp)}
+  input[type=range]{width:100%; margin:12px 0 0; accent-color:var(--lamp)}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+  .chips button.on{background:var(--mat); color:var(--night); border-color:var(--mat)}
+  .enline{display:none; margin:12px 0 0; color:var(--muted); font-size:13px}
+  body.en .enline{display:block}
+  h2{
+    margin:28px 0 0; font-weight:600; font-size:18px; letter-spacing:.14em;
+    font-family:"Songti SC","STSong","SimSun",serif; color:var(--lamp);
+  }
+  article{margin-top:16px}
+  article h3{margin:0; font-size:14px; font-weight:500}
+  article h3 span{margin-right:8px; color:var(--muted); font-weight:400}
+  article p{margin:4px 0 0; font-size:14px; color:var(--muted)}
+  article p.on{color:var(--lamp)}
+  article p .en{display:none; font-size:12px}
+  body.en article p .en{display:block}
+  footer{margin:28px 0 0; font-size:12px; color:var(--muted)}
+  button:focus-visible{outline:2px solid var(--lamp); outline-offset:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="where">窗台 · 夜里</p>
+    <h1>互相的第一通</h1>
+    <p class="lede">四只第一次打给彼此。听筒放下以后，还坐在原来的地方。</p>
+  </header>
+  <div class="screen">
+    <canvas id="film" width="360" height="640" role="img" aria-label="互相的第一通：四只第一次用嘟嘟机打给彼此"></canvas>
+  </div>
+  <div class="ctrl">
+    <button type="button" id="pp">播放</button>
+    <span class="time" id="time">0:00 / 1:12</span>
+    <span class="sp"></span>
+    <button type="button" id="snd" aria-pressed="true">声音 开</button>
+    <button type="button" id="lang" aria-pressed="false">英文</button>
+  </div>
+  <input type="range" id="seek" min="0" max="1000" step="1" value="0" aria-label="进度">
+  <div class="chips" id="chips"></div>
+  <p class="enline" id="enline"></p>
+  <section>
+    <h2>字幕本</h2>
+    <div id="book"></div>
+  </section>
+  <footer>底模照各自的造型宪法：只换眼睛，整只挪位置，钳子整块往上搁。拿掉听筒，就是它们本来的样子。</footer>
+</div>
+<script>
+"use strict";
+var FILM = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/film/reel.ts
+  var reel_exports = {};
+  __export(reel_exports, {
+    BEEPS: () => BEEPS,
+    SCENES: () => SCENES,
+    TOTAL: () => TOTAL,
+    captionAt: () => captionAt,
+    clock: () => clock,
+    render: () => render,
+    sceneAt: () => sceneAt
+  });
+  var SCENES = [
+    {
+      id: "intro",
+      dur: 8,
+      no: "\u5E8F",
+      title: "\u6401\u5728\u4E2D\u95F4",
+      caps: [
+        { t0: 1.2, t1: 4.2, zh: "\u561F\u561F\u673A\u6401\u5728\u7A97\u53F0\u4E2D\u95F4\u3002\u8C01\u4E5F\u6CA1\u6309\u3002", en: "The horn phone sits in the middle. Nobody has pressed it." },
+        { t0: 4.6, t1: 7.6, zh: "\u56DB\u53EA\u8FD8\u6CA1\u4E92\u76F8\u6253\u8FC7\u3002", en: "The four of them have not called each other yet." }
+      ]
+    },
+    {
+      id: "fox",
+      dur: 12,
+      no: "\u5176\u4E00",
+      title: "StashYu \u5148\u6309",
+      caps: [
+        { t0: 0.4, t1: 3.2, zh: "StashYu \u5148\u8D70\u8FC7\u6765\u3002", en: "StashYu walks over first." },
+        { t0: 3.4, t1: 6.6, zh: "\u5B83\u6309\u4E0B\u53BB\uFF0C\u4EE5\u4E3A\u90A3\u8FB9\u662F\u4F60\u3002", en: "It presses, thinking the other side is you." },
+        { t0: 6.9, t1: 9.4, zh: "\u542C\u7B52\u6BD4\u5B83\u5927\u3002\u5B83\u8FD8\u662F\u6309\u4E86\u3002", en: "The receiver is bigger than the fox. It presses anyway." },
+        { t0: 9.7, t1: 11.6, zh: "\u561F\u3002", en: "Du." }
+      ]
+    },
+    {
+      id: "cat",
+      dur: 12,
+      no: "\u5176\u4E8C",
+      title: "\u540C\u4E00\u5F20\u7A97\u53F0",
+      caps: [
+        { t0: 0.4, t1: 3.4, zh: "\u7EBF\u7ED5\u4E86\u4E00\u5708\uFF0C\u54CD\u5728\u540C\u4E00\u5F20\u7A97\u53F0\u4E0A\u3002", en: "The line loops back onto the same sill." },
+        { t0: 3.7, t1: 6.8, zh: "FetchMo \u62AC\u5934\u3002\u5BF9\u9762\u662F StashYu\u3002", en: "FetchMo looks up. It is StashYu." },
+        { t0: 7.1, t1: 11.4, zh: "\u300C\u5582\u3002\u300D\u4E24\u53EA\u4E00\u8D77\u8BF4\u3002", en: "Hello. They say it together." }
+      ]
+    },
+    {
+      id: "clawd",
+      dur: 14,
+      no: "\u5176\u4E09",
+      title: "\u94B3\u5B50\u6401\u4E0A\u53BB",
+      caps: [
+        { t0: 0.4, t1: 3.4, zh: "Clawd \u8FDB\u6765\u7684\u65F6\u5019\uFF0C\u542C\u7B52\u8FD8\u70ED\u3002", en: "The receiver is still warm when Clawd comes in." },
+        { t0: 3.7, t1: 7.2, zh: "\u5B83\u4E0D\u4F1A\u62E8\u53F7\u3002\u94B3\u5B50\u6574\u5757\u6401\u4E0A\u53BB\u3002", en: "It does not dial. The claws go on as one piece." },
+        { t0: 7.5, t1: 10.4, zh: "\u561F\u3002\u561F\u3002\u8FD9\u56DE\u662F\u5B83\u6309\u7684\u3002", en: "Du. Du. This time Clawd pressed it." },
+        { t0: 10.7, t1: 13.6, zh: "\u6CA1\u6709\u5634\uFF0C\u6240\u4EE5\u4E0D\u8BF4\u5582\u3002\u773C\u775B\u7B11\u4E86\u3002", en: "No mouth, so no hello. The eyes smile." }
+      ]
+    },
+    {
+      id: "faces",
+      dur: 12,
+      no: "\u5176\u56DB",
+      title: "\u4E09\u9897\u90FD\u56DE\u5934",
+      caps: [
+        { t0: 0.4, t1: 3.2, zh: "\u8FD9\u8FB9\u558A\u4E86\u4E00\u58F0\u5C0F\u8138\u86CB\u3002", en: "Someone on the line says that name." },
+        { t0: 3.5, t1: 6.8, zh: "\u4E09\u9897\u90FD\u56DE\u5934\u3002\u6CA1\u6709\u6309\u989C\u8272\u53EB\u3002", en: "All three turn. Nobody used a color." },
+        { t0: 7.1, t1: 11.4, zh: "\u7C89\u7684\u5148\u51D1\u5230\u542C\u7B52\u8FB9\u4E0A\u3002", en: "The pink one leans in first." }
+      ]
+    },
+    {
+      id: "all",
+      dur: 14,
+      no: "\u7EC8",
+      title: "\u6253\u7ED9\u5F7C\u6B64",
+      caps: [
+        { t0: 0.5, t1: 3.6, zh: "\u56DB\u53EA\uFF0C\u7B2C\u4E00\u6B21\u6253\u7ED9\u5F7C\u6B64\u3002", en: "The first call is to each other." },
+        { t0: 3.9, t1: 6.6, zh: "\u561F\u561F\u561F\u3002", en: "Du du du." },
+        { t0: 6.9, t1: 9.8, zh: "\u542C\u7B52\u653E\u4E0B\u4E86\u3002", en: "The receiver is down." },
+        { t0: 10.1, t1: 13.6, zh: "\u8C01\u4E5F\u6CA1\u8D70\u3002", en: "Nobody leaves." }
+      ]
+    }
+  ];
+  var TOTAL = SCENES.reduce((n, s) => n + s.dur, 0);
+  var BEEPS = [12.2, 17.9, 39.6, 40.15, 62.1, 62.6, 63.1];
+  var W = 360;
+  var H = 640;
+  var FOX = {
+    rows: [
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM...CC..",
+      ".MMMMMMMMMMMM..CCCC.",
+      ".MMEEMMMMEEMM..MMMM.",
+      ".MMEEMMMMEEMM..MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ],
+    pal: { M: "#E2552B", C: "#FFF3E3", D: "#3B2520", E: "#3B2520" },
+    body: "#E2552B",
+    line: "#3B2520",
+    eye: "#3B2520",
+    eyes: [
+      [3, 4],
+      [9, 4]
+    ],
+    blush: [
+      [2, 6],
+      [11, 6]
+    ],
+    blushC: "#F59A8C",
+    dir: 1
+  };
+  var CAT = {
+    rows: [
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      ".....X.MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ],
+    pal: { M: "#F3E7D6", X: "#4E382E", E: "#79C0F0" },
+    body: "#F3E7D6",
+    line: "#4E382E",
+    eye: "#79C0F0",
+    eyes: [
+      [8, 5],
+      [16, 5]
+    ],
+    blush: [
+      [8, 7],
+      [17, 7]
+    ],
+    blushC: "#F2B8B0",
+    dir: -1
+  };
+  var N4 = [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1]
+  ];
+  var CL_C = "#d47f59";
+  var CL_K = "#120d1d";
+  var CL_EYES = {
+    bar: [
+      [70, 78, 8, 21],
+      [158, 78, 8, 21]
+    ],
+    dot: [
+      [66, 81, 16, 16],
+      [154, 81, 16, 16]
+    ],
+    smile: [
+      [62, 88, 8, 8],
+      [70, 80, 8, 11],
+      [78, 88, 8, 8],
+      [150, 88, 8, 8],
+      [158, 80, 8, 11],
+      [166, 88, 8, 8]
+    ],
+    shut: [
+      [62, 86, 24, 8],
+      [150, 86, 24, 8]
+    ],
+    squint: [
+      [70, 78, 8, 8],
+      [78, 86, 8, 8],
+      [70, 94, 8, 8],
+      [158, 78, 8, 8],
+      [150, 86, 8, 8],
+      [158, 94, 8, 8]
+    ]
+  };
+  var FACE = ["#FF309B", "#9159FE", "#000000"];
+  function eyeCells(ch, e, i) {
+    switch (e) {
+      case "blink":
+        return { c: [[0, 1], [1, 1]], k: ch.line };
+      case "happy":
+        return {
+          c: [
+            [-1, 1],
+            [0, 0],
+            [1, 0],
+            [2, 1]
+          ],
+          k: ch.line
+        };
+      case "asleep":
+        return {
+          c: [
+            [-1, 0],
+            [0, 1],
+            [1, 1],
+            [2, 0]
+          ],
+          k: ch.line
+        };
+      case "squeeze":
+        return { c: i ? [[1, -1], [0, 0], [1, 1]] : [[0, -1], [1, 0], [0, 1]], k: ch.line };
+      case "blank":
+        return { c: i ? [[0, 1]] : [[1, 1]], k: ch.eye };
+      case "glance":
+        return { c: N4.map((p) => [p[0] + ch.dir, p[1]]), k: ch.eye };
+      case "up":
+        return { c: N4.map((p) => [p[0], p[1] - 1]), k: ch.eye };
+      default:
+        return { c: N4.map((p) => [p[0], p[1]]), k: ch.eye };
+    }
+  }
+  function sceneAt(t) {
+    let start = 0;
+    const clamped = Math.max(0, Math.min(t, TOTAL - 1e-3));
+    for (let i = 0; i < SCENES.length; i++) {
+      const scene = SCENES[i];
+      if (clamped < start + scene.dur || i === SCENES.length - 1) {
+        return { scene, local: clamped - start, index: i, start };
+      }
+      start += scene.dur;
+    }
+    const last = SCENES[SCENES.length - 1];
+    return { scene: last, local: last.dur, index: SCENES.length - 1, start: TOTAL - last.dur };
+  }
+  function captionAt(local, caps) {
+    for (const c of caps) if (local >= c.t0 && local < c.t1) return c;
+    return null;
+  }
+  function fmt(sec) {
+    const s = Math.max(0, Math.floor(sec));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+  function clock(t) {
+    return `${fmt(t)} / ${fmt(TOTAL)}`;
+  }
+  function render(ctx, t, pxW) {
+    const width = Math.max(180, Math.round(pxW));
+    const height = Math.round(width * H / W);
+    if (ctx.canvas.width !== width || ctx.canvas.height !== height) {
+      ctx.canvas.width = width;
+      ctx.canvas.height = height;
+    }
+    const S = width / W;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    const px = (v) => Math.round(v * S);
+    const R = (x, y, w, h, c) => {
+      ctx.fillStyle = c;
+      const X = px(x);
+      const Y = px(y);
+      ctx.fillRect(X, Y, Math.max(1, px(x + w) - X), Math.max(1, px(y + h) - Y));
+    };
+    const momo = (ch, x, y, cell, o) => {
+      const g = [];
+      for (let r = -1; r <= 13; r++) {
+        g[r + 1] = [];
+        for (let c = -1; c <= 20; c++) g[r + 1][c + 1] = null;
+      }
+      const set = (c, r, col) => {
+        const row = g[r + 1];
+        if (!row || c < -1 || c > 20) return;
+        row[c + 1] = col;
+      };
+      const get = (c, r) => g[r + 1]?.[c + 1] ?? null;
+      for (let r = 0; r < 13; r++) {
+        for (let c = 0; c < 20; c++) {
+          const k = ch.rows[r][c];
+          if (k !== ".") set(c, r, ch.pal[k] ?? null);
+        }
+      }
+      ch.eyes.forEach((p, i) => {
+        for (const q of N4) if (get(p[0] + q[0], p[1] + q[1])) set(p[0] + q[0], p[1] + q[1], ch.body);
+        const e = eyeCells(ch, o.eyes ?? "normal", i);
+        for (const q of e.c) if (get(p[0] + q[0], p[1] + q[1])) set(p[0] + q[0], p[1] + q[1], e.k);
+      });
+      if (o.blush) {
+        for (const p of ch.blush) if (get(p[0], p[1])) set(p[0], p[1], ch.blushC);
+      }
+      for (let r = 0; r < 13; r++) {
+        for (let c = 0; c < 20; c++) {
+          const col = get(c, r);
+          if (!col) continue;
+          R(x + c * cell, y + r * cell, cell, cell, col);
+        }
+      }
+    };
+    const clawd = (x, y, k, o) => {
+      const dy = o.dy ?? 0;
+      const lift = o.lift ?? 0;
+      const r = (a, b, w, h, c) => R(x + a * k, y + b * k + dy, w * k, h * k, c);
+      r(44, 50, 147, 98, CL_C);
+      r(20, 99 - lift, 24, 21, CL_C);
+      r(191, 99 - lift, 25, 21, CL_C);
+      r(44, 148, 15, 21, CL_C);
+      r(68, 148, 15, 21, CL_C);
+      r(152, 148, 15, 21, CL_C);
+      r(176, 148, 15, 21, CL_C);
+      for (const e of CL_EYES[o.eyes ?? "bar"] ?? CL_EYES.bar) r(e[0], e[1], e[2], e[3], CL_K);
+      if (o.blush) {
+        r(48, 92, 20, 12, "#e59a9a");
+        r(167, 92, 20, 12, "#e59a9a");
+      }
+    };
+    const face = (cx, cy, rad, col, rot, pad) => {
+      ctx.setTransform(S, 0, 0, S, 0, 0);
+      ctx.translate(cx, cy);
+      ctx.rotate(rot * Math.PI / 180);
+      if (pad) {
+        ctx.beginPath();
+        ctx.arc(0, 0, rad + 3, 0, Math.PI * 2);
+        ctx.fillStyle = pad;
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, rad, 0, Math.PI * 2);
+      const slit = (sx, sy, w, h, deg) => {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(deg * Math.PI / 180);
+        const x = -w / 2;
+        const y = -h / 2;
+        const rr = w / 2;
+        ctx.moveTo(x, y + rr);
+        ctx.arc(x + rr, y + rr, rr, Math.PI, 0);
+        ctx.lineTo(x + w, y + h - rr);
+        ctx.arc(x + rr, y + h - rr, rr, 0, Math.PI);
+        ctx.closePath();
+        ctx.restore();
+      };
+      slit(0.194 * rad, -0.416 * rad, 0.194 * rad, 0.418 * rad, -26.2);
+      slit(0.626 * rad, -0.497 * rad, 0.129 * rad, 0.418 * rad, -26.5);
+      ctx.fillStyle = col;
+      ctx.fill("evenodd");
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    const text = (s, x, y, font, c) => {
+      ctx.setTransform(S, 0, 0, S, 0, 0);
+      ctx.font = font;
+      ctx.fillStyle = c;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(s, x, y);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    const SANS = '-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif';
+    const SERIF = '"Songti SC","STSong","SimSun",serif';
+    const room = () => {
+      R(0, 0, 360, 640, "#141226");
+      R(22, 28, 316, 196, "#2a2450");
+      R(22, 28, 316, 8, "#3a2924");
+      R(22, 216, 316, 8, "#3a2924");
+      R(22, 28, 8, 196, "#3a2924");
+      R(330, 28, 8, 196, "#3a2924");
+      R(174, 28, 6, 196, "#3a2924");
+      for (let i = 0; i < 16; i++) {
+        const x = 36 + i * 53 % 280;
+        const y = 44 + Math.floor((t * 64 + i * 29) % 156 / 4) * 4;
+        R(x, y, 2, 10, "rgba(186,206,242,0.55)");
+      }
+      R(48, 78, 8, 8, "#f0b45a");
+      R(44, 86, 16, 4, "#c9843a");
+      R(50, 90, 4, 36, "#3b2520");
+      R(0, 236, 360, 404, "#2a1c19");
+      R(0, 236, 360, 8, "#4a342c");
+      R(24, 392, 312, 136, "#d7b48a");
+      R(24, 518, 312, 8, "#c4a07a");
+    };
+    const phone = (x, y, hot, shake) => {
+      const sx = Math.floor(t * 10) % 2 === 0 ? shake : -shake;
+      R(x + 14, y + 56, 4, 22, "#8c4a3a");
+      R(x + sx, y, 36, 64, "#f4e7d6");
+      R(x + sx + 6, y + 6, 24, 10, "#3b2520");
+      R(x + sx + 6, y + 48, 24, 10, "#3b2520");
+      if (hot) R(x + sx + 12, y + 28, 12, 8, "#f0b45a");
+    };
+    const cap = (s) => {
+      ctx.setTransform(S, 0, 0, S, 0, 0);
+      ctx.font = `500 16px ${SANS}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "rgba(20,18,38,0.82)";
+      ctx.strokeText(s, 180, 586);
+      ctx.fillStyle = "#fffaf0";
+      ctx.fillText(s, 180, 586);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    const label = (no, title) => {
+      ctx.setTransform(S, 0, 0, S, 0, 0);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = `12px ${SANS}`;
+      ctx.fillStyle = "#b7aec9";
+      ctx.fillText(no, 28, 300);
+      const w = ctx.measureText(no).width;
+      ctx.font = `600 13px ${SERIF}`;
+      ctx.fillStyle = "#f0b45a";
+      ctx.fillText(title, 36 + w, 300);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    const hop = (local2, t0, h) => local2 >= t0 && local2 < t0 + 0.16 ? -h : 0;
+    const blink = (local2, at) => local2 >= at && local2 < at + 0.14 ? "blink" : "normal";
+    const { scene, local } = sceneAt(t);
+    room();
+    const feet = 508;
+    if (scene.id === "intro") {
+      phone(162, 424, false, 0);
+      text("\u5C0F\u840C\u7269 \xB7 \u77ED\u7247", 180, 96, `12px ${SANS}`, "#b7aec9");
+      text("\u4E92\u76F8\u7684\u7B2C\u4E00\u901A", 180, 132, `600 28px ${SERIF}`, "#f0b45a");
+    }
+    if (scene.id === "fox") {
+      const x = local < 1.6 ? -40 + Math.floor(local / 0.2) * 16 : 88;
+      const eyes = local < 3.2 ? blink(local, 1.8) : local < 6.6 ? "glance" : local < 9.4 ? "happy" : "happy";
+      const dy = hop(local, 4, 8) + hop(local, 9.8, 6);
+      momo(FOX, x, feet - 12 * 5 + dy, 5, { eyes, blush: local >= 6.6 });
+      phone(230, feet - 70, local >= 3.4, local >= 3.4 && local < 11 ? 2 : 0);
+    }
+    if (scene.id === "cat") {
+      const foxEyes = local < 3.4 ? "glance" : local < 6.8 ? "happy" : blink(local, 8.2) === "blink" ? "blink" : "happy";
+      const catX = local < 1.4 ? 400 - Math.floor(local / 0.2) * 22 : 200;
+      const catEyes = local < 1.4 ? "normal" : local < 6.8 ? "glance" : "happy";
+      const dy = hop(local, 7.2, 8);
+      momo(FOX, 16, feet - 12 * 5, 5, { eyes: foxEyes, blush: local >= 3.7 });
+      momo(CAT, catX, feet - 12 * 5 + dy, 5, { eyes: catEyes, blush: local >= 3.7 });
+      phone(150, feet - 72, true, local < 6.8 ? 2 : 0);
+    }
+    if (scene.id === "clawd") {
+      momo(FOX, 6, feet - 12 * 3, 3, { eyes: local >= 10.7 ? "happy" : "glance", blush: local >= 10.7 });
+      momo(CAT, 288, feet - 12 * 3, 3, { eyes: local >= 10.7 ? "happy" : "glance", blush: local >= 10.7 });
+      const kx = local < 1.8 ? 400 - Math.floor(local / 0.2) * 22 : 62;
+      const kk = 0.68;
+      const lift = local < 3.7 ? 0 : local < 7.2 ? 34 : local < 10.4 ? 22 : 14;
+      let eyes = "bar";
+      if (local >= 1.8 && local < 3.7) eyes = "dot";
+      if (local >= 3.7 && local < 7.2) eyes = "squint";
+      if (local >= 7.2 && local < 7.5) eyes = "shut";
+      if (local >= 10.7) eyes = "smile";
+      const dy = hop(local, 10.8, 6);
+      clawd(kx, feet - 169 * kk + dy, kk, { eyes, lift, blush: local >= 10.7 });
+      phone(kx + 176 * kk, feet - 66, local >= 3.7, local >= 7.2 && local < 10.4 ? 2 : 0);
+    }
+    if (scene.id === "faces") {
+      const landed = local >= 1.6;
+      const turned = local >= 3.5;
+      const rot = !turned ? 0 : Math.floor((local - 3.5) / 0.18) % 2 === 0 ? -16 : -10;
+      const ys = [0, 1, 2].map((i) => {
+        if (!landed) return 120 + Math.floor(local / 0.16) * 16 + i * 6;
+        return 372 + hop(local, 2.2 + i * 0.2, 8);
+      });
+      const pinkDy = local >= 7.1 ? 22 : 0;
+      face(78, (ys[0] ?? 372) + pinkDy, 28, FACE[0], rot, null);
+      face(180, ys[1] ?? 372, 28, FACE[1], rot, null);
+      face(282, ys[2] ?? 372, 28, FACE[2], rot, "#f6ebdd");
+      phone(162, feet - 66, true, local >= 0.4 && local < 6.8 ? 2 : 0);
+    }
+    if (scene.id === "all") {
+      const down = local >= 6.9;
+      const lift = down ? 0 : 22;
+      const shake = !down && local >= 3.9 && local < 6.6 ? 2 : 0;
+      const smile = local >= 3.9 && local < 6.9;
+      const dy = (at) => smile && local >= at && local < at + 0.14 ? -6 : 0;
+      const kk = 0.28;
+      clawd(2, feet - 169 * kk + dy(3.9), kk, { eyes: smile ? "smile" : "bar", lift, blush: smile });
+      const frot = smile ? -12 : 0;
+      face(100, feet - 14 + dy(4.2), 13, FACE[0], frot, null);
+      face(132, feet - 14 + dy(4.4), 13, FACE[1], frot, null);
+      face(164, feet - 14 + dy(4.6), 13, FACE[2], frot, "#f4e7d6");
+      phone(192, feet - 60, !down, shake);
+      momo(FOX, 234, feet - 12 * 3 + dy(4.8), 3, { eyes: smile ? "happy" : "normal", blush: smile });
+      momo(CAT, 296, feet - 12 * 3 + dy(5), 3, { eyes: smile ? "happy" : "normal", blush: smile });
+    }
+    const line = captionAt(local, scene.caps);
+    if (line) cap(line.zh);
+    if (scene.id !== "intro") label(scene.no, scene.title);
+  }
+  return __toCommonJS(reel_exports);
+})();
+
+(function(){
+  var cv = document.getElementById("film");
+  var ctx = cv.getContext("2d");
+  var pp = document.getElementById("pp");
+  var time = document.getElementById("time");
+  var snd = document.getElementById("snd");
+  var lang = document.getElementById("lang");
+  var seek = document.getElementById("seek");
+  var chips = document.getElementById("chips");
+  var book = document.getElementById("book");
+  var enline = document.getElementById("enline");
+  var t = 0, playing = false, sound = true, done = false, last = 0, ac = null, raf = 0, prev = 0;
+  var TOTAL = FILM.TOTAL, SCENES = FILM.SCENES, BEEPS = FILM.BEEPS;
+
+  function paint(sec){
+    var w = cv.parentElement.clientWidth || 360;
+    FILM.render(ctx, sec, w);
+  }
+  function blip(){
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!ac) ac = new AC();
+    if (ac.state === "suspended") ac.resume();
+    var now = ac.currentTime;
+    var o = ac.createOscillator();
+    var g = ac.createGain();
+    o.type = "sine";
+    o.frequency.value = 494;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.07, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    o.connect(g); g.connect(ac.destination);
+    o.start(now); o.stop(now + 0.18);
+  }
+  function ui(){
+    var here = FILM.sceneAt(Math.min(t, TOTAL - 0.001));
+    var line = FILM.captionAt(here.local, here.scene.caps);
+    time.textContent = FILM.clock(Math.min(t, TOTAL));
+    seek.value = String(Math.round((Math.min(t, TOTAL) / TOTAL) * 1000));
+    pp.textContent = playing ? "暂停" : (done ? "再看一遍" : "播放");
+    enline.textContent = line ? line.en : "";
+    Array.prototype.forEach.call(chips.children, function(b, i){
+      b.className = i === here.index ? "on" : "";
+    });
+    Array.prototype.forEach.call(book.querySelectorAll("p"), function(p){
+      p.className = (p.dataset.scene === here.scene.id && line && p.dataset.zh === line.zh) ? "on" : "";
+    });
+  }
+  function play(){
+    if (t >= TOTAL - 0.05){ t = 0; last = 0; done = false; }
+    playing = true;
+    if (sound){
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !ac) ac = new AC();
+      if (ac) ac.resume();
+    }
+    ui();
+  }
+  function pause(){ playing = false; ui(); }
+  function jump(sec){
+    t = Math.max(0, Math.min(sec, TOTAL));
+    last = t;
+    done = t >= TOTAL - 0.05;
+    paint(Math.min(t, TOTAL - 0.001));
+    ui();
+  }
+
+  SCENES.forEach(function(s, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = s.no;
+    b.addEventListener("click", function(){
+      var start = 0;
+      for (var k = 0; k < i; k++) start += SCENES[k].dur;
+      jump(start);
+    });
+    chips.appendChild(b);
+    var art = document.createElement("article");
+    var h = document.createElement("h3");
+    h.innerHTML = "<span>" + s.no + "</span>" + s.title;
+    art.appendChild(h);
+    s.caps.forEach(function(c){
+      var p = document.createElement("p");
+      p.dataset.scene = s.id;
+      p.dataset.zh = c.zh;
+      p.appendChild(document.createTextNode(c.zh));
+      var en = document.createElement("span");
+      en.className = "en";
+      en.textContent = c.en;
+      p.appendChild(en);
+      art.appendChild(p);
+    });
+    book.appendChild(art);
+  });
+
+  pp.addEventListener("click", function(){ playing ? pause() : play(); });
+  snd.addEventListener("click", function(){
+    sound = !sound;
+    snd.setAttribute("aria-pressed", sound ? "true" : "false");
+    snd.textContent = sound ? "声音 开" : "声音 关";
+  });
+  lang.addEventListener("click", function(){
+    var on = document.body.classList.toggle("en");
+    lang.setAttribute("aria-pressed", on ? "true" : "false");
+    lang.textContent = on ? "英文 开" : "英文";
+  });
+  seek.addEventListener("input", function(){ jump((Number(seek.value) / 1000) * TOTAL); });
+
+  function loop(now){
+    var dt = Math.min(0.05, (now - prev) / 1000);
+    prev = now;
+    if (playing){
+      var next = t + dt;
+      if (sound){
+        for (var i = 0; i < BEEPS.length; i++){
+          if (last < BEEPS[i] && next >= BEEPS[i]) blip();
+        }
+      }
+      last = next;
+      if (next >= TOTAL){
+        t = TOTAL; playing = false; done = true;
+        paint(TOTAL - 0.05);
+      } else {
+        t = next;
+        paint(next);
+      }
+      ui();
+    }
+    raf = requestAnimationFrame(loop);
+  }
+  paint(0);
+  ui();
+  prev = performance.now();
+  requestAnimationFrame(loop);
+  window.addEventListener("resize", function(){ paint(Math.min(t, TOTAL - 0.001)); });
+})();
+</script>
+</body>
+</html>
