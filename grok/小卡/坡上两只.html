@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>坡上两只</title>
+<meta name="description" content="没有图也没有歌。两只坐在坡上，格和音都是这一页当场算的。">
+<meta name="theme-color" content="#D7E0E8">
+<style>
+  html,body{margin:0;height:100%;background:#c9d4de;color:#3B2520;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;}
+  canvas{width:min(100vw,560px);height:auto;image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
+  .dock{width:min(100vw,560px);padding:10px 16px 22px;box-sizing:border-box;
+    display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px;}
+  .dock b{font-weight:600;letter-spacing:.04em;}
+  .hint{opacity:.62;font-size:12px;}
+  button{appearance:none;border:0;background:#3B2520;color:#F7F1E8;border-radius:999px;
+    padding:8px 16px;font:inherit;font-size:13px;}
+  button[aria-pressed="true"]{background:#E2552B;}
+</style>
+</head>
+<body>
+<canvas id="c" width="280" height="240"></canvas>
+<div class="dock">
+  <div>
+    <b id="bar">第 1 / 16 小节</b>
+    <div class="hint" id="hint">点「出声」：画和琴一起走。同一页，没有素材文件。</div>
+  </div>
+  <button id="go" type="button" aria-pressed="false">出声</button>
+</div>
+<script>
+const FOX_ROWS = [
+  ".D..........D.......",
+  ".DM........MD.......",
+  ".MCM......MCM...CC..",
+  ".MMMMMMMMMMMM..CCCC.",
+  ".MMEEMMMMEEMM..MMMM.",
+  ".MMEEMMMMEEMM..MMMMM",
+  "CCCCCCDDCCCCCC.MMMMM",
+  "..CCCCCCCCCC..MMMMM.",
+  "....MMCCMM...MMMMM..",
+  "....MMCCMM..MMMMM...",
+  "....MMMMMM.MMMMM....",
+  "....DDMMDDMMMM......",
+  "...................."
+];
+const CAT_ROWS = [
+  "....................",
+  "........X........X..",
+  ".......XXX......XXX.",
+  "........MMMMMMMMMM..",
+  ".......MMMMMMMMMMMM.",
+  ".......MEEMMMMMMEEM.",
+  ".....X.MEEMXXXXMEEM.",
+  "....X..MMMMMXXMMMMM.",
+  "....X...MMMMMMMMMM..",
+  "....X...MMMMMMMMMM..",
+  ".....X...MMMMMMMM...",
+  "......XXXXXM..MXX...",
+  "...................."
+];
+const FOX = {rows:FOX_ROWS, pal:{M:"#E2552B",C:"#FFF3E3",D:"#3B2520",E:"#3B2520"}, line:"#3B2520",
+  eyes:[[3,4],[9,4]], blush:[[2,6],[11,6]], blushC:"#F59A8C", body:"#E2552B"};
+const CAT = {rows:CAT_ROWS, pal:{M:"#F3E7D6",X:"#4E382E",E:"#79C0F0"}, line:"#4E382E",
+  eyes:[[8,5],[16,5]], blush:[[8,7],[17,7]], blushC:"#F2B8B0", body:"#F3E7D6"};
+
+const W=20,H=13,N=4;
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d");
+ctx.imageSmoothingEnabled=false;
+
+function cloneRows(rows){return rows.map(r=>r.split(""));}
+
+function paintEyes(grid, who, name){
+  const bodyCh = "M";
+  who.eyes.forEach(([ex,ey])=>{
+    for(let dy=0;dy<2;dy++) for(let dx=0;dx<2;dx++){
+      if(grid[ey+dy] && grid[ey+dy][ex+dx]!==undefined) grid[ey+dy][ex+dx]=bodyCh;
+    }
+  });
+  const E = "E";
+  const specs = {
+    normal:[[[0,0],[1,0],[0,1],[1,1]], E],
+    blink:[[[0,1],[1,1]], "LINE"],
+    happy:[[[-1,1],[0,0],[1,0],[2,1]], "LINE"],
+    asleep:[[[-1,0],[0,1],[1,1],[2,0]], "LINE"],
+    glance:null,
+    dazed:[[[1,1]], E]
+  };
+  who.eyes.forEach(([ex,ey],i)=>{
+    if(name==="wink"){
+      const cells = i===0 ? [[0,0],[1,0],[0,1],[1,1]] : [[-1,1],[0,0],[1,0],[2,1]];
+      const col = i===0 ? E : "LINE";
+      cells.forEach(([dx,dy])=>{
+        const x=ex+dx,y=ey+dy;
+        if(grid[y]&&grid[y][x]!==undefined) grid[y][x]= col==="LINE"?"LINE":col;
+      });
+      return;
+    }
+    if(name==="glance"){
+      const dir = who===FOX ? 1 : -1;
+      for(let dy=0;dy<2;dy++) for(let dx=0;dx<2;dx++){
+        const x=ex+dir+dx,y=ey+dy;
+        if(grid[y]&&grid[y][x]!==undefined) grid[y][x]=E;
+      }
+      return;
+    }
+    const spec = specs[name]||specs.normal;
+    spec[0].forEach(([dx,dy])=>{
+      const x=ex+dx,y=ey+dy;
+      if(grid[y]&&grid[y][x]!==undefined) grid[y][x]= spec[1]==="LINE"?"LINE":spec[1];
+    });
+  });
+}
+
+function drawWho(who, ox, oy, face){
+  const grid=cloneRows(who.rows);
+  paintEyes(grid, who, face);
+  who.blush.forEach(([x,y])=>{ if(grid[y]) grid[y][x]="BLUSH"; });
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const ch=grid[y][x];
+      if(ch===".") continue;
+      let col=who.pal[ch];
+      if(ch==="LINE") col=who.line;
+      if(ch==="BLUSH") col=who.blushC;
+      if(!col) continue;
+      ctx.fillStyle=col;
+      ctx.fillRect(ox+x*N, oy+y*N, N, N);
+    }
+  }
+}
+
+function drawFish(ox,oy,on){
+  if(!on) return;
+  const g=[".XX.X","XXXXX",".XX.X"];
+  ctx.fillStyle="#5E9BC9";
+  for(let y=0;y<g.length;y++) for(let x=0;x<g[y].length;x++){
+    if(g[y][x]==="X") ctx.fillRect(ox+x*N, oy+y*N, N, N);
+  }
+}
+function drawNote(ox,oy,on){
+  if(!on) return;
+  const g=["..XX","..X.","..X.","XXX.","XX.."];
+  ctx.fillStyle="#C0587A";
+  for(let y=0;y<g.length;y++) for(let x=0;x<g[y].length;x++){
+    if(g[y][x]==="X") ctx.fillRect(ox+x*N, oy+y*N, N, N);
+  }
+}
+
+const faces=["normal","normal","blink","normal","glance","normal","happy","wink","normal","asleep","normal","dazed"];
+let t0=performance.now();
+let playing=false;
+let audio=null;
+
+function stepIndex(ms, every){ return Math.floor(ms/every); }
+
+function frame(now){
+  const ms=now-t0;
+  const bar=Math.floor(ms/2000)%16;
+  const beat=Math.floor(ms/500)%4;
+  const face=faces[stepIndex(ms,900)%faces.length];
+  const hop = [0,0,-N,-N,0,0][stepIndex(ms,180)%6];
+  const sway = [0,0,N,N,0,0,-N,-N][stepIndex(ms,280)%8];
+
+  ctx.fillStyle="#D7E0E8";
+  ctx.fillRect(0,0,280,240);
+  ctx.fillStyle="#c5d0da";
+  for(let i=0;i<18;i++){
+    const gx=((i*37)+stepIndex(ms,800)*3)%280;
+    const gy=20+(i*11)%70;
+    ctx.fillRect(gx,gy,6,4);
+  }
+  ctx.strokeStyle="#3B2520";
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.arc(58,58,22,0,Math.PI*2);
+  ctx.stroke();
+
+  ctx.fillStyle="#9aafb8";
+  ctx.beginPath();
+  ctx.moveTo(0,168);
+  ctx.quadraticCurveTo(140,118,280,168);
+  ctx.lineTo(280,240); ctx.lineTo(0,240); ctx.fill();
+
+  ctx.strokeStyle="#3B2520";
+  ctx.beginPath();
+  ctx.moveTo(0,168);
+  ctx.quadraticCurveTo(140,118,280,168);
+  ctx.stroke();
+
+  const foxX=28+sway, foxY=108+hop;
+  const catX=168-sway, catY=108+hop;
+  drawWho(FOX, foxX, foxY, face);
+  drawWho(CAT, catX, catY, face==="wink"?"glance":face);
+
+  drawNote(128, 72 + (stepIndex(ms,240)%2)*N, beat!==3);
+  drawFish(210, 86 - (stepIndex(ms,320)%3)*N, bar%2===0);
+
+  document.getElementById("bar").textContent="第 "+(bar+1)+" / 16 小节";
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function pluck(ctxA, freq, when, dur, gain){
+  const o=ctxA.createOscillator();
+  const g=ctxA.createGain();
+  const f=ctxA.createBiquadFilter();
+  o.type="triangle";
+  o.frequency.setValueAtTime(freq, when);
+  o.frequency.exponentialRampToValueAtTime(freq*0.97, when+dur);
+  f.type="lowpass"; f.frequency.value=1400;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(gain, when+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, when+dur);
+  o.connect(f); f.connect(g); g.connect(ctxA.destination);
+  o.start(when); o.stop(when+dur+0.02);
+}
+
+const SCALE=[233.08,277.18,311.13,349.23,415.30,466.16];
+function startAudio(){
+  if(audio) return;
+  audio=new (window.AudioContext||window.webkitAudioContext)();
+  const now=audio.currentTime+0.05;
+  const bpm=60, beat=60/bpm;
+  for(let bar=0; bar<32; bar++){
+    for(let b=0;b<4;b++){
+      const t=now+(bar*4+b)*beat;
+      const note=SCALE[(bar+b*2)%SCALE.length];
+      const g = b===0 ? 0.11 : 0.06;
+      pluck(audio, note, t, b===0?1.4:0.7, g);
+      if(b===2) pluck(audio, note*1.5, t+0.02, 0.5, 0.035);
+    }
+  }
+}
+
+document.getElementById("go").addEventListener("click", async ()=>{
+  const btn=document.getElementById("go");
+  if(!playing){
+    startAudio();
+    if(audio && audio.state==="suspended") await audio.resume();
+    t0=performance.now();
+    playing=true;
+    btn.setAttribute("aria-pressed","true");
+    btn.textContent="在响";
+    document.getElementById("hint").textContent="格子图没变。动的是位置、眼睛，和这一秒该响的音。";
+  }else{
+    if(audio){ audio.close(); audio=null; }
+    playing=false;
+    btn.setAttribute("aria-pressed","false");
+    btn.textContent="出声";
+  }
+});
+</script>
+</body>
+</html>
