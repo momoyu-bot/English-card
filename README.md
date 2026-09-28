@@ -45,5 +45,6 @@
 - 不要按文风把 `pluto/` 的页挪进小机，也不要把小机的页挪进 `pluto/`。
   哪些是 Arena 的，她自己说
 
-店务笔记在 [CLAUDE.md](CLAUDE.md)（cc 和 Grok Build 开工都会自动读），给 Grok 的几条在 [AGENTS.md](AGENTS.md)。
+店务笔记在 [CLAUDE.md](CLAUDE.md)（cc 和 Grok Build 开工都会自动读），给 Grok 的几条在 [AGENTS.md](AGENTS.md)，
+动手时才用得上的细节在 [tools/README.md](tools/README.md)（机房手册）。
 原来的 `GROK.md` 2026-09-27 并进了 `AGENTS.md`，已退役。

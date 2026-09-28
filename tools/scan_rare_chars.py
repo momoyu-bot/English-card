@@ -11,9 +11,10 @@ import re
 import subprocess
 
 G = ['git', '-c', 'core.quotepath=false']
-# CLAUDE.md 自己列着一堆错字样本，扫进来全是噪音
+# CLAUDE.md 和机房手册自己列着一堆错字样本，扫进来全是噪音
+NOISE = {'CLAUDE.md', 'tools/README.md'}
 files = [f for f in subprocess.run(G + ['ls-files', '*.html', '*.svg', '*.md'],
-         capture_output=True, text=True).stdout.split('\n') if f and f != 'CLAUDE.md']
+         capture_output=True, text=True).stdout.split('\n') if f and f not in NOISE]
 
 
 def tier(ch):
