@@ -16,12 +16,15 @@ on:
       - '**.html'
       - '**.svg'
       - 'tools/build_index.py'
+      # 小萌物画法合订本从三页造型宪法里抽（宪法是 .html，上面已经管到了）；抽的脚本改了也要重抽
+      - 'tools/build_huafa.py'
       - '.github/workflows/build-index.yml'
       # 下面那道闸门守着的几份，改了它们也要跑一趟，写残了才能当场捞回来
-      # （2026-09-27 GROK.md 并进了 AGENTS.md；09-28 加了机房手册 tools/README.md）
+      # （2026-09-27 GROK.md 并进了 AGENTS.md；09-28 加了机房手册 tools/README.md；09-30 手册按事拆进 tools/手册/）
       - 'CLAUDE.md'
       - 'AGENTS.md'
       - 'tools/README.md'
+      - 'tools/手册/**'
       - '梦境.md'
   workflow_dispatch:
 
@@ -60,6 +63,9 @@ jobs:
           # CLAUDE.md 以前配的是 20000，等于规定笔记不许瘦到两万字节以下，
           # 笔记里还照抄成了一条「别压到两万以下」；2026-09-28 降到 3000，只防空壳。
           # AGENTS.md 同一晚瘦到 1.2K，原来的 1000 贴得太近，又会变成体重线，降到 300。
+          # 09-30 机房手册按事拆成 tools/手册/ 的几本，tools/README.md 只剩目录和「规矩的来历」（3.4K），
+          # 还按 3000 守就贴得太近，降到 1000；拆出去的每一本最小的也有五六百字节，各守 200。
+          # 手册新开一本，这张表里也加一行。
           #
           # index.html 不用管：它是生成出来的，下一步就会重算，自己会好。
           : > /tmp/restored.txt
@@ -71,7 +77,16 @@ jobs:
             "梦境.md|8000" \
             "梦境.html|20000" \
             "CLAUDE.md|3000" \
-            "tools/README.md|3000" \
+            "tools/README.md|1000" \
+            "tools/手册/首页和生成器.md|200" \
+            "tools/手册/名字和附注.md|200" \
+            "tools/手册/页面坏了.md|200" \
+            "tools/手册/新页面.md|200" \
+            "tools/手册/错别字怎么扫.md|200" \
+            "tools/手册/裸奔怎么补.md|200" \
+            "tools/手册/打捞机翻译版.md|200" \
+            "tools/手册/书里的文字怎么查.md|200" \
+            "tools/手册/git.md|200" \
             "AGENTS.md|300" \
           ; do
             f=${item%|*}; min=${item##*|}
@@ -112,12 +127,19 @@ jobs:
       - name: 生成清单
         run: python3 tools/build_index.py
 
+      - name: 抽小萌物画法
+        # 从三页造型宪法里抽「开新对话时整段贴过去」那段，合成 tools/小萌物画法.txt，
+        # 宪法改了合订本跟着变，不会走样。某一页抽不出来，脚本自己把那一段换成「去翻原页」、不报错；
+        # 万一脚本本身坏了，也只留一条警告、沿用上一版，不为它发失败邮件。
+        run: python3 tools/build_huafa.py || echo "::warning::小萌物画法这次没抽成，沿用上一版"
+
       - name: 有变化就提交回去
         run: |
           # 生成器会写两处：首页清单，和总机那一页的线路表。
           # 只 add index.html 的话，新传进来的电话不会出现在总机上。
-          set -- index.html "claude/盲盒/总机.html"
-          msg="自动更新首页清单和总机线路表"
+          # 第三处是小萌物画法合订本。
+          set -- index.html "claude/盲盒/总机.html" "tools/小萌物画法.txt"
+          msg="自动更新首页清单、总机线路表和小萌物画法"
           if [ -n "${{ steps.guard.outputs.restored }}" ]; then
             # 这一趟捞回来的文件得跟着交回去，否则下次 push 还是残的。
             while IFS= read -r r; do
