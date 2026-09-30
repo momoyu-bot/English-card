@@ -32,6 +32,7 @@ SOURCES = [
     ]),
     ('momoyu（StashYu、FetchMo）', 'claude/小科普/momoyu造型宪法.html', [
         ('DATA', ('rules', 'zh'), None),
+        ('DATA', ('tail', 'zh'), '—— 尾巴 DLC ——'),
     ]),
 ]
 
