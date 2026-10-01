@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>队尾到纪念碑 · 小萌物短片</title>
+<meta name="description" content="四只顺着今晚的票，走到果冻英雄纪念碑。队尾那颗，还在肚子里蹦迪。" />
+<style>
+  :root {
+    --bg: #171116;
+    --paper: #241c20;
+    --ink: #f3e6dc;
+    --muted: #b9a39a;
+    --jelly: #e56b86;
+    --gold: #e6c37a;
+    --line: rgba(243, 230, 220, .14);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+    --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei",
+      system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.55;
+    padding: calc(16px + var(--safe-top)) 16px calc(28px + var(--safe-bot));
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  .kicker {
+    font-size: 12px;
+    letter-spacing: .16em;
+    color: var(--gold);
+    margin: 0;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    line-height: 1.3;
+    margin: 4px 0 0;
+  }
+  .frame {
+    margin-top: 16px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    background: var(--bg);
+    touch-action: manipulation;
+  }
+  .live { min-height: 5.6em; margin-top: 16px; }
+  .cap { font-size: 20px; line-height: 1.35; margin: 6px 0 0; }
+  .aside { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+  input[type="range"] {
+    accent-color: var(--jelly);
+    width: 100%;
+    height: 44px;
+    margin: 4px 0 0;
+  }
+  .time {
+    display: flex;
+    justify-content: space-between;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .chapters {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 12px 0 4px;
+  }
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: 0;
+  }
+  .chapters button {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--paper);
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .chapters button[aria-pressed="true"] {
+    background: var(--jelly);
+    color: var(--bg);
+    border-color: transparent;
+  }
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .actions button {
+    min-height: 48px;
+    border-radius: 999px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .actions .primary { background: var(--jelly); color: #fffaf8; }
+  .hint { text-align: center; color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+  footer {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  footer a { color: var(--gold); }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    canvas { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="kicker">小萌物短片</p>
+    <h1>队尾到纪念碑</h1>
+  </header>
+  <div class="frame">
+    <canvas id="stage" width="640" height="360" role="img" aria-label="队尾到纪念碑"></canvas>
+  </div>
+  <div class="live" aria-live="polite">
+    <p class="kicker" id="kicker"></p>
+    <p class="cap" id="cap"></p>
+    <p class="aside" id="aside"></p>
+  </div>
+  <label>
+    <span class="sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">进度</span>
+    <input id="scrub" type="range" min="0" max="82" step="0.1" value="0" />
+  </label>
+  <div class="time"><span id="now">0:00</span><span id="end">1:22</span></div>
+  <div class="chapters" id="chapters"></div>
+  <div class="actions">
+    <button type="button" class="primary" id="play">暂停</button>
+    <button type="button" id="sound">八音盒开</button>
+  </div>
+  <p class="hint" id="hint" hidden>戳碑上的果冻，它会 BOING。</p>
+  <footer>
+    <p>
+      <a href="今晚的赛博旅游.html">今晚的赛博旅游</a>
+      <span> · </span>
+      <a href="../../gemini/小卡/果冻英雄纪念碑.html">果冻英雄纪念碑</a>
+    </p>
+    <p>同一晚。队尾写进了碑里。</p>
+  </footer>
+</div>
+<script>
+/** Pixel casts, copied from the shop's drawing notes. Do not redraw the grids. */
+const FOX = "#E2552B";
+const CREAM = "#FFF3E3";
+const FOX_DARK = "#3B2520";
+const CAT = "#F3E7D6";
+const POINT = "#4E382E";
+const CAT_EYE = "#79C0F0";
+const CLAWD = "#d47f59";
+const FACE = "#FF309B";
+const STAGE = "#FFF3E3";
+const STASH = [
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM...CC..",
+    ".MMMMMMMMMMMM..CCCC.",
+    ".MMEEMMMMEEMM..MMMM.",
+    ".MMEEMMMMEEMM..MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "....................",
+];
+const STASH_IN = [
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM..CC...",
+    ".MMMMMMMMMMMM.CCCC..",
+    ".MMEEMMMMEEMM.MMMM..",
+    ".MMEEMMMMEEMM.MMMMM.",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "....................",
+];
+const STASH_OUT = [
+    ".D..........D........",
+    ".DM........MD........",
+    ".MCM......MCM....CC..",
+    ".MMMMMMMMMMMM...CCCC.",
+    ".MMEEMMMMEEMM...MMMM.",
+    ".MMEEMMMMEEMM...MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM.",
+    "..CCCCCCCCCC..MMMMM..",
+    "....MMCCMM...MMMMM...",
+    "....MMCCMM..MMMMM....",
+    "....MMMMMM.MMMMM.....",
+    "....DDMMDDMMMM.......",
+    ".....................",
+];
+const STASH_TAP = [
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM.CC....",
+    ".MMMMMMMMMMMM.CCCC..",
+    ".MMEEMMMMEEMM..MMMM.",
+    ".MMEEMMMMEEMM..MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "....................",
+];
+const FETCH = [
+    "....................",
+    "........X........X..",
+    ".......XXX......XXX.",
+    "........MMMMMMMMMM..",
+    ".......MMMMMMMMMMMM.",
+    ".......MEEMMMMMMEEM.",
+    ".....X.MEEMXXXXMEEM.",
+    "....X..MMMMMXXMMMMM.",
+    "....X...MMMMMMMMMM..",
+    "....X...MMMMMMMMMM..",
+    ".....X...MMMMMMMM...",
+    "......XXXXXM..MXX...",
+    "....................",
+];
+const FETCH_UP = [
+    "....................",
+    "........X........X..",
+    ".....X.XXX......XXX.",
+    "....X...MMMMMMMMMM..",
+    "....X..MMMMMMMMMMMM.",
+    "....X..MEEMMMMMMEEM.",
+    "....X..MEEMXXXXMEEM.",
+    ".....X.MMMMMXXMMMMM.",
+    "......X.MMMMMMMMMM..",
+    ".......XMMMMMMMMMM..",
+    "........XMMMMMMMM...",
+    ".........XXM..MXX...",
+    "....................",
+];
+const FOX_PALETTE = {
+    M: FOX,
+    C: CREAM,
+    D: FOX_DARK,
+    E: FOX_DARK,
+};
+const CAT_PALETTE = {
+    M: CAT,
+    X: POINT,
+    E: CAT_EYE,
+};
+let checked = false;
+function assertCast() {
+    if (checked)
+        return;
+    checked = true;
+    const packs = [
+        ["stash", STASH, 20],
+        ["in", STASH_IN, 20],
+        ["tap", STASH_TAP, 20],
+        ["out", STASH_OUT, 21],
+        ["fetch", FETCH, 20],
+        ["up", FETCH_UP, 20],
+    ];
+    for (const [name, grid, width] of packs) {
+        if (grid.length !== 13)
+            throw new Error(`${name} rows`);
+        for (const row of grid) {
+            if (row.length !== width)
+                throw new Error(`${name} width ${row.length}`);
+        }
+    }
+}
+function eyeCells(mode) {
+    if (mode === "blink")
+        return [
+            [0, 1],
+            [1, 1],
+        ];
+    if (mode === "happy")
+        return [
+            [-1, 1],
+            [0, 0],
+            [1, 0],
+            [2, 1],
+        ];
+    return [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+    ];
+}
+function paintGrid(ctx, grid, x, y, cell, palette, eyes, blush) {
+    for (let r = 0; r < grid.length; r++) {
+        const row = grid[r] ?? "";
+        for (let c = 0; c < row.length; c++) {
+            const ch = row[c] ?? ".";
+            if (ch === ".")
+                continue;
+            const color = palette[ch];
+            if (!color)
+                continue;
+            ctx.fillStyle = color;
+            ctx.fillRect(x + c * cell, y + r * cell, cell, cell);
+        }
+    }
+    const shift = eyes.mode === "normal" ? eyes.look : 0;
+    const ink = eyes.mode === "normal" ? palette.E ?? eyes.line : eyes.line;
+    for (const [ec, er] of eyes.at) {
+        ctx.fillStyle = eyes.body;
+        ctx.fillRect(x + ec * cell, y + er * cell, cell * 2, cell * 2);
+        ctx.fillStyle = ink;
+        for (const [dx, dy] of eyeCells(eyes.mode)) {
+            ctx.fillRect(x + (ec + shift + dx) * cell, y + (er + dy) * cell, cell, cell);
+        }
+    }
+    ctx.fillStyle = blush.color;
+    for (const [bc, br] of blush.at) {
+        ctx.fillRect(x + bc * cell, y + br * cell, cell, cell);
+    }
+}
+function drawStash(ctx, x, feet, cell, t, mood, eyes) {
+    let grid = STASH;
+    if (mood === "stash")
+        grid = Math.floor(t / 0.18) % 2 === 0 ? STASH_TAP : STASH;
+    else if (mood === "wag") {
+        const frame = Math.floor(t / 0.22) % 4;
+        if (frame === 1)
+            grid = STASH_IN;
+        else if (frame === 3)
+            grid = STASH_OUT;
+    }
+    const top = feet - 12 * cell;
+    paintGrid(ctx, grid, x, top, cell, FOX_PALETTE, { at: [[3, 4], [9, 4]], mode: eyes, look: 1, line: FOX_DARK, body: FOX }, { at: [[2, 6], [11, 6]], color: "#F59A8C" });
+}
+function drawFetch(ctx, x, feet, cell, mood, eyes) {
+    const grid = mood === "up" ? FETCH_UP : FETCH;
+    const top = feet - 12 * cell;
+    paintGrid(ctx, grid, x, top, cell, CAT_PALETTE, { at: [[8, 5], [16, 5]], mode: eyes, look: -1, line: POINT, body: CAT }, { at: [[8, 7], [17, 7]], color: "#F2B8B0" });
+}
+const clawdCache = new Map();
+function clawdSheet(legs) {
+    if (typeof document === "undefined")
+        return null;
+    const hit = clawdCache.get(legs);
+    if (hit)
+        return hit;
+    const canvas = document.createElement("canvas");
+    canvas.width = 220;
+    canvas.height = 176;
+    const g = canvas.getContext("2d");
+    if (!g)
+        return null;
+    g.fillStyle = CLAWD;
+    g.fillRect(44, 50, 147, 98);
+    g.fillRect(20, 99, 24, 21);
+    g.fillRect(191, 99, 25, 21);
+    const xs = legs === "wide" ? [44, 68, 152, 176] : [65, 89, 131, 155];
+    for (const lx of xs)
+        g.fillRect(lx, 148, 15, 21);
+    g.fillStyle = "#1a120e";
+    g.fillRect(70, 78, 8, 21);
+    g.fillRect(158, 78, 8, 21);
+    clawdCache.set(legs, canvas);
+    return canvas;
+}
+function drawClawd(ctx, x, feet, destW, stepping, t) {
+    const legs = stepping && Math.floor(t / 0.18) % 2 === 0 ? "in" : "wide";
+    const sheet = clawdSheet(legs);
+    if (!sheet)
+        return;
+    const destH = (176 * destW) / 220;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sheet, x, feet - destH, destW, destH);
+}
+/** Slits are holes: they show the stage color, not white ink. */
+function drawFace(ctx, cx, cy, r, hole, blink) {
+    ctx.fillStyle = FACE;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    const slits = [
+        { ox: 0.194, oy: -0.416, w: 0.194 },
+        { ox: 0.626, oy: -0.497, w: 0.129 },
+    ];
+    const len = blink ? 0.08 : 0.418;
+    ctx.fillStyle = hole;
+    for (const slit of slits) {
+        ctx.save();
+        ctx.translate(cx + slit.ox * r, cy + slit.oy * r);
+        ctx.rotate((-26.2 * Math.PI) / 180);
+        const halfH = (len * r) / 2;
+        const halfW = (slit.w * r) / 2;
+        const rad = Math.min(halfW, halfH);
+        ctx.beginPath();
+        ctx.roundRect(-halfW, -halfH, halfW * 2, halfH * 2, rad);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+const BEATS = [
+    {
+        id: "ticket",
+        start: 0,
+        end: 6,
+        kicker: "票",
+        caption: "今晚的赛博旅游",
+        aside: "2026.08.22 夜 · 星期六不是星期四",
+    },
+    {
+        id: "tail",
+        start: 6,
+        end: 16,
+        kicker: "队尾",
+        caption: "队尾的草莓果冻",
+        aside: "好久没被用。LRU 只看最后一次被碰的时间，不看你重不重要。",
+    },
+    {
+        id: "get",
+        start: 16,
+        end: 24,
+        kicker: "点它",
+        caption: "点它，就被拿一次",
+        aside: "晃一下很可爱，但晃不会刷新排队。",
+    },
+    {
+        id: "tri",
+        start: 24,
+        end: 31,
+        kicker: "绿三角",
+        caption: "不是被淘汰，是进错门",
+        aside: "右上角那个绿三角，是运行。",
+    },
+    {
+        id: "hmtl",
+        start: 31,
+        end: 38,
+        kicker: "hmtl",
+        caption: "看起来像漏风",
+        aside: "城堡的积木是标题和段落。换行符粘在身上。",
+    },
+    {
+        id: "mail",
+        start: 38,
+        end: 45,
+        kicker: "避风港",
+        caption: "label:毛球的避风港",
+        aside: "from:github，还有 is:unread。金色标签没有真的建好。",
+    },
+    {
+        id: "v50",
+        start: 45,
+        end: 52,
+        kicker: "V50",
+        caption: "星期六不是星期四",
+        aside: "五十块兑成五十份算力。负数不是穷，是快蒸发。",
+    },
+    {
+        id: "spoon",
+        start: 52,
+        end: 60,
+        kicker: "汤勺",
+        caption: "不——！！！",
+        aside: "铁铲原来是勺子。不在服务器里，在餐盘里。这叫降维。",
+    },
+    {
+        id: "gone",
+        start: 60,
+        end: 66,
+        kicker: "404",
+        caption: "404 NOT FOUND",
+        aside: "果冻 user 被 mo.exe 吃掉。物理形态结束。",
+    },
+    {
+        id: "stone",
+        start: 66,
+        end: 82,
+        kicker: "碑",
+        caption: "在人类肚子里快乐蹦迪",
+        aside: "Super_Fluffy_Jelly_Hero.dll · 金色缓存 · 没有 LRU · 没有勺子",
+    },
+];
+const DURATION = 82;
+const POKE_LINES = [
+    "呀！被你发现我藏在金色缓存区了！",
+    "我已经化成水融入 HashMap 啦",
+    "快乐蹦迪中",
+    "别用大汤勺敲我",
+    "警告：检测到 mo.exe 正在靠近",
+];
+function beatAt(t) {
+    const clamped = Math.min(Math.max(t, 0), DURATION);
+    for (let i = BEATS.length - 1; i >= 0; i--) {
+        const beat = BEATS[i];
+        if (beat && clamped >= beat.start)
+            return beat;
+    }
+    return BEATS[0];
+}
+const WORLD_W = 640;
+const WORLD_H = 360;
+const NIGHT = "#171116";
+const PAPER = "#241c20";
+const INK = "#f3e6dc";
+const MUTED = "#b9a39a";
+const JELLY = "#e56b86";
+const DEEP = "#c44766";
+const GOLD = "#e6c37a";
+const GREEN = "#8fbf9a";
+const STAGE_Y = 208;
+const FEET = 332;
+const FLOOR = "#e7d3b0";
+const STARS = [
+    [48, 28, GOLD],
+    [120, 64, INK],
+    [210, 22, JELLY],
+    [300, 48, GOLD],
+    [410, 18, INK],
+    [520, 40, GOLD],
+    [580, 70, JELLY],
+    [90, 110, GOLD],
+    [560, 120, INK],
+];
+function step(t, stepSec) {
+    return Math.floor(t / stepSec);
+}
+function roundBox(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+}
+function drawJelly(ctx, x, y, r, squash, face) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1, squash);
+    ctx.fillStyle = DEEP;
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.22, r * 0.92, r * 0.72, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = JELLY;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.92, r * 0.78, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,247,244,0.62)";
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.28, -r * 0.28, r * 0.26, r * 0.14, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#4a2430";
+    const eyeH = r * 0.11;
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.24, -r * 0.02, r * 0.08, eyeH, 0, 0, Math.PI * 2);
+    ctx.ellipse(r * 0.24, -r * 0.02, r * 0.08, eyeH, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#4a2430";
+    ctx.lineWidth = Math.max(1.5, r * 0.07);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    if (face === "oh")
+        ctx.arc(0, r * 0.2, r * 0.1, 0, Math.PI * 2);
+    else
+        ctx.arc(0, r * 0.14, r * 0.18, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(243,230,220,0.75)";
+    ctx.lineWidth = Math.max(1, r * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.95, 0);
+    ctx.lineTo(-r * 0.48, r * 0.06);
+    ctx.moveTo(-r * 0.9, r * 0.16);
+    ctx.lineTo(-r * 0.46, r * 0.12);
+    ctx.moveTo(r * 0.95, 0);
+    ctx.lineTo(r * 0.48, r * 0.06);
+    ctx.moveTo(r * 0.9, r * 0.16);
+    ctx.lineTo(r * 0.46, r * 0.12);
+    ctx.stroke();
+    ctx.restore();
+}
+function jellySquash(t, dance, poke) {
+    if (poke > 0) {
+        const p = Math.min(1, poke / 0.45);
+        if (p > 0.65)
+            return 0.84;
+        if (p > 0.3)
+            return 1.12;
+        return 0.94;
+    }
+    if (!dance) {
+        const f = step(t, 0.45) % 2;
+        return f === 0 ? 1 : 0.96;
+    }
+    const f = step(t, 0.18) % 4;
+    return [1, 0.86, 1.1, 0.98][f] ?? 1;
+}
+function drawCast(ctx, t, beat) {
+    const cell = 4;
+    const clawdW = 118;
+    const faceR = 30;
+    const critterW = 20 * cell;
+    const gap = 14;
+    const total = clawdW + gap + faceR * 2 + gap + critterW + gap + critterW;
+    let x = (WORLD_W - total) / 2;
+    const feet = FEET;
+    ctx.fillStyle = FLOOR;
+    ctx.fillRect(0, STAGE_Y, WORLD_W, WORLD_H - STAGE_Y);
+    ctx.fillStyle = GOLD;
+    ctx.fillRect(0, STAGE_Y, WORLD_W, 3);
+    const blink = beat !== "stone" && beat !== "get" && t % 4.2 < 0.12;
+    const eyes = beat === "stone" || beat === "get" ? "happy" : blink ? "blink" : "normal";
+    const stashMood = beat === "stone" && t > 74 ? "stash" : beat === "get" || beat === "stone" ? "wag" : "idle";
+    const fetchMood = beat === "get" || beat === "stone" || (t >= 16 && t < 52) ? "up" : "idle";
+    drawClawd(ctx, x, feet, clawdW, false, t);
+    x += clawdW + gap;
+    drawFace(ctx, x + faceR, feet - faceR, faceR, FLOOR, blink && beat !== "stone");
+    x += faceR * 2 + gap;
+    drawStash(ctx, x, feet, cell, t, stashMood, eyes);
+    x += critterW + gap;
+    drawFetch(ctx, x, feet, cell, fetchMood, eyes);
+}
+function drawShelf(ctx, jellySlot) {
+    const cellW = 52;
+    const gap = 8;
+    const total = 5 * cellW + 4 * gap;
+    const x0 = (WORLD_W - total) / 2;
+    const y = 78;
+    ctx.fillStyle = MUTED;
+    ctx.font = "14px 'WenQuanYi Zen Hei', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("头", x0, 68);
+    ctx.textAlign = "right";
+    ctx.fillText("尾", x0 + total, 68);
+    for (let i = 0; i < 5; i++) {
+        const x = x0 + i * (cellW + gap);
+        ctx.fillStyle = "rgba(0,0,0,0.28)";
+        roundBox(ctx, x, y, cellW, 64, 10);
+        ctx.fill();
+        if (i === jellySlot) {
+            drawJelly(ctx, x + cellW / 2, y + 34, 20, 1, "ok");
+            ctx.strokeStyle = GOLD;
+            ctx.lineWidth = 2;
+            roundBox(ctx, x + 1, y + 1, cellW - 2, 62, 10);
+            ctx.stroke();
+        }
+        else {
+            ctx.fillStyle = PAPER;
+            ctx.fillRect(x + 16, y + 26, 20, 14);
+        }
+    }
+}
+function drawSpoon(ctx, x, y) {
+    ctx.fillStyle = INK;
+    roundBox(ctx, x - 5, y, 10, 86, 4);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x, y + 96, 34, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = MUTED;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 98, 20, 13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,247,244,0.45)";
+    ctx.beginPath();
+    ctx.ellipse(x - 8, y + 90, 8, 5, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+}
+function night(ctx) {
+    ctx.fillStyle = NIGHT;
+    ctx.fillRect(0, 0, WORLD_W, STAGE_Y);
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(78, 36, 10, 0.7, 5.2);
+    ctx.stroke();
+    for (const [sx, sy, color] of STARS) {
+        ctx.fillStyle = color;
+        ctx.fillRect(sx, sy, 2, 2);
+    }
+}
+function drawFilm(ctx, t, pokeLeft) {
+    assertCast();
+    const beat = beatAt(t).id;
+    night(ctx);
+    let hit = null;
+    if (beat === "ticket") {
+        ctx.fillStyle = PAPER;
+        roundBox(ctx, 132, 28, 376, 168, 18);
+        ctx.fill();
+        ctx.fillStyle = GOLD;
+        ctx.fillRect(132, 28, 8, 168);
+        ctx.setLineDash([3, 5]);
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(156, 172);
+        ctx.lineTo(488, 172);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        drawJelly(ctx, 320, 108, 40, jellySquash(t, false, 0), "ok");
+    }
+    else if (beat === "tail") {
+        drawShelf(ctx, 4);
+    }
+    else if (beat === "get") {
+        const u = Math.min(1, Math.max(0, (t - 16.4) / 1.6));
+        drawShelf(ctx, u < 1 ? -1 : 0);
+        if (u < 1) {
+            const cellW = 52;
+            const gap = 8;
+            const total = 5 * cellW + 4 * gap;
+            const x0 = (WORLD_W - total) / 2;
+            const from = x0 + 4 * (cellW + gap) + cellW / 2;
+            const to = x0 + cellW / 2;
+            const x = from + (to - from) * u;
+            const hop = u < 0.5 ? -28 * (u / 0.5) : -28 * (1 - (u - 0.5) / 0.5);
+            drawJelly(ctx, x, 112 + hop, 18, u > 0.85 ? 0.86 : 1.08, "ok");
+        }
+        if (t > 18.2 && t < 20.2) {
+            ctx.fillStyle = GOLD;
+            ctx.font = "16px ui-monospace, monospace";
+            ctx.textAlign = "center";
+            ctx.fillText("BOING", 320, 62);
+        }
+    }
+    else if (beat === "tri") {
+        ctx.fillStyle = PAPER;
+        roundBox(ctx, 168, 36, 304, 156, 14);
+        ctx.fill();
+        ctx.fillStyle = NIGHT;
+        ctx.fillRect(184, 52, 272, 124);
+        ctx.fillStyle = GREEN;
+        ctx.beginPath();
+        ctx.moveTo(414, 64);
+        ctx.lineTo(448, 112);
+        ctx.lineTo(380, 112);
+        ctx.closePath();
+        ctx.fill();
+    }
+    else if (beat === "hmtl") {
+        ctx.fillStyle = PAPER;
+        ctx.fillRect(228, 58, 150, 36);
+        ctx.fillRect(250, 104, 150, 36);
+        ctx.fillRect(206, 150, 120, 28);
+        ctx.fillStyle = GOLD;
+        ctx.fillRect(340, 168, 10, 22);
+        ctx.fillRect(348, 182, 18, 8);
+    }
+    else if (beat === "mail") {
+        ctx.fillStyle = PAPER;
+        roundBox(ctx, 230, 70, 180, 110, 12);
+        ctx.fill();
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(242, 86);
+        ctx.lineTo(320, 132);
+        ctx.lineTo(398, 86);
+        ctx.stroke();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(360, 48, 72, 22);
+        ctx.setLineDash([]);
+    }
+    else if (beat === "v50") {
+        ctx.fillStyle = CREAM;
+        roundBox(ctx, 220, 56, 200, 130, 8);
+        ctx.fill();
+        ctx.fillStyle = GOLD;
+        ctx.font = "64px ui-monospace, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("50", 320, 148);
+        ctx.strokeStyle = DEEP;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(250, 78);
+        ctx.lineTo(390, 96);
+        ctx.stroke();
+    }
+    else if (beat === "spoon") {
+        const local = t - 52;
+        const drop = local < 3 ? 20 + local * 28 : 104;
+        drawSpoon(ctx, 320, drop - 70);
+        const shrink = local < 3.2 ? 1 : Math.max(0, 1 - (local - 3.2) / 1.4);
+        if (shrink > 0.05) {
+            drawJelly(ctx, 320, 150, 28 * shrink, local > 3 ? 0.8 : 1, "oh");
+        }
+    }
+    else if (beat === "gone") {
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(320, 112, 46, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = GOLD;
+        ctx.font = "42px ui-monospace, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("404", 320, 124);
+    }
+    else {
+        ctx.fillStyle = PAPER;
+        roundBox(ctx, 168, 24, 304, 172, 16);
+        ctx.fill();
+        ctx.fillStyle = GOLD;
+        ctx.fillRect(168, 24, 8, 172);
+        ctx.beginPath();
+        ctx.arc(320, 112, 54, 0, Math.PI * 2);
+        ctx.fillStyle = NIGHT;
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = GOLD;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(320, 112, 46, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        const squash = jellySquash(t, true, pokeLeft);
+        drawJelly(ctx, 320, 114, 32, squash, "dance");
+        hit = { x: 320, y: 114, r: 42 };
+    }
+    drawCast(ctx, t, beat);
+    return hit;
+}
+
+const MELODY = [523.25, 659.25, 783.99, 659.25, 880, 783.99, 659.25, 523.25];
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const $kicker = document.getElementById("kicker");
+const $cap = document.getElementById("cap");
+const $aside = document.getElementById("aside");
+const $scrub = document.getElementById("scrub");
+const $now = document.getElementById("now");
+const $play = document.getElementById("play");
+const $sound = document.getElementById("sound");
+const $hint = document.getElementById("hint");
+const $chapters = document.getElementById("chapters");
+let t = 0;
+let playing = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let soundOn = false;
+let audio = null;
+let note = -1;
+let hit = null;
+let pokeLeft = 0;
+let pokeCount = 0;
+let pokeLine = null;
+let ended = false;
+let beatId = BEATS[0].id;
+
+function fmt(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function tone(freq, dur, gain) {
+  if (!audio || !soundOn) return;
+  const start = audio.currentTime;
+  const osc = audio.createOscillator();
+  const amp = audio.createGain();
+  osc.type = "sine";
+  osc.frequency.value = freq;
+  amp.gain.setValueAtTime(0.0001, start);
+  amp.gain.exponentialRampToValueAtTime(gain, start + 0.02);
+  amp.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  osc.connect(amp);
+  amp.connect(audio.destination);
+  osc.start(start);
+  osc.stop(start + dur + 0.02);
+}
+function paint() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const bw = Math.max(1, Math.round(rect.width * dpr));
+  const bh = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
+  }
+  const scale = Math.min(rect.width / WORLD_W, rect.height / WORLD_H);
+  const ox = (rect.width - WORLD_W * scale) / 2;
+  const oy = (rect.height - WORLD_H * scale) / 2;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#171116";
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+  ctx.imageSmoothingEnabled = false;
+  hit = drawFilm(ctx, t, pokeLeft);
+}
+function renderUi(force) {
+  const beat = beatAt(t);
+  if (force || beat.id !== beatId) {
+    beatId = beat.id;
+    document.querySelectorAll(".chapters button").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.dataset.id === beatId ? "true" : "false");
+    });
+  }
+  $kicker.textContent = beat.kicker;
+  $cap.textContent = beat.caption;
+  $aside.textContent = pokeLine || beat.aside;
+  $scrub.value = String(t);
+  $scrub.setAttribute("aria-valuetext", fmt(t));
+  $now.textContent = fmt(t);
+  $play.textContent = ended ? "再看一遍" : playing ? "暂停" : "播放";
+  $hint.hidden = beatId !== "stone";
+}
+function seek(next, resume) {
+  t = Math.min(DURATION, Math.max(0, next));
+  note = Math.floor(t / 0.9);
+  pokeLine = null;
+  ended = t >= DURATION;
+  if (ended) playing = false;
+  else if (resume) playing = true;
+  renderUi(true);
+  paint();
+}
+BEATS.forEach((item) => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.dataset.id = item.id;
+  btn.textContent = item.kicker;
+  btn.setAttribute("aria-pressed", item.id === beatId ? "true" : "false");
+  btn.addEventListener("click", () => seek(item.start, true));
+  $chapters.appendChild(btn);
+});
+$scrub.addEventListener("input", () => seek(Number($scrub.value), false));
+$play.addEventListener("click", () => {
+  if (t >= DURATION) {
+    t = 0;
+    note = -1;
+    pokeLine = null;
+    ended = false;
+  }
+  playing = !playing;
+  if (t >= DURATION) playing = false;
+  renderUi(true);
+});
+$sound.addEventListener("click", async () => {
+  if (!soundOn) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!audio) audio = new Ctx();
+    await audio.resume();
+    soundOn = true;
+    $sound.textContent = "八音盒关";
+    tone(880, 0.18, 0.04);
+  } else {
+    soundOn = false;
+    $sound.textContent = "八音盒开";
+  }
+});
+canvas.addEventListener("click", (event) => {
+  if (!hit) return;
+  const rect = canvas.getBoundingClientRect();
+  const scale = Math.min(rect.width / WORLD_W, rect.height / WORLD_H);
+  const ox = (rect.width - WORLD_W * scale) / 2;
+  const oy = (rect.height - WORLD_H * scale) / 2;
+  const x = (event.clientX - rect.left - ox) / scale;
+  const y = (event.clientY - rect.top - oy) / scale;
+  const dx = x - hit.x;
+  const dy = y - hit.y;
+  if (dx * dx + dy * dy > hit.r * hit.r) return;
+  pokeLeft = 0.45;
+  pokeLine = POKE_LINES[pokeCount % POKE_LINES.length];
+  pokeCount += 1;
+  renderUi(true);
+  if (soundOn) {
+    tone(520, 0.12, 0.05);
+    setTimeout(() => tone(780, 0.16, 0.04), 90);
+  }
+});
+let last = performance.now();
+let lastUi = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (playing) {
+    t = Math.min(DURATION, t + dt);
+    if (t >= DURATION) {
+      playing = false;
+      ended = true;
+    }
+  }
+  if (pokeLeft > 0) pokeLeft = Math.max(0, pokeLeft - dt);
+  paint();
+  if (soundOn && playing) {
+    const index = Math.floor(t / 0.9);
+    if (index !== note) {
+      note = index;
+      tone(MELODY[index % MELODY.length], 0.32, 0.03);
+    }
+  }
+  if (now - lastUi > 200) {
+    lastUi = now;
+    renderUi(false);
+  }
+  requestAnimationFrame(frame);
+}
+renderUi(true);
+paint();
+requestAnimationFrame(frame);
+window.addEventListener("resize", paint);
+</script>
+</body>
+</html>
