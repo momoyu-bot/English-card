@@ -17,7 +17,7 @@ git config user.email "318139614+momoyu-bot@users.noreply.github.com"
 | 文件 | 是什么 |
 | --- | --- |
 | `tools/build_index.py` | 首页上架那台机器，碰坏了整个店停摆 |
-| `tools/build_huafa.py` / `tools/小萌物画法.txt` | 从三页造型宪法里抽画法的机器，和它抽出来的合订本（手改了也会被下次推送重抽盖掉） |
+| `tools/build_huafa.py` / `tools/小萌物画法.txt` | 从 `CLAUDE.md`「怎么画」那一节开头和三页造型宪法里抽画法的机器，和它抽出来的合订本（手改了也会被下次推送重抽盖掉） |
 | `梦境.md` / `梦境.html` | 她手写的关系表和它的前台 |
 | `index.html` | 首页，前端交给 Claude |
 | `CLAUDE.md` / `tools/README.md` / `tools/手册/` | 店务笔记 / 机房手册的目录和各本 |

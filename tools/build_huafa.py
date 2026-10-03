@@ -10,6 +10,12 @@
 某一页抽不出来（改了结构、挪了位置），那一段换成一句「去翻原页」，脚本照样写完、
 不报错——宁可让读的人多翻一页，也别为这个让工作流红。
 要换抽哪几页、抽哪几段，改下面 SOURCES 这张表。
+
+最前面那段从店规 CLAUDE.md 抄：「Clawd、小脸蛋、momoyu 怎么画」那一节开头，到「画全员时」那一行之前
+（四句怎么用宪法，加「小萌物短片是什么」）。找不到那一行就抄到下一个「## 」为止；整节都找不到，换成一句「去翻 CLAUDE.md」。
+为什么要抄（2026-10-04）：「小萌物短片是全员出场」以前只在 CLAUDE.md 一个括号里，合订本开头只留一句「看 CLAUDE.md」。
+可合订本是要递到仓库外面去的（她放进 Drive 给 Gemini、给不进仓库的 Grok chat 看），外面的人读不到 CLAUDE.md。
+那一晚 Grok、Gemini 各拍了一部，都没拍成全员，见 claude/博物馆/谁在场，谁在演.html。
 """
 import io
 import os
@@ -38,11 +44,16 @@ SOURCES = [
 
 HEAD = """小萌物画法（合订本）
 
-三页造型宪法里「开新对话时整段贴过去」的那一段，按 Clawd、小脸蛋、momoyu 排在一起。
-是 tools/build_huafa.py 从原页抽出来的，push 后工作流会重抽；别在这里手改，要改就改原页。
-怎么用这几段，看 CLAUDE.md「Clawd、小脸蛋、momoyu 怎么画」那四句。
+最前面是店规 CLAUDE.md「Clawd、小脸蛋、momoyu 怎么画」开头那几段：怎么用这几份宪法，和小萌物短片是什么。
+后面是三页造型宪法里「开新对话时整段贴过去」的那一段，按 Clawd、小脸蛋、momoyu 排在一起。
+都是 tools/build_huafa.py 从原处抽出来的，push 后工作流会重抽；别在这里手改，要改就改原处。
 原页里的图、试画按钮、量法和来龙去脉这里都没搬，要用就去翻原页。
 """
+
+# 最前面那段从哪抄：这一节的标题，抄到哪一行之前停。
+NOTES = 'CLAUDE.md'
+NOTES_HEAD = '## Clawd、小脸蛋、momoyu 怎么画'
+NOTES_STOP = '画全员时'
 
 ESC = {'n': '\n', 't': '\t', 'r': '\r', 'b': '\b', 'f': '\f', 'v': '\v'}
 
@@ -169,8 +180,36 @@ def grab(src, var, keys):
     return read_string(src, i)[0]
 
 
+def grab_notes():
+    """抄 CLAUDE.md 那一节开头几段：标题下一行起，到「画全员时」那一行（或下一个「## 」）之前。"""
+    lines = io.open(os.path.join(ROOT, NOTES), encoding='utf-8').read().splitlines()
+    for k, line in enumerate(lines):
+        if line.strip() == NOTES_HEAD:
+            break
+    else:
+        raise ValueError('里面找不到「%s」这一节' % NOTES_HEAD[3:])
+    out = []
+    for line in lines[k + 1:]:
+        if line.startswith('## ') or line.startswith(NOTES_STOP):
+            break
+        out.append(line.rstrip())
+    text = '\n'.join(out).strip('\n')
+    if not text.strip():
+        raise ValueError('那一节开头抄出来是空的')
+    return text
+
+
 def build():
     parts, warns = [HEAD], []
+    parts.append('\n==== 先看这几句 ====\n抄自：%s「%s」（店规，不是哪一页里写的）\n' % (NOTES, NOTES_HEAD[3:]))
+    try:
+        parts.append('\n' + grab_notes() + '\n')
+    except FileNotFoundError:
+        warns.append(('CLAUDE.md 那几段', '文件不在了'))
+        parts.append('\n（这一段这次没抄出来：%s 不在了。去翻仓库根上的店规，找「%s」那一节。）\n' % (NOTES, NOTES_HEAD[3:]))
+    except (OSError, ValueError) as e:
+        warns.append(('CLAUDE.md 那几段', str(e)))
+        parts.append('\n（这一段这次没抄出来：%s%s。去翻仓库根上的 %s「%s」。）\n' % (NOTES, e, NOTES, NOTES_HEAD[3:]))
     for title, page, pieces in SOURCES:
         parts.append('\n==== %s ====\n原页：%s\n' % (title, page))
         try:
@@ -194,7 +233,7 @@ def build():
 def main():
     text, warns = build()
     for title, why in warns:
-        print('::warning::小萌物画法：%s 没抽出来（%s），合订本里这一段换成了「去翻原页」' % (title, why))
+        print('::warning::小萌物画法：%s 没抽出来（%s），合订本里这一段换成了一句指路的话' % (title, why))
     path = os.path.join(ROOT, OUT)
     try:
         old = io.open(path, encoding='utf-8').read()
