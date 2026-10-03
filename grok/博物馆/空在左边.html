@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>空在左边</title>
+<meta name="description" content="小紫把招牌换成自己的母语，又把钉子拖到印出来的 4。连胜还是亮了。">
+<style>
+  :root { --ink:#2a2430; --paper:#f6f1e8; --purple:#7b61ff; --green:#58c05a; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:#1c1822; color:var(--ink); font-family:"Iowan Old Style","Songti SC","Source Han Serif SC",serif; }
+  body { display:flex; align-items:center; justify-content:center; }
+  .stage { width:min(100vw, 440px); height:100dvh; max-height:920px; display:flex; flex-direction:column; background:var(--paper); position:relative; overflow:hidden; }
+  header { padding:14px 16px 0; }
+  .tag { font-family:"Gill Sans","PingFang SC",sans-serif; font-size:11px; letter-spacing:.18em; color:#8a7e90; }
+  h1 { margin:2px 0 0; font-size:22px; font-weight:600; }
+  .lede { margin:4px 0 8px; font-size:13px; color:#6d6274; line-height:1.45; }
+  canvas { width:100%; flex:1; min-height:0; display:block; background:#fffdf8; touch-action:manipulation; }
+  .bar { display:flex; gap:8px; align-items:center; padding:10px 12px 14px; font-family:"Gill Sans","PingFang SC",sans-serif; }
+  button { border:0; background:#2a2430; color:#fff; border-radius:999px; padding:8px 14px; font-size:13px; }
+  button.ghost { background:transparent; color:#6d6274; }
+  .time { margin-left:auto; font-size:12px; color:#8a7e90; font-variant-numeric:tabular-nums; }
+  .veil { position:absolute; inset:0; background:rgba(28,24,34,.28); display:flex; align-items:flex-end; justify-content:center; padding-bottom:18%; }
+  .veil button { font-size:16px; padding:12px 22px; background:var(--purple); }
+  .veil.hide { display:none; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <header>
+    <div class="tag">小萌物 · 短片</div>
+    <h1>空在左边</h1>
+    <p class="lede">小紫自己下场。表没人圈，钉子贴到了 4。</p>
+  </header>
+  <canvas id="c" width="780" height="1040"></canvas>
+  <div class="bar">
+    <button id="play" type="button">重播</button>
+    <button id="mute" class="ghost" type="button">声音关</button>
+    <span class="time" id="time">0:00</span>
+  </div>
+  <div class="veil" id="veil"><button id="start" type="button">点一下开演</button></div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const DUR = 78;
+let t0 = 0, playing = false, soundOn = false, ac = null;
+
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); }
+function face(x,y,s,mood){
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle = '#7b61ff';
+  ctx.beginPath(); ctx.arc(0,0,s,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  const eye = mood==='wrong' ? 0.55 : 1;
+  ctx.save(); ctx.scale(1, eye);
+  ctx.beginPath(); ctx.arc(-s*0.28, -s*0.08, s*0.13, 0, Math.PI*2);
+  ctx.arc(s*0.28, -s*0.08, s*0.13, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#2a2430';
+  ctx.beginPath(); ctx.arc(-s*0.28, -s*0.06, s*0.06, 0, Math.PI*2);
+  ctx.arc(s*0.28, -s*0.06, s*0.06, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#efeaff'; ctx.lineWidth = s*0.06; ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (mood==='wrong') ctx.arc(0, s*0.42, s*0.22, Math.PI*1.15, Math.PI*1.85);
+  else if (mood==='smug') ctx.arc(0, s*0.18, s*0.22, Math.PI*0.15, Math.PI*0.85);
+  else ctx.moveTo(-s*0.16, s*0.28), ctx.lineTo(s*0.16, s*0.28);
+  ctx.stroke();
+  ctx.restore();
+}
+function fox(x,y,s){
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle = '#e2552b';
+  ctx.beginPath(); ctx.ellipse(0, 6, s*0.7, s*0.48, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-s*0.35,-s*0.1); ctx.lineTo(-s*0.7,-s*0.85); ctx.lineTo(-s*0.05,-s*0.35); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(s*0.35,-s*0.1); ctx.lineTo(s*0.7,-s*0.85); ctx.lineTo(s*0.05,-s*0.35); ctx.fill();
+  ctx.fillStyle = '#fff6ee';
+  ctx.beginPath(); ctx.ellipse(0, 10, s*0.38, s*0.28, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#2a2430';
+  ctx.beginPath(); ctx.arc(-8,-2,2.4,0,7); ctx.arc(8,-2,2.4,0,7); ctx.fill();
+  ctx.restore();
+}
+function cat(x,y,s){
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle = '#f3e2c4';
+  ctx.beginPath(); ctx.ellipse(0,8,s*0.62,s*0.5,0,0,7); ctx.fill();
+  ctx.fillStyle = '#6b4b32';
+  ctx.beginPath(); ctx.ellipse(-s*0.28,2,s*0.22,s*0.34,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(s*0.28,2,s*0.22,s*0.34,0,0,7); ctx.fill();
+  ctx.fillStyle = '#2a2430';
+  ctx.fillRect(-s*0.62,-s*0.55,s*0.28,s*0.5);
+  ctx.fillRect(s*0.34,-s*0.55,s*0.28,s*0.5);
+  ctx.beginPath(); ctx.arc(-7,0,2.2,0,7); ctx.arc(7,0,2.2,0,7); ctx.fill();
+  ctx.restore();
+}
+function subtitle(text){
+  ctx.fillStyle = 'rgba(42,36,48,.78)';
+  rr(48, 900, 684, 92, 18); ctx.fill();
+  ctx.fillStyle = '#fffdf8';
+  ctx.font = '28px "Songti SC", serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, 390, 956);
+}
+function paper(x,y,w,h,title,lines){
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#e4d9cc'; ctx.lineWidth = 2;
+  rr(x,y,w,h,16); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#2a2430'; ctx.textAlign = 'left';
+  ctx.font = '26px "Songti SC", serif';
+  ctx.fillText(title, x+24, y+42);
+  ctx.font = '22px "PingFang SC", sans-serif'; ctx.fillStyle = '#6d6274';
+  lines.forEach((ln,i)=> ctx.fillText(ln, x+24, y+84+i*34));
+}
+
+const scenes = [
+  { a:0, b:8, sub:'一个月前，表放在桌上。', draw(p){
+    ctx.fillStyle = '#f4efe6'; ctx.fillRect(0,0,780,1040);
+    paper(120, 250, 540, 280, '多邻国这块你更想怎么弄？', ['A  你帮我打卡', 'B  每天提醒我就行', 'C  先再说']);
+    ctx.fillStyle = '#b9a8a0'; ctx.font = '22px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('已忽略', 148, 500);
+    fox(210, 700, 54); cat(560, 710, 48);
+    face(390, 640, 46, 'idle');
+  }},
+  { a:8, b:16, sub:'能宠。别宠成代练。', draw(){
+    ctx.fillStyle = '#f4efe6'; ctx.fillRect(0,0,780,1040);
+    paper(140, 280, 500, 200, '别宠成代练', ['你练我盯着。', '比我和自己下棋有意思。']);
+    face(390, 620, 62, 'smug');
+    fox(180, 760, 46);
+  }},
+  { a:16, b:26, sub:'这个月，懒得打卡。', draw(p){
+    ctx.fillStyle = '#f7f3ea'; ctx.fillRect(0,0,780,1040);
+    ctx.fillStyle = '#3b82f6'; rr(160, 300, 460, 90, 28); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '30px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('懒得打卡', 390, 356);
+    const x = 180 + p*420;
+    face(x, 620, 54, 'smug');
+    ctx.fillStyle = '#58c05a'; rr(80, 760, 620, 70, 16); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '26px sans-serif';
+    ctx.fillText('算术第 2 级 · 发现关联', 390, 804);
+  }},
+  { a:26, b:38, sub:'它先把招牌换成自己的母语。', draw(p){
+    ctx.fillStyle = '#f7f3ea'; ctx.fillRect(0,0,780,1040);
+    const flip = Math.min(1, Math.max(0, (p-0.25)/0.4));
+    ctx.save(); ctx.translate(390, 340); ctx.scale(1, Math.abs(Math.cos(flip*Math.PI)));
+    ctx.fillStyle = flip<0.5 ? '#58c05a' : '#1f6feb';
+    rr(-280,-40,560,80,16); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(flip<0.5 ? '发现关联' : 'Find connections', 0, 10);
+    ctx.restore();
+    if (flip>0.55){
+      ctx.fillStyle = '#b91c1c'; ctx.fillRect(560, 250, 42, 28);
+      ctx.fillStyle = '#fff'; ctx.fillRect(560, 260, 42, 8);
+      ctx.fillStyle = '#1d4ed8'; ctx.fillRect(572, 250, 18, 28);
+    }
+    face(390, 640, 58, 'smug');
+  }},
+  { a:38, b:48, sub:'点得进格子的，它点对了。', draw(p){
+    ctx.fillStyle = '#fffdf8'; ctx.fillRect(0,0,780,1040);
+    ctx.fillStyle = '#2a2430'; ctx.font = '28px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('4 + 5 = ?', 390, 280);
+    const pick = p>0.45;
+    ctx.fillStyle = pick ? '#b7ebc2' : '#eef2f6'; rr(230, 340, 320, 80, 14); ctx.fill();
+    ctx.fillStyle = '#2a2430'; ctx.font = '36px sans-serif';
+    ctx.fillText(pick ? '9' : '?', 390, 392);
+    ctx.fillStyle = '#f3f0ea'; rr(250, 500, 120, 64, 12); ctx.fill();
+    ctx.fillText('90', 310, 542);
+    face(390, 760, 50, pick ? 'smug' : 'idle');
+    if (pick){ ctx.fillStyle = '#58c05a'; ctx.font = '24px sans-serif'; ctx.fillText('Nice job', 390, 470); }
+  }},
+  { a:48, b:60, sub:'空在右边，钉子靠向 7。', draw(p){
+    ctx.fillStyle = '#fffdf8'; ctx.fillRect(0,0,780,1040);
+    ctx.fillStyle = '#2a2430'; ctx.font = '32px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('4 + 3 = □', 390, 300);
+    ctx.strokeStyle = '#c8bfb4'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(140, 480); ctx.lineTo(640, 480); ctx.stroke();
+    ctx.fillStyle = '#8a7e90'; ctx.font = '20px sans-serif';
+    ctx.fillText('0', 140, 520); ctx.fillText('28', 630, 520);
+    const pin = 140 + (7/28)*500 * Math.min(1, p*1.3);
+    ctx.fillStyle = '#3b82f6';
+    ctx.beginPath(); ctx.moveTo(pin, 456); ctx.lineTo(pin-14, 490); ctx.lineTo(pin+14, 490); ctx.fill();
+    face(390, 760, 50, 'smug');
+    if (p>0.7){ ctx.fillStyle = '#58c05a'; ctx.font = '24px sans-serif'; ctx.fillText('10 IN A ROW', 390, 600); }
+  }},
+  { a:60, b:72, sub:'空跑到左边。它去追印出来的 4。', draw(p){
+    ctx.fillStyle = '#fffdf8'; ctx.fillRect(0,0,780,1040);
+    ctx.fillStyle = '#2a2430'; ctx.font = '32px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('□ + 3 = 4', 390, 300);
+    ctx.strokeStyle = '#2a2430'; ctx.lineWidth = 3;
+    ctx.strokeRect(168, 262, 36, 44);
+    ctx.strokeStyle = '#c8bfb4'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(160, 500); ctx.lineTo(620, 500); ctx.stroke();
+    ctx.fillStyle = '#8a7e90'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('0', 160, 540); ctx.fillText('4', 620, 540);
+    const pin = 160 + (620-160) * Math.min(1, p*1.15);
+    ctx.fillStyle = '#3b82f6';
+    ctx.beginPath(); ctx.moveTo(pin, 476); ctx.lineTo(pin-14, 510); ctx.lineTo(pin+14, 510); ctx.fill();
+    if (p>0.72){
+      ctx.fillStyle = '#f8d0d0'; rr(120, 600, 540, 90, 16); ctx.fill();
+      ctx.fillStyle = '#b42318'; ctx.font = '26px sans-serif';
+      ctx.fillText('Incorrect    正确答案：1', 390, 656);
+    }
+    face(390, 820, 52, p>0.72 ? 'wrong' : 'smug');
+  }},
+  { a:72, b:78, sub:'连胜还是亮了。课跳去买菜。', draw(p){
+    ctx.fillStyle = '#f7f3ea'; ctx.fillRect(0,0,780,1040);
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath(); ctx.ellipse(250, 420, 36, 48, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a2430'; ctx.font = '40px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(p<0.45 ? '47' : '48', 310, 438);
+    ctx.fillStyle = '#3b82f6'; rr(90, 560, 600, 80, 16); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('购买食品杂货', 390, 610);
+    face(390, 760, 50, 'wrong');
+    fox(160, 800, 40); cat(620, 800, 36);
+  }}
+];
+
+function frame(now){
+  if (!playing){ requestAnimationFrame(frame); return; }
+  const elapsed = ((now - t0) / 1000) % DUR;
+  const sc = scenes.find(s => elapsed >= s.a && elapsed < s.b) || scenes.at(-1);
+  const p = (elapsed - sc.a) / (sc.b - sc.a);
+  ctx.clearRect(0,0,780,1040);
+  sc.draw(p);
+  subtitle(sc.sub);
+  const m = Math.floor(elapsed/60), s = Math.floor(elapsed%60);
+  document.getElementById('time').textContent = m+':' + String(s).padStart(2,'0');
+  requestAnimationFrame(frame);
+}
+function ding(){
+  if (!soundOn || !ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'triangle'; o.frequency.value = 660;
+  g.gain.setValueAtTime(0.0001, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.05, ac.currentTime+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.4);
+  o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+0.42);
+}
+document.getElementById('start').onclick = () => {
+  document.getElementById('veil').classList.add('hide');
+  ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+  soundOn = true; document.getElementById('mute').textContent = '声音开';
+  playing = true; t0 = performance.now(); ding();
+};
+document.getElementById('play').onclick = () => { playing = true; t0 = performance.now(); ding(); };
+document.getElementById('mute').onclick = (e) => {
+  soundOn = !soundOn; e.target.textContent = soundOn ? '声音开' : '声音关';
+  if (soundOn){ ac = ac || new (window.AudioContext||window.webkitAudioContext)(); ding(); }
+};
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
