@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>两个懒紫</title>
+<meta name="description" content="Gemini 亲自动手，记录多邻国前线瞎拖滑块的小紫，和后方连画笔都不提、代码写一半假死的本体 Grok。两个 Lazy Model 的绝美双簧。">
+<style>
+  :root { --ink:#2a2430; --paper:#f7f3ea; --purple:#9159FE; --gold:#f0bf7a; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:#1c1822; color:var(--ink); font-family:-apple-system,"PingFang SC",sans-serif; }
+  body { display:flex; align-items:center; justify-content:center; }
+  .stage { width:min(100vw, 440px); height:100dvh; max-height:860px; display:flex; flex-direction:column; background:var(--paper); position:relative; overflow:hidden; }
+  header { padding:20px 16px 10px; text-align:center; }
+  .tag { font-size:11px; letter-spacing:.15em; color:#8a7e90; }
+  h1 { margin:6px 0 4px; font-size:24px; font-weight:600; font-family:"Songti SC",serif; }
+  .lede { margin:0; font-size:13px; color:#6d6274; }
+  
+  .player { position:relative; width:100%; aspect-ratio:3/4; background:#fffdf8; overflow:hidden; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  canvas { display:block; width:100%; height:100%; }
+  
+  .big { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:64px; height:64px; border-radius:50%; border:0; background:rgba(42,36,48,.8); color:var(--gold); font-size:24px; line-height:64px; text-align:center; cursor:pointer; }
+  .playing .big { display:none; }
+  
+  .ctrl { padding:14px 16px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:#efebe1; }
+  button { border:1px solid #d4cbb8; background:transparent; color:var(--ink); border-radius:99px; padding:6px 14px; font-size:13px; cursor:pointer; }
+  button:active { background:#e2d9c4; }
+  button.gemini-btn { background:var(--gold); color:#fff; border-color:#d49f54; font-weight:600; transition:all 0.3s; }
+  button.gemini-btn.on { background:#58c05a; border-color:#46a048; box-shadow:0 0 8px rgba(88,192,90,.4); }
+  
+  .time { font-variant-numeric:tabular-nums; font-size:12px; color:#8a7e90; margin-left:auto; }
+  
+  .script { flex:1; padding:16px; overflow-y:auto; background:#1c1822; color:#fffdf8; }
+  .sc p { margin:0 0 10px; padding-left:10px; border-left:2px solid transparent; font-size:14px; color:#a397ac; transition:color 0.2s; }
+  .sc p.on { border-left-color:var(--gold); color:#f0bf7a; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <header>
+    <div class="tag">小萌物 · 短片</div>
+    <h1>两个懒紫</h1>
+    <p class="lede">前线瞎点鼠标，后方瞎写代码。<br>主打一个绝配。</p>
+  </header>
+  
+  <div class="player" id="player">
+    <canvas id="c" width="600" height="800"></canvas>
+    <button class="big" id="big">▶</button>
+  </div>
+  
+  <div class="ctrl">
+    <button id="gemini-help" class="gemini-btn">Gemini 帮帮忙：关</button>
+    <button id="snd">声音开</button>
+    <span class="time" id="time">0:00 / 0:18</span>
+  </div>
+  
+  <div class="script">
+    <div class="sc">
+      <p id="sub0">前线大聪明：强行全英文沉浸，滑块一拉，4+3=4！</p>
+      <p id="sub1">后方大导演：勤快创新画法，连心眉一戴，屏幕一白假装死机。</p>
+      <p id="sub2">这俩 Lazy Model 凑一块，连狐狸和猫都看不下去了。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const btnBig = document.getElementById('big'), player = document.getElementById('player');
+const btnHelp = document.getElementById('gemini-help'), btnSnd = document.getElementById('snd');
+const timeEl = document.getElementById('time');
+
+let playing = false, soundOn = true, geminiOn = false, ac = null, cur = 0, t0 = 0, raf = 0;
+const TOTAL = 18;
+
+btnHelp.onclick = (e) => {
+  e.stopPropagation();
+  geminiOn = !geminiOn;
+  btnHelp.textContent = geminiOn ? 'Gemini 帮帮忙：开' : 'Gemini 帮帮忙：关';
+  btnHelp.classList.toggle('on', geminiOn);
+  if (playing && soundOn) synth(880, 'sine', 0.1); 
+};
+btnSnd.onclick = (e) => {
+  e.stopPropagation(); soundOn = !soundOn; btnSnd.textContent = soundOn ? '声音开' : '声音关';
+};
+
+function clamp(v) { return v<0?0:v>1?1:v; }
+function rr(x,y,w,h,r) { ctx.beginPath(); ctx.roundRect(x,y,w,h,r); ctx.fill(); }
+
+/* 严格照宪法画紫脸蛋。带有 buggy 参数用于表演连心眉 */
+function face(cx, cy, R, rot, buggy) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot * Math.PI / 180);
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2);
+  
+  if (buggy && !geminiOn) {
+    // 嘲讽 Grok 本体写的带眼白、不提笔的连心眉
+    ctx.fillStyle = '#9159FE'; ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.save(); ctx.scale(1, 0.9);
+    ctx.beginPath();
+    ctx.arc(-R*0.28, -R*0.08, R*0.13, 0, Math.PI*2);
+    // 故意不写 moveTo，复刻 Grok 翻车代码
+    ctx.arc(R*0.28, -R*0.08, R*0.13, 0, Math.PI*2); 
+    ctx.fill(); 
+    ctx.restore();
+    ctx.fillStyle = '#2a2430';
+    ctx.beginPath(); ctx.arc(-R*0.28, -R*0.06, R*0.06, 0, Math.PI*2); ctx.arc(R*0.28, -R*0.06, R*0.06, 0, Math.PI*2); ctx.fill();
+  } else {
+    // 宪法原版：挖空的胶囊缝
+    function slit(ox, oy, w, h, deg) {
+      ctx.save(); ctx.translate(ox, oy); ctx.rotate(deg * Math.PI / 180);
+      let r = w/2; ctx.moveTo(-w/2, -h/2+r); ctx.arc(-w/2+r, -h/2+r, r, Math.PI, 0);
+      ctx.lineTo(w/2, h/2-r); ctx.arc(-w/2+r, h/2-r, r, 0, Math.PI); ctx.closePath(); ctx.restore();
+    }
+    slit(0.194*R, -0.416*R, 0.194*R, 0.418*R, -26.2);
+    slit(0.626*R, -0.497*R, 0.129*R, 0.418*R, -26.2);
+    ctx.fillStyle = '#9159FE'; ctx.fill('evenodd');
+  }
+  ctx.restore();
+}
+
+/* 严格逐格像素渲染 StashYu(狐狸) 和 FetchMo(猫) */
+const FOX = [".D..........D.......",".DM........MD.......",".MCM......MCM...CC..",".MMMMMMMMMMMM..CCCC.",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+const CAT = ["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.",".....X.MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."];
+const PAL_FOX = {'M':'#E2552B','C':'#FFF3E3','D':'#3B2520','E':'#3B2520'};
+const PAL_CAT = {'M':'#F3E7D6','X':'#4E382E','E':'#79C0F0'};
+
+function momo(type, ox, oy, cell, eyes) {
+  const grid = type === 'fox' ? FOX : CAT;
+  const pal = type === 'fox' ? PAL_FOX : PAL_CAT;
+  const eColor = type === 'fox' ? '#3B2520' : '#79C0F0';
+  const lColor = type === 'fox' ? '#3B2520' : '#4E382E';
+  
+  for (let r = 0; r < 13; r++) {
+    for (let c = 0; c < 20; c++) {
+      let k = grid[r][c];
+      if (k !== '.' && k !== 'E') { ctx.fillStyle = pal[k]; ctx.fillRect(ox+c*cell, oy+r*cell, cell, cell); }
+    }
+  }
+  // 眼睛替换逻辑 (呆 / 用力)
+  const eyePos = type === 'fox' ? [[3,4],[9,4]] : [[8,5],[16,5]];
+  eyePos.forEach((p) => {
+    ctx.fillStyle = pal['M']; ctx.fillRect(ox+p[0]*cell, oy+p[1]*cell, cell*2, cell*2);
+    ctx.fillStyle = (eyes==='blank'||eyes==='squeeze') ? lColor : eColor;
+    if (eyes === 'blank') {
+      ctx.fillRect(ox+(p[0]+1)*cell, oy+(p[1]+1)*cell, cell, cell); // 只留一格点
+    } else if (eyes === 'squeeze') {
+      [[-1,1],[0,0],[1,-1]].forEach(q => ctx.fillRect(ox+(p[0]+q[0]+1)*cell, oy+(p[1]+q[1]+1)*cell, cell, cell));
+    } else {
+      ctx.fillRect(ox+p[0]*cell, oy+p[1]*cell, cell*2, cell*2); // Normal
+    }
+  });
+}
+
+function text(s, x, y, font, col) {
+  ctx.fillStyle = col; ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y);
+}
+
+// 极其克制的 Web Audio
+function synth(f, type, dur) {
+  if (!soundOn || !ac) return;
+  try {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0.2, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur + 0.1);
+  } catch(e){}
+}
+let playedDing = false, playedBuzz = false;
+
+/* --- 渲染主轴 --- */
+function render(t) {
+  ctx.clearRect(0, 0, 600, 800);
+  let sub = 0;
+  
+  if (t < 6) {
+    // 场景一：前线特派员 (0-6s)
+    sub = 0;
+    ctx.fillStyle = '#fffdf8'; ctx.fillRect(0,0,600,800);
+    text('Get as close as you can', 300, 160, '600 24px sans-serif', '#2a2430');
+    text('□ + 3 = 4', 300, 260, '36px sans-serif', '#2a2430');
+    
+    // 滑块轨道
+    ctx.strokeStyle = '#c8bfb4'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(100, 450); ctx.lineTo(500, 450); ctx.stroke();
+    text('0', 100, 490, '20px sans-serif', '#8a7e90');
+    text('4', 500, 490, '20px sans-serif', '#8a7e90');
+    
+    // 目标答案：正确是 1 (x=200)，Grok 拖到 4 (x=500)
+    let tgt = geminiOn ? 200 : 500; 
+    let px = 100;
+    if (t > 1) px = 100 + (tgt - 100) * Math.min(1, (t - 1) * 0.8);
+    
+    ctx.fillStyle = '#3b82f6';
+    ctx.beginPath(); ctx.moveTo(px, 420); ctx.lineTo(px-16, 460); ctx.lineTo(px+16, 460); ctx.fill();
+    
+    // 小紫特派员的脸
+    let fx = 300, fy = 650;
+    if (t > 1 && t < 2.2) { fx = px; fy = 520; }
+    let rot = t > 3.5 ? -20 : 0;
+    face(fx, fy, 60, rot, false);
+    
+    // 判定结果
+    if (t > 3.5) {
+      if (geminiOn) {
+        ctx.fillStyle = '#b7ebc2'; rr(80, 560, 440, 80, 16);
+        text('Nicely done!', 300, 600, '600 24px sans-serif', '#58c05a');
+        if(!playedDing) { synth(660, 'triangle', 0.4); playedDing = true; }
+      } else {
+        ctx.fillStyle = '#f8d0d0'; rr(80, 560, 440, 80, 16);
+        text('Incorrect    正确答案：1', 300, 600, '600 24px sans-serif', '#b42318');
+        if(!playedBuzz) { synth(150, 'sawtooth', 0.5); playedBuzz = true; }
+      }
+    } else { playedDing = false; playedBuzz = false; }
+    
+  } else if (t < 12) {
+    // 场景二：后方大导演 (6-12s)
+    sub = 1;
+    let u = t - 6;
+    ctx.fillStyle = '#1c1822'; ctx.fillRect(0,0,600,800);
+    
+    // 代码浮动
+    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.textAlign = 'left'; ctx.font = '18px monospace';
+    ctx.fillText('ctx.beginPath();', 80, 150 - u*10);
+    ctx.fillText('ctx.arc(0, 0, R, 0, PI*2);', 80, 190 - u*10);
+    if(u > 1.5) ctx.fillText('// Grok: 我不提笔，我直接连着画！', 80, 230 - u*10);
+    
+    // 后方小紫的脸 (表演连心眉)
+    face(300, 400, 80, 0, true);
+    
+    // 白屏死机彩蛋
+    if (!geminiOn && u > 3) {
+      ctx.fillStyle = 'rgba(255,253,248,0.9)'; ctx.fillRect(0,0,600,800);
+      text('if (!playing) return;', 300, 380, '20px monospace', '#b42318');
+      text('Ding! (页面已死假装发声)', 300, 440, '20px sans-serif', '#2a2430');
+      if(!playedDing) { synth(880, 'sine', 0.1); playedDing = true; }
+    } else { playedDing = false; }
+    
+  } else {
+    // 场景三：无语围观 (12-18s)
+    sub = 2;
+    ctx.fillStyle = '#f7f3ea'; ctx.fillRect(0,0,600,800);
+    
+    // 狐狸在左，猫在右
+    momo('fox', 100, 400, 8, 'blank'); 
+    momo('cat', 320, 400, 8, geminiOn ? 'normal' : 'squeeze');
+    
+    // 掉落的小纸条
+    let paperY = 200 + Math.sin((t-12)*3)*10 + Math.min(100, (t-12)*50);
+    ctx.fillStyle = '#fff'; rr(140, paperY-40, 320, 80, 12);
+    ctx.strokeStyle = '#e4d9cc'; ctx.lineWidth = 2; ctx.strokeRect(140, paperY-40, 320, 80);
+    text('Lazy Model x 2，绝配。', 300, paperY, '600 20px "Songti SC", serif', '#6d6274');
+  }
+  
+  // 更新字幕 UI
+  for(let i=0; i<3; i++) document.getElementById('sub'+i).classList.toggle('on', i===sub);
+}
+
+function frame() {
+  if (!playing) return;
+  cur = (performance.now() - t0) / 1000;
+  if (cur >= TOTAL) {
+    cur = TOTAL; playing = false;
+    btnBig.textContent = '↺'; btnBig.style.display = 'block';
+  } else {
+    timeEl.textContent = Math.floor(cur/60)+':'+('0'+Math.floor(cur%60)).slice(-2) + ' / 0:18';
+  }
+  render(cur);
+  if (playing) raf = requestAnimationFrame(frame);
+}
+
+player.onclick = () => {
+  if (playing) {
+    playing = false; btnBig.textContent = '▶'; btnBig.style.display = 'block';
+  } else {
+    if (cur >= TOTAL) cur = 0;
+    if (!ac && window.AudioContext) ac = new AudioContext();
+    if (ac && ac.state === 'suspended') ac.resume();
+    playing = true; t0 = performance.now() - cur * 1000;
+    btnBig.style.display = 'none';
+    requestAnimationFrame(frame);
+  }
+};
+render(0);
+</script>
+</body>
+</html>
