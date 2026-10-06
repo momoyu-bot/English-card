@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>小萌物肖形印</title>
+<meta name="description" content="六只不写字。朱文白文各一枚，朱砂盖在宣纸上。">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --ink:#C23A2E; --paper:#F3E6CF; --desk:#E7D3B4; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    background:
+      radial-gradient(ellipse at 50% 0%, #f7edd9 0%, var(--desk) 70%);
+    color:#5c3b32;
+    font-family:"Songti SC","STSong","Noto Serif SC",serif;
+    min-height:100%;
+  }
+  header { text-align:center; padding:22px 16px 6px; }
+  h1 { font-size:22px; font-weight:500; letter-spacing:.35em; margin:0 0 6px; }
+  p.note { margin:0; font-size:13px; letter-spacing:.12em; opacity:.8; }
+  main { max-width:880px; margin:0 auto; padding:8px 16px 40px; }
+  .sheet-wrap {
+    background:var(--paper);
+    border-radius:2px;
+    box-shadow:0 10px 30px rgba(90,50,30,.12), inset 0 0 80px rgba(180,140,90,.18);
+    position:relative;
+    overflow:hidden;
+  }
+  #paper { width:100%; height:auto; display:block; cursor:crosshair; touch-action:manipulation; }
+  .bar {
+    display:flex; justify-content:space-between; align-items:center;
+    gap:12px; margin:14px 2px 8px; font-size:13px; letter-spacing:.08em;
+  }
+  button {
+    font-family:inherit; font-size:13px; letter-spacing:.12em;
+    background:transparent; color:#7a4036; border:1px solid #c9a090;
+    padding:6px 12px; border-radius:999px; cursor:pointer;
+  }
+  button:active { background:#f6e7d8; }
+  .stones {
+    display:grid; grid-template-columns:repeat(6, 1fr); gap:10px;
+  }
+  .stone { text-align:center; }
+  .stone canvas {
+    width:100%; height:auto; display:block; cursor:pointer;
+    border-radius:4px; background:transparent;
+  }
+  .stone.on canvas { outline:1px dashed #c23a2e; outline-offset:3px; }
+  .nm { font-size:12px; margin-top:6px; letter-spacing:.06em; }
+  .pair { display:flex; gap:4px; justify-content:center; margin-top:4px; }
+  .pair button {
+    padding:2px 8px; font-size:12px; border-radius:999px;
+  }
+  .pair button.on { background:var(--ink); color:#fff8f2; border-color:var(--ink); }
+  @media (max-width:720px) {
+    .stones { grid-template-columns:repeat(3, 1fr); gap:14px 10px; }
+    h1 { letter-spacing:.2em; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>小萌物肖形印</h1>
+  <p class="note">点一枚，再点纸。印面没有字。盖下去都是朱砂。</p>
+</header>
+<main>
+  <div class="sheet-wrap"><canvas id="paper" width="1200" height="760"></canvas></div>
+  <div class="bar">
+    <span id="hint">先选印。朱文是红线，白文是红地白形。</span>
+    <button id="wipe" type="button">把纸擦干净</button>
+  </div>
+  <div class="stones" id="stones"></div>
+</main>
+<script>
+const INK = [194, 58, 46];
+const FOX = [
+".D..........D.......",
+".DM........MD.......",
+".MCM......MCM...CC..",
+".MMMMMMMMMMMM..CCCC.",
+".MMEEMMMMEEMM..MMMM.",
+".MMEEMMMMEEMM..MMMMM",
+"CCCCCCDDCCCCCC.MMMMM",
+"..CCCCCCCCCC..MMMMM.",
+"....MMCCMM...MMMMM..",
+"....MMCCMM..MMMMM...",
+"....MMMMMM.MMMMM....",
+"....DDMMDDMMMM......",
+"...................."
+];
+const CAT = [
+"....................",
+"........X........X..",
+".......XXX......XXX.",
+"........MMMMMMMMMM..",
+".......MMMMMMMMMMMM.",
+".......MEEMMMMMMEEM.",
+".....X.MEEMXXXXMEEM.",
+"....X..MMMMMXXMMMMM.",
+"....X...MMMMMMMMMM..",
+"....X...MMMMMMMMMM..",
+".....X...MMMMMMMM...",
+"......XXXXXM..MXX...",
+"...................."
+];
+const CREW = [
+  { id:"clawd", name:"Clawd", knob:"#d47f59" },
+  { id:"pink", name:"小粉", knob:"#FF309B" },
+  { id:"violet", name:"小紫", knob:"#9159FE" },
+  { id:"black", name:"小黑", knob:"#2a2a2a" },
+  { id:"fox", name:"StashYu", knob:"#E2552B" },
+  { id:"cat", name:"FetchMo", knob:"#F3E7D6" }
+];
+
+function rnd(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function inkify(ctx, w, h, seed) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const r = rnd(seed);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = (y * w + x) * 4;
+      if (d[i + 3] < 24) continue;
+      let edge = 0;
+      if (d[i + 4] < 24) edge++;
+      if (d[i - 4] < 24) edge++;
+      if (d[i + w * 4 + 3] < 24) edge++;
+      if (d[i - w * 4 + 3] < 24) edge++;
+      const n = r();
+      if (edge && n < 0.42) d[i + 3] = 0;
+      else if (n < 0.035) d[i + 3] = 0;
+      else if (n < 0.09) {
+        d[i] = 214; d[i + 1] = 92; d[i + 2] = 74; d[i + 3] = 210;
+      } else if (n > 0.97) {
+        d[i] = 255; d[i + 1] = 236; d[i + 2] = 226; d[i + 3] = 180;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function fillInk(ctx) { ctx.fillStyle = "rgb(" + INK.join(",") + ")"; }
+
+function roundRect(ctx, x, y, w, h, rad) {
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+
+function drawBorder(ctx, x, y, w, h, rad, mode) {
+  ctx.save();
+  fillInk(ctx);
+  if (mode === "bai") {
+    roundRect(ctx, x, y, w, h, rad);
+    ctx.fill();
+  } else {
+    ctx.lineWidth = 11;
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineJoin = "round";
+    roundRect(ctx, x + 6, y + 6, w - 12, h - 12, rad);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function clawd(ctx, mode) {
+  const body = () => {
+    roundRect(ctx, 58, 78, 124, 72, 6);
+    ctx.rect(30, 104, 28, 16);
+    ctx.rect(182, 104, 28, 16);
+    ctx.rect(58, 150, 16, 22);
+    ctx.rect(82, 150, 16, 22);
+    ctx.rect(142, 150, 16, 22);
+    ctx.rect(166, 150, 16, 22);
+  };
+  ctx.beginPath();
+  body();
+  if (mode === "bai") {
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    fillInk(ctx);
+    ctx.fillRect(86, 98, 8, 22);
+    ctx.fillRect(146, 98, 8, 22);
+  } else {
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "rgb(" + INK.join(",") + ")";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    fillInk(ctx);
+    ctx.fillRect(86, 98, 8, 22);
+    ctx.fillRect(146, 98, 8, 22);
+  }
+}
+
+function face(ctx, mode) {
+  ctx.beginPath();
+  ctx.arc(120, 118, 54, 0, Math.PI * 2);
+  if (mode === "bai") {
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+  } else {
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = "rgb(" + INK.join(",") + ")";
+    ctx.stroke();
+  }
+  ctx.save();
+  fillInk(ctx);
+  ctx.translate(124, 86);
+  ctx.rotate(-26.3 * Math.PI / 180);
+  ctx.fillRect(-5, -15, 10, 30);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.translate(154, 78);
+  ctx.rotate(-26.3 * Math.PI / 180);
+  ctx.fillRect(-3, -13, 6, 26);
+  ctx.restore();
+}
+
+function gridSeal(ctx, rows, mode, cut) {
+  const S = 9;
+  const gw = rows[0].length * S;
+  const gh = rows.length * S;
+  const ox = Math.round((240 - gw) / 2);
+  const oy = Math.round((240 - gh) / 2) - 2;
+  const occ = (x, y) => y >= 0 && y < rows.length && x >= 0 && x < rows[y].length && rows[y][x] !== ".";
+  fillInk(ctx);
+  if (mode === "bai") {
+    ctx.globalCompositeOperation = "destination-out";
+    for (let y = 0; y < rows.length; y++) {
+      for (let x = 0; x < rows[y].length; x++) {
+        if (occ(x, y)) ctx.fillRect(ox + x * S, oy + y * S, S, S);
+      }
+    }
+    ctx.globalCompositeOperation = "source-over";
+    fillInk(ctx);
+  } else {
+    for (let y = 0; y < rows.length; y++) {
+      for (let x = 0; x < rows[y].length; x++) {
+        if (!occ(x, y)) continue;
+        const px = ox + x * S, py = oy + y * S;
+        if (!occ(x - 1, y)) ctx.fillRect(px, py, 3, S);
+        if (!occ(x + 1, y)) ctx.fillRect(px + S - 3, py, 3, S);
+        if (!occ(x, y - 1)) ctx.fillRect(px, py, S, 3);
+        if (!occ(x, y + 1)) ctx.fillRect(px, py + S - 3, S, 3);
+      }
+    }
+  }
+  cut(ctx, ox, oy, S);
+}
+
+function foxCuts(ctx, ox, oy, S) {
+  const mark = (x, y) => ctx.fillRect(ox + x * S, oy + y * S, S, S);
+  [[1,0],[12,0],[6,6],[7,6],[3,4],[4,4],[9,4],[10,4],[15,2],[16,2],[17,2],[18,2],[15,3],[16,3],[17,3],[18,3]].forEach(p => mark(p[0], p[1]));
+}
+function catCuts(ctx, ox, oy, S) {
+  const mark = (x, y) => ctx.fillRect(ox + x * S, oy + y * S, S, S);
+  [[8,5],[9,5],[16,5],[17,5],[11,6],[12,6],[13,6],[14,6],[11,7],[12,7]].forEach(p => mark(p[0], p[1]));
+}
+
+function makeSeal(id, mode) {
+  const c = document.createElement("canvas");
+  c.width = 240; c.height = 240;
+  const ctx = c.getContext("2d");
+  const square = id === "clawd" || id === "fox" || id === "cat";
+  if (square) drawBorder(ctx, 14, 14, 212, 212, 8, mode);
+  else {
+    fillInk(ctx);
+    if (mode === "bai") { ctx.beginPath(); ctx.arc(120, 120, 104, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.lineWidth = 11; ctx.strokeStyle = ctx.fillStyle; ctx.beginPath(); ctx.arc(120, 120, 96, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  if (id === "clawd") clawd(ctx, mode);
+  else if (id === "pink" || id === "violet" || id === "black") face(ctx, mode);
+  else if (id === "fox") gridSeal(ctx, FOX, mode, foxCuts);
+  else gridSeal(ctx, CAT, mode, catCuts);
+  inkify(ctx, 240, 240, (id.charCodeAt(0) * 97 + (mode === "bai" ? 13 : 7)) >>> 0);
+  return c;
+}
+
+const cache = {};
+CREW.forEach(one => {
+  cache[one.id + ":zhu"] = makeSeal(one.id, "zhu");
+  cache[one.id + ":bai"] = makeSeal(one.id, "bai");
+});
+
+const paper = document.getElementById("paper");
+const pctx = paper.getContext("2d");
+const stamps = [];
+let armed = null;
+let armedMode = "zhu";
+
+function paperGrain() {
+  pctx.clearRect(0, 0, paper.width, paper.height);
+  pctx.fillStyle = "#F4E7D0";
+  pctx.fillRect(0, 0, paper.width, paper.height);
+  const g = pctx.getImageData(0, 0, paper.width, paper.height);
+  const d = g.data;
+  const r = rnd(42);
+  for (let i = 0; i < d.length; i += 16) {
+    const n = (r() - 0.5) * 18;
+    d[i] = Math.max(0, Math.min(255, d[i] + n));
+    d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.8));
+    d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.5));
+  }
+  pctx.putImageData(g, 0, 0);
+  pctx.strokeStyle = "rgba(160,120,80,.15)";
+  pctx.lineWidth = 1;
+  for (let y = 40; y < paper.height; y += 28) {
+    pctx.beginPath();
+    pctx.moveTo(24, y);
+    pctx.lineTo(paper.width - 24, y + Math.sin(y) * 2);
+    pctx.stroke();
+  }
+}
+
+function redraw() {
+  paperGrain();
+  stamps.forEach(s => {
+    pctx.save();
+    pctx.translate(s.x, s.y);
+    pctx.rotate(s.rot);
+    pctx.globalAlpha = s.a;
+    pctx.drawImage(cache[s.id + ":" + s.mode], -s.size / 2, -s.size / 2, s.size, s.size);
+    pctx.restore();
+  });
+}
+
+function place(x, y) {
+  if (!armed) return;
+  stamps.push({
+    id: armed, mode: armedMode, x, y,
+    rot: (Math.random() - 0.5) * 0.18,
+    a: 0.86 + Math.random() * 0.14,
+    size: 168 + Math.random() * 28
+  });
+  redraw();
+}
+
+paper.addEventListener("click", e => {
+  const r = paper.getBoundingClientRect();
+  place((e.clientX - r.left) / r.width * paper.width, (e.clientY - r.top) / r.height * paper.height);
+});
+
+const stones = document.getElementById("stones");
+const hint = document.getElementById("hint");
+CREW.forEach(one => {
+  const box = document.createElement("div");
+  box.className = "stone";
+  const cv = document.createElement("canvas");
+  cv.width = 240; cv.height = 240;
+  const name = document.createElement("div");
+  name.className = "nm";
+  name.textContent = one.name;
+  const pair = document.createElement("div");
+  pair.className = "pair";
+  ["zhu", "bai"].forEach(mode => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = mode === "zhu" ? "朱文" : "白文";
+    b.dataset.mode = mode;
+    b.addEventListener("click", () => arm(one, mode, box, cv));
+    pair.appendChild(b);
+  });
+  cv.addEventListener("click", () => arm(one, armed && armed === one.id ? armedMode : "zhu", box, cv));
+  box.appendChild(cv);
+  box.appendChild(name);
+  box.appendChild(pair);
+  stones.appendChild(box);
+  one.box = box; one.cv = cv;
+  paintStone(one, "zhu");
+});
+
+function paintStone(one, mode) {
+  const ctx = one.cv.getContext("2d");
+  ctx.clearRect(0, 0, 240, 240);
+  ctx.fillStyle = "#efe2cf";
+  roundRect(ctx, 18, 36, 204, 190, 8);
+  ctx.fill();
+  ctx.fillStyle = one.knob;
+  ctx.beginPath();
+  ctx.arc(120, 28, 14, 0, Math.PI * 2);
+  ctx.fill();
+  if (one.id === "cat") {
+    ctx.strokeStyle = "#4E382E";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+  ctx.drawImage(cache[one.id + ":" + mode], 28, 44, 184, 174);
+}
+
+function arm(one, mode, box, cv) {
+  armed = one.id;
+  armedMode = mode;
+  document.querySelectorAll(".stone").forEach(n => n.classList.remove("on"));
+  box.classList.add("on");
+  box.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.mode === mode));
+  paintStone(one, mode);
+  hint.textContent = one.name + " · " + (mode === "zhu" ? "朱文" : "白文") + "，点纸上想盖的地方。";
+}
+
+document.getElementById("wipe").addEventListener("click", () => { stamps.length = 0; redraw(); });
+redraw();
+</script>
+</body>
+</html>
