@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>正经构建</title>
+<meta name="description" content="一句感觉交进去，两只按构建日志收成能交的一行。">
+<style>
+  :root {
+    --bg: #141210;
+    --surface: #1c1916;
+    --fg: #f3ebe0;
+    --muted: #8c8378;
+    --fox: #e2552b;
+    --line: #2c2824;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
+  body {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", monospace;
+    color-scheme: dark;
+  }
+  main { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  header, .crew, form, .log { padding: 16px; }
+  header, .crew, form { border-color: var(--line); border-style: solid; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; border-width: 0 0 1px; }
+  h1 { margin: 0; font-size: 20px; font-weight: 500; line-height: 1.25; }
+  header p { margin: 8px 0 0; max-width: 36rem; color: var(--muted); font-size: 14px; line-height: 1.55; }
+  .ver { margin: 0; color: var(--muted); font-size: 14px; flex: none; }
+  .crew { display: flex; align-items: flex-end; gap: 32px; border-width: 0 0 1px; }
+  .who { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .who canvas { image-rendering: pixelated; display: block; }
+  .who b { font-weight: 500; font-size: 14px; }
+  .who span, .muted { color: var(--muted); font-size: 14px; }
+  .who .on { color: var(--fg); }
+  .log { flex: 1; min-height: 0; overflow-y: auto; }
+  ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  li { display: grid; grid-template-columns: 4.6rem 2.6rem 1fr; column-gap: 12px; font-size: 14px; line-height: 1.45; }
+  li .stash { color: var(--fox); }
+  li span:last-child { overflow-wrap: anywhere; }
+  .caret {
+    display: inline-block; width: 0.55em; height: 1em; margin: 8px 0 0;
+    background: var(--fox); vertical-align: text-bottom;
+    animation: blink 1.05s steps(1, end) infinite;
+  }
+  @keyframes blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+  .file { margin-top: 24px; border: 1px solid var(--line); background: var(--surface); padding: 16px; }
+  pre { margin: 12px 0 0; font: inherit; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+  form { display: flex; flex-direction: column; gap: 12px; border-width: 1px 0 0; }
+  @media (min-width: 640px) { form { flex-direction: row; } .btns { flex: none; } }
+  label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  input, button { font: inherit; font-size: 14px; height: 44px; }
+  input {
+    flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface);
+    color: var(--fg); padding: 0 12px;
+  }
+  input::placeholder { color: var(--muted); }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--fox); outline-offset: 2px; }
+  .btns { display: flex; gap: 12px; }
+  button { cursor: pointer; padding: 0 16px; border: 1px solid var(--line); background: transparent; color: var(--fg); }
+  button.primary { background: var(--fox); border-color: var(--fox); flex: 1; }
+  @media (min-width: 640px) { button.primary, .skip { flex: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>正经构建</h1>
+      <p>氛围编码（vibe coding）。一句感觉交进来，收成能交的一行。</p>
+    </div>
+    <p class="ver">0.9.4</p>
+  </header>
+  <div class="crew">
+    <div class="who" id="foxBox"><canvas id="fox" width="1" height="1" aria-label="StashYu"></canvas><b id="foxName">StashYu</b><span>暂存</span></div>
+    <div class="who" id="catBox"><canvas id="cat" width="1" height="1" aria-label="FetchMo"></canvas><b id="catName">FetchMo</b><span>取件</span></div>
+  </div>
+  <section class="log" id="log" aria-label="构建日志"></section>
+  <form id="form">
+    <label for="feeling">要收住的那一句</label>
+    <input id="feeling" maxlength="80" placeholder="灯还亮着，句子先停在这里" autocomplete="off">
+    <div class="btns">
+      <button class="primary" type="submit">开始构建</button>
+      <button class="skip" id="skip" type="button" hidden>直接看结果</button>
+    </div>
+  </form>
+</main>
+<script>
+const DEFAULT_LINE = "一句还没写完的话，要在这里收住。";
+const STOP = /[。！？…!?]$/;
+const FOX = [".D..........D.......",".DM........MD.......",".MCM......MCM...CC..",".MMMMMMMMMMMM..CCCC.",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+const FOX_TAP = [".D..........D.......",".DM........MD.......",".MCM......MCM.CC....",".MMMMMMMMMMMM.CCCC..",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+const FOX_IN = [".D..........D.......",".DM........MD.......",".MCM......MCM..CC...",".MMMMMMMMMMMM.CCCC..",".MMEEMMMMEEMM.MMMM..",".MMEEMMMMEEMM.MMMMM.","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+const FOX_OUT = [".D..........D........",".DM........MD........",".MCM......MCM....CC..",".MMMMMMMMMMMM...CCCC.",".MMEEMMMMEEMM...MMMM.",".MMEEMMMMEEMM...MMMMM","CCCCCCDDCCCCCC.MMMMM.","..CCCCCCCCCC..MMMMM..","....MMCCMM...MMMMM...","....MMCCMM..MMMMM....","....MMMMMM.MMMMM.....","....DDMMDDMMMM.......","....................."];
+const CAT = ["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.",".....X.MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."];
+const CAT_FLICK = ["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."];
+const CAT_UP = ["....................","........X........X..",".....X.XXX......XXX.","....X...MMMMMMMMMM..","....X..MMMMMMMMMMMM.","....X..MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.",".....X.MMMMMXXMMMMM.","......X.MMMMMMMMMM..",".......XMMMMMMMMMM..","........XMMMMMMMM...",".........XXM..MXX...","...................."];
+const PAL = { fox: { M:"#E2552B", C:"#FFF3E3", D:"#3B2520", E:"#3B2520" }, cat: { M:"#F3E7D6", X:"#4E382E", E:"#79C0F0" } };
+
+function gridFor(who, mood, frame) {
+  if (who === "fox") {
+    if (mood === "done") return [FOX, FOX_IN, FOX, FOX_OUT][frame % 4];
+    if (mood === "work") return frame % 8 === 5 || frame % 8 === 7 ? FOX_TAP : FOX;
+    return FOX;
+  }
+  if (mood === "done") return CAT_UP;
+  if (mood === "work") return frame % 6 === 5 ? CAT_FLICK : CAT;
+  return CAT;
+}
+function eyesFor(who, mood, blink, index) {
+  if (mood === "wait" && blink) return [[0,1,"ink"],[1,1,"ink"]];
+  if (mood === "done") return [[-1,1,"ink"],[0,0,"ink"],[1,0,"ink"],[2,1,"ink"]];
+  if (mood === "work" && who === "fox") return index === 0 ? [[0,-1,"ink"],[1,0,"ink"],[0,1,"ink"]] : [[1,-1,"ink"],[0,0,"ink"],[1,1,"ink"]];
+  if (mood === "work" && who === "cat") return [[-1,0,"eye"],[0,0,"eye"],[-1,1,"eye"],[0,1,"eye"]];
+  return [[0,0,"eye"],[1,0,"eye"],[0,1,"eye"],[1,1,"eye"]];
+}
+function raster(who, mood, frame, blink) {
+  const grid = gridFor(who, mood, frame);
+  const width = Math.max(...grid.map(r => r.length));
+  const height = grid.length;
+  const palette = PAL[who];
+  const body = who === "fox" ? "#E2552B" : "#F3E7D6";
+  const ink = who === "fox" ? "#3B2520" : "#4E382E";
+  const eye = who === "fox" ? "#3B2520" : "#79C0F0";
+  const color = Array(width * height).fill("");
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) color[y * width + x] = palette[grid[y][x] || "."] || "";
+  const anchors = who === "fox" ? [[3,4],[9,4]] : [[8,5],[16,5]];
+  anchors.forEach((o, i) => {
+    for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+      const x = o[0] + dx, y = o[1] + dy;
+      if (x >= 0 && y >= 0 && x < width && y < height) color[y * width + x] = body;
+    }
+    eyesFor(who, mood, blink, i).forEach(([dx, dy, kind]) => {
+      const x = o[0] + dx, y = o[1] + dy;
+      if (x >= 0 && y >= 0 && x < width && y < height) color[y * width + x] = kind === "eye" ? eye : ink;
+    });
+  });
+  if (mood === "done") {
+    const blush = who === "fox" ? "#F59A8C" : "#F2B8B0";
+    (who === "fox" ? [[2,6],[11,6]] : [[8,7],[17,7]]).forEach(([x, y]) => { if (color[y * width + x]) color[y * width + x] = blush; });
+  }
+  const padW = width + 2, padH = height + 2;
+  const cells = Array(padW * padH).fill("");
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (!color[y * width + x]) continue;
+    [[x-1,y],[x+1,y],[x,y-1],[x,y+1]].forEach(([nx, ny]) => {
+      const filled = nx >= 0 && ny >= 0 && nx < width && ny < height && color[ny * width + nx];
+      if (!filled) cells[(ny + 1) * padW + (nx + 1)] = "#FFF3E3";
+    });
+  }
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (color[y * width + x]) cells[(y + 1) * padW + (x + 1)] = color[y * width + x];
+  return { w: padW, h: padH, cells };
+}
+
+function settle(raw) {
+  const typed = raw.replace(/\s+/g, " ").trim();
+  const source = typed || DEFAULT_LINE;
+  const addedStop = typed.length > 0 && !STOP.test(typed);
+  return { source, line: addedStop ? typed + "。" : source, addedStop };
+}
+function stamp(i) {
+  const s = 9 * 3600 + 14 * 60 + 2 + i;
+  const p = n => String(n).padStart(2, "0");
+  return p(Math.floor(s / 3600)) + ":" + p(Math.floor((s % 3600) / 60)) + ":" + p(s % 60);
+}
+function buildSession(raw) {
+  const { source, line, addedStop } = settle(raw);
+  const count = Array.from(line).length;
+  const rows = [
+    ["sys","正经","0.9.4  开工"],
+    ["sys","工单","句子收束"],
+    ["sys","验收","读完不再想往下补"],
+    ["fetch","取件","正在取远端的感觉"],
+    ["fetch","取件","取到  " + source]
+  ];
+  if (addedStop) rows.push(["fetch","取件","这句还敞着。验收要求收住，补一个句号。"]);
+  rows.push(
+    ["stash","暂存","工作区里有半行没提交的字"],
+    ["stash","暂存","已暂存：半行"],
+    ["stash","暂存","暂存放回 src/line.ts"],
+    ["sys","写入","export const line = " + JSON.stringify(line)],
+    ["fetch","取件","类型定为「收住的话」，不是「还可以再加」"],
+    ["sys","检查","通过"],
+    ["stash","暂存","测试：光标在句号后不再闪"],
+    ["sys","测试","1 通过，0 失败    字数 " + count],
+    ["sys","完成","构建完成。可以交。"]
+  );
+  return { source, line, addedStop, count, lines: rows.map((r, i) => ({ who: r[0], tag: r[1], text: r[2], t: stamp(i) })) };
+}
+
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let scale = matchMedia("(min-width: 1024px)").matches ? 5 : 4;
+matchMedia("(min-width: 1024px)").addEventListener("change", e => { scale = e.matches ? 5 : 4; });
+let query = "", shown = 1, frame = 0, blink = false, bob = 0;
+let session = buildSession("");
+const logEl = document.getElementById("log");
+const skipBtn = document.getElementById("skip");
+const names = { fox: document.getElementById("foxName"), cat: document.getElementById("catName") };
+
+function moodFor(phase, sprite) {
+  if (phase === "done") return "done";
+  if (phase === "fetch") return sprite === "cat" ? "work" : "wait";
+  if (phase === "stash") return sprite === "fox" ? "work" : "wait";
+  return "wait";
+}
+function paint() {
+  const running = shown < session.lines.length;
+  const phase = running ? session.lines[Math.max(shown, 1) - 1].who : "done";
+  ["fox", "cat"].forEach(who => {
+    const mood = moodFor(phase, who);
+    const picture = raster(who, mood, frame, blink && mood === "wait");
+    const canvas = document.getElementById(who);
+    const ctx = canvas.getContext("2d");
+    canvas.width = picture.w * scale;
+    canvas.height = picture.h * scale;
+    ctx.imageSmoothingEnabled = false;
+    for (let i = 0; i < picture.cells.length; i++) {
+      if (!picture.cells[i]) continue;
+      ctx.fillStyle = picture.cells[i];
+      ctx.fillRect((i % picture.w) * scale, Math.floor(i / picture.w) * scale, scale, scale);
+    }
+    canvas.style.transform = bob ? "translateY(-" + scale + "px)" : "";
+    canvas.parentElement.style.width = ((who === "fox" ? 23 : 22) * scale) + "px";
+    names[who].className = mood === "wait" ? "" : "on";
+  });
+}
+function renderLog() {
+  const running = shown < session.lines.length;
+  const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48;
+  const items = session.lines.slice(0, shown).map(line =>
+    "<li><span class='muted'>" + line.t + "</span><span class='" + (line.who === "stash" ? "stash" : "") + "'>" + line.tag + "</span><span>" + line.text.replace(/&/g, "\u0026amp;").replace(/</g, "\u0026lt;") + "</span></li>"
+  ).join("");
+  const file = running ? "" : "<div class='file'><p class='muted'>src/line.ts</p><pre>export const line = " + JSON.stringify(session.line) + " as const\nexport const settled = true</pre><p class='muted'>字数 " + session.count + " · " + (session.addedStop ? "补了句号" : "本来就收着") + " · 光标不再闪</p></div>";
+  logEl.innerHTML = "<ol>" + items + "</ol>" + (running ? "<i class='caret'></i>" : "") + file;
+  if (nearBottom || shown <= 2) logEl.scrollTop = logEl.scrollHeight;
+  skipBtn.hidden = !running;
+  paint();
+}
+function restart(raw) {
+  query = raw;
+  session = buildSession(query);
+  shown = reduced ? session.lines.length : 1;
+  renderLog();
+}
+document.getElementById("form").addEventListener("submit", e => {
+  e.preventDefault();
+  restart(document.getElementById("feeling").value);
+});
+skipBtn.addEventListener("click", () => { shown = session.lines.length; renderLog(); });
+restart("");
+if (!reduced) {
+  setInterval(() => { frame++; if (frame % 2 === 0) bob = bob ? 0 : 1; paint(); }, 220);
+  setInterval(() => { if (shown < session.lines.length) { shown++; renderLog(); } }, 340);
+  setInterval(() => { blink = true; paint(); setTimeout(() => { blink = false; paint(); }, 140); }, 3200);
+}
+</script>
+</body>
+</html>
