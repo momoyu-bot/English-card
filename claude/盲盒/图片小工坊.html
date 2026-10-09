@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 这一行是锁：浏览器只许这页用它自己写的代码和你选的图片，不许它连任何网址。图片因此出不了这台设备。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; base-uri 'none'; form-action 'none'">
+<title>图片小工坊 · 改尺寸和拼图</title>
+<meta name="description" content="改像素、裁成 1:1、好几张拼成一张。图片只在这台手机里算，不上传，断网也能用。">
+<style>
+:root{
+  --bg:#f5efe6; --card:#fffcf7; --ink:#3b332c; --muted:#8b7f73; --line:#e7ddcf;
+  --chip:#f0e7da; --chip-ink:#5a4e43; --on:#3b332c; --on-ink:#fffaf2;
+  --accent:#c08f5f; --accent-soft:#f6eadb; --warn:#b4584a;
+  --ck1:#ebe4da; --ck2:#fbf8f3;
+  --shadow:0 1px 2px rgba(60,40,20,.05),0 8px 24px rgba(60,40,20,.06);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#1d1a17; --card:#27231f; --ink:#efe7dc; --muted:#a6998b; --line:#3a342d;
+    --chip:#332d27; --chip-ink:#d9cdbf; --on:#efe7dc; --on-ink:#1d1a17;
+    --accent:#d3a375; --accent-soft:#30281f; --warn:#e48b7c;
+    --ck1:#2e2924; --ck2:#3a342e; --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:22px 16px calc(48px + env(safe-area-inset-bottom))}
+.top{padding:6px 4px 6px}
+.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--muted)}
+h1{font-size:28px;line-height:1.25;margin:4px 0 8px;letter-spacing:.03em}
+.lede{margin:0;color:var(--muted)}
+.lock{display:inline-block;margin-top:10px;font-size:12px;padding:3px 10px;border-radius:999px;
+  background:var(--accent-soft);color:var(--ink);border:1px solid var(--line)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:14px 0;box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.card-h h2{font-size:17px;margin:0;flex:1}
+.step{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700;flex:none}
+.link{border:0;background:none;color:var(--muted);font:inherit;font-size:13px;padding:4px 2px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+
+.drop{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:20px 12px;
+  border:1.5px dashed var(--accent);border-radius:14px;background:var(--accent-soft);text-align:center;cursor:pointer}
+.drop.over{background:var(--chip)}
+.drop input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.drop-big{font-size:17px;font-weight:600}
+.drop-small{font-size:12px;color:var(--muted)}
+
+.tray{display:flex;gap:10px;overflow-x:auto;padding:12px 2px 4px;-webkit-overflow-scrolling:touch}
+.tray:empty{display:none}
+.thumb{flex:none;width:86px;position:relative}
+.thumb canvas{display:block;width:86px;height:86px;border-radius:12px;border:2px solid transparent;cursor:pointer}
+.thumb.on canvas{border-color:var(--accent)}
+.thumb .num{position:absolute;left:5px;top:5px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;
+  background:rgba(30,22,15,.62);color:#fff;font-size:12px;line-height:20px;text-align:center;pointer-events:none}
+.tbtns{display:flex;justify-content:space-between;margin-top:5px}
+.tbtns button{width:27px;height:27px;padding:0;border-radius:8px;border:1px solid var(--line);background:var(--card);
+  color:var(--ink);font:inherit;font-size:15px;line-height:1;cursor:pointer}
+.tbtns button:disabled{opacity:.3}
+
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:12px;background:var(--chip);margin-bottom:6px}
+.tabs button{border:0;background:transparent;padding:9px 6px;border-radius:9px;font:inherit;font-weight:600;color:var(--chip-ink);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+
+.row{margin:14px 0}
+.lab{font-size:13px;color:var(--muted);margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:0;background:var(--chip);color:var(--chip-ink);font:inherit;font-size:14px;padding:6px 13px;
+  border-radius:999px;min-height:34px;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--on);color:var(--on-ink)}
+.colors{align-items:center}
+.colors button,.colors label{width:34px;height:34px;min-height:0;padding:0;border-radius:50%;border:1.5px solid var(--line);
+  position:relative;cursor:pointer;display:block}
+.colors [aria-pressed="true"]{outline:2px solid var(--on);outline-offset:2px}
+.colors .clear{background:conic-gradient(var(--ck1) 25%,var(--ck2) 0 50%,var(--ck1) 0 75%,var(--ck2) 0) 0 0/12px 12px}
+.colors label{background:conic-gradient(#f2a7a7,#f5d38c,#a9dba0,#9cc7ef,#c9a8ee,#f2a7a7)}
+.colors label input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;padding:0;border:0}
+
+.pair{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--muted);font-size:14px}
+.pair input{width:92px;font:inherit;font-size:16px;padding:6px 10px;border-radius:10px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink)}
+.pair input.short{width:64px}
+.slide{display:flex;align-items:center;gap:10px}
+.slide input{flex:1;accent-color:var(--accent)}
+.slide output{min-width:2.6em;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+.sliders .row{margin:8px 0}
+.mini{border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;cursor:pointer}
+
+.stage{position:relative;display:flex;justify-content:center;align-items:center;min-height:170px;
+  margin:14px 0 6px;padding:10px;border-radius:14px;background:var(--chip);overflow:hidden}
+.stage canvas{display:block;max-width:100%;
+  background:conic-gradient(var(--ck1) 25%,var(--ck2) 0 50%,var(--ck1) 0 75%,var(--ck2) 0) 0 0/16px 16px}
+.stage canvas.grab{cursor:grab;touch-action:none}
+.stage .empty{color:var(--muted);font-size:14px}
+.hint{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.info{font-size:13px;margin:8px 0 0;color:var(--ink)}
+.warn{color:var(--warn)}
+
+.go{display:grid;gap:8px;margin-top:16px}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:10px 16px;border-radius:13px;
+  font:inherit;font-size:16px;font-weight:600;text-decoration:none;cursor:pointer;border:1.5px solid var(--on)}
+.btn.main{background:var(--on);color:var(--on-ink)}
+.btn.sub{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+.status{font-size:13px;color:var(--muted);min-height:1.2em;margin:8px 0 0;text-align:center}
+
+.results:empty{display:none}
+.results{margin-top:8px}
+.res-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:10px 0 4px;border-top:1px solid var(--line)}
+.res-top b{font-size:15px}
+.res{padding:14px 0;border-top:1px dashed var(--line)}
+.res img{display:block;max-width:100%;max-height:62vh;margin:0 auto 10px;border-radius:10px;
+  background:conic-gradient(var(--ck1) 25%,var(--ck2) 0 50%,var(--ck1) 0 75%,var(--ck2) 0) 0 0/16px 16px}
+.res-meta{font-size:13px;color:var(--muted);word-break:break-all}
+.res-meta b{display:block;color:var(--ink);font-size:14px;font-weight:600}
+.res-act{display:flex;gap:8px;margin-top:10px}
+.res-act .btn{flex:1;min-height:40px;font-size:14px}
+
+footer{margin:26px 4px 0;font-size:12.5px;color:var(--muted)}
+footer p{margin:6px 0}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header class="top">
+  <div class="eyebrow">宝's Shop · 盲盒</div>
+  <h1>图片小工坊</h1>
+  <p class="lede">改像素、裁成 1:1、好几张拼成一张。</p>
+  <span class="lock">🔒 图片只在这台设备里算，不上传，断网也能用</span>
+</header>
+
+<section class="card">
+  <div class="card-h"><span class="step">1</span><h2>放图片</h2><button class="link" id="clearAll" type="button" hidden>全部清空</button></div>
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept="image/*" multiple>
+    <span class="drop-big">＋ 选图片</span>
+    <span class="drop-small">可以一次选好几张；电脑上也能直接拖进来或粘贴</span>
+  </label>
+  <div class="tray" id="tray"></div>
+  <p class="hint" id="trayHint" hidden></p>
+</section>
+
+<section class="card">
+  <div class="card-h"><span class="step">2</span><h2>怎么改</h2></div>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="resize">改尺寸 · 裁比例</button>
+    <button type="button" role="tab" data-tab="collage">多图拼接</button>
+  </div>
+
+  <!-- 改尺寸 -->
+  <div id="pResize">
+    <div class="row">
+      <div class="lab">比例</div>
+      <div class="chips" data-key="r.ratio">
+        <button type="button" data-v="orig">原比例</button>
+        <button type="button" data-v="1:1">1:1</button>
+        <button type="button" data-v="3:4">3:4</button>
+        <button type="button" data-v="4:3">4:3</button>
+        <button type="button" data-v="9:16">9:16</button>
+        <button type="button" data-v="16:9">16:9</button>
+        <button type="button" data-v="2:3">2:3</button>
+        <button type="button" data-v="3:2">3:2</button>
+        <button type="button" data-v="custom">自己填</button>
+      </div>
+    </div>
+    <div class="row" id="rowCustom">
+      <div class="pair">宽 <input class="short" id="rcw" type="number" inputmode="decimal" min="0.1" step="any"> : 高 <input class="short" id="rch" type="number" inputmode="decimal" min="0.1" step="any"></div>
+    </div>
+    <div class="row" id="rowFit">
+      <div class="lab">比例不一样，多出来的部分</div>
+      <div class="chips" data-key="r.fit">
+        <button type="button" data-v="crop">裁掉</button>
+        <button type="button" data-v="pad">不裁，补一圈底色</button>
+      </div>
+    </div>
+    <div class="row" id="rowRBg">
+      <div class="lab">底色</div>
+      <div class="chips colors" data-key="r.bg"></div>
+    </div>
+
+    <div class="stage" id="stageR"><canvas id="cvR"></canvas><div class="empty" id="emptyR">先在上面放一张图片</div></div>
+    <div id="rowZoom">
+      <div class="slide"><span class="lab" style="margin:0">框的大小</span><input type="range" id="rZoom" min="15" max="100" step="1" value="100"><output id="rZoomOut">100%</output></div>
+      <p class="hint">拖框挪位置；两根手指捏一捏也能缩放框。<button type="button" class="mini" id="rCenter">放回正中间</button></p>
+    </div>
+
+    <div class="row">
+      <div class="lab">存成多大</div>
+      <div class="chips" data-key="r.size">
+        <button type="button" data-v="orig">原图大小</button>
+        <button type="button" data-v="720">720</button>
+        <button type="button" data-v="1080">1080</button>
+        <button type="button" data-v="1440">1440</button>
+        <button type="button" data-v="2160">2160</button>
+      </div>
+      <p class="hint">数字是短的那条边：1:1 选 1080，就是 1080×1080。也可以直接在下面填。</p>
+    </div>
+    <div class="row">
+      <div class="pair">宽 <input id="rW" type="number" inputmode="numeric" min="1" step="1"> × 高 <input id="rH" type="number" inputmode="numeric" min="1" step="1"> 像素</div>
+    </div>
+    <p class="info" id="rInfo"></p>
+  </div>
+
+  <!-- 拼图 -->
+  <div id="pCollage" hidden>
+    <div class="row">
+      <div class="lab">怎么拼</div>
+      <div class="chips" data-key="c.layout">
+        <button type="button" data-v="v">竖着接（长图）</button>
+        <button type="button" data-v="h">横着排</button>
+        <button type="button" data-v="grid">宫格</button>
+      </div>
+    </div>
+    <div id="gridRows">
+      <div class="row">
+        <div class="lab">每行几张</div>
+        <div class="chips" data-key="c.cols">
+          <button type="button" data-v="2">2</button>
+          <button type="button" data-v="3">3</button>
+          <button type="button" data-v="4">4</button>
+          <button type="button" data-v="5">5</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="lab">每一格的比例</div>
+        <div class="chips" data-key="c.cell">
+          <button type="button" data-v="1:1">1:1</button>
+          <button type="button" data-v="3:4">3:4</button>
+          <button type="button" data-v="4:3">4:3</button>
+          <button type="button" data-v="9:16">9:16</button>
+          <button type="button" data-v="16:9">16:9</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="lab">图片放进格子</div>
+        <div class="chips" data-key="c.fit">
+          <button type="button" data-v="crop">裁满格子</button>
+          <button type="button" data-v="pad">整张放进去</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint" id="lineHint"></p>
+
+    <div class="sliders">
+      <div class="row"><div class="slide"><span class="lab" style="margin:0;min-width:4em">中间缝</span><input type="range" data-key="c.gap" min="0" max="80" step="1"><output></output></div></div>
+      <div class="row"><div class="slide"><span class="lab" style="margin:0;min-width:4em">外边框</span><input type="range" data-key="c.pad" min="0" max="120" step="1"><output></output></div></div>
+      <div class="row"><div class="slide"><span class="lab" style="margin:0;min-width:4em">圆角</span><input type="range" data-key="c.radius" min="0" max="80" step="1"><output></output></div></div>
+    </div>
+    <div class="row">
+      <div class="lab">缝和边框的颜色</div>
+      <div class="chips colors" data-key="c.bg"></div>
+    </div>
+    <div class="row">
+      <div class="lab">成品宽度</div>
+      <div class="chips" data-key="c.width">
+        <button type="button" data-v="auto">尽量清楚</button>
+        <button type="button" data-v="720">720</button>
+        <button type="button" data-v="1080">1080</button>
+        <button type="button" data-v="1440">1440</button>
+        <button type="button" data-v="2160">2160</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="pair">或者自己填 <input id="cW" type="number" inputmode="numeric" min="50" step="1"> 像素宽</div>
+    </div>
+
+    <div class="stage" id="stageC"><canvas id="cvC"></canvas><div class="empty" id="emptyC">先在上面放两张以上的图片</div></div>
+    <p class="info" id="cInfo"></p>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-h"><span class="step">3</span><h2>存下来</h2></div>
+  <div class="row">
+    <div class="lab">格式</div>
+    <div class="chips" data-key="e.fmt">
+      <button type="button" data-v="jpeg">JPG</button>
+      <button type="button" data-v="png">PNG</button>
+      <button type="button" data-v="webp" id="webpChip">WebP</button>
+    </div>
+    <p class="hint">JPG 文件小，照片用它；PNG 最清楚，截图、要透明底的时候用它。</p>
+  </div>
+  <div class="row" id="rowQ">
+    <div class="slide"><span class="lab" style="margin:0">画质</span><input type="range" id="eQ" min="50" max="100" step="1"><output id="eQOut"></output></div>
+  </div>
+  <div class="row">
+    <div class="pair">文件不超过 <input id="eMax" type="number" inputmode="numeric" min="1" step="1" placeholder="不限"> KB<span>（不填就不管）</span></div>
+  </div>
+
+  <div class="go">
+    <button type="button" class="btn main" id="goOne">生成这一张</button>
+    <button type="button" class="btn sub" id="goAll" hidden>所有图都这样处理</button>
+    <button type="button" class="btn main" id="goC" hidden>拼起来</button>
+  </div>
+  <p class="status" id="status"></p>
+  <div class="results" id="results"></div>
+</section>
+
+<footer>
+  <p>🔒 这页自己上了一把锁：浏览器只许它读你选的图片、用它自己写的代码，不许它连任何网址。所以图片不会离开这台设备，关掉页面就没了。</p>
+  <p>手机上存图：点「存到相册」，或者长按做好的图片 →「存储到照片」。</p>
+</footer>
+
+</main>
+
+<script>
+(() => {
+'use strict';
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const MAX_AREA = 16000000;   // iPhone 的画布大概到 1677 万像素，留一点余量
+const MAX_SIDE = 16000;
+const PREV_MAX = 1000;       // 预览用的小图，长边这么多像素
+const MIME = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+const EXT = { jpeg: 'jpg', png: 'png', webp: 'webp' };
+const FMT_NAME = { jpeg: 'JPG', png: 'PNG', webp: 'WebP' };
+const COLORS = [
+  ['#ffffff', '白'], ['#f6efe4', '奶油'], ['#f8dfe3', '粉'], ['#dfe9f3', '浅蓝'], ['#1b1b1b', '黑'], ['transparent', '透明']
+];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const tick = () => new Promise(r => setTimeout(r, 40));
+
+const WEBP_OK = (() => {
+  try { const c = document.createElement('canvas'); c.width = c.height = 1;
+    return c.toDataURL('image/webp').indexOf('data:image/webp') === 0; } catch (e) { return false; }
+})();
+const SHARE_OK = (() => {
+  try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.png', { type: 'image/png' })] })); }
+  catch (e) { return false; }
+})();
+
+const S = {
+  imgs: [], cur: 0, tab: 'resize',
+  r: { ratio: 'orig', cw: 3, ch: 4, fit: 'crop', bg: '#ffffff', size: 'orig', customW: 1080 },
+  c: { layout: 'v', cols: '2', cell: '1:1', fit: 'crop', gap: 8, pad: 0, radius: 0, bg: '#ffffff', width: '1080', customW: 1080 },
+  e: { fmt: 'jpeg', q: 92, maxKB: '' }
+};
+let uid = 0;
+let results = [];
+
+const getK = k => { const [a, b] = k.split('.'); return S[a][b]; };
+const setK = (k, v) => { const [a, b] = k.split('.'); S[a][b] = v; };
+
+/* ---------- 画布小工具 ---------- */
+function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function free(c) { if (c) { c.width = 0; c.height = 0; } }
+function srcSize(src) { return [src.naturalWidth || src.width, src.naturalHeight || src.height]; }
+function fitRect(s, W, H) {
+  const x = clamp(s.x, 0, W), y = clamp(s.y, 0, H);
+  return { x, y, w: Math.max(1e-3, Math.min(s.w, W - x)), h: Math.max(1e-3, Math.min(s.h, H - y)) };
+}
+// 缩很多倍时一次画下去会起毛，先对半对半地缩
+function drawHQ(ctx, src, s, d) {
+  const [SW, SH] = srcSize(src);
+  let r = fitRect(s, SW, SH), cur = src, tmp = null;
+  while (r.w > d.w * 2 && r.h > d.h * 2) {
+    let nw = Math.ceil(r.w / 2), nh = Math.ceil(r.h / 2);
+    if (nw * nh > MAX_AREA) { const f = Math.sqrt(MAX_AREA / (nw * nh)); nw = Math.floor(nw * f); nh = Math.floor(nh * f); }
+    const c = canvas(nw, nh), x = c.getContext('2d');
+    x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+    x.drawImage(cur, r.x, r.y, r.w, r.h, 0, 0, nw, nh);
+    if (tmp) free(tmp);
+    tmp = cur = c; r = { x: 0, y: 0, w: nw, h: nh };
+  }
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(cur, r.x, r.y, r.w, r.h, d.x, d.y, d.w, d.h);
+  if (tmp) free(tmp);
+}
+// 预览只画小图，快
+function drawPrev(ctx, im, s, d) {
+  const f = im.prev.width / im.w;
+  const r = fitRect({ x: s.x * f, y: s.y * f, w: s.w * f, h: s.h * f }, im.prev.width, im.prev.height);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(im.prev, r.x, r.y, r.w, r.h, d.x, d.y, d.w, d.h);
+}
+function coverSrc(im, A) {
+  if (im.w / im.h > A) { const w = im.h * A; return { x: (im.w - w) / 2, y: 0, w, h: im.h }; }
+  const h = im.w / A; return { x: 0, y: (im.h - h) / 2, w: im.w, h };
+}
+function containDst(im, d) {
+  const k = Math.min(d.w / im.w, d.h / im.h), w = im.w * k, h = im.h * k;
+  return { x: d.x + (d.w - w) / 2, y: d.y + (d.h - h) / 2, w, h };
+}
+function roundPath(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function bgFor(bg, fmt) { return bg === 'transparent' ? (fmt === 'jpeg' ? '#ffffff' : null) : bg; }
+function capSize(W, H) {
+  let k = 1;
+  if (W * H > MAX_AREA) k = Math.sqrt(MAX_AREA / (W * H));
+  k = Math.min(k, MAX_SIDE / W, MAX_SIDE / H);
+  return k;
+}
+
+/* ---------- 读图 ---------- */
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if (!w || !h) { URL.revokeObjectURL(url); reject(new Error('empty')); return; }
+      const k = Math.min(1, PREV_MAX / Math.max(w, h));
+      const prev = canvas(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+      drawHQ(prev.getContext('2d'), img, { x: 0, y: 0, w, h }, { x: 0, y: 0, w: prev.width, h: prev.height });
+      const thumb = canvas(172, 172);
+      const im = { id: ++uid, name: baseName(file.name), size: file.size, url, img, w, h, prev, thumb, crop: { cx: .5, cy: .5, z: 1 } };
+      drawPrev(thumb.getContext('2d'), im, coverSrc(im, 1), { x: 0, y: 0, w: 172, h: 172 });
+      resolve(im);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+    img.src = url;
+  });
+}
+function baseName(n) {
+  n = (n || '图片').replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '_').trim();
+  return n || '图片';
+}
+async function addFiles(fileList) {
+  const files = Array.from(fileList || []).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|bmp|avif|heic|heif)$/i.test(f.name));
+  if (!files.length) return;
+  const before = S.imgs.length;
+  say('正在读图…');
+  let bad = 0;
+  for (const f of files) {
+    try { S.imgs.push(await loadImage(f)); } catch (e) { bad++; }
+  }
+  if (!before && S.imgs.length) S.cur = 0;
+  say(bad ? bad + ' 张没读出来，可能是这个浏览器不认识的格式（比如 HEIC），换成 JPG 再试试。' : '');
+  renderTray(); render();
+}
+function removeImg(i) {
+  const im = S.imgs[i]; if (!im) return;
+  URL.revokeObjectURL(im.url); free(im.prev); free(im.thumb);
+  S.imgs.splice(i, 1);
+  if (S.cur >= S.imgs.length) S.cur = Math.max(0, S.imgs.length - 1);
+  renderTray(); render();
+}
+function moveImg(i, d) {
+  const j = i + d; if (j < 0 || j >= S.imgs.length) return;
+  const a = S.imgs; [a[i], a[j]] = [a[j], a[i]];
+  if (S.cur === i) S.cur = j; else if (S.cur === j) S.cur = i;
+  renderTray(); render();
+}
+
+/* ---------- 改尺寸的算法 ---------- */
+function ratioA(im) {
+  const r = S.r;
+  if (r.ratio === 'orig') return im.w / im.h;
+  if (r.ratio === 'custom') { const a = +r.cw, b = +r.ch; return (a > 0 && b > 0) ? a / b : 1; }
+  const [a, b] = r.ratio.split(':').map(Number); return a / b;
+}
+function cropRect(im, A) {
+  const c = im.crop;
+  c.z = clamp(c.z || 1, 1, 100 / 15);
+  let w, h;
+  if (im.w / im.h > A) { h = im.h; w = h * A; } else { w = im.w; h = w / A; }
+  w /= c.z; h /= c.z;
+  c.cx = clamp(c.cx, w / 2 / im.w, 1 - w / 2 / im.w);
+  c.cy = clamp(c.cy, h / 2 / im.h, 1 - h / 2 / im.h);
+  return { x: c.cx * im.w - w / 2, y: c.cy * im.h - h / 2, w, h };
+}
+function planResize(im) {
+  const r = S.r, A = ratioA(im);
+  const mode = r.ratio === 'orig' ? 'orig' : r.fit;
+  let src = { x: 0, y: 0, w: im.w, h: im.h }, bw = im.w, bh = im.h;
+  if (mode === 'crop') { src = cropRect(im, A); bw = src.w; bh = src.h; }
+  else if (mode === 'pad') { if (im.w / im.h > A) { bw = im.w; bh = im.w / A; } else { bh = im.h; bw = im.h * A; } }
+  let W, H;
+  if (r.size === 'orig') { W = bw; H = bh; }
+  else if (r.size === 'custom') { W = clamp(+r.customW || 1, 1, MAX_SIDE); H = W / A; }
+  else { const n = +r.size; if (A >= 1) { H = n; W = n * A; } else { W = n; H = n / A; } }
+  W = Math.max(1, Math.round(W)); H = Math.max(1, Math.round(H));
+  const k = capSize(W, H); let capped = false;
+  if (k < 1) { W = Math.max(1, Math.floor(W * k)); H = Math.max(1, Math.floor(H * k)); capped = true; }
+  return { mode, A, src, W, H, bw: Math.round(bw), bh: Math.round(bh), capped, up: W > bw * 1.02 };
+}
+function paintResize(ctx, im, p, bg, hq) {
+  const draw = hq ? (s, d) => drawHQ(ctx, im.img, s, d) : (s, d) => drawPrev(ctx, im, s, d);
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, p.W, p.H); }
+  if (p.mode === 'pad') draw({ x: 0, y: 0, w: im.w, h: im.h }, containDst(im, { x: 0, y: 0, w: p.W, h: p.H }));
+  else draw(p.src, { x: 0, y: 0, w: p.W, h: p.H });
+}
+
+/* ---------- 拼图的算法 ---------- */
+function cellA() { const [a, b] = S.c.cell.split(':').map(Number); return a / b; }
+function collageWidth(list) {
+  const c = S.c;
+  if (c.width === 'custom') return clamp(Math.round(+c.customW) || 1080, 50, MAX_SIDE);
+  if (c.width !== 'auto') return +c.width;
+  // 尽量清楚：让每张图都不被缩小（太大的话下面还会再压到上限以内）
+  const n = list.length, g = c.gap / 1080, p = c.pad / 1080;
+  let imgs, frac;
+  if (c.layout === 'h') {
+    const h0 = Math.min.apply(null, list.map(im => im.h));
+    imgs = list.reduce((s, im) => s + h0 * im.w / im.h, 0); frac = 2 * p + g * (n - 1);
+  } else if (c.layout === 'v') {
+    imgs = Math.min.apply(null, list.map(im => im.w)); frac = 2 * p;
+  } else {
+    const cols = +c.cols, A = cellA();
+    const cw = Math.min.apply(null, list.map(im => c.fit === 'crop' ? Math.min(im.w, im.h * A) : Math.max(im.w, im.h * A)));
+    imgs = cw * cols; frac = 2 * p + g * (cols - 1);
+  }
+  return clamp(Math.round(imgs / Math.max(.2, 1 - frac)), 50, MAX_SIDE);
+}
+function buildCollage(list, W) {
+  const c = S.c, n = list.length, k = W / 1080, g = c.gap * k, p = c.pad * k;
+  const cells = []; let H = 0;
+  if (c.layout === 'h') {
+    const sumA = list.reduce((s, im) => s + im.w / im.h, 0);
+    const h0 = (W - 2 * p - g * (n - 1)) / sumA;
+    let x = p;
+    list.forEach(im => { const w = h0 * im.w / im.h; cells.push({ im, x, y: p, w, h: h0, fit: 'none' }); x += w + g; });
+    H = h0 + 2 * p;
+  } else if (c.layout === 'v') {
+    const w0 = W - 2 * p; let y = p;
+    list.forEach(im => { const h = w0 * im.h / im.w; cells.push({ im, x: p, y, w: w0, h, fit: 'none' }); y += h + g; });
+    H = y - g + p;
+  } else {
+    const cols = +c.cols, rows = Math.ceil(n / cols);
+    const cw = (W - 2 * p - g * (cols - 1)) / cols, ch = cw / cellA();
+    list.forEach((im, i) => {
+      const row = Math.floor(i / cols), col = i % cols;
+      const inRow = row === rows - 1 ? n - row * cols : cols;
+      const off = (cols - inRow) * (cw + g) / 2;   // 最后一行不满就居中
+      cells.push({ im, x: p + off + col * (cw + g), y: p + row * (ch + g), w: cw, h: ch, fit: c.fit });
+    });
+    H = 2 * p + rows * ch + (rows - 1) * g;
+  }
+  // 对齐到整像素，免得两张图之间漏一条细缝
+  cells.forEach(cl => {
+    const x0 = Math.round(cl.x), y0 = Math.round(cl.y);
+    cl.w = Math.round(cl.x + cl.w) - x0; cl.h = Math.round(cl.y + cl.h) - y0; cl.x = x0; cl.y = y0;
+  });
+  return { W: Math.round(W), H: Math.max(1, Math.round(H)), cells, r: c.radius * k,
+    bad: cells.some(cl => cl.w < 1 || cl.h < 1) };
+}
+function planCollage(list) {
+  const W = collageWidth(list);
+  let plan = buildCollage(list, W);
+  const k = capSize(plan.W, plan.H);
+  if (k < 1) { plan = buildCollage(list, Math.floor(W * k)); plan.capped = true; }
+  return plan;
+}
+function paintCollage(ctx, plan, bg, hq) {
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, plan.W, plan.H); }
+  plan.cells.forEach(cl => {
+    const im = cl.im;
+    let s = { x: 0, y: 0, w: im.w, h: im.h }, d = { x: cl.x, y: cl.y, w: cl.w, h: cl.h };
+    if (cl.fit === 'crop') s = coverSrc(im, d.w / d.h);
+    else if (cl.fit === 'pad') d = containDst(im, d);
+    ctx.save();
+    if (plan.r > 0) { roundPath(ctx, d.x, d.y, d.w, d.h, plan.r); ctx.clip(); }
+    if (hq) drawHQ(ctx, im.img, s, d); else drawPrev(ctx, im, s, d);
+    ctx.restore();
+  });
+}
+
+/* ---------- 预览 ---------- */
+const cvR = $('#cvR'), cvC = $('#cvC');
+const view = { k: 1 };
+function sizePreview(cv, w, h, maxH) {
+  const box = cv.parentElement;
+  const maxW = Math.max(60, box.clientWidth - 20);
+  const k = Math.min(maxW / w, maxH / h);
+  const cssW = Math.max(1, Math.round(w * k)), cssH = Math.max(1, Math.round(h * k));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
+  cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(cv.width / w, 0, 0, cv.height / h, 0, 0);
+  return { ctx, k: cssW / w };
+}
+function drawResizePreview() {
+  const im = S.imgs[S.cur];
+  cvR.hidden = !im; $('#emptyR').hidden = !!im;
+  if (!im) return;
+  const p = planResize(im);
+  const maxH = Math.min(window.innerHeight * .55, 560);
+  if (p.mode === 'crop') {
+    const { ctx, k } = sizePreview(cvR, im.w, im.h, maxH);
+    view.k = k;
+    drawPrev(ctx, im, { x: 0, y: 0, w: im.w, h: im.h }, { x: 0, y: 0, w: im.w, h: im.h });
+    const s = p.src;
+    ctx.save();
+    ctx.fillStyle = 'rgba(25,18,12,.55)';
+    ctx.beginPath(); ctx.rect(0, 0, im.w, im.h); ctx.rect(s.x, s.y, s.w, s.h); ctx.fill('evenodd');
+    const lw = 2 / k;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = lw;
+    ctx.strokeRect(s.x + lw / 2, s.y + lw / 2, s.w - lw, s.h - lw);
+    ctx.globalAlpha = .5; ctx.lineWidth = 1 / k; ctx.beginPath();
+    for (let i = 1; i < 3; i++) {
+      const x = s.x + s.w * i / 3, y = s.y + s.h * i / 3;
+      ctx.moveTo(x, s.y); ctx.lineTo(x, s.y + s.h); ctx.moveTo(s.x, y); ctx.lineTo(s.x + s.w, y);
+    }
+    ctx.stroke(); ctx.restore();
+  } else {
+    const { ctx } = sizePreview(cvR, p.W, p.H, maxH);
+    paintResize(ctx, im, p, p.mode === 'pad' ? bgFor(S.r.bg, S.e.fmt) : (S.e.fmt === 'jpeg' ? '#ffffff' : null), false);
+  }
+}
+function drawCollagePreview() {
+  const ok = S.imgs.length >= 1;
+  cvC.hidden = !ok; $('#emptyC').hidden = ok;
+  if (!ok) return;
+  const plan = planCollage(S.imgs);
+  if (plan.bad) { cvC.hidden = true; return; }
+  const maxH = S.c.layout === 'v' ? 2400 : Math.min(window.innerHeight * .6, 620);
+  const { ctx } = sizePreview(cvC, plan.W, plan.H, maxH);
+  paintCollage(ctx, plan, bgFor(S.c.bg, S.e.fmt), false);
+}
+let raf = 0;
+function draw() {
+  if (raf) return;
+  raf = requestAnimationFrame(() => {
+    raf = 0;
+    if (S.tab === 'resize') drawResizePreview(); else drawCollagePreview();
+  });
+}
+
+/* ---------- 拖框、捏框 ---------- */
+const pts = new Map(); let g0 = null;
+const isCrop = () => S.tab === 'resize' && S.imgs[S.cur] && S.r.ratio !== 'orig' && S.r.fit === 'crop';
+function gestureStart() {
+  const im = S.imgs[S.cur]; if (!im || !pts.size) { g0 = null; return; }
+  const a = Array.from(pts.values());
+  g0 = { cx: im.crop.cx, cy: im.crop.cy, z: im.crop.z, a: a.map(p => ({ x: p.x, y: p.y })) };
+  if (a.length >= 2) g0.d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1;
+}
+cvR.addEventListener('pointerdown', e => {
+  if (!isCrop()) return;
+  e.preventDefault();
+  try { cvR.setPointerCapture(e.pointerId); } catch (err) {}
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); gestureStart();
+});
+cvR.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId) || !g0) return;
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const im = S.imgs[S.cur]; if (!im) return;
+  const a = Array.from(pts.values());
+  if (a.length === 1) {
+    im.crop.cx = g0.cx + (a[0].x - g0.a[0].x) / view.k / im.w;
+    im.crop.cy = g0.cy + (a[0].y - g0.a[0].y) / view.k / im.h;
+  } else if (g0.d) {
+    const d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1;
+    im.crop.z = clamp(g0.z * g0.d / d, 1, 100 / 15);
+    const mx = (a[0].x + a[1].x - g0.a[0].x - g0.a[1].x) / 2, my = (a[0].y + a[1].y - g0.a[0].y - g0.a[1].y) / 2;
+    im.crop.cx = g0.cx + mx / view.k / im.w; im.crop.cy = g0.cy + my / view.k / im.h;
+  }
+  render();
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => cvR.addEventListener(t, e => {
+  if (!pts.delete(e.pointerId)) return; gestureStart();
+}));
+cvR.addEventListener('wheel', e => {
+  if (!isCrop()) return;
+  e.preventDefault();
+  const im = S.imgs[S.cur];
+  im.crop.z = clamp(im.crop.z * Math.exp(e.deltaY * .0015), 1, 100 / 15);
+  render();
+}, { passive: false });
+
+/* ---------- 界面 ---------- */
+function say(t) { $('#status').textContent = t || ''; }
+function kb(n) { return n >= 1048576 ? (n / 1048576).toFixed(n >= 10485760 ? 0 : 1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+
+function buildColorChips() {
+  $$('.colors').forEach(box => {
+    const key = box.dataset.key;
+    COLORS.forEach(([v, name]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.v = v; b.title = name; b.setAttribute('aria-label', name);
+      if (v === 'transparent') b.className = 'clear'; else b.style.background = v;
+      box.append(b);
+    });
+    const l = document.createElement('label');
+    l.title = '自己挑颜色';
+    const inp = document.createElement('input');
+    inp.type = 'color'; inp.value = '#c9a8ee'; inp.setAttribute('aria-label', '自己挑颜色');
+    inp.addEventListener('input', () => { setK(key, inp.value); render(); });
+    l.append(inp); box.append(l);
+  });
+}
+
+function renderTray() {
+  const tray = $('#tray'); tray.textContent = '';
+  const n = S.imgs.length;
+  S.imgs.forEach((im, i) => {
+    const t = document.createElement('div');
+    t.className = 'thumb' + (S.tab === 'resize' && i === S.cur ? ' on' : '');
+    t.dataset.i = i;
+    im.thumb.dataset.act = 'pick';
+    const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1;
+    const bs = document.createElement('div'); bs.className = 'tbtns';
+    [['left', '‹', '往前挪', i === 0], ['right', '›', '往后挪', i === n - 1], ['del', '×', '拿掉这张', false]].forEach(([act, txt, label, dis]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.dataset.act = act; b.textContent = txt;
+      b.setAttribute('aria-label', label); b.disabled = dis; bs.append(b);
+    });
+    t.append(im.thumb, num, bs); tray.append(t);
+  });
+  $('#clearAll').hidden = !n;
+  const hint = $('#trayHint');
+  hint.hidden = n < 2;
+  hint.textContent = S.tab === 'resize'
+    ? '点小图切换要改哪一张；每张的框可以分别挪。'
+    : '拼的时候按这个顺序，用 ‹ › 挪位置。';
+}
+
+function render() {
+  const n = S.imgs.length, im = S.imgs[S.cur];
+  // 选中的按钮
+  $$('.chips[data-key]').forEach(box => {
+    const v = String(getK(box.dataset.key)); let hit = false;
+    box.querySelectorAll('button[data-v]').forEach(b => { const on = b.dataset.v === v; hit = hit || on; b.setAttribute('aria-pressed', on); });
+    const lab = box.querySelector('label');
+    if (lab) lab.setAttribute('aria-pressed', !hit);
+  });
+  $$('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === S.tab));
+  $('#pResize').hidden = S.tab !== 'resize';
+  $('#pCollage').hidden = S.tab !== 'collage';
+
+  // 改尺寸
+  const r = S.r;
+  $('#rowCustom').hidden = r.ratio !== 'custom';
+  $('#rowFit').hidden = r.ratio === 'orig';
+  $('#rowRBg').hidden = r.ratio === 'orig' || r.fit !== 'pad';
+  const crop = isCrop();
+  $('#rowZoom').hidden = !crop;
+  cvR.classList.toggle('grab', !!crop);
+  setVal('#rcw', r.cw); setVal('#rch', r.ch);
+  if (im) {
+    const p = planResize(im);
+    setVal('#rW', p.W); setVal('#rH', p.H);
+    if (crop) { setVal('#rZoom', Math.round(100 / im.crop.z)); $('#rZoomOut').textContent = Math.round(100 / im.crop.z) + '%'; }
+    let t = '原图 ' + im.w + '×' + im.h;
+    if (p.mode === 'crop') t += ' → 裁出 ' + p.bw + '×' + p.bh;
+    if (p.mode === 'pad') t += ' → 补成 ' + p.bw + '×' + p.bh;
+    t += ' → 存成 ' + p.W + '×' + p.H;
+    $('#rInfo').textContent = t;
+    if (p.up) addWarn('#rInfo', '比原图大，放大了会有点糊。');
+    if (p.capped) addWarn('#rInfo', '太大了，手机画不了这么大，已经自动缩小。');
+  } else { setVal('#rW', ''); setVal('#rH', ''); $('#rInfo').textContent = ''; }
+
+  // 拼图
+  const c = S.c;
+  $('#gridRows').hidden = c.layout !== 'grid';
+  $('#lineHint').textContent = c.layout === 'v' ? '每张会自动缩放到一样宽。' : c.layout === 'h' ? '每张会自动缩放到一样高。' : '';
+  $('#lineHint').hidden = c.layout === 'grid';
+  $$('.sliders input[data-key]').forEach(inp => {
+    const v = getK(inp.dataset.key);
+    if (document.activeElement !== inp) inp.value = v;
+    inp.nextElementSibling.textContent = v;
+  });
+  if (document.activeElement !== $('#cW')) $('#cW').value = c.width === 'custom' ? c.customW : '';
+  let cPlan = null;
+  if (n) {
+    cPlan = planCollage(S.imgs);
+    if (cPlan.bad) { $('#cInfo').textContent = ''; addWarn('#cInfo', '图太多、缝太宽，放不下了。把缝调小，或者成品宽度调大。'); }
+    else {
+      $('#cInfo').textContent = '成品 ' + cPlan.W + '×' + cPlan.H + '，一共 ' + n + ' 张';
+      if (cPlan.capped) addWarn('#cInfo', '太大了，手机画不了这么大，已经自动缩小。');
+      if (n === 1) addWarn('#cInfo', '现在只有一张，再放几张进来才拼得起来。');
+    }
+  } else $('#cInfo').textContent = '';
+
+  // 存
+  $('#webpChip').hidden = !WEBP_OK;
+  $('#rowQ').hidden = S.e.fmt === 'png';
+  setVal('#eQ', S.e.q); $('#eQOut').textContent = S.e.q;
+  setVal('#eMax', S.e.maxKB);
+  const busy = document.body.classList.contains('busy');
+  $('#goOne').hidden = S.tab !== 'resize';
+  $('#goAll').hidden = S.tab !== 'resize' || n < 2;
+  $('#goAll').textContent = '所有 ' + n + ' 张都这样处理';
+  $('#goC').hidden = S.tab !== 'collage';
+  $('#goOne').disabled = busy || !im;
+  $('#goAll').disabled = busy || n < 2;
+  $('#goC').disabled = busy || !n || (cPlan && cPlan.bad);
+  draw();
+}
+function setVal(sel, v) { const el = $(sel); if (document.activeElement !== el) el.value = v; }
+function addWarn(sel, t) { const s = document.createElement('span'); s.className = 'warn'; s.textContent = ' ' + t; $(sel).append(s); }
+
+/* ---------- 存图 ---------- */
+function toBlob(cv, mime, q) { return new Promise(res => cv.toBlob(res, mime, q)); }
+async function bestQuality(cv, mime, qMax, lim) {
+  const top = await toBlob(cv, mime, qMax);
+  if (top && top.size <= lim) return { blob: top, q: qMax };
+  let lo = .4, hi = qMax;
+  const low = await toBlob(cv, mime, lo);
+  if (!low || low.size > lim) return null;
+  let best = { blob: low, q: lo };
+  for (let i = 0; i < 6; i++) {
+    const m = (lo + hi) / 2, b = await toBlob(cv, mime, m);
+    if (b && b.size <= lim) { best = { blob: b, q: m }; lo = m; } else hi = m;
+  }
+  return best;
+}
+async function encode(cv, fmt) {
+  const mime = MIME[fmt], q = S.e.q / 100;
+  const lim = (+S.e.maxKB > 0) ? +S.e.maxKB * 1024 : 0;
+  const notes = [];
+  let blob = await toBlob(cv, mime, fmt === 'png' ? undefined : q);
+  if (!blob) throw new Error('toBlob');
+  let W = cv.width, H = cv.height;
+  if (blob.type && blob.type !== mime) notes.push('这个浏览器存不了 ' + FMT_NAME[fmt] + '，换成了 ' + blob.type.replace('image/', '').toUpperCase() + '。');
+  if (lim && blob.size > lim) {
+    if (fmt === 'png') notes.push('PNG 没法靠降画质变小，要压到 ' + S.e.maxKB + ' KB 以内，格式换成 JPG 再试。');
+    else {
+      let src = cv, got = null;
+      for (let t = 0; t < 7 && !got; t++) {
+        got = await bestQuality(src, mime, q, lim);
+        if (got) break;
+        const low = await toBlob(src, mime, .4);
+        const f = clamp(Math.sqrt(lim / low.size) * .95, .3, .95);
+        const c2 = canvas(Math.max(1, Math.round(src.width * f)), Math.max(1, Math.round(src.height * f)));
+        const x = c2.getContext('2d');
+        if (fmt === 'jpeg') { x.fillStyle = '#ffffff'; x.fillRect(0, 0, c2.width, c2.height); }
+        drawHQ(x, src, { x: 0, y: 0, w: src.width, h: src.height }, { x: 0, y: 0, w: c2.width, h: c2.height });
+        if (src !== cv) free(src);
+        src = c2;
+      }
+      if (got) {
+        blob = got.blob;
+        if (src.width !== W) notes.push('为了不超过 ' + S.e.maxKB + ' KB，尺寸缩到了 ' + src.width + '×' + src.height + '。');
+        else if (got.q < q - .005) notes.push('为了不超过 ' + S.e.maxKB + ' KB，画质降到了 ' + Math.round(got.q * 100) + '。');
+        W = src.width; H = src.height;
+      } else notes.push('压不到 ' + S.e.maxKB + ' KB 以内，先给你原来这张。');
+      if (src !== cv) free(src);
+    }
+  }
+  return { blob, W, H, notes };
+}
+function extOf(blob, fmt) { const t = (blob.type || '').replace('image/', ''); return t === 'jpeg' ? 'jpg' : (t || EXT[fmt]); }
+
+async function run(jobs) {
+  document.body.classList.add('busy'); render();
+  say('正在做，图大的话要等几秒…');
+  await tick();
+  const out = [], used = {};
+  try {
+    for (const job of jobs) {
+      const cv = canvas(job.W, job.H);
+      job.paint(cv.getContext('2d'));
+      const r = await encode(cv, S.e.fmt);
+      free(cv);
+      let name = job.name + '_' + r.W + 'x' + r.H;
+      used[name] = (used[name] || 0) + 1;
+      if (used[name] > 1) name += '-' + used[name];
+      name += '.' + extOf(r.blob, S.e.fmt);
+      out.push({ blob: r.blob, W: r.W, H: r.H, name, notes: r.notes, from: job.from });
+      if (jobs.length > 1) { say('做好 ' + out.length + ' / ' + jobs.length + ' 张…'); await tick(); }
+    }
+    say('');
+  } catch (e) {
+    say('这张没做出来，可能是太大了手机画不动。把像素调小一点再试试。');
+  }
+  document.body.classList.remove('busy'); render();
+  if (out.length) showResults(out);
+}
+function resizeJobs(list) {
+  const fmt = S.e.fmt;
+  return list.map(im => {
+    const p = planResize(im);
+    return { W: p.W, H: p.H, name: im.name, from: im.size,
+      paint: ctx => paintResize(ctx, im, p, p.mode === 'pad' ? bgFor(S.r.bg, fmt) : (fmt === 'jpeg' ? '#ffffff' : null), true) };
+  });
+}
+
+function showResults(list) {
+  results.forEach(r => URL.revokeObjectURL(r.url));
+  results = list.map(r => Object.assign(r, { url: URL.createObjectURL(r.blob), file: new File([r.blob], r.name, { type: r.blob.type }) }));
+  const box = $('#results'); box.textContent = '';
+  const top = document.createElement('div'); top.className = 'res-top';
+  const b = document.createElement('b'); b.textContent = '做好了' + (results.length > 1 ? '，一共 ' + results.length + ' 张' : '');
+  top.append(b);
+  if (results.length > 1) {
+    const acts = document.createElement('div'); acts.className = 'res-act'; acts.style.margin = '0';
+    if (SHARE_OK) acts.append(mkBtn('全部存到相册', () => share(results)));
+    acts.append(mkBtn('全部下载', downloadAll));
+    top.append(acts);
+  }
+  box.append(top);
+  results.forEach(r => {
+    const card = document.createElement('div'); card.className = 'res';
+    const img = document.createElement('img'); img.src = r.url; img.alt = r.name;
+    const meta = document.createElement('div'); meta.className = 'res-meta';
+    const nm = document.createElement('b'); nm.textContent = r.name;
+    let line = r.W + '×' + r.H + ' · ' + kb(r.blob.size);
+    if (r.from) line += '（原来 ' + kb(r.from) + '）';
+    meta.append(nm, document.createTextNode(line));
+    r.notes.forEach(t => { const s = document.createElement('div'); s.className = 'warn'; s.textContent = t; meta.append(s); });
+    const act = document.createElement('div'); act.className = 'res-act';
+    if (SHARE_OK) act.append(mkBtn('存到相册 / 发出去', () => share([r]), true));
+    const a = document.createElement('a'); a.className = 'btn sub'; a.href = r.url; a.download = r.name; a.textContent = '下载';
+    act.append(a);
+    card.append(img, meta, act); box.append(card);
+  });
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function mkBtn(t, fn, main) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn ' + (main ? 'main' : 'sub'); b.textContent = t;
+  b.addEventListener('click', fn); return b;
+}
+function share(list) {
+  navigator.share({ files: list.map(r => r.file) }).catch(e => {
+    if (e && e.name !== 'AbortError') say('这里分享不了，长按图片存，或者点「下载」。');
+  });
+}
+async function downloadAll() {
+  for (const r of results) {
+    const a = document.createElement('a'); a.href = r.url; a.download = r.name;
+    document.body.append(a); a.click(); a.remove();
+    await new Promise(res => setTimeout(res, 350));
+  }
+}
+
+/* ---------- 事件 ---------- */
+$('#file').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+const drop = $('#drop');
+document.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classList.remove('over'); });
+document.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer) addFiles(e.dataTransfer.files); });
+document.addEventListener('paste', e => {
+  const files = e.clipboardData ? Array.from(e.clipboardData.files || []) : [];
+  if (files.length) { e.preventDefault(); addFiles(files); }
+});
+$('#clearAll').addEventListener('click', () => {
+  S.imgs.forEach(im => { URL.revokeObjectURL(im.url); free(im.prev); free(im.thumb); });
+  S.imgs = []; S.cur = 0; renderTray(); render();
+});
+$('#tray').addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'), t = e.target.closest('.thumb');
+  if (!el || !t) return;
+  const i = +t.dataset.i;
+  if (el.dataset.act === 'pick') { S.cur = i; renderTray(); render(); }
+  else if (el.dataset.act === 'left') moveImg(i, -1);
+  else if (el.dataset.act === 'right') moveImg(i, 1);
+  else if (el.dataset.act === 'del') removeImg(i);
+});
+$$('.tabs button').forEach(b => b.addEventListener('click', () => { S.tab = b.dataset.tab; renderTray(); render(); }));
+document.addEventListener('click', e => {
+  const b = e.target.closest('.chips[data-key] button[data-v]');
+  if (!b) return;
+  setK(b.closest('.chips').dataset.key, b.dataset.v);
+  render();
+});
+$$('.sliders input[data-key]').forEach(inp => inp.addEventListener('input', () => { setK(inp.dataset.key, +inp.value); render(); }));
+$('#rcw').addEventListener('input', e => { S.r.cw = e.target.value; render(); });
+$('#rch').addEventListener('input', e => { S.r.ch = e.target.value; render(); });
+$('#rW').addEventListener('input', e => {
+  const v = Math.round(+e.target.value); if (!(v > 0)) return;
+  S.r.size = 'custom'; S.r.customW = v; render();
+});
+$('#rH').addEventListener('input', e => {
+  const v = Math.round(+e.target.value), im = S.imgs[S.cur]; if (!(v > 0) || !im) return;
+  S.r.size = 'custom'; S.r.customW = Math.max(1, Math.round(v * ratioA(im))); render();
+});
+['#rW', '#rH', '#cW', '#rcw', '#rch', '#eMax'].forEach(s => $(s).addEventListener('blur', () => render()));
+$('#rZoom').addEventListener('input', e => {
+  const im = S.imgs[S.cur]; if (!im) return; im.crop.z = 100 / +e.target.value; render();
+});
+$('#rCenter').addEventListener('click', () => { const im = S.imgs[S.cur]; if (im) { im.crop = { cx: .5, cy: .5, z: 1 }; render(); } });
+$('#cW').addEventListener('input', e => {
+  const v = Math.round(+e.target.value); if (!(v >= 50)) return;
+  S.c.width = 'custom'; S.c.customW = v; render();
+});
+$('#eQ').addEventListener('input', e => { S.e.q = +e.target.value; render(); });
+$('#eMax').addEventListener('input', e => { S.e.maxKB = e.target.value; });
+$('#goOne').addEventListener('click', () => { const im = S.imgs[S.cur]; if (im) run(resizeJobs([im])); });
+$('#goAll').addEventListener('click', () => run(resizeJobs(S.imgs)));
+$('#goC').addEventListener('click', () => {
+  const plan = planCollage(S.imgs); if (plan.bad) return;
+  const fmt = S.e.fmt;
+  run([{ W: plan.W, H: plan.H, name: '拼图', from: 0, paint: ctx => paintCollage(ctx, plan, bgFor(S.c.bg, fmt), true) }]);
+});
+window.addEventListener('resize', draw);
+
+buildColorChips();
+renderTray();
+render();
+})();
+</script>
+</body>
+</html>
