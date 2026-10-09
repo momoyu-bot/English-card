@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>截图别拼糊</title>
+  <meta name="description" content="按模型真正会缩小到的尺寸，算一张里最多接几张。" />
+  <style>
+    :root {
+      --bg: #f6f1e8;
+      --ink: #2c2824;
+      --muted: #7a7168;
+      --card: #fffdf8;
+      --line: #e6dccf;
+      --ok: #2f6f4e;
+      --warn: #9a5b12;
+      --bad: #9c3b32;
+      --accent: #e2552b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Iowan Old Style", "Songti SC", "Source Han Serif SC", serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 28px 18px 64px; }
+    h1 { font-size: 28px; margin: 0 0 6px; font-weight: 600; }
+    .sub { color: var(--muted); margin: 0 0 18px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+    .drop {
+      border: 1.5px dashed #d7cbbd;
+      border-radius: 16px;
+      padding: 28px 16px;
+      text-align: center;
+      background: #fbf7f1;
+      cursor: pointer;
+    }
+    .drop.over { background: #fff4ea; border-color: var(--accent); }
+    button, .filebtn {
+      font: inherit;
+      border: 0;
+      background: var(--ink);
+      color: #fff;
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button.ghost { background: #efe7dc; color: var(--ink); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .note { color: var(--muted); font-size: 14px; }
+    .shots { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+    .shots img { height: 120px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+    label { font-size: 14px; color: var(--muted); }
+    select { font: inherit; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>截图别拼糊</h1>
+  <p class="sub">手机原图先别接。接之前看模型缩小之后，每张还剩多宽。</p>
+
+  <div class="card drop" id="drop">
+    <div>把截图拖进来，或点这里选</div>
+    <div class="note" style="margin-top:8px">按文件名里的数字排，片段 2 会排在片段 10 前面</div>
+    <input id="picker" type="file" accept="image/*" multiple hidden />
+  </div>
+
+  <div class="card" id="summary" hidden>
+    <div class="row" style="justify-content:space-between">
+      <div id="count"></div>
+      <div class="row">
+        <label>对照谁</label>
+        <select id="who">
+          <option value="claude-new">Claude 新（长边 2576，约 375 万像素）</option>
+          <option value="claude-old">Claude 旧（长边 1568，约 123 万像素）</option>
+          <option value="gemini">Gemini（单页尽量别过 3072）</option>
+        </select>
+      </div>
+    </div>
+    <div class="shots" id="thumbs"></div>
+    <table>
+      <thead>
+        <tr><th>接法</th><th>成品大约</th><th>模型看见时，每张还剩</th><th>字</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="note" id="advice"></p>
+    <div class="row">
+      <button id="exportOne" disabled>按原图逐张存，名字补零</button>
+      <button id="exportPair" class="ghost" disabled>只横排两张一组</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <strong>这页用的数</strong>
+    <p class="note">Claude 上传硬上限是 8000×8000，再大可能直接拒。可它真正看的时候会先缩小：新模型长边 2576、视觉块大约 4784 个；旧模型长边 1568。你这种 1206×2622 的原图，一张就快把新模型的额度用满。竖着接两张，宽度会掉到六百上下，气泡还勉强，书页里的小字容易错。三张就别接。</p>
+    <p class="note">Gemini 网页一次十个文件。文档页会缩到 3072 见方里。截图要清楚，就一页一张，别为了少传几次把六张焊成一条。</p>
+    <p class="note">存 PNG。JPG 会在字边上起方块，拼给模型读更亏。</p>
+  </div>
+</main>
+<script>
+const drop = document.getElementById("drop");
+const picker = document.getElementById("picker");
+const summary = document.getElementById("summary");
+const who = document.getElementById("who");
+let items = [];
+
+const limits = {
+  "claude-new": { edge: 2576, area: 3750000, name: "Claude 新" },
+  "claude-old": { edge: 1568, area: 1230000, name: "Claude 旧" },
+  gemini: { edge: 3072, area: 3072 * 3072, name: "Gemini" }
+};
+
+function numKey(name) {
+  const m = String(name).match(/(\d+)/g);
+  return m ? m.map(n => n.padStart(6, "0")).join("-") : name;
+}
+
+drop.onclick = () => picker.click();
+picker.onchange = () => take(picker.files);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); take(e.dataTransfer.files); };
+who.onchange = render;
+
+function take(files) {
+  const list = [...files].filter(f => f.type.startsWith("image/"));
+  if (!list.length) return;
+  items = [];
+  let left = list.length;
+  list.forEach(file => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      items.push({ file, img, url, w: img.naturalWidth, h: img.naturalHeight });
+      if (--left === 0) {
+        items.sort((a, b) => numKey(a.file.name).localeCompare(numKey(b.file.name)));
+        summary.hidden = false;
+        render();
+      }
+    };
+    img.src = url;
+  });
+}
+
+function seen(w, h, lim) {
+  const scale = Math.min(1, lim.edge / Math.max(w, h), Math.sqrt(lim.area / (w * h)));
+  return { scale, w: Math.round(w * scale), h: Math.round(h * scale) };
+}
+
+function judge(widthLeft, origW) {
+  const ratio = widthLeft / origW;
+  if (ratio >= 0.9) return ["ok", "清楚"];
+  if (ratio >= 0.7) return ["warn", "气泡还行，书页小字危险"];
+  return ["bad", "容易看错"];
+}
+
+function render() {
+  const lim = limits[who.value];
+  const n = items.length;
+  document.getElementById("count").textContent = n + " 张，已按数字排好";
+  const thumbs = document.getElementById("thumbs");
+  thumbs.innerHTML = "";
+  items.slice(0, 12).forEach(it => {
+    const el = document.createElement("img");
+    el.src = it.url;
+    el.title = it.file.name + "  " + it.w + "×" + it.h;
+    thumbs.appendChild(el);
+  });
+  const sample = items[0];
+  const plans = [
+    ["不接，一张一张", sample.w, sample.h, 1],
+    ["横排 2 张", sample.w * 2, sample.h, 2],
+    ["竖接 2 张", sample.w, sample.h * 2, 2],
+    ["竖接 3 张", sample.w, sample.h * 3, 3],
+    ["横排 6 张", sample.w * 6, sample.h, 6]
+  ];
+  const rows = document.getElementById("rows");
+  rows.innerHTML = "";
+  plans.forEach(([label, w, h, each]) => {
+    const s = seen(w, h, lim);
+    const eachW = Math.round(s.w / (label.startsWith("横") ? each : 1));
+    const [cls, word] = judge(eachW, sample.w);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${label}</td><td>${w}×${h}</td><td>宽 ${eachW}</td><td class="${cls}">${word}</td>`;
+    rows.appendChild(tr);
+  });
+  document.getElementById("advice").textContent =
+    "以第一张 " + sample.w + "×" + sample.h + " 估算。超过 8000 的边可能被拒，单张也别压过大约 10MB。要回顾，优先逐张 PNG。";
+  document.getElementById("exportOne").disabled = false;
+  document.getElementById("exportPair").disabled = items.length < 2;
+}
+
+function padName(i) {
+  return String(i + 1).padStart(2, "0") + ".png";
+}
+
+function canvasOf(w, h) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  return c;
+}
+
+function saveCanvas(c, name) {
+  c.toBlob(blob => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+  }, "image/png");
+}
+
+document.getElementById("exportOne").onclick = () => {
+  items.forEach((it, i) => {
+    const c = canvasOf(it.w, it.h);
+    c.getContext("2d").drawImage(it.img, 0, 0);
+    setTimeout(() => saveCanvas(c, padName(i)), i * 250);
+  });
+};
+
+document.getElementById("exportPair").onclick = () => {
+  let group = 1;
+  for (let i = 0; i < items.length; i += 2) {
+    const a = items[i];
+    const b = items[i + 1];
+    if (!b) {
+      const c = canvasOf(a.w, a.h);
+      c.getContext("2d").drawImage(a.img, 0, 0);
+      saveCanvas(c, "横排" + String(group).padStart(2, "0") + "-单张.png");
+    } else {
+      const h = Math.max(a.h, b.h);
+      const c = canvasOf(a.w + b.w, h);
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(a.img, 0, 0);
+      ctx.drawImage(b.img, a.w, 0);
+      saveCanvas(c, "横排" + String(group).padStart(2, "0") + ".png");
+    }
+    group += 1;
+  }
+};
+</script>
+</body>
+</html>
