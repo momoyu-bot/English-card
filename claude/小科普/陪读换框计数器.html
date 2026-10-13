@@ -1,0 +1,624 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>陪读换框计数器</title>
+<meta name="description" content="拍了几页、聊了几轮，算算这一框还能装多少，四个陪读搭子都能用">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap&text=陪读换框计数器这一到现在什么时候该交接小纸条脸蛋单线程数字从哪来ClaudeGeminiGrok">
+<style>
+/* Layout：书桌俯视。顶上四枚书签切换陪读搭子；中间一条「桌面」量这一框装了多少；往下是记数、换框信号和交接小纸条。 */
+:root{
+  --bg:#ECEFE8;
+  --surface:#FAFBF7;
+  --ink:#1E2520;
+  --muted:#5D685F;
+  --line:#D3DACF;
+  --desk:#E1E6DC;
+  --c-claude:#B4572F;
+  --c-gemini:#3A60C4;
+  --c-grok:#3B4148;
+  --c-face:#C44A7B;
+  --ok:#3C7653;
+  --warn:#8F5E0B;
+  --alert:#B0433A;
+  --accent:var(--c-claude);
+  --font-display:"ZCOOL KuaiLe", ui-rounded, "SF Pro Rounded", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  --font-body:ui-rounded, "SF Pro Rounded", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  --font-num:ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "PingFang SC", sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121613; --surface:#1A1F1B; --ink:#E4E9E2; --muted:#9AA59C; --line:#2D352F; --desk:#252C27;
+    --c-claude:#E08A61; --c-gemini:#8DA6F2; --c-grok:#C2CAD1; --c-face:#F08DB5;
+    --ok:#73B98F; --warn:#E2AE52; --alert:#E58275;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121613; --surface:#1A1F1B; --ink:#E4E9E2; --muted:#9AA59C; --line:#2D352F; --desk:#252C27;
+  --c-claude:#E08A61; --c-gemini:#8DA6F2; --c-grok:#C2CAD1; --c-face:#F08DB5;
+  --ok:#73B98F; --warn:#E2AE52; --alert:#E58275;
+  color-scheme:dark;
+}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.65;-webkit-text-size-adjust:100%}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+
+.wrap{max-width:600px;margin-inline:auto;padding-inline:16px;padding-block-start:max(56px, calc(env(safe-area-inset-top, 0px) + 28px));padding-block-end:48px;display:flex;flex-direction:column;gap:18px}
+.wrap[data-plat="claude"]{--accent:var(--c-claude)}
+.wrap[data-plat="gemini"]{--accent:var(--c-gemini)}
+.wrap[data-plat="grok"]{--accent:var(--c-grok)}
+.wrap[data-plat="face"]{--accent:var(--c-face)}
+
+.head h1{font-family:var(--font-display);font-weight:400;font-size:clamp(30px,8vw,38px);line-height:1.2;margin:0;letter-spacing:.03em;text-wrap:balance}
+.head p{margin:6px 0 0;color:var(--muted);font-size:15px}
+.stamp{display:inline-block;margin-top:10px;font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:6px;padding:2px 8px;font-variant-numeric:tabular-nums}
+
+/* 书签 */
+.marks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:start;margin-block-end:-6px}
+.mark{--m:var(--c-claude);appearance:none;margin:0;cursor:pointer;font:inherit;color:var(--ink);background:var(--surface);border:0;border-top:3px solid var(--m);padding:8px 4px 20px;min-height:66px;display:flex;flex-direction:column;align-items:center;clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 10px),0 100%);transition:transform .2s ease,background-color .2s ease,color .2s ease}
+.mark[data-p="gemini"]{--m:var(--c-gemini)}
+.mark[data-p="grok"]{--m:var(--c-grok)}
+.mark[data-p="face"]{--m:var(--c-face)}
+.mark b{font-family:var(--font-display);font-weight:400;font-size:17px;line-height:1.3}
+.mark small{font-size:11px;color:var(--muted);line-height:1.4}
+.mark[aria-pressed="true"]{background:var(--m);color:var(--surface);transform:translateY(6px)}
+.mark[aria-pressed="true"] small{color:color-mix(in srgb,var(--surface) 82%,var(--m))}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 16px}
+h2{font-family:var(--font-display);font-weight:400;font-size:20px;margin:0;line-height:1.3}
+.h2row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ex{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:2px 9px;white-space:nowrap}
+
+/* 桌面 */
+.desk-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.kicker{font-size:12px;color:var(--muted);letter-spacing:.14em}
+.big{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:clamp(28px,8.5vw,38px);font-weight:650;line-height:1.15;letter-spacing:-.01em}
+.big small{display:block;margin-top:4px;font-size:14px;font-weight:500;color:var(--muted);letter-spacing:0}
+.pill{--tone:var(--ok);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;line-height:1;padding:7px 11px;border-radius:999px;color:var(--tone);background:color-mix(in srgb,var(--tone) 13%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 32%,var(--surface))}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill[data-tone="mid"]{--tone:var(--accent)}
+.pill[data-tone="warn"]{--tone:var(--warn)}
+.pill[data-tone="alert"]{--tone:var(--alert)}
+
+.bar{position:relative;display:flex;height:26px;margin-block-start:16px;border-radius:7px;overflow:hidden;background-color:var(--desk);background-image:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),color-mix(in srgb,var(--line) 85%,var(--desk)) calc(10% - 1px) 10%);box-shadow:inset 0 0 0 1px var(--line)}
+.seg{display:block;height:100%;width:0;flex:none;transition:width .35s ease}
+.seg.boot{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--muted) 52%,var(--surface)) 0 5px,color-mix(in srgb,var(--muted) 32%,var(--surface)) 5px 10px)}
+.seg.img{background:var(--accent)}
+.seg.chat{background:color-mix(in srgb,var(--accent) 50%,var(--surface))}
+.seg.extra{background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--accent) 38%,var(--surface)) 0 3px,color-mix(in srgb,var(--accent) 16%,var(--surface)) 3px 6px)}
+.soft{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--warn)}
+.scale{position:relative;height:18px;margin-top:4px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.scale span{position:absolute;top:0;white-space:nowrap}
+.scale .s0{left:0}
+.scale .s1{right:0}
+.scale .sm{transform:translateX(-50%);color:var(--warn)}
+
+.legend{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.legend li{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+.dot.boot{background:color-mix(in srgb,var(--muted) 45%,var(--surface))}
+.dot.img{background:var(--accent)}
+.dot.chat{background:color-mix(in srgb,var(--accent) 50%,var(--surface))}
+.dot.extra{background:color-mix(in srgb,var(--accent) 28%,var(--surface))}
+.dot.free{background:var(--desk);box-shadow:inset 0 0 0 1px var(--line)}
+
+.pages{display:flex;flex-wrap:wrap;gap:3px;margin-block-start:14px;min-height:14px;align-items:center}
+.pg{display:block;width:9px;height:12px;border-radius:1.5px;background:color-mix(in srgb,var(--accent) 16%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 50%,var(--surface))}
+.pg.shot{width:6px;height:13px;border-radius:2px}
+.more{font-size:12px;color:var(--muted);margin-left:4px;font-variant-numeric:tabular-nums}
+
+.left{margin:12px 0 0;font-size:15px}
+.left b{font-family:var(--font-num);font-size:19px;color:var(--accent);font-variant-numeric:tabular-nums}
+.cap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:center;margin-block-start:12px;font-size:13px;color:var(--muted)}
+.cap b{color:var(--ink);font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.capbar{height:6px;border-radius:3px;background:var(--desk);overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.capbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .35s ease}
+.cap small{grid-column:1/-1;font-size:12px}
+.note{margin:12px 0 0;font-size:13px;color:var(--muted)}
+
+/* 记数 */
+.inputs{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;border-bottom:1px solid var(--line)}
+.row:last-of-type{border-bottom:0}
+.row.col{flex-direction:column;align-items:stretch;gap:8px}
+.row label,.lab{display:flex;flex-direction:column;font-size:15px;min-width:0}
+.row small,.lab small{font-size:12px;color:var(--muted)}
+.step{display:flex;align-items:center;flex:none;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg)}
+.step button{appearance:none;border:0;margin:0;background:transparent;color:var(--ink);font:inherit;font-size:20px;line-height:1;width:42px;height:40px;cursor:pointer}
+.step button:active{background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
+.step input{width:58px;height:40px;border:0;border-inline:1px solid var(--line);border-radius:0;background:var(--surface);color:var(--ink);text-align:center;font-family:var(--font-num);font-size:17px;font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield}
+.step input::-webkit-inner-spin-button,.step input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.step.solo input{width:132px;border:0;font-size:15px}
+.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+#win{grid-template-columns:repeat(2,minmax(0,1fr))}
+.chips button{appearance:none;margin:0;font:inherit;cursor:pointer;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;font-size:15px;line-height:1.4}
+.chips button small{font-size:11px;color:var(--muted)}
+.chips button[aria-checked="true"],.chips button[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface));box-shadow:inset 0 0 0 1px var(--accent)}
+.foot-row{display:flex;align-items:center;gap:12px;margin-block-start:14px;flex-wrap:wrap}
+.reset{appearance:none;margin:0;font:inherit;font-size:14px;color:var(--muted);background:transparent;border:1px dashed var(--line);border-radius:9px;padding:9px 14px;cursor:pointer}
+#reset-st{font-size:13px;color:var(--muted)}
+
+/* 信号 */
+.axis{font-size:15px;margin:10px 0 0}
+.sig,.face ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.sig li,.face li{position:relative;padding-left:20px;font-size:15px}
+.sig li::before,.face li::before{content:"";position:absolute;left:3px;top:.6em;width:7px;height:7px;border-radius:1.5px;background:var(--accent);transform:rotate(45deg)}
+.face p{margin:10px 0 0;font-size:15px}
+
+/* 小纸条 */
+.hint{margin:6px 0 0;font-size:14px;color:var(--muted)}
+.fields{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 12px;align-items:center;margin-block-start:14px}
+.fields > label,.fields > .lab{font-size:14px;color:var(--muted)}
+.fields input,.fields textarea{font:inherit;font-size:15px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0;width:100%}
+.fields textarea{resize:vertical;line-height:1.6}
+.rules{display:flex;flex-wrap:wrap;gap:8px}
+.rules button{flex-direction:row;padding:6px 11px;font-size:14px}
+.slip{margin:18px 0 0;white-space:pre-wrap;word-break:break-word;font-family:var(--font-body);font-size:15px;line-height:1.8;color:var(--ink);padding:22px 16px 14px;border-radius:3px;position:relative;
+  background-color:color-mix(in srgb,var(--accent) 5%,var(--surface));
+  background-image:repeating-linear-gradient(180deg,transparent 0 calc(1.8em - 1px),color-mix(in srgb,var(--line) 75%,transparent) calc(1.8em - 1px) 1.8em);
+  background-origin:content-box;
+  box-shadow:0 0 0 1px var(--line)}
+.slip::before{content:"";position:absolute;left:0;right:0;top:-1px;height:9px;background:radial-gradient(circle at 7px 0,var(--surface) 3.5px,transparent 4px) 0 0/14px 9px repeat-x}
+.actions{display:flex;align-items:center;gap:12px;margin-block-start:12px;flex-wrap:wrap}
+.primary{appearance:none;margin:0;font:inherit;font-size:15px;cursor:pointer;border:0;border-radius:9px;padding:10px 16px;background:var(--accent);color:var(--surface)}
+#copied{font-size:13px;color:var(--muted)}
+
+/* 出处 */
+.src summary{cursor:pointer;font-family:var(--font-display);font-size:19px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.src summary::-webkit-details-marker{display:none}
+.src summary::after{content:"＋";color:var(--muted);font-family:var(--font-body)}
+.src[open] summary::after{content:"－"}
+.src ul{margin:12px 0 0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:8px}
+.src a{color:var(--accent);text-underline-offset:3px;word-break:break-word}
+.foot{font-size:12px;color:var(--muted);text-align:center;margin:0}
+
+button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:420px){.fields{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap" id="app" data-plat="claude">
+  <header class="head">
+    <h1>陪读换框计数器</h1>
+    <p>拍了几页、聊了几轮，这一框的桌子还剩多少。</p>
+    <span class="stamp">数字核对于 2026-10-13</span>
+  </header>
+
+  <nav class="marks" aria-label="选陪读搭子">
+    <button class="mark" type="button" id="tab-claude" data-p="claude" aria-pressed="true"><b>Claude</b><small>大回顾</small></button>
+    <button class="mark" type="button" id="tab-gemini" data-p="gemini" aria-pressed="false"><b>Gemini</b><small>白天主搭</small></button>
+    <button class="mark" type="button" id="tab-grok" data-p="grok" aria-pressed="false"><b>Grok</b><small>查证位</small></button>
+    <button class="mark" type="button" id="tab-face" data-p="face" aria-pressed="false"><b>小脸蛋</b><small>初读</small></button>
+  </nav>
+
+  <section class="card desk" id="desk">
+    <div class="desk-top">
+      <div>
+        <div class="kicker">桌上</div>
+        <div class="big"><span id="d-num">约 30 万</span><small id="d-win">/ 100 万</small></div>
+      </div>
+      <span class="pill" id="d-pill" data-tone="ok">还很空</span>
+    </div>
+    <div class="bar" id="bar" role="img" aria-label="桌面用量">
+      <i class="seg boot" id="s-boot"></i><i class="seg img" id="s-img"></i><i class="seg chat" id="s-chat"></i><i class="seg extra" id="s-extra"></i>
+      <i class="soft" id="s-soft" hidden></i>
+    </div>
+    <div class="scale"><span class="s0">0</span><span class="sm" id="sc-soft" hidden>遗忘线 20 万</span><span class="s1" id="sc-max">100 万</span></div>
+    <ul class="legend" id="legend"></ul>
+    <div class="pages" id="pages" aria-hidden="true"></div>
+    <p class="left" id="d-left"></p>
+    <div class="cap" id="cap" hidden>
+      <span>图片名额 <b id="cap-n">0 / 100</b></span><span class="capbar"><i id="cap-fill"></i></span>
+      <small>每框 100 张是第三方实测，合并之后可能变了。</small>
+    </div>
+    <p class="note" id="d-note"></p>
+  </section>
+
+  <section class="card face" id="face" hidden>
+    <h2>小脸蛋单线程</h2>
+    <p>一只脸蛋一个对话，换不了框，所以这里不数桌子。</p>
+    <ul>
+      <li>它记住的是偏好、角色和过往工作的摘要，原图放在三只共用的那台云电脑上。前面的细节会慢慢变成摘要。</li>
+      <li>它也会说错。怀疑它的时候，拉 Gemini 或 Grok 交叉问一句。</li>
+      <li>还悬着的问题记进下面的小纸条，留给大回顾。</li>
+    </ul>
+  </section>
+
+  <section class="card inputs" id="inputs">
+    <div class="h2row"><h2>这一框到现在</h2><span class="ex" id="ex-counts">示例数字</span></div>
+    <div class="row">
+      <label for="n-photos">拍的书页<small>相机拍的照片</small></label>
+      <div class="step"><button type="button" data-k="photos" data-d="-1" aria-label="少一页">−</button><input id="n-photos" data-k="photos" type="number" inputmode="numeric" min="0" step="1"><button type="button" data-k="photos" data-d="1" aria-label="多一页">＋</button></div>
+    </div>
+    <div class="row">
+      <label for="n-shots">截图<small>手机截屏</small></label>
+      <div class="step"><button type="button" data-k="shots" data-d="-1" aria-label="少一张截图">−</button><input id="n-shots" data-k="shots" type="number" inputmode="numeric" min="0" step="1"><button type="button" data-k="shots" data-d="1" aria-label="多一张截图">＋</button></div>
+    </div>
+    <div class="row">
+      <label for="n-rounds">聊了几轮<small>一问一答算一轮</small></label>
+      <div class="step"><button type="button" data-k="rounds" data-d="-1" aria-label="少一轮">−</button><input id="n-rounds" data-k="rounds" type="number" inputmode="numeric" min="0" step="1"><button type="button" data-k="rounds" data-d="1" aria-label="多一轮">＋</button></div>
+    </div>
+    <div class="row col">
+      <span class="lab">每轮大概多长</span>
+      <div class="chips" id="len" role="radiogroup" aria-label="每轮大概多长">
+        <button type="button" role="radio" data-len="short" id="len-short">短<small>一两句</small></button>
+        <button type="button" role="radio" data-len="mid" id="len-mid">中<small>几百字</small></button>
+        <button type="button" role="radio" data-len="long" id="len-long">长<small>长回复＋长思考</small></button>
+      </div>
+    </div>
+    <div class="row">
+      <label for="n-extra">另外的资料<small>联网、翻记忆、传长文件，按万 token 填</small></label>
+      <div class="step"><button type="button" data-k="extra" data-d="-1" aria-label="少一万">−</button><input id="n-extra" data-k="extra" type="number" inputmode="decimal" min="0" step="1"><button type="button" data-k="extra" data-d="1" aria-label="多一万">＋</button></div>
+    </div>
+    <div class="row only" data-only="claude">
+      <label for="n-actual">问过 Claude 的实数<small>填了就按实数算，单位万 token</small></label>
+      <div class="step solo"><input id="n-actual" type="number" inputmode="decimal" min="0" step="0.1" placeholder="没问过就空着"></div>
+    </div>
+    <div class="row col only" data-only="grok">
+      <span class="lab">按多大的桌子算<small>app 每个对话给多少，官方没写</small></span>
+      <div class="chips" id="win" role="radiogroup" aria-label="按多大的桌子算">
+        <button type="button" role="radio" data-win="500000" id="win-50">50 万<small>模型本身</small></button>
+        <button type="button" role="radio" data-win="200000" id="win-20">20 万<small>保守算</small></button>
+      </div>
+    </div>
+    <div class="foot-row"><button type="button" class="reset" id="reset">清零，开新框</button><span id="reset-st" role="status"></span></div>
+  </section>
+
+  <section class="card signals" id="signals">
+    <h2>什么时候该换框</h2>
+    <p class="axis">换框有两种理由。<b>桌子装不下</b>，上面那条能算；<b>它被自己说过的话带偏</b>，这个算不出来，要靠你的感觉和下面这些信号。</p>
+    <ul class="sig" data-for="claude">
+      <li>我说「这一框整理过一次了」，就是自动压缩了。先看问题：要回扣前面细节的，让我回去翻原图和聊天记录；只问这一页的，不受影响。</li>
+      <li>图片快到 100 张，换。</li>
+      <li>你觉得我开始记错前面的页，换。</li>
+      <li>想要准数，就问我「现在用了多少」，把答案填进上面的实数。</li>
+    </ul>
+    <ul class="sig" data-for="gemini" hidden>
+      <li>它拿自己的推论压过原文、你指出来它还绕回去，当场换。新框第一句就把范围钉死：只许用读过的部分。</li>
+      <li>每读二三十页问它一句「这一框第一页讲了什么，我立的规矩是什么」，答不准就换。</li>
+      <li>它压缩了也不会说，别等它提醒。</li>
+    </ul>
+    <ul class="sig" data-for="grok" hidden>
+      <li>看到 Summarizing，准备换。</li>
+      <li>弹出「对话过长，模型无法继续。请开始新对话」，只能换。</li>
+      <li>它单轮查证强、回扣前文弱，开新框几乎没有损失。</li>
+    </ul>
+  </section>
+
+  <section class="card slipcard">
+    <div class="h2row"><h2>交接小纸条</h2><span class="ex" id="ex-slip">示例</span></div>
+    <p class="hint">换框时把它贴进新对话的第一句，新框就知道从哪接着读。</p>
+    <div class="fields">
+      <label for="s-book">书</label><input id="s-book" type="text" autocomplete="off">
+      <label for="s-at">读到哪</label><input id="s-at" type="text" autocomplete="off">
+      <span class="lab">规矩</span>
+      <div class="chips rules" id="rules">
+        <button type="button" data-rule="nospoil" id="r-nospoil">不剧透</button>
+        <button type="button" data-rule="guess" id="r-guess">猜的标「我猜」</button>
+        <button type="button" data-rule="readonly" id="r-readonly">只用我读过的部分</button>
+        <button type="button" data-rule="quote" id="r-quote">原文最多带一两句</button>
+        <button type="button" data-rule="say" id="r-say">对不上就直说</button>
+      </div>
+      <label for="s-qs">悬着的问题<small>一行一个</small></label><textarea id="s-qs" rows="3"></textarea>
+    </div>
+    <pre class="slip" id="slip"></pre>
+    <div class="actions"><button type="button" class="primary" id="copy">复制小纸条</button><span id="copied" role="status"></span></div>
+  </section>
+
+  <details class="card src" id="src">
+    <summary>数字从哪来</summary>
+    <ul>
+      <li>Claude 聊天的桌子：Opus 5.5 是 100 万 token，接近上限会自动把前面整理成摘要。<a href="https://support.claude.com/en/articles/8606394-how-large-is-the-context-window-on-paid-claude-plans" target="_blank" rel="noopener">帮助中心</a></li>
+      <li>Claude 给图算 token：每 28×28 像素一格，新模型每张最多 4,784 格。照片 3024×4032 约 4,740，截图 1206×2622 约 3,956；压到 2000 像素以内时分别约 3,888 和 2,376。<a href="https://platform.claude.com/docs/en/build-with-claude/vision" target="_blank" rel="noopener">开发文档</a></li>
+      <li>每条消息最多 20 张图是开发文档写的；每框 100 张是第三方实测。<a href="https://plenvo.ai/blog/claude-ai-upload-limits-explained" target="_blank" rel="noopener">第三方测试</a></li>
+      <li>开局约 18 万、中文约 1.4 token 一个字、Claude 的思考会留在桌上：2026-10-13 在一个真实的 Claude 对话里读用量记录量出来的。</li>
+      <li>每轮多长：短约 1,000，中约 3,000，长约 8,000 token，按上面那个中文换算估的，长的那档算进了思考。</li>
+      <li>Gemini：AI Pro 和 Ultra 是 100 万，每张图默认按 1,120 算；20 万的遗忘线是用户反映，不是官方数字。<a href="https://support.google.com/gemini/answer/16275805" target="_blank" rel="noopener">帮助中心</a> · <a href="https://ai.google.dev/gemini-api/docs/media-resolution" target="_blank" rel="noopener">图片 token</a> · <a href="https://www.androidauthority.com/gemini-start-forgetting-context-window-3674304/" target="_blank" rel="noopener">用户反映</a></li>
+      <li>Grok：grok-4.7 模型本身是 50 万；每张图封顶 1,792 是旧版官方说明；app 每个对话给多少，官方没写。<a href="https://docs.x.ai/developers/grok-4-7" target="_blank" rel="noopener">模型说明</a> · <a href="https://docs.x.ai/grok/faq" target="_blank" rel="noopener">app 常见问题</a></li>
+      <li>小脸蛋：Bot 记住的是偏好和过往工作的摘要，文件放在共用的云电脑上。<a href="https://docs.x.ai/grok-bot/overview" target="_blank" rel="noopener">Grok Bot 说明</a></li>
+    </ul>
+  </details>
+
+  <p class="foot">数只记在这台设备的浏览器里，换手机不会带过去。</p>
+</div>
+
+<script>
+(() => {
+  const ROUND = { short: 1000, mid: 3000, long: 8000 };
+  const LEN_NAME = { short: '短', mid: '中', long: '长' };
+  const PLAT = {
+    claude: { boot: 180000, win: 1000000, photo: [3888, 4740], shot: [2376, 3956], cap: 100 },
+    gemini: { boot: 0, win: 1000000, soft: 200000, photo: [1120, 1120], shot: [1120, 1120] },
+    grok:   { boot: 0, win: 500000, photo: [1792, 1792], shot: [1792, 1792], pickWin: true },
+    face:   { single: true }
+  };
+  const RULES = [
+    ['nospoil', '不剧透'],
+    ['guess', '猜的标「我猜」'],
+    ['readonly', '只用我读过的部分'],
+    ['quote', '原文最多带一两句'],
+    ['say', '对不上就直说']
+  ];
+  const NOTE = {
+    claude: r => r.actual
+      ? '用的是你问来的实数。书页和聊天只用来估往后每页有多重。'
+      : '开局约 18 万是在一个真实对话里量的。书页按高清档算，后台要是先压小了，实际会轻一点。想要准数就问我「现在用了多少」。',
+    gemini: () => '官方给 100 万。那条竖线是用户反映的遗忘线，大约 15 到 20 万，不是官方数字。它压缩了也不会说。',
+    grok: () => 'grok-4.7 模型本身是 50 万；app 每个对话给多少，官方没写。看到 Summarizing 就是信号。'
+  };
+  const KEY = 'peidu-counter-v1';
+  const EXAMPLE = {
+    plat: 'claude',
+    exampleCounts: true,
+    exampleSlip: true,
+    counts: {
+      claude: { photos: 12, shots: 1, rounds: 20, len: 'mid', extra: 0, actual: 0 },
+      gemini: { photos: 14, shots: 0, rounds: 26, len: 'mid', extra: 0, actual: 0 },
+      grok:   { photos: 3, shots: 2, rounds: 6, len: 'mid', extra: 2, actual: 0, win: 500000 }
+    },
+    slip: {
+      book: '卡拉马佐夫兄弟',
+      at: '第一卷开头',
+      rules: ['nospoil', 'guess'],
+      qs: '费奥多尔哭第一任太太，几分是真的？\n他把家丑讲得眉飞色舞，是在抢说法吗？'
+    }
+  };
+
+  const clone = o => JSON.parse(JSON.stringify(o));
+  let S = null;
+  try { S = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { S = null; }
+  if (!S || typeof S !== 'object' || !S.counts) S = clone(EXAMPLE);
+  for (const k of ['claude', 'gemini', 'grok']) {
+    S.counts[k] = Object.assign({ photos: 0, shots: 0, rounds: 0, len: 'mid', extra: 0, actual: 0 }, S.counts[k] || {});
+  }
+  if (!S.counts.grok.win) S.counts.grok.win = 500000;
+  S.slip = Object.assign({ book: '', at: '', rules: [], qs: '' }, S.slip || {});
+  if (!Array.isArray(S.slip.rules)) S.slip.rules = [];
+  if (!PLAT[S.plat]) S.plat = 'claude';
+
+  const $ = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const app = $('#app');
+
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+  const wan = n => String(Math.round(n / 1000) / 10);
+  const setVal = (el, v) => { if (el && document.activeElement !== el) el.value = v; };
+
+  function calc(key) {
+    const p = PLAT[key], c = S.counts[key];
+    const per = ROUND[c.len] || ROUND.mid;
+    const imgLo = c.photos * p.photo[0] + c.shots * p.shot[0];
+    const imgHi = c.photos * p.photo[1] + c.shots * p.shot[1];
+    const chat = c.rounds * per;
+    const extra = Math.max(0, Number(c.extra) || 0) * 10000;
+    const win = p.pickWin ? (c.win || p.win) : p.win;
+    const actual = p.cap && c.actual > 0 ? c.actual * 10000 : 0;
+    let lo = p.boot + imgLo + chat + extra;
+    let hi = p.boot + imgHi + chat + extra;
+    if (actual) { lo = actual; hi = actual; }
+    const pages = c.photos + c.shots;
+    const rpp = pages > 0 && c.rounds > 0 ? c.rounds / pages : 1;
+    const perPage = p.photo[1] + rpp * per;
+    let left = Math.floor(Math.max(0, win - hi) / perPage);
+    let bind = 'tok';
+    if (p.cap) {
+      const capLeft = Math.max(0, p.cap - pages);
+      if (capLeft < left) { left = capLeft; bind = 'cap'; }
+    }
+    const softLeft = p.soft ? Math.floor(Math.max(0, p.soft - hi) / perPage) : null;
+    return { p, c, per, imgHi, chat, extra, win, lo, hi, actual, pages, rpp, perPage, left, bind, softLeft, pct: hi / win };
+  }
+
+  function tone(r, key) {
+    const p = r.p;
+    if (p.cap && r.pages >= p.cap) return ['alert', '图片名额到了'];
+    if (r.pct >= 0.95) return ['alert', key === 'claude' ? '随时会自动整理' : key === 'grok' ? '随时可能撞墙' : '已经超出'];
+    if (r.pct >= 0.8) return ['warn', '快到头了'];
+    if (p.soft && r.hi > p.soft) return ['warn', '过了遗忘线'];
+    if (p.cap && r.pages >= p.cap * 0.85) return ['warn', '图片名额快满'];
+    if (r.pct >= 0.5) return ['mid', '过半了'];
+    return ['ok', '还很空'];
+  }
+
+  function renderDesk(key) {
+    const r = calc(key), c = r.c;
+    setVal($('#n-photos'), c.photos);
+    setVal($('#n-shots'), c.shots);
+    setVal($('#n-rounds'), c.rounds);
+    setVal($('#n-extra'), c.extra);
+    if (key === 'claude') setVal($('#n-actual'), c.actual > 0 ? c.actual : '');
+    $$('#len button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.len === c.len)));
+    $$('#win button').forEach(b => b.setAttribute('aria-checked', String(Number(b.dataset.win) === (c.win || 500000))));
+
+    const showRange = !r.actual && r.hi - r.lo >= 1000;
+    const num = showRange ? `约 ${wan(r.lo)}–${wan(r.hi)} 万` : `约 ${wan(r.hi)} 万`;
+    $('#d-num').textContent = num;
+    $('#d-win').textContent = `共 ${wan(r.win)} 万 · 用了 ${Math.round(r.pct * 100)}%`;
+    const [t, label] = tone(r, key);
+    const pill = $('#d-pill');
+    pill.dataset.tone = t;
+    pill.textContent = label;
+
+    const parts = r.actual
+      ? [['#s-boot', 0], ['#s-img', r.actual], ['#s-chat', 0], ['#s-extra', 0]]
+      : [['#s-boot', r.p.boot], ['#s-img', r.imgHi], ['#s-chat', r.chat], ['#s-extra', r.extra]];
+    let acc = 0;
+    for (const [sel, v] of parts) {
+      const w = Math.max(0, Math.min(100 - acc, v / r.win * 100));
+      $(sel).style.width = w + '%';
+      acc += w;
+    }
+    const soft = $('#s-soft'), scSoft = $('#sc-soft');
+    if (r.p.soft) {
+      const at = r.p.soft / r.win * 100;
+      soft.hidden = false; soft.style.left = at + '%';
+      scSoft.hidden = false; scSoft.style.left = at + '%';
+    } else { soft.hidden = true; scSoft.hidden = true; }
+    $('#sc-max').textContent = `${wan(r.win)} 万`;
+    $('#bar').setAttribute('aria-label', `桌上${num}，桌子共 ${wan(r.win)} 万`);
+
+    const L = [];
+    if (r.actual) L.push(['img', `问来的实数 ${wan(r.actual)} 万`]);
+    else {
+      L.push(['boot', r.p.boot ? `开局说明 ${wan(r.p.boot)} 万` : '开局说明 量不到']);
+      L.push(['img', `书页 ${wan(r.imgHi)} 万`]);
+      L.push(['chat', `聊天 ${wan(r.chat)} 万`]);
+      if (r.extra) L.push(['extra', `另外的资料 ${wan(r.extra)} 万`]);
+    }
+    L.push(['free', `空位 ${wan(Math.max(0, r.win - r.hi))} 万`]);
+    $('#legend').innerHTML = L.map(([k, txt]) => `<li><i class="dot ${k}"></i>${txt}</li>`).join('');
+
+    const MAXP = 60;
+    const ph = Math.min(c.photos, MAXP);
+    const sh = Math.min(c.shots, Math.max(0, MAXP - ph));
+    let html = '<i class="pg"></i>'.repeat(ph) + '<i class="pg shot"></i>'.repeat(sh);
+    const more = c.photos + c.shots - ph - sh;
+    if (more > 0) html += `<span class="more">+${more}</span>`;
+    $('#pages').innerHTML = html;
+
+    const pace = `每页约 ${Math.round(r.rpp * 10) / 10} 轮、每轮「${LEN_NAME[c.len] || '中'}」`;
+    let left;
+    if (key === 'claude') {
+      left = `按这一框的节奏（${pace}），还能再放约 <b>${r.left}</b> 页` + (r.bind === 'cap' ? '，先到的是 100 张的图片名额。' : '。');
+    } else if (key === 'gemini') {
+      left = `按这一框的节奏（${pace}），离遗忘线还能放约 <b>${r.softLeft}</b> 页，离官方 100 万还能放约 <b>${r.left}</b> 页。`;
+    } else {
+      left = `按这一框的节奏（${pace}），按 ${wan(r.win)} 万算还能放约 <b>${r.left}</b> 页。`;
+    }
+    $('#d-left').innerHTML = left;
+
+    if (r.p.cap) {
+      $('#cap').hidden = false;
+      $('#cap-n').textContent = `${r.pages} / ${r.p.cap}`;
+      $('#cap-fill').style.width = Math.min(100, r.pages / r.p.cap * 100) + '%';
+    } else $('#cap').hidden = true;
+    $('#d-note').textContent = NOTE[key](r);
+  }
+
+  function renderSlip() {
+    const s = S.slip;
+    $$('#rules button').forEach(b => b.setAttribute('aria-pressed', String(s.rules.includes(b.dataset.rule))));
+    const rules = RULES.filter(([k]) => s.rules.includes(k)).map(([, t]) => t).join('；');
+    const qs = String(s.qs || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const lines = ['交接小纸条'];
+    const book = String(s.book || '').trim().replace(/^《/, '').replace(/》$/, '');
+    if (book) lines.push(`书：《${book}》`);
+    if (String(s.at || '').trim()) lines.push(`读到：${s.at.trim()}`);
+    if (rules) lines.push(`规矩：${rules}`);
+    if (qs.length) {
+      lines.push('还悬着的问题：');
+      qs.forEach((q, i) => lines.push(`${i + 1}. ${q}`));
+    }
+    lines.push('上一框聊到这里，请接着陪我读。');
+    $('#slip').textContent = lines.join('\n');
+    $('#ex-slip').hidden = !S.exampleSlip;
+  }
+
+  function render() {
+    const key = S.plat;
+    app.dataset.plat = key;
+    $$('.mark').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === key)));
+    const single = !!PLAT[key].single;
+    $('#desk').hidden = single;
+    $('#inputs').hidden = single;
+    $('#signals').hidden = single;
+    $('#face').hidden = !single;
+    $$('.sig').forEach(u => { u.hidden = u.dataset.for !== key; });
+    $$('.only').forEach(el => { el.hidden = el.dataset.only !== key; });
+    $('#ex-counts').hidden = !S.exampleCounts;
+    if (!single) renderDesk(key);
+    renderSlip();
+  }
+
+  const touchCounts = () => { S.exampleCounts = false; };
+  const touchSlip = () => { S.exampleSlip = false; };
+
+  $$('.mark').forEach(b => b.addEventListener('click', () => { S.plat = b.dataset.p; save(); render(); }));
+
+  $$('[data-d]').forEach(b => b.addEventListener('click', () => {
+    const c = S.counts[S.plat];
+    if (!c) return;
+    const k = b.dataset.k;
+    c[k] = Math.max(0, (Number(c[k]) || 0) + Number(b.dataset.d));
+    touchCounts(); save(); render();
+  }));
+
+  ['photos', 'shots', 'rounds', 'extra'].forEach(k => {
+    const el = $('#n-' + k);
+    el.addEventListener('input', () => {
+      const c = S.counts[S.plat];
+      if (!c) return;
+      const v = parseFloat(el.value);
+      c[k] = Number.isFinite(v) && v >= 0 ? (k === 'extra' ? v : Math.floor(v)) : 0;
+      touchCounts(); save(); render();
+    });
+  });
+
+  $('#n-actual').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    S.counts.claude.actual = Number.isFinite(v) && v > 0 ? v : 0;
+    touchCounts(); save(); render();
+  });
+
+  $$('#len button').forEach(b => b.addEventListener('click', () => {
+    const c = S.counts[S.plat];
+    if (!c) return;
+    c.len = b.dataset.len;
+    touchCounts(); save(); render();
+  }));
+
+  $$('#win button').forEach(b => b.addEventListener('click', () => {
+    S.counts.grok.win = Number(b.dataset.win);
+    touchCounts(); save(); render();
+  }));
+
+  $('#reset').addEventListener('click', () => {
+    const c = S.counts[S.plat];
+    if (!c) return;
+    Object.assign(c, { photos: 0, shots: 0, rounds: 0, extra: 0, actual: 0 });
+    touchCounts(); save(); render();
+    const st = $('#reset-st');
+    st.textContent = '已清零，新框从这里开始数';
+    setTimeout(() => { st.textContent = ''; }, 2600);
+  });
+
+  const slipInputs = [['#s-book', 'book'], ['#s-at', 'at'], ['#s-qs', 'qs']];
+  slipInputs.forEach(([sel, field]) => {
+    const el = $(sel);
+    el.value = S.slip[field] || '';
+    el.addEventListener('input', () => { S.slip[field] = el.value; touchSlip(); save(); renderSlip(); });
+  });
+
+  $$('#rules button').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.rule, i = S.slip.rules.indexOf(k);
+    if (i >= 0) S.slip.rules.splice(i, 1); else S.slip.rules.push(k);
+    touchSlip(); save(); renderSlip();
+  }));
+
+  $('#copy').addEventListener('click', () => {
+    const pre = $('#slip'), st = $('#copied');
+    const text = pre.textContent;
+    const fallback = () => {
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (e) {}
+      st.textContent = '已选中，长按就能复制';
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => {
+        st.textContent = '已复制';
+        setTimeout(() => { st.textContent = ''; }, 2400);
+      }, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  render();
+})();
+</script>
+
+</body></html>
