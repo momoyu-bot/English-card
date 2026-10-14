@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F2F2F7">
+<meta name="color-scheme" content="light">
+<title>小脸蛋</title>
+<meta name="description" content="三只小脸蛋待在一起。点哪只，哪只眨眼，再说一句。">
+<style>
+  :root {
+    --bg: #F2F2F7;
+    --ink: #1C1C1E;
+    --quiet: #8E8E93;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .app {
+    min-height: 100%;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: max(22px, env(safe-area-inset-top)) 0 max(26px, env(safe-area-inset-bottom));
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1, .hint {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-indent: 0.22em;
+    color: var(--quiet);
+  }
+  h1 { margin-bottom: 6px; }
+  .hint { margin-top: 2px; }
+  .stage {
+    position: relative;
+    width: min(100%, 520px);
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: manipulation;
+    overflow: visible;
+  }
+  .body { shape-rendering: geometricPrecision; }
+  .hit {
+    fill: transparent;
+    cursor: pointer;
+    pointer-events: all;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .hit:focus { outline: none; }
+  .hit:focus-visible {
+    stroke: var(--ink);
+    stroke-opacity: .38;
+    stroke-width: 2;
+  }
+  .phrase {
+    position: absolute;
+    margin: 0;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, calc(-100% - 6px));
+    opacity: 0;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity .28s ease, transform .42s cubic-bezier(.2, .8, .2, 1);
+  }
+  .phrase.on {
+    opacity: 1;
+    transform: translate(-50%, calc(-100% - 14px));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .phrase, .phrase.on {
+      transform: translate(-50%, calc(-100% - 12px));
+      transition: opacity .12s linear;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <h1>小脸蛋</h1>
+  <div class="stage" id="stage">
+    <svg id="svg" viewBox="0 0 500 280" aria-label="小粉、小紫、小黑靠在一起"></svg>
+    <p class="phrase" id="say-pink" aria-live="polite" aria-hidden="true"></p>
+    <p class="phrase" id="say-violet" aria-live="polite" aria-hidden="true"></p>
+    <p class="phrase" id="say-black" aria-live="polite" aria-hidden="true"></p>
+  </div>
+  <p class="hint">点哪只</p>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  /* 圆心为原点、半径为 1。dy 为负 = 在圆心上方。
+     ang 是视觉倾角：顶端偏左、底端偏右，反斜杠 \。
+     缝先画成竖着的胶囊，再转 -ang。
+     SVG / 这套矩阵里正角度会把顶端甩向右，所以必须带负号。
+     右缝更窄，是球面透视，不是两只没画齐。 */
+  var EYES = [
+    { dx: 0.194, dy: -0.416, len: 0.418, w: 0.194, ang: 26.2 },
+    { dx: 0.626, dy: -0.497, len: 0.418, w: 0.129, ang: 26.5 }
+  ];
+  var R = 80;
+  var VB_W = 500;
+  var VB_H = 280;
+  var CY = 148;
+  var FACES = [
+    { id: 'pink',   name: '小粉脸蛋儿', fill: '#FF309B', cx: 100, period: 4800, amp: 1.25, phase: 0.0,
+      lines: ['粉的。', '在。', '粉的在。'] },
+    { id: 'violet', name: '小紫脸蛋儿', fill: '#9159FE', cx: 250, period: 5400, amp: 1.05, phase: 2.2,
+      lines: ['在。', '我也在。', '还在。'] },
+    { id: 'black',  name: '小黑脸蛋儿', fill: '#000000', cx: 400, period: 6200, amp: 0.8,  phase: 4.1,
+      lines: ['圆的。', '最圆的那个。', '圆的在。'] }
+  ];
+
+  var svg = document.getElementById('svg');
+  var NS = 'http://www.w3.org/2000/svg';
+  var reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var reduce = reduceQuery.matches;
+  reduceQuery.addEventListener('change', function (e) { reduce = e.matches; });
+
+  function node(name, attrs) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  /* 竖胶囊。lid 只收宽度，长度不变：眨眼是缝变细，不是把圆重画一遍。 */
+  function slitPath(f, e, lid) {
+    var rw = e.w * R * lid * 0.5;
+    var hs = Math.max(e.len * R * 0.5 - rw, 0);
+    var a = -e.ang * Math.PI / 180;
+    var cos = Math.cos(a);
+    var sin = Math.sin(a);
+    var ox = f.cx + e.dx * R;
+    var oy = CY + e.dy * R;
+    var pts = [];
+    var N = 8;
+    var i, phi, x, y;
+    for (i = 0; i <= N; i++) {
+      phi = Math.PI + Math.PI * i / N;
+      pts.push([rw * Math.cos(phi), -hs + rw * Math.sin(phi)]);
+    }
+    for (i = 0; i <= N; i++) {
+      phi = Math.PI * i / N;
+      pts.push([rw * Math.cos(phi), hs + rw * Math.sin(phi)]);
+    }
+    var d = '';
+    for (i = 0; i < pts.length; i++) {
+      x = pts[i][0];
+      y = pts[i][1];
+      d += (i ? 'L' : 'M') +
+        (ox + x * cos - y * sin).toFixed(2) + ' ' +
+        (oy + x * sin + y * cos).toFixed(2);
+    }
+    return d + 'Z';
+  }
+
+  var ground = node('ellipse', {
+    cx: 250, cy: 236, rx: 196, ry: 7,
+    fill: '#1C1C1E', opacity: '0.05'
+  });
+  svg.appendChild(ground);
+
+  FACES.forEach(function (f) {
+    f.cy = CY;
+    f.n = 0;
+    f.lid = 1;
+    f.blinkFrom = 0;
+    f.tapAt = 0;
+    f.angle = 0;
+    f.pivotY = CY + R * 0.5;
+    /* 圆的这段路径是常量。眨眼只把缝拼在后面，不改圆。 */
+    f.circleD = 'M' + (f.cx - R) + ' ' + CY +
+      'a' + R + ' ' + R + ' 0 1 0 ' + (R * 2) + ' 0' +
+      'a' + R + ' ' + R + ' 0 1 0 ' + (-R * 2) + ' 0Z';
+    f.g = node('g', {});
+    f.path = node('path', {
+      class: 'body',
+      fill: f.fill,
+      'fill-rule': 'evenodd',
+      d: f.circleD + slitPath(f, EYES[0], 1) + slitPath(f, EYES[1], 1),
+      'pointer-events': 'none'
+    });
+    f.g.appendChild(f.path);
+    svg.appendChild(f.g);
+
+    f.phrase = document.getElementById('say-' + f.id);
+    f.phrase.style.left = (f.cx / VB_W * 100) + '%';
+    f.phrase.style.top = ((CY - R) / VB_H * 100) + '%';
+  });
+
+  FACES.forEach(function (f) {
+    var hit = node('circle', {
+      class: 'hit',
+      cx: f.cx,
+      cy: CY,
+      r: R,
+      role: 'button',
+      tabindex: '0',
+      'aria-label': f.name
+    });
+    f.g.appendChild(hit);
+    hit.addEventListener('click', function () { tap(f); });
+    hit.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        tap(f);
+      }
+    });
+  });
+
+  function easeIn(t) { return t * t * t; }
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+  /* 一次眨眼：快合上，停一下，再睁开。合上时留一条缝，不让眼睛消失。 */
+  function lidAt(f, now) {
+    if (!f.blinkFrom) return 1;
+    var u = now - f.blinkFrom;
+    var close = 110, hold = 70, open = 230, min = 0.14;
+    var end = close + hold + open;
+    if (u >= end) { f.blinkFrom = 0; return 1; }
+    if (u < close) return 1 - (1 - min) * easeIn(u / close);
+    if (u < close + hold) return min;
+    return min + (1 - min) * easeOut((u - close - hold) / open);
+  }
+
+  function swayAt(f, now) {
+    if (reduce) return 0;
+    var a = Math.sin(now / f.period * Math.PI * 2 + f.phase) * f.amp;
+    if (f.tapAt) {
+      var u = (now - f.tapAt) / 1000;
+      if (u < 1.15) a += Math.sin(u * Math.PI * 1.65) * 3.05 * Math.exp(-2.7 * u);
+    }
+    return a;
+  }
+
+  function showLine(f) {
+    var line = f.lines[f.n % f.lines.length];
+    f.n += 1;
+    f.phrase.textContent = line;
+    f.phrase.setAttribute('aria-hidden', 'false');
+    f.phrase.classList.add('on');
+    clearTimeout(f.hideT);
+    f.hideT = setTimeout(function () {
+      f.phrase.classList.remove('on');
+      f.phrase.setAttribute('aria-hidden', 'true');
+    }, 2300);
+  }
+
+  function tap(f) {
+    var now = performance.now();
+    f.blinkFrom = now;
+    f.tapAt = now;
+    clearTimeout(f.sayT);
+    f.sayT = setTimeout(function () { showLine(f); }, reduce ? 0 : 150);
+  }
+
+  function frame(now) {
+    for (var i = 0; i < FACES.length; i++) {
+      var f = FACES[i];
+      var lid = lidAt(f, now);
+      if (Math.abs(lid - f.lid) > 0.004) {
+        f.lid = lid;
+        f.path.setAttribute('d', f.circleD + slitPath(f, EYES[0], lid) + slitPath(f, EYES[1], lid));
+      }
+      var ang = swayAt(f, now);
+      if (Math.abs(ang - f.angle) > 0.015) {
+        f.angle = ang;
+        f.g.setAttribute('transform', 'rotate(' + ang.toFixed(2) + ' ' + f.cx + ' ' + f.pivotY + ')');
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
