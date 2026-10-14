@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>半色调点阵果冻流星 · Halftone Jelly Meteors</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Sans SC', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    /* 四角星呼吸与旋转动效 */
+    @keyframes starFloat {
+      0%, 100% {
+        transform: translateY(0px) scale(1) rotate(0deg);
+        filter: drop-shadow(0 0 12px rgba(255, 30, 117, 0.45));
+      }
+      50% {
+        transform: translateY(-5px) scale(1.08) rotate(8deg);
+        filter: drop-shadow(0 0 20px rgba(58, 80, 224, 0.75));
+      }
+    }
+    .gemini-star {
+      animation: starFloat 4s ease-in-out infinite;
+    }
+
+    /* 自定义滑块样式 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 999px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ff1e75, #6366f1);
+      box-shadow: 0 2px 8px rgba(255, 30, 117, 0.5);
+      border: 2px solid #ffffff;
+      cursor: grab;
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.2);
+      cursor: grabbing;
+    }
+
+    /* 毛玻璃自适应过渡 */
+    .glass-dark {
+      background: rgba(16, 18, 32, 0.72);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 24px rgba(138, 43, 226, 0.18);
+    }
+    .glass-light {
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      border: 1px solid rgba(59, 91, 219, 0.14);
+      box-shadow: 0 16px 36px rgba(59, 91, 219, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04);
+    }
+  </style>
+</head>
+<body class="bg-[#05050a] text-white transition-colors duration-500">
+
+  <!-- 全屏 WebGL 半色调果冻物理画布 -->
+  <canvas id="jellyCanvas"></canvas>
+
+  <!-- 顶部轻量状态栏（仿原生顶栏细节 + 实时冲量指示器） -->
+  <header class="fixed top-4 left-0 right-0 z-20 px-4 sm:px-8 flex items-center justify-between pointer-events-none">
+    <!-- 左上角品牌胶囊 -->
+    <div id="topBrandPill" class="glass-dark pointer-events-auto flex items-center gap-2.5 px-3.5 py-2 rounded-full transition-all duration-300">
+      <span class="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-[#ff1e75] to-[#3a50e0] animate-pulse"></span>
+      <span id="brandTitle" class="text-xs sm:text-sm font-medium tracking-wide text-white/90">Halftone Jelly · 物理果冻场</span>
+      <button id="toggleHeroBtn" title="显示/隐藏中央文字" class="ml-1 text-xs px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 transition">
+        隐藏文字
+      </button>
+    </div>
+
+    <!-- 右上角实时手速/冲量深度指示器 -->
+    <div id="speedMeterPill" class="glass-dark pointer-events-auto flex items-center gap-2.5 px-3.5 py-2 rounded-full transition-all duration-300">
+      <span id="speedLabel" class="text-xs text-white/70">果冻陷落深度</span>
+      <div class="w-16 sm:w-24 h-2 rounded-full bg-white/15 overflow-hidden">
+        <div id="speedBar" class="h-full w-1 rounded-full bg-gradient-to-r from-[#3a50e0] via-[#8a2be2] to-[#ff1e75] transition-all duration-75"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 中央偏上欢迎引导区（还原截图 Gemini 欢迎页排版与质感） -->
+  <main id="heroOverlay" class="fixed inset-x-0 top-[15%] sm:top-[16%] z-10 flex flex-col items-center justify-center px-6 text-center pointer-events-none transition-all duration-500">
+    <!-- 四角星 SVG -->
+    <div class="gemini-star mb-4 sm:mb-5 pointer-events-auto cursor-pointer" id="starTrigger" title="点击激起环形果冻波">
+      <svg width="46" height="46" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="starGrad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#ff4b4b"/>
+            <stop offset="32%" stop-color="#ff9f1c"/>
+            <stop offset="65%" stop-color="#3a86ff"/>
+            <stop offset="100%" stop-color="#2ec4b6"/>
+          </linearGradient>
+        </defs>
+        <path d="M24 2C24 14.1503 14.1503 24 2 24C14.1503 24 24 33.8497 24 46C24 33.8497 33.8497 24 46 24C33.8497 24 24 14.1503 24 2Z" fill="url(#starGrad)"/>
+      </svg>
+    </div>
+
+    <!-- 主标题 -->
+    <h1 id="heroHeading" class="text-2xl sm:text-4xl font-semibold tracking-tight leading-snug mb-2 transition-colors duration-300">
+      看看你可以用果冻流星<br class="sm:hidden" />做些什么
+    </h1>
+
+    <!-- 副标题说明 -->
+    <p id="heroSub" class="text-xs sm:text-sm text-white/65 max-w-md mb-5 transition-colors duration-300">
+      划动屏幕发射果冻流星 · 越快越深，松手化成一滩果冻水流走
+    </p>
+
+    <!-- 仿截图胶囊按钮：点击触发果冻爆破涟漪 -->
+    <button id="rippleBtn" class="pointer-events-auto px-6 py-2.5 rounded-full text-sm sm:text-base font-medium transition-all duration-300 active:scale-95 bg-[#0a0b12]/90 text-white shadow-[0_0_30px_rgba(255,30,117,0.35)] border border-white/15 hover:border-white/30">
+      我们来一探究竟吧
+    </button>
+  </main>
+
+  <!-- 底部悬浮毛玻璃交互控制栏（支持展开/收起，仿底部输入框布局） -->
+  <section class="fixed bottom-4 sm:bottom-6 inset-x-0 z-20 flex flex-col items-center px-3 sm:px-6 pointer-events-none">
+    
+    <!-- 顶部迷你模式切换胶囊（仿截图「聊天 | 任务」切换器） -->
+    <div id="miniTabPill" class="glass-dark pointer-events-auto mb-2.5 p-1 rounded-full flex items-center gap-1 text-xs font-medium transition-all duration-300">
+      <button id="themeDarkBtn" class="px-3.5 py-1.5 rounded-full bg-black text-white shadow transition-all">
+        🌙 夜光玫红果冻
+      </button>
+      <button id="themeLightBtn" class="px-3.5 py-1.5 rounded-full text-white/75 hover:text-white transition-all">
+        ☀️ 清透蓝紫果冻
+      </button>
+    </div>
+
+    <!-- 主控制舱（仿底部输入胶囊） -->
+    <div id="controlDock" class="glass-dark pointer-events-auto w-full max-w-xl rounded-[28px] px-4 py-3.5 sm:px-6 sm:py-4 transition-all duration-300">
+      
+      <!-- 第一行：快捷按钮与折叠开关 -->
+      <div class="flex items-center justify-between gap-2">
+        <!-- 召唤流星雨按钮 -->
+        <button id="meteorShowerBtn" class="flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-medium bg-gradient-to-r from-[#ff1e75] via-[#8a2be2] to-[#3a50e0] text-white shadow-lg shadow-purple-500/25 hover:brightness-110 active:scale-95 transition">
+          <span>🌠 召唤流星雨</span>
+        </button>
+
+        <!-- 单颗大果冻流星按钮 -->
+        <button id="singleMeteorBtn" class="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs sm:text-sm font-medium bg-white/10 hover:bg-white/20 text-white transition active:scale-95">
+          <span>☄️ 发射超级果冻</span>
+        </button>
+
+        <!-- 展开/收起参数滑块按钮 -->
+        <button id="collapseSlidersBtn" class="ml-auto flex items-center gap-1 px-3 py-2 rounded-full text-xs bg-white/10 hover:bg-white/20 text-white/85 transition" title="收起或展开物理参数">
+          <span id="collapseText">收起参数</span>
+          <svg id="collapseIcon" class="w-3.5 h-3.5 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- 第二行：物理滑块调节区（可折叠） -->
+      <div id="slidersPanel" class="mt-3.5 pt-3 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 transition-all duration-300 overflow-hidden">
+        <!-- 滑块 1：果冻 Q 弹度（欠阻尼系数） -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between items-center text-xs">
+            <span id="dampingLabel" class="font-medium text-white/85">🍮 果冻Q弹度（欠阻尼震荡）</span>
+            <span id="dampingValue" class="text-[#ff6ea7] font-semibold">超Q弹 (88%)</span>
+          </div>
+          <input id="bouncinessSlider" type="range" min="0.15" max="0.98" step="0.01" value="0.88" class="w-full bg-white/20" />
+        </div>
+
+        <!-- 滑块 2：果冻融化流速（向下重力坍塌） -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between items-center text-xs">
+            <span id="gravityLabel" class="font-medium text-white/85">💧 果冻融化流速（化水重力）</span>
+            <span id="gravityValue" class="text-[#72a7ff] font-semibold">自然流淌 (60%)</span>
+          </div>
+          <input id="meltSpeedSlider" type="range" min="0.05" max="1.0" step="0.01" value="0.60" class="w-full bg-white/20" />
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <script>
+    /**
+     * ============================================================================
+     * 半色调点阵果冻流星 (Halftone Jelly Meteors)
+     * ----------------------------------------------------------------------------
+     * 物理与渲染核心架构：
+     * 1. 二维欧拉-拉格朗日混合弹簧波动网格 (2D Spring-Damper + Gravity Slump Grid)：
+     *    - 每个网格节点维护：
+     *      h:  果冻隆起高度 / 表面张力势能
+     *      vh: 垂直方向振荡速度（欠阻尼简谐运动 m*h'' + c*h' + k*h = F(t) + c_lap*∇²h）
+     *      dx, dy: 平面圆点网格被推挤的弹性位移向量（产生截图中点阵弯曲折叠的3D果冻体积错觉）
+     *      vdx, vdy: 平面弹性恢复速度
+     * 2. 重力松弛与化水流动 (Gravity Relaxation & Melting Advection)：
+     *    - 高高鼓起的果冻波峰在失去外力后，一边 Q 弹回弹，一边受到向下的虚拟重力牵引，
+     *      向屏幕底部的“果冻水浅滩”流淌汇合，色彩也随高度与张力从火龙果玫红退回静谧深宝蓝。
+     * 3. WebGL 片元着色器 (45° 旋转半色调点阵 + 曲面 UV 扭曲 + 双主题多段能量色谱)：
+     *    - 将物理场实时打包上传至 GPU 纹理，驱动成千上万个抗锯齿半色调圆点（Halftone Dots）。
+     * ============================================================================
+     */
+
+    window.onload = function () {
+      const canvas = document.getElementById('jellyCanvas');
+      const gl = canvas.getContext('webgl', { alpha: false, antialias: true, depth: false, stencil: false });
+
+      if (!gl) {
+        document.body.innerHTML = '<div class="p-8 text-center text-white">您的浏览器不支持 WebGL，请升级或开启硬件加速。</div>';
+        return;
+      }
+
+      // ---------------------------------------------------------------------------
+      // 1. 交互与物理全局配置状态
+      // ---------------------------------------------------------------------------
+      const state = {
+        isDarkMode: true,          // 默认深色模式（夜光火龙果/深海蓝果冻）
+        bounciness: 0.88,          // 果冻Q弹度 (0.15 ~ 0.98)
+        meltGravity: 0.60,         // 果冻融化重力流速 (0.05 ~ 1.0)
+        heroVisible: true,
+        slidersExpanded: true,
+        currentSwipeDepth: 0,      // 用于右上角深度计 UI 显示
+        tiltX: 0,                  // 手机陀螺仪水平倾角附加力
+      };
+
+      // ---------------------------------------------------------------------------
+      // 2. 构建二维欠阻尼弹簧-流体物理网格 (CPU Float32 高速物理场 -> GPU 纹理)
+      // ---------------------------------------------------------------------------
+      // 使用适中分辨率的二维网格，通过双线性插值传递给 WebGL，既保证 60fps 极速计算，又具有丝滑连续曲率
+      const GRID_W = 108;
+      const GRID_H = 180;
+      const NUM_CELLS = GRID_W * GRID_H;
+
+      // 物理场数组
+      const hField = new Float32Array(NUM_CELLS);     // 果冻能量/高度场 (0 ~ 2.5+)
+      const hNext = new Float32Array(NUM_CELLS);      // 高度平流缓存
+      const vhField = new Float32Array(NUM_CELLS);    // 高度垂直弹性速度（产生 duang duang 震荡）
+      const dxField = new Float32Array(NUM_CELLS);    // 水平点阵推挤偏移 (-1 ~ 1)
+      const dyField = new Float32Array(NUM_CELLS);    // 垂直点阵推挤偏移 (-1 ~ 1)
+      const vdxField = new Float32Array(NUM_CELLS);   // 水平偏移弹性速度
+      const vdyField = new Float32Array(NUM_CELLS);   // 垂直偏移弹性速度
+      const glowField = new Float32Array(NUM_CELLS);  // 高能色温/流星核心余晖场 (0 ~ 2.0)
+      const glowNext = new Float32Array(NUM_CELLS);
+
+      // 打包上传给 GPU 的 RGBA 纹理缓冲 (R: 高度h, G: dx偏移, B: dy偏移, A: 高能色温glow)
+      const texData = new Uint8Array(NUM_CELLS * 4);
+
+      // 初始化底部待机“果冻水浅滩”
+      function initJellyPool() {
+        for (let y = 0; y < GRID_H; y++) {
+          // ny = 0 在底部, ny = 1 在顶部
+          const ny = y / (GRID_H - 1);
+          // 底部 38% 区域有初始温润的果冻水浅滩
+          const basePool = Math.max(0, (0.42 - ny) * 1.35);
+          for (let x = 0; x < GRID_W; x++) {
+            const idx = y * GRID_W + x;
+            hField[idx] = basePool;
+            glowField[idx] = basePool * 0.35;
+          }
+        }
+      }
+      initJellyPool();
+
+      // ---------------------------------------------------------------------------
+      // 3. “果冻流星”实体管理器 (Jelly Meteors)
+      // ---------------------------------------------------------------------------
+      const meteors = [];
+
+      /**
+       * 生成一颗划过屏幕的果冻流星
+       * @param {Object} opts 自定义起点、速度与大小
+       */
+      function spawnMeteor(opts = {}) {
+        // 归一化屏幕坐标 (x: 0~1 左到右, y: 0~1 下到上)
+        const fromLeft = opts.fromLeft !== undefined ? opts.fromLeft : (Math.random() > 0.48);
+        const startX = opts.x !== undefined ? opts.x : (fromLeft ? -0.05 + Math.random() * 0.35 : 0.70 + Math.random() * 0.35);
+        const startY = opts.y !== undefined ? opts.y : (0.62 + Math.random() * 0.36);
+
+        // 朝向屏幕中下方（果冻池）俯冲
+        const speedMag = opts.speed !== undefined ? opts.speed : (0.65 + Math.random() * 0.75);
+        const angle = fromLeft
+          ? (-0.65 - Math.random() * 0.55) // 向右下俯冲
+          : (-Math.PI + 0.65 + Math.random() * 0.55); // 向左下俯冲
+
+        meteors.push({
+          x: startX,
+          y: startY,
+          vx: Math.cos(angle) * speedMag,
+          vy: Math.sin(angle) * speedMag,
+          radius: opts.radius || (0.068 + Math.random() * 0.045),
+          power: opts.power || (1.15 + Math.random() * 0.65),
+          life: 0,
+          maxLife: opts.maxLife || (1.1 + Math.random() * 0.6),
+          wobbleFreq: 10 + Math.random() * 8,
+          wobblePhase: Math.random() * Math.PI * 2
+        });
+      }
+
+      // 召唤流星雨
+      function triggerMeteorShower(count = 7) {
+        const mainFromLeft = Math.random() > 0.5;
+        for (let i = 0; i < count; i++) {
+          setTimeout(() => {
+            spawnMeteor({
+              fromLeft: i % 3 === 0 ? !mainFromLeft : mainFromLeft,
+              x: (mainFromLeft ? 0.05 : 0.95) + (Math.random() - 0.5) * 0.5,
+              y: 0.65 + Math.random() * 0.33,
+              speed: 0.75 + Math.random() * 0.7,
+              radius: 0.072 + Math.random() * 0.04,
+              power: 1.35 + Math.random() * 0.5
+            });
+          }, i * 130);
+        }
+      }
+
+      // 在指定坐标激起环形果冻大波浪（用于点击按钮或星星时）
+      function triggerRadialJellySplash(nx, ny, strength = 1.6, radius = 0.16) {
+        const aspect = canvas.width / Math.max(1, canvas.height);
+        for (let gy = 0; gy < GRID_H; gy++) {
+          const cy = gy / (GRID_H - 1);
+          const dy = cy - ny;
+          if (Math.abs(dy) > radius * 1.8) continue;
+
+          for (let gx = 0; gx < GRID_W; gx++) {
+            const cx = gx / (GRID_W - 1);
+            const dx = (cx - nx) * aspect;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < radius) {
+              const t = 1.0 - dist / radius;
+              const falloff = t * t * (3 - 2 * t);
+              const idx = gy * GRID_W + gx;
+              // 注入高度与向外推挤的果冻脉冲
+              vhField[idx] += strength * 8.5 * falloff;
+              hField[idx] = Math.min(2.6, hField[idx] + strength * 0.55 * falloff);
+              glowField[idx] = Math.min(2.4, glowField[idx] + strength * 0.95 * falloff);
+
+              if (dist > 0.001) {
+                const dirX = dx / dist;
+                const dirY = dy / dist;
+                vdxField[idx] += dirX * strength * 4.2 * falloff;
+                vdyField[idx] += dirY * strength * 4.2 * falloff;
+              }
+            }
+          }
+        }
+        state.currentSwipeDepth = Math.min(1.0, state.currentSwipeDepth + 0.75);
+      }
+
+      // ---------------------------------------------------------------------------
+      // 4. 往果冻物理网格注入线段冲量（手势滑动 & 流星飞行共用）
+      // ---------------------------------------------------------------------------
+      /**
+       * 在 (x0, y0) -> (x1, y1) 路径上按瞬时速度注入欠阻尼果冻推力与色温能量
+       */
+      function injectJellyImpulseSegment(x0, y0, x1, y1, vx, vy, baseRadius, powerMultiplier = 1.0) {
+        const aspect = canvas.width / Math.max(1, canvas.height);
+        const segDx = (x1 - x0) * aspect;
+        const segDy = y1 - y0;
+        const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
+
+        // 瞬时速率决定深度与色彩激发强度（越快越深！）
+        const speed = Math.sqrt((vx * aspect) * (vx * aspect) + vy * vy);
+        // 速度非线性放大因子：慢滑轻柔，快滑剧烈深陷
+        const speedFactor = Math.min(2.5, 0.32 + Math.pow(speed * 0.85, 1.18)) * powerMultiplier;
+
+        // 动态半径：速度越快，推开的果冻波峰越宽阔饱满
+        const radius = baseRadius * (0.85 + Math.min(0.75, speed * 0.35));
+        const steps = Math.max(1, Math.ceil(segLen / (radius * 0.35)));
+
+        for (let s = 0; s <= steps; s++) {
+          const tStep = steps === 0 ? 1.0 : s / steps;
+          const px = x0 + (x1 - x0) * tStep;
+          const py = y0 + (y1 - y0) * tStep;
+
+          const minGy = Math.max(0, Math.floor((py - radius * 1.4) * (GRID_H - 1)));
+          const maxGy = Math.min(GRID_H - 1, Math.ceil((py + radius * 1.4) * (GRID_H - 1)));
+          const radiusX = radius / Math.max(0.35, aspect);
+          const minGx = Math.max(0, Math.floor((px - radiusX * 1.4) * (GRID_W - 1)));
+          const maxGx = Math.min(GRID_W - 1, Math.ceil((px + radiusX * 1.4) * (GRID_W - 1)));
+
+          for (let gy = minGy; gy <= maxGy; gy++) {
+            const cy = gy / (GRID_H - 1);
+            const dy = cy - py;
+            for (let gx = minGx; gx <= maxGx; gx++) {
+              const cx = gx / (GRID_W - 1);
+              const dx = (cx - px) * aspect;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+
+              if (dist < radius) {
+                const u = 1.0 - dist / radius;
+                const kernel = u * u * (3.0 - 2.0 * u); // Smoothstep 核函数
+                const idx = gy * GRID_W + gx;
+
+                // 1) 激发果冻隆起与垂直欠阻尼震荡速度 (duang duang 感)
+                vhField[idx] += kernel * speedFactor * 6.2;
+                hField[idx] = Math.min(2.6, hField[idx] + kernel * speedFactor * 0.34);
+
+                // 2) 激发高能荧光色温（速度越快，越激发亮紫/玫红/青白核）
+                glowField[idx] = Math.min(2.5, glowField[idx] + kernel * speedFactor * 0.58);
+
+                // 3) 产生点阵平面挤压与推开（顺着滑动方向拖拽 + 向两侧排开果冻）
+                const pushOutX = dist > 0.0001 ? (dx / dist) : 0;
+                const pushOutY = dist > 0.0001 ? (dy / dist) : 0;
+                const dragX = Math.max(-2.2, Math.min(2.2, vx * 0.45));
+                const dragY = Math.max(-2.2, Math.min(2.2, vy * 0.45));
+
+                vdxField[idx] += kernel * (dragX * 2.6 + pushOutX * speedFactor * 1.9);
+                vdyField[idx] += kernel * (dragY * 2.6 + pushOutY * speedFactor * 1.9);
+              }
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // 5. 每帧物理步进：欠阻尼弹簧波动 + 重力坍塌化水 ("化成果冻水流走")
+      // ---------------------------------------------------------------------------
+      let lastSimTime = performance.now();
+      let ambientMeteorTimer = 0;
+
+      function stepPhysics(now) {
+        const rawDt = (now - lastSimTime) * 0.001;
+        lastSimTime = now;
+        const dt = Math.min(0.033, Math.max(0.008, rawDt));
+        const timeSec = now * 0.001;
+
+        // A. 自动定时划过果冻流星
+        ambientMeteorTimer += dt;
+        if (ambientMeteorTimer > 2.35) {
+          ambientMeteorTimer = 0;
+          if (meteors.length < 4) {
+            spawnMeteor();
+          }
+        }
+
+        // B. 更新所有飞行中的“果冻流星”
+        for (let i = meteors.length - 1; i >= 0; i--) {
+          const m = meteors[i];
+          const prevX = m.x;
+          const prevY = m.y;
+
+          // 流星自身受到微弱重力弧线牵引
+          m.vy -= 0.18 * dt;
+          m.x += m.vx * dt;
+          m.y += m.vy * dt;
+          m.life += dt;
+
+          // 流星飞行时带有轻微 Q 弹脉动
+          const pulse = 1.0 + 0.18 * Math.sin(m.life * m.wobbleFreq + m.wobblePhase);
+
+          // 将流星尾迹冲量注入果冻网格
+          injectJellyImpulseSegment(
+            prevX, prevY, m.x, m.y,
+            m.vx * 1.15, m.vy * 1.15,
+            m.radius * pulse,
+            m.power
+          );
+
+          // 移除飞出屏幕或寿命结束的流星
+          if (m.life >= m.maxLife || m.x < -0.25 || m.x > 1.25 || m.y < -0.15) {
+            meteors.splice(i, 1);
+          }
+        }
+
+        // C. 计算物理参数（由 UI 滑块实时控制）
+        // 1) 欠阻尼弹簧参数：bounciness 越高，阻尼越小、刚度与波动传递越强，duang来duang去越明显
+        const springK = 18.0 + state.bounciness * 26.0;          // 胡克恢复系数 k
+        const laplacianK = 22.0 + state.bounciness * 36.0;       // 邻域表面张力耦合（水波扩散）
+        const damping = Math.pow(0.985 - (1.0 - state.bounciness) * 0.13, dt * 60.0);
+
+        // 2) 重力坍塌与融化流速：meltGravity 控制果冻包往屏幕下方流走的速度
+        const gravityFlowRate = (0.32 + state.meltGravity * 1.35) * dt;
+        const lateralSpread = (0.12 + state.meltGravity * 0.25) * dt;
+        const energyDecay = Math.pow(0.986 - state.meltGravity * 0.018, dt * 60.0);
+
+        // D. 第一遍：重力向下平流 & 坍塌化水 ("化成一滩果冻水自己流走")
+        for (let y = 0; y < GRID_H; y++) {
+          const ny = y / (GRID_H - 1);
+          // 屏幕底部自然果冻池的基准液面高度（带微风呼吸起伏）
+          const poolLevel = 0.28 + 0.04 * Math.sin(timeSec * 0.9);
+
+          for (let x = 0; x < GRID_W; x++) {
+            const idx = y * GRID_W + x;
+            const yUp = Math.min(GRID_H - 1, y + 1);
+            const yDown = Math.max(0, y - 1);
+            const xLeft = Math.max(0, x - 1);
+            const xRight = Math.min(GRID_W - 1, x + 1);
+
+            const idxUp = yUp * GRID_W + x;
+            const idxDown = yDown * GRID_W + x;
+            const idxLeft = y * GRID_W + xLeft;
+            const idxRight = y * GRID_W + xRight;
+
+            // 上方的果冻隆起顺着重力往当前格子流淌（非线性：鼓包越高，化水下流越快）
+            const hCurr = hField[idx];
+            const hAbove = hField[idxUp];
+            const slumpSpeed = gravityFlowRate * (1.0 + Math.max(0, hAbove) * 0.65);
+
+            // 从上方流下来的果冻 + 向左右微弱摊平
+            let advectedH = hCurr * (1.0 - slumpSpeed - lateralSpread)
+                          + hAbove * slumpSpeed
+                          + (hField[idxLeft] + hField[idxRight]) * (lateralSpread * 0.5);
+
+            // 手机倾斜或底部果冻池自然水平微流
+            if (Math.abs(state.tiltX) > 0.01) {
+              const tiltShift = state.tiltX * dt * 1.2;
+              advectedH += (hField[idxLeft] - hField[idxRight]) * tiltShift;
+            }
+
+            // 底部果冻池的静水均衡恢复：高处果冻流到底部后慢慢融入浅滩并从底边缓缓漏走
+            const xNorm = x / (GRID_W - 1);
+            const waveBreath = Math.sin(xNorm * 4.5 + timeSec * 1.25) * 0.045
+                             + Math.cos(xNorm * 7.2 - timeSec * 0.85) * 0.03;
+            const targetBase = Math.max(0.0, (poolLevel + waveBreath - ny) * 1.45);
+
+            // 在高处时加速消散化水，在底部浅滩时保持温润的待机果冻层
+            const relaxRate = ny > 0.35 ? (1.0 - energyDecay) * 1.25 : (1.0 - energyDecay) * 0.65;
+            hNext[idx] = advectedH + (targetBase - advectedH) * relaxRate;
+
+            // 高能色温场也同步随着果冻融化向下流淌并向深海蓝褪色
+            const gCurr = glowField[idx];
+            const gAbove = glowField[idxUp];
+            const advectedG = gCurr * (1.0 - slumpSpeed * 1.1) + gAbove * (slumpSpeed * 1.1);
+            const baseGlow = targetBase * 0.25;
+            glowNext[idx] = (advectedG - baseGlow) * energyDecay + baseGlow;
+          }
+        }
+
+        // E. 第二遍：欠阻尼弹簧-阻尼波动方程 (Spring-Damper Wave Equation) + 平面网格 Q 弹回弹
+        for (let y = 0; y < GRID_H; y++) {
+          const ny = y / (GRID_H - 1);
+          const yUp = Math.min(GRID_H - 1, y + 1);
+          const yDown = Math.max(0, y - 1);
+
+          for (let x = 0; x < GRID_W; x++) {
+            const idx = y * GRID_W + x;
+            const xLeft = Math.max(0, x - 1);
+            const xRight = Math.min(GRID_W - 1, x + 1);
+
+            const hC = hNext[idx];
+            const hL = hNext[y * GRID_W + xLeft];
+            const hR = hNext[y * GRID_W + xRight];
+            const hU = hNext[yUp * GRID_W + x];
+            const hD = hNext[yDown * GRID_W + x];
+
+            // 二维拉普拉斯算子 ∇²h 驱动涟漪向四周扩散
+            const laplacian = (hL + hR + hU + hD - 4.0 * hC);
+
+            // 静息平衡面
+            const eqBase = Math.max(0.0, (0.30 - ny) * 1.4);
+
+            // 胡克恢复力 + 邻域张力波
+            const forceH = -springK * (hC - eqBase) + laplacianK * laplacian;
+            vhField[idx] = (vhField[idx] + forceH * dt) * damping;
+
+            let finalH = hC + vhField[idx] * dt;
+            // 允许轻微负波谷（果冻被按下去后的凹坑），但限制下界
+            finalH = Math.max(-0.35, Math.min(2.8, finalH));
+            hField[idx] = finalH;
+            glowField[idx] = Math.max(0.0, Math.min(2.6, glowNext[idx] + Math.max(0, vhField[idx]) * 0.015));
+
+            // 平面点阵位移 (dx, dy) 的欠阻尼弹簧震荡与邻域平滑
+            const dxC = dxField[idx];
+            const dyC = dyField[idx];
+            const dxAvg = 0.25 * (
+              dxField[y * GRID_W + xLeft] +
+              dxField[y * GRID_W + xRight] +
+              dxField[yUp * GRID_W + x] +
+              dxField[yDown * GRID_W + x]
+            );
+            const dyAvg = 0.25 * (
+              dyField[y * GRID_W + xLeft] +
+              dyField[y * GRID_W + xRight] +
+              dyField[yUp * GRID_W + x] +
+              dyField[yDown * GRID_W + x]
+            );
+
+            // 平面胡克恢复力：让被推歪的圆点网格像果冻一样来回 duang 几下再归位
+            const dispSpringK = 26.0 + state.bounciness * 32.0;
+            const dispCoupleK = 18.0;
+            vdxField[idx] = (vdxField[idx] + (-dispSpringK * dxC + dispCoupleK * (dxAvg - dxC)) * dt) * damping;
+            vdyField[idx] = (vdyField[idx] + (-dispSpringK * dyC + dispCoupleK * (dyAvg - dyC)) * dt) * damping;
+
+            // 重力也会轻微向下拉扯被推高的点阵网格
+            const gravityPullY = -Math.max(0, finalH - eqBase) * state.meltGravity * 0.14 * dt;
+
+            dxField[idx] = Math.max(-1.5, Math.min(1.5, dxC + vdxField[idx] * dt));
+            dyField[idx] = Math.max(-1.5, Math.min(1.5, dyC + vdyField[idx] * dt + gravityPullY));
+          }
+        }
+
+        // F. 将物理场打包到 Uint8Array 纹理供 WebGL 高速采样
+        for (let i = 0; i < NUM_CELLS; i++) {
+          const base = i * 4;
+          // R: hField 映射 [-0.4, 2.4] -> [0, 255]
+          const r = Math.max(0, Math.min(255, Math.round(((hField[i] + 0.4) / 2.8) * 255)));
+          // G: dxField 映射 [-1.2, 1.2] -> [0, 255]
+          const g = Math.max(0, Math.min(255, Math.round(((dxField[i] + 1.2) / 2.4) * 255)));
+          // B: dyField 映射 [-1.2, 1.2] -> [0, 255]
+          const b = Math.max(0, Math.min(255, Math.round(((dyField[i] + 1.2) / 2.4) * 255)));
+          // A: glowField 映射 [0.0, 2.2] -> [0, 255]
+          const a = Math.max(0, Math.min(255, Math.round((glowField[i] / 2.2) * 255)));
+
+          texData[base]     = r;
+          texData[base + 1] = g;
+          texData[base + 2] = b;
+          texData[base + 3] = a;
+        }
+
+        // 更新右上角手速/果冻陷落深度指示条平滑回落
+        state.currentSwipeDepth *= Math.pow(0.92, dt * 60);
+        const speedBar = document.getElementById('speedBar');
+        if (speedBar) {
+          const pct = Math.max(6, Math.min(100, Math.round(state.currentSwipeDepth * 100)));
+          speedBar.style.width = pct + '%';
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // 6. WebGL 着色器：45° 半色调点阵 + 3D 曲面法线扭曲 + 双主题果冻配色
+      // ---------------------------------------------------------------------------
+      const vertexShaderSrc = `
+        attribute vec2 aPosition;
+        varying vec2 vUv;
+        void main() {
+          vUv = aPosition * 0.5 + 0.5;
+          gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+      `;
+
+      const fragmentShaderSrc = `
+        precision highp float;
+        varying vec2 vUv;
+
+        uniform sampler2D uPhysicsTex;
+        uniform vec2 uResolution;
+        uniform float uTime;
+        uniform float uDarkMode; // 1.0 = 深色夜光玫红果冻, 0.0 = 浅色清透蓝紫果冻
+
+        // -------------------------------------------------------------------------
+        // 2D Simplex Noise（驱动底部果冻水的自主呼吸与有机流淌感）
+        // -------------------------------------------------------------------------
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec3 permute(vec3 x) { return mod289(((x * 34.0) + 1.0) * x); }
+
+        float snoise(vec2 v) {
+          const vec4 C = vec4(
+            0.211324865405187,  // (3.0-sqrt(3.0))/6.0
+            0.366025403784439,  // 0.5*(sqrt(3.0)-1.0)
+           -0.577350269189626,  // -1.0 + 2.0 * C.x
+            0.024390243902439   // 1.0 / 41.0
+          );
+          vec2 i  = floor(v + dot(v, C.yy));
+          vec2 x0 = v - i + dot(i, C.xx);
+          vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+          vec4 x12 = x0.xyxy + C.xxzz;
+          x12.xy -= i1;
+          i = mod289(i);
+          vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+          vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+          m = m * m;
+          m = m * m;
+          vec3 x = 2.0 * fract(p * C.www) - 1.0;
+          vec3 h = abs(x) - 0.5;
+          vec3 ox = floor(x + 0.5);
+          vec3 a0 = x - ox;
+          m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+          vec3 g;
+          g.x  = a0.x  * x0.x  + h.x  * x0.y;
+          g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+          return 130.0 * dot(m, g);
+        }
+
+        // 解包物理场纹理 (R: 高度h, G: dx, B: dy, A: 色温glow)
+        vec4 samplePhysics(vec2 uv) {
+          vec4 raw = texture2D(uPhysicsTex, clamp(uv, 0.002, 0.998));
+          float h    = raw.r * 2.8 - 0.4;
+          float dx   = raw.g * 2.4 - 1.2;
+          float dy   = raw.b * 2.4 - 1.2;
+          float glow = raw.a * 2.2;
+          return vec4(h, dx, dy, glow);
+        }
+
+        // 双三次/9点平滑采样物理场，确保半色调网格扭曲极其丝滑无锯齿
+        vec4 samplePhysicsSmooth(vec2 uv) {
+          vec2 texel = vec2(1.0 / 108.0, 1.0 / 180.0);
+          vec4 c  = samplePhysics(uv) * 0.36;
+          c += samplePhysics(uv + vec2( texel.x, 0.0)) * 0.11;
+          c += samplePhysics(uv + vec2(-texel.x, 0.0)) * 0.11;
+          c += samplePhysics(uv + vec2(0.0,  texel.y)) * 0.11;
+          c += samplePhysics(uv + vec2(0.0, -texel.y)) * 0.11;
+          c += samplePhysics(uv + vec2( texel.x,  texel.y)) * 0.05;
+          c += samplePhysics(uv + vec2(-texel.x,  texel.y)) * 0.05;
+          c += samplePhysics(uv + vec2( texel.x, -texel.y)) * 0.05;
+          c += samplePhysics(uv + vec2(-texel.x, -texel.y)) * 0.05;
+          return c;
+        }
+
+        // -------------------------------------------------------------------------
+        // 深色模式色谱（还原图3、图4：纯黑底 -> 静谧宝蓝 -> 亮钴蓝 -> 荧光紫 -> 火龙果玫红 -> 流星青白核）
+        // -------------------------------------------------------------------------
+        vec3 getDarkJellyPalette(float energy, float glow, float waveGrad) {
+          vec3 cDeepNavy    = vec3(0.063, 0.106, 0.294); // #101b4b 静谧深宝蓝
+          vec3 cDarkViolet  = vec3(0.141, 0.106, 0.329); // #241b54 暗紫浅滩
+          vec3 cCobalt      = vec3(0.227, 0.314, 0.878); // #3a50e0 亮钴蓝
+          vec3 cElectricPur = vec3(0.541, 0.169, 0.886); // #8a2be2 荧光紫
+          vec3 cDragonfruit = vec3(1.000, 0.118, 0.459); // #ff1e75 火龙果玫红
+          vec3 cCyanCore    = vec3(0.627, 1.000, 0.902); // #a0ffe6 流星核心青白微光
+
+          float t = clamp(energy * 0.62 + glow * 0.48, 0.0, 1.85);
+          vec3 col = mix(cDeepNavy, cDarkViolet, smoothstep(0.0, 0.25, t));
+          col = mix(col, cCobalt,      smoothstep(0.18, 0.52, t));
+          col = mix(col, cElectricPur, smoothstep(0.45, 0.88, t));
+          col = mix(col, cDragonfruit, smoothstep(0.78, 1.32, t));
+          col = mix(col, cCyanCore,    smoothstep(1.30, 1.82, t + waveGrad * 0.25));
+          return col;
+        }
+
+        // -------------------------------------------------------------------------
+        // 浅色模式色谱（还原图1、图2：奶白底 -> 柔和淡薰衣草蓝 -> 亮矢车菊蓝 -> 深皇家蓝/电光紫 -> 青翠色波峰）
+        // -------------------------------------------------------------------------
+        vec3 getLightJellyPalette(float energy, float glow, float waveGrad) {
+          vec3 cSoftPeriwinkle = vec3(0.710, 0.775, 0.995); // 柔和淡薰衣草蓝
+          vec3 cCornflower     = vec3(0.420, 0.535, 0.965); // 清透矢车菊蓝
+          vec3 cRoyalBlue      = vec3(0.231, 0.357, 0.859); // #3b5bdb 深皇家蓝
+          vec3 cElectricViolet = vec3(0.373, 0.239, 0.769); // #5f3dc4 电光紫
+          vec3 cMintTeal       = vec3(0.071, 0.722, 0.525); // #12b886 青翠色折射（图2左侧高能边缘）
+
+          float t = clamp(energy * 0.65 + glow * 0.45, 0.0, 1.75);
+          vec3 col = mix(cSoftPeriwinkle, cCornflower,     smoothstep(0.05, 0.38, t));
+          col = mix(col,                  cRoyalBlue,      smoothstep(0.32, 0.78, t));
+          col = mix(col,                  cElectricViolet, smoothstep(0.72, 1.22, t));
+          // 当波峰剧烈隆起或快速搓动时，叠加图2中标志性的青绿色色散感
+          float tealMask = smoothstep(0.85, 1.48, t) * clamp(0.5 + waveGrad * 1.6, 0.0, 1.0);
+          col = mix(col, cMintTeal, tealMask * 0.72);
+          return col;
+        }
+
+        void main() {
+          vec2 aspectVec = vec2(uResolution.x / uResolution.y, 1.0);
+
+          // 1. 叠加双层连续柏林噪声（Simplex Noise），让底部果冻水时刻保持呼吸晃荡感
+          float n1 = snoise(vUv * vec2(2.6, 2.2) + vec2(uTime * 0.14, -uTime * 0.18));
+          float n2 = snoise(vUv * vec2(5.2, 4.5) - vec2(uTime * 0.22,  uTime * 0.11));
+          float breathNoise = (n1 * 0.65 + n2 * 0.35);
+
+          // 2. 采样平滑物理场与空间梯度（用于计算 3D 果冻表面的凹凸倾斜法线）
+          vec4 phys = samplePhysicsSmooth(vUv);
+          vec2 eps = vec2(0.012, 0.012);
+          float hRight = samplePhysicsSmooth(vUv + vec2(eps.x, 0.0)).x;
+          float hLeft  = samplePhysicsSmooth(vUv - vec2(eps.x, 0.0)).x;
+          float hUp    = samplePhysicsSmooth(vUv + vec2(0.0, eps.y)).x;
+          float hDown  = samplePhysicsSmooth(vUv - vec2(0.0, eps.y)).x;
+
+          vec2 gradH = vec2(hRight - hLeft, hUp - hDown) / (2.0 * eps);
+
+          // 3. 合成底部自然果冻水浅滩 + 物理场隆起高度
+          // 屏幕下方自然聚集的果冻高度曲线（带斜向波浪起伏，还原截图1~4斜向波浪构图）
+          float diagWave = sin(vUv.x * 3.6 + uTime * 0.55) * 0.06 + breathNoise * 0.055;
+          float ambientPool = smoothstep(0.62 + diagWave, 0.02, vUv.y) * 0.62;
+
+          float rawH = phys.x;
+          vec2  disp = phys.yz;
+          float glow = phys.w;
+
+          // 总果冻厚度/能量场
+          float jellyHeight = max(0.0, max(ambientPool, rawH) + rawH * 0.65 + breathNoise * 0.04 * smoothstep(0.75, 0.0, vUv.y));
+
+          // 4. 关键视觉机制：3D 曲面 UV 扭曲（让原本平直的半色调圆点随果冻隆起弯曲挤压！）
+          // 结合平面速度拖拽位移 disp 与高度场梯度 gradH，产生真实的立体果冻透镜折光与挤压感
+          vec2 uvWarp = disp * 0.052 + gradH * 0.026 + vec2(n1, n2) * 0.004 * clamp(jellyHeight, 0.0, 1.0);
+          vec2 warpedPos = (vUv - uvWarp) * uResolution;
+
+          // 5. 构建 45° 旋转半色调点阵网格 (Halftone Dot-Matrix Grid)
+          // 截图中的圆点呈经典 45° 斜向矩阵排列，自适应屏幕像素密度
+          float baseSpacing = clamp(min(uResolution.x, uResolution.y) / 92.0, 5.2, 9.5);
+          // 45度旋转矩阵
+          const float cos45 = 0.70710678;
+          const float sin45 = 0.70710678;
+          vec2 rotCoord = vec2(
+            warpedPos.x * cos45 - warpedPos.y * sin45,
+            warpedPos.x * sin45 + warpedPos.y * cos45
+          ) / baseSpacing;
+
+          vec2 cellUv = fract(rotCoord) - 0.5;
+          float distToDotCenter = length(cellUv);
+
+          // 6. 计算圆点半径 (Dot Scale) —— 手速越快/果冻越深，圆点越大、排列越密不透风
+          // 计算局部挤压散度：当网格被推挤压缩时，圆点进一步膨胀饱满
+          float compression = clamp(length(gradH) * 0.35 + length(disp) * 0.45, 0.0, 0.65);
+          float effectiveEnergy = clamp(jellyHeight * 0.88 + glow * 0.42 + compression * 0.35, 0.0, 1.85);
+
+          // 圆点半径从 0.0（完全消隐）平滑增长到 0.54（高能波峰处圆点互相融合密不透风）
+          float dotRadius = smoothstep(0.02, 1.15, effectiveEnergy) * 0.50
+                          + smoothstep(0.85, 1.65, effectiveEnergy) * 0.14;
+
+          // 抗锯齿圆点边缘 (fwidth 自适应平滑)
+          float aa = 0.085;
+          float dotMask = 1.0 - smoothstep(dotRadius - aa, dotRadius + aa, distToDotCenter);
+          // 若半径极小则彻底隐去
+          dotMask *= smoothstep(0.015, 0.07, dotRadius);
+
+          // 7. 计算色彩与次表面散射果冻底光 (Subsurface Jelly Glow)
+          float waveSlope = gradH.x * 0.6 + gradH.y * 0.4 + disp.x * 0.5;
+
+          // --- 深色模式渲染 ---
+          vec3 darkBg = vec3(0.020, 0.020, 0.039); // #05050a 纯黑深邃背景
+          vec3 darkDotColor = getDarkJellyPalette(effectiveEnergy, glow, waveSlope);
+          // 深色模式下，高能果冻区域底部的荧光次表面透光（还原图3玫红/紫光晕质感）
+          float darkSubsurface = smoothstep(0.12, 1.35, effectiveEnergy) * 0.58
+                               + smoothstep(0.65, 1.65, glow) * 0.35;
+          vec3 darkFinal = mix(darkBg, darkDotColor * 0.42, darkSubsurface);
+          darkFinal = mix(darkFinal, darkDotColor, dotMask * smoothstep(0.02, 0.32, effectiveEnergy));
+          // 流星核心与高能波峰的柔光高光
+          float highlight = smoothstep(1.15, 1.85, effectiveEnergy + glow * 0.5) * 0.38;
+          darkFinal += vec3(0.55, 0.85, 1.0) * highlight;
+
+          // --- 浅色模式渲染 ---
+          vec3 lightBg = vec3(0.973, 0.976, 0.988); // #f8f9fc 纯净奶白底色
+          vec3 lightDotColor = getLightJellyPalette(effectiveEnergy, glow, waveSlope);
+          // 浅色模式下，波峰处果冻半透明蓝紫色果冻底色晕染（还原图1、图2）
+          float lightSubsurface = smoothstep(0.18, 1.38, effectiveEnergy) * 0.52;
+          vec3 lightJellyTint = mix(vec3(0.82, 0.86, 1.0), lightDotColor, 0.68);
+          vec3 lightFinal = mix(lightBg, lightJellyTint, lightSubsurface);
+          float lightDotAlpha = dotMask * smoothstep(0.02, 0.25, effectiveEnergy);
+          lightFinal = mix(lightFinal, lightDotColor, lightDotAlpha);
+
+          // 根据主题平滑混合输出
+          vec3 finalColor = mix(lightFinal, darkFinal, uDarkMode);
+
+          gl_FragColor = vec4(finalColor, 1.0);
+        }
+      `;
+
+      // 编译着色器辅助函数
+      function compileShader(type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+
+      const vs = compileShader(gl.VERTEX_SHADER, vertexShaderSrc);
+      const fs = compileShader(gl.FRAGMENT_SHADER, fragmentShaderSrc);
+      const program = gl.createProgram();
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+      gl.useProgram(program);
+
+      // 全屏四边形顶点缓冲
+      const quadVerts = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, quadVerts, gl.STATIC_DRAW);
+
+      const aPositionLoc = gl.getAttribLocation(program, 'aPosition');
+      gl.enableVertexAttribArray(aPositionLoc);
+      gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 0, 0);
+
+      // Uniform 位置
+      const uPhysicsTexLoc = gl.getUniformLocation(program, 'uPhysicsTex');
+      const uResolutionLoc = gl.getUniformLocation(program, 'uResolution');
+      const uTimeLoc       = gl.getUniformLocation(program, 'uTime');
+      const uDarkModeLoc   = gl.getUniformLocation(program, 'uDarkMode');
+
+      // 创建物理场动态纹理
+      const physicsTex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, physicsTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, GRID_W, GRID_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, texData);
+      gl.uniform1i(uPhysicsTexLoc, 0);
+
+      // ---------------------------------------------------------------------------
+      // 7. 响应式画布尺寸更新
+      // ---------------------------------------------------------------------------
+      function resizeCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2.0);
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      // ---------------------------------------------------------------------------
+      // 8. 多指触摸 & 鼠标交互（追踪瞬时手速 v = Δp / Δt，手速越快果冻越深！）
+      // ---------------------------------------------------------------------------
+      const activePointers = new Map(); // id -> { x, y, time }
+
+      function getNormalizedPos(clientX, clientY) {
+        return {
+          x: clientX / window.innerWidth,
+          y: 1.0 - (clientY / window.innerHeight) // WebGL Y轴向上为 0->1
+        };
+      }
+
+      function handlePointerDown(id, clientX, clientY) {
+        const pos = getNormalizedPos(clientX, clientY);
+        const now = performance.now();
+        activePointers.set(id, { x: pos.x, y: pos.y, time: now });
+
+        // 轻触瞬间产生一朵 Q 弹果冻小涟漪
+        injectJellyImpulseSegment(pos.x, pos.y, pos.x + 0.001, pos.y + 0.001, 0.25, -0.25, 0.08, 0.9);
+        state.currentSwipeDepth = Math.min(1.0, state.currentSwipeDepth + 0.25);
+      }
+
+      function handlePointerMove(id, clientX, clientY) {
+        const prev = activePointers.get(id);
+        const pos = getNormalizedPos(clientX, clientY);
+        const now = performance.now();
+
+        if (!prev) {
+          activePointers.set(id, { x: pos.x, y: pos.y, time: now });
+          return;
+        }
+
+        const dt = Math.max(0.004, (now - prev.time) * 0.001);
+        const vx = (pos.x - prev.x) / dt;
+        const vy = (pos.y - prev.y) / dt;
+        const speedMag = Math.sqrt(vx * vx + vy * vy);
+
+        // 将手指滑动的瞬时速度注入果冻网格（手速越快，冲量越大、色彩越深）
+        injectJellyImpulseSegment(prev.x, prev.y, pos.x, pos.y, vx, vy, 0.095, 1.25);
+
+        // 更新右上角深度指示器
+        const normalizedDepth = Math.min(1.0, speedMag * 0.38);
+        state.currentSwipeDepth = Math.max(state.currentSwipeDepth, normalizedDepth);
+
+        // 如果用户快速甩动手指（高速度），还会顺着指尖方向甩出一颗果冻流星！
+        if (speedMag > 2.3 && meteors.length < 10 && Math.random() < 0.35) {
+          meteors.push({
+            x: pos.x,
+            y: pos.y,
+            vx: vx * 0.42,
+            vy: vy * 0.42,
+            radius: 0.078,
+            power: Math.min(1.9, 0.9 + speedMag * 0.22),
+            life: 0,
+            maxLife: 0.65,
+            wobbleFreq: 14,
+            wobblePhase: 0
+          });
+        }
+
+        prev.x = pos.x;
+        prev.y = pos.y;
+        prev.time = now;
+      }
+
+      function handlePointerUp(id) {
+        activePointers.delete(id);
+      }
+
+      // 鼠标事件绑定
+      let isMouseDown = false;
+      canvas.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        handlePointerDown('mouse', e.clientX, e.clientY);
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (isMouseDown) {
+          handlePointerMove('mouse', e.clientX, e.clientY);
+        }
+      });
+      window.addEventListener('mouseup', () => {
+        isMouseDown = false;
+        handlePointerUp('mouse');
+      });
+
+      // 触摸事件绑定（支持多指同时揉搓果冻产生波浪干涉！）
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          handlePointerDown(t.identifier, t.clientX, t.clientY);
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          handlePointerMove(t.identifier, t.clientX, t.clientY);
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          handlePointerUp(e.changedTouches[i].identifier);
+        }
+      });
+      canvas.addEventListener('touchcancel', (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          handlePointerUp(e.changedTouches[i].identifier);
+        }
+      });
+
+      // 手机重力感应倾斜支持（摇晃手机时果冻水也会左右晃荡）
+      window.addEventListener('deviceorientation', (e) => {
+        if (e.gamma !== null) {
+          state.tiltX = Math.max(-1.0, Math.min(1.0, e.gamma / 35.0));
+        }
+      });
+
+      // ---------------------------------------------------------------------------
+      // 9. UI 控制栏事件绑定与双主题切换逻辑
+      // ---------------------------------------------------------------------------
+      const themeDarkBtn       = document.getElementById('themeDarkBtn');
+      const themeLightBtn      = document.getElementById('themeLightBtn');
+      const meteorShowerBtn    = document.getElementById('meteorShowerBtn');
+      const singleMeteorBtn    = document.getElementById('singleMeteorBtn');
+      const bouncinessSlider   = document.getElementById('bouncinessSlider');
+      const meltSpeedSlider    = document.getElementById('meltSpeedSlider');
+      const dampingValue       = document.getElementById('dampingValue');
+      const gravityValue       = document.getElementById('gravityValue');
+      const collapseSlidersBtn = document.getElementById('collapseSlidersBtn');
+      const slidersPanel       = document.getElementById('slidersPanel');
+      const collapseText       = document.getElementById('collapseText');
+      const collapseIcon       = document.getElementById('collapseIcon');
+      const toggleHeroBtn      = document.getElementById('toggleHeroBtn');
+      const heroOverlay        = document.getElementById('heroOverlay');
+      const rippleBtn          = document.getElementById('rippleBtn');
+      const starTrigger        = document.getElementById('starTrigger');
+
+      // 切换深色/浅色果冻主题
+      function applyTheme(isDark) {
+        state.isDarkMode = isDark;
+        const glassPanels = [
+          document.getElementById('topBrandPill'),
+          document.getElementById('speedMeterPill'),
+          document.getElementById('miniTabPill'),
+          document.getElementById('controlDock')
+        ];
+
+        const heroHeading  = document.getElementById('heroHeading');
+        const heroSub      = document.getElementById('heroSub');
+        const brandTitle   = document.getElementById('brandTitle');
+        const speedLabel   = document.getElementById('speedLabel');
+        const dampingLabel = document.getElementById('dampingLabel');
+        const gravityLabel = document.getElementById('gravityLabel');
+
+        if (isDark) {
+          document.body.className = 'bg-[#05050a] text-white transition-colors duration-500';
+          glassPanels.forEach(el => {
+            el.classList.remove('glass-light');
+            el.classList.add('glass-dark');
+          });
+          themeDarkBtn.className  = 'px-3.5 py-1.5 rounded-full bg-black text-white shadow transition-all';
+          themeLightBtn.className = 'px-3.5 py-1.5 rounded-full text-white/75 hover:text-white transition-all';
+
+          heroHeading.className = 'text-2xl sm:text-4xl font-semibold tracking-tight leading-snug mb-2 text-white transition-colors duration-300';
+          heroSub.className     = 'text-xs sm:text-sm text-white/65 max-w-md mb-5 transition-colors duration-300';
+          rippleBtn.className   = 'pointer-events-auto px-6 py-2.5 rounded-full text-sm sm:text-base font-medium transition-all duration-300 active:scale-95 bg-[#0a0b12]/90 text-white shadow-[0_0_30px_rgba(255,30,117,0.35)] border border-white/15 hover:border-white/30';
+
+          brandTitle.className   = 'text-xs sm:text-sm font-medium tracking-wide text-white/90';
+          speedLabel.className   = 'text-xs text-white/70';
+          dampingLabel.className = 'font-medium text-white/85';
+          gravityLabel.className = 'font-medium text-white/85';
+          singleMeteorBtn.className = 'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs sm:text-sm font-medium bg-white/10 hover:bg-white/20 text-white transition active:scale-95';
+          collapseSlidersBtn.className = 'ml-auto flex items-center gap-1 px-3 py-2 rounded-full text-xs bg-white/10 hover:bg-white/20 text-white/85 transition';
+          toggleHeroBtn.className = 'ml-1 text-xs px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 transition';
+        } else {
+          document.body.className = 'bg-[#f8f9fc] text-[#111420] transition-colors duration-500';
+          glassPanels.forEach(el => {
+            el.classList.remove('glass-dark');
+            el.classList.add('glass-light');
+          });
+          themeLightBtn.className = 'px-3.5 py-1.5 rounded-full bg-white text-[#111420] shadow-md transition-all';
+          themeDarkBtn.className  = 'px-3.5 py-1.5 rounded-full text-[#111420]/65 hover:text-[#111420] transition-all';
+
+          heroHeading.className = 'text-2xl sm:text-4xl font-semibold tracking-tight leading-snug mb-2 text-[#111420] transition-colors duration-300';
+          heroSub.className     = 'text-xs sm:text-sm text-[#111420]/60 max-w-md mb-5 transition-colors duration-300';
+          rippleBtn.className   = 'pointer-events-auto px-6 py-2.5 rounded-full text-sm sm:text-base font-medium transition-all duration-300 active:scale-95 bg-white text-[#111420] shadow-[0_8px_28px_rgba(59,91,219,0.16)] border border-indigo-100 hover:bg-indigo-50/50';
+
+          brandTitle.className   = 'text-xs sm:text-sm font-medium tracking-wide text-[#111420]/90';
+          speedLabel.className   = 'text-xs text-[#111420]/70';
+          dampingLabel.className = 'font-medium text-[#111420]/85';
+          gravityLabel.className = 'font-medium text-[#111420]/85';
+          singleMeteorBtn.className = 'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs sm:text-sm font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-[#1e293b] transition active:scale-95';
+          collapseSlidersBtn.className = 'ml-auto flex items-center gap-1 px-3 py-2 rounded-full text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-[#1e293b] transition';
+          toggleHeroBtn.className = 'ml-1 text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 text-[#1e293b] transition';
+        }
+
+        // 切换主题瞬间在底部果冻池激起一圈柔和波浪
+        triggerRadialJellySplash(0.5, 0.35, 1.15, 0.22);
+      }
+
+      themeDarkBtn.addEventListener('click', () => applyTheme(true));
+      themeLightBtn.addEventListener('click', () => applyTheme(false));
+
+      // 召唤流星雨按钮
+      meteorShowerBtn.addEventListener('click', () => {
+        triggerMeteorShower(8);
+      });
+
+      // 发射单颗高能超级大果冻流星
+      singleMeteorBtn.addEventListener('click', () => {
+        const fromLeft = Math.random() > 0.5;
+        spawnMeteor({
+          fromLeft,
+          x: fromLeft ? 0.08 : 0.92,
+          y: 0.78,
+          speed: 1.25,
+          radius: 0.115,
+          power: 2.1
+        });
+      });
+
+      // 点击中央「我们来一探究竟吧」或四角星激起果冻波峰
+      rippleBtn.addEventListener('click', () => {
+        triggerRadialJellySplash(0.5, 0.45, 1.85, 0.24);
+        spawnMeteor({ fromLeft: true, x: 0.12, y: 0.72, speed: 1.05, radius: 0.095, power: 1.7 });
+        spawnMeteor({ fromLeft: false, x: 0.88, y: 0.72, speed: 1.05, radius: 0.095, power: 1.7 });
+      });
+
+      starTrigger.addEventListener('click', () => {
+        triggerRadialJellySplash(0.5, 0.68, 1.75, 0.22);
+      });
+
+      // 隐藏/显示中央欢迎文字
+      toggleHeroBtn.addEventListener('click', () => {
+        state.heroVisible = !state.heroVisible;
+        if (state.heroVisible) {
+          heroOverlay.style.opacity = '1';
+          heroOverlay.style.transform = 'translateY(0px)';
+          toggleHeroBtn.textContent = '隐藏文字';
+        } else {
+          heroOverlay.style.opacity = '0';
+          heroOverlay.style.transform = 'translateY(-12px)';
+          toggleHeroBtn.textContent = '显示文字';
+        }
+      });
+
+      // 展开/收起底部参数滑块面板
+      collapseSlidersBtn.addEventListener('click', () => {
+        state.slidersExpanded = !state.slidersExpanded;
+        if (state.slidersExpanded) {
+          slidersPanel.style.display = 'grid';
+          collapseText.textContent = '收起参数';
+          collapseIcon.style.transform = 'rotate(0deg)';
+        } else {
+          slidersPanel.style.display = 'none';
+          collapseText.textContent = '展开参数';
+          collapseIcon.style.transform = 'rotate(180deg)';
+        }
+      });
+
+      // Q弹度（欠阻尼）滑块
+      bouncinessSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        state.bounciness = val;
+        const pct = Math.round(val * 100);
+        let desc = '温和布丁';
+        if (val > 0.85) desc = '超Q弹果冻';
+        else if (val > 0.6) desc = 'Q弹爽滑';
+        else if (val > 0.35) desc = '柔糯软糖';
+        dampingValue.textContent = `${desc} (${pct}%)`;
+      });
+
+      // 融化流速（重力）滑块
+      meltSpeedSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        state.meltGravity = val;
+        const pct = Math.round(val * 100);
+        let desc = '自然流淌';
+        if (val > 0.8) desc = '飞速化水';
+        else if (val > 0.45) desc = '自然流淌';
+        else if (val > 0.2) desc = '浓稠糖浆';
+        else desc = '慢速凝固';
+        gravityValue.textContent = `${desc} (${pct}%)`;
+      });
+
+      // ---------------------------------------------------------------------------
+      // 10. 启动开场流星演示与 60fps 主渲染循环
+      // ---------------------------------------------------------------------------
+      let currentThemeBlend = 1.0; // 平滑过渡深浅色 uniform
+
+      // 页面加载后立即划过两颗迎宾果冻流星，展示 duang 来 duang 去并化水下流的完整过程
+      setTimeout(() => {
+        spawnMeteor({ fromLeft: false, x: 0.88, y: 0.72, speed: 0.95, radius: 0.095, power: 1.65 });
+      }, 250);
+      setTimeout(() => {
+        spawnMeteor({ fromLeft: true, x: 0.14, y: 0.62, speed: 0.88, radius: 0.088, power: 1.55 });
+      }, 950);
+
+      function animate(now) {
+        // 1. 步进物理网格与果冻流星
+        stepPhysics(now);
+
+        // 2. 上传更新后的物理场纹理至 GPU
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, physicsTex);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GRID_W, GRID_H, gl.RGBA, gl.UNSIGNED_BYTE, texData);
+
+        // 3. 平滑主题过渡与绘制
+        const targetTheme = state.isDarkMode ? 1.0 : 0.0;
+        currentThemeBlend += (targetTheme - currentThemeBlend) * 0.12;
+
+        gl.uniform2f(uResolutionLoc, canvas.width, canvas.height);
+        gl.uniform1f(uTimeLoc, now * 0.001);
+        gl.uniform1f(uDarkModeLoc, currentThemeBlend);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        requestAnimationFrame(animate);
+      }
+
+      requestAnimationFrame(animate);
+    };
+  </script>
+</body>
+</html>
