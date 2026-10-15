@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <title>你想知道什么?</title>
+  <style>
+    html {
+      color-scheme: dark;
+      background: #000;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      cursor: default;
+    }
+
+    #sky {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 0;
+      pointer-events: none;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <script>
+    (function () {
+      var canvas = document.getElementById("sky");
+      var ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) return;
+
+      var WAIT_IN = 3000;
+      var FADE_IN = 3600;
+
+      var stars = [];
+      var w = 0;
+      var h = 0;
+      var dpr = 1;
+      var opacity = 0;
+      var fade = { from: 0, to: 0, start: 0, dur: 1, done: true };
+      var queued = null;
+      var nextDash = 0;
+      var last = 0;
+      var running = false;
+      var reduce = false;
+      var motionMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+      reduce = motionMq.matches;
+
+      function onMotion() {
+        reduce = motionMq.matches;
+      }
+
+      if (motionMq.addEventListener) motionMq.addEventListener("change", onMotion);
+      else if (motionMq.addListener) motionMq.addListener(onMotion);
+
+      function desiredCount() {
+        return Math.max(12, Math.min(28, Math.round((w * h) / 80000)));
+      }
+
+      function resetStar(s, fromTop) {
+        var x = Math.random() * w;
+        var y = fromTop ? -12 - Math.random() * 90 : Math.random() * h;
+        var attempt;
+
+        if (!fromTop) {
+          for (attempt = 0; attempt < 8; attempt++) {
+            x = Math.random() * w;
+            y = Math.random() * h;
+            var ok = true;
+            var i;
+            for (i = 0; i < stars.length; i++) {
+              var o = stars[i];
+              if (o === s || o.x == null) continue;
+              var dx = o.x - x;
+              var dy = o.y - y;
+              if (dx * dx + dy * dy < 4096) {
+                ok = false;
+                break;
+              }
+            }
+            if (ok) break;
+          }
+        }
+
+        var roll = Math.random();
+        var radius;
+        if (roll < 0.8) radius = 0.34 + Math.random() * 0.4;
+        else if (roll < 0.95) radius = 0.8 + Math.random() * 0.36;
+        else radius = 1.25 + Math.random() * 0.55;
+
+        var speedRoll = Math.random();
+        var speed = speedRoll < 0.78
+          ? 4 + Math.random() * 12
+          : 20 + Math.random() * 32;
+
+        s.x = x;
+        s.y = y;
+        s.r = radius;
+        s.a = radius < 0.75
+          ? 0.38 + Math.random() * 0.42
+          : 0.62 + Math.random() * 0.3;
+        s.vy = speed;
+        s.vx = (Math.random() - 0.5) * (speed < 18 ? 0.7 : 2.2);
+        s.phase = Math.random() * Math.PI * 2;
+        s.phaseRate = 0.18 + Math.random() * 0.4;
+        s.dashing = false;
+      }
+
+      function syncStars() {
+        var n = desiredCount();
+        var s;
+        while (stars.length < n) {
+          s = {};
+          resetStar(s, false);
+          stars.push(s);
+        }
+        if (stars.length > n) stars.length = n;
+        var i;
+        for (i = 0; i < stars.length; i++) {
+          s = stars[i];
+          if (s.x < -40 || s.x > w + 40 || s.y > h + 60) resetStar(s, false);
+        }
+      }
+
+      function resize() {
+        var rect = canvas.getBoundingClientRect();
+        var nw = rect.width || window.innerWidth;
+        var nh = rect.height || window.innerHeight;
+        var ndpr = window.devicePixelRatio || 1;
+        if (nw < 1 || nh < 1) return;
+        if (Math.abs(nw - w) < 0.5 && Math.abs(nh - h) < 0.5 && ndpr === dpr && canvas.width > 0) return;
+        w = nw;
+        h = nh;
+        dpr = ndpr;
+        canvas.width = Math.max(1, Math.round(w * dpr));
+        canvas.height = Math.max(1, Math.round(h * dpr));
+        syncStars();
+      }
+
+      function startFade(to, dur, now) {
+        fade = {
+          from: opacity,
+          to: to,
+          start: now,
+          dur: dur,
+          done: Math.abs(opacity - to) < 0.001
+        };
+        if (fade.done) opacity = to;
+      }
+
+      function sample(now) {
+        if (!fade.done) {
+          var t = (now - fade.start) / fade.dur;
+          if (t < 0) t = 0;
+          if (t >= 1) {
+            opacity = fade.to;
+            fade.done = true;
+          } else {
+            var e = t * t * (3 - 2 * t);
+            opacity = fade.from + (fade.to - fade.from) * e;
+          }
+        }
+        if (queued && now >= queued.at) {
+          var q = queued;
+          queued = null;
+          startFade(q.to, q.dur, now);
+        }
+      }
+
+      function stepStars(dt) {
+        var bottom = h + 36;
+        var i;
+        for (i = 0; i < stars.length; i++) {
+          var s = stars[i];
+          s.x += s.vx * dt;
+          s.y += s.vy * dt;
+          if (s.y > bottom || s.x < -90 || s.x > w + 90) resetStar(s, true);
+        }
+      }
+
+      function anyDashing() {
+        var i;
+        for (i = 0; i < stars.length; i++) {
+          if (stars[i].dashing) return true;
+        }
+        return false;
+      }
+
+      function maybeDash(now) {
+        if (stars.length === 0) return;
+        if (opacity < 0.75) {
+          if (now > nextDash) nextDash = now + 4000 + Math.random() * 4000;
+          return;
+        }
+        if (anyDashing()) {
+          if (now > nextDash) nextDash = now + 4000;
+          return;
+        }
+        if (now < nextDash) return;
+
+        var s = stars[(Math.random() * stars.length) | 0];
+        var quicker = Math.random() < 0.25;
+        s.dashing = true;
+        s.x = Math.random() * w;
+        s.y = -28;
+        s.vy = quicker ? 235 + Math.random() * 70 : 150 + Math.random() * 75;
+        s.vx = (Math.random() - 0.5) * 16;
+        s.a = Math.max(s.a, 0.78);
+        s.r = Math.min(1.2, Math.max(s.r, 0.65));
+        nextDash = now + 13000 + Math.random() * 11000;
+      }
+
+      function drawStar(s, now) {
+        var a = s.a;
+        if (!reduce && !s.dashing) {
+          a *= 0.93 + 0.07 * Math.sin(now * 0.001 * s.phaseRate + s.phase);
+        }
+        a *= opacity;
+        if (a < 0.012) return;
+
+        if (!reduce) {
+          var vx = s.vx;
+          var vy = s.vy;
+          var speed = Math.sqrt(vx * vx + vy * vy);
+          var len = 0;
+          var factor = 0;
+          if (s.dashing && speed > 0) {
+            len = Math.min(140, speed * 0.4);
+            factor = 0.28;
+          } else if (speed > 34) {
+            len = Math.min(30, (speed - 28) * 0.6);
+            factor = Math.min(0.1, (speed - 28) / 320);
+          }
+          if (len > 2 && factor > 0.02) {
+            var scale = len / speed;
+            var x2 = s.x - vx * scale;
+            var y2 = s.y - vy * scale;
+            var head = a * factor;
+            var g = ctx.createLinearGradient(x2, y2, s.x, s.y);
+            g.addColorStop(0, "rgba(255,255,255,0)");
+            g.addColorStop(1, "rgba(255,255,255," + head.toFixed(3) + ")");
+            ctx.strokeStyle = g;
+            ctx.lineWidth = s.dashing ? 0.8 : 0.55;
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(s.x, s.y);
+            ctx.stroke();
+          }
+        }
+
+        ctx.fillStyle = "rgba(255,255,255," + a.toFixed(3) + ")";
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function draw(now) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+        if (opacity < 0.004) return;
+        ctx.lineCap = "round";
+        var i;
+        for (i = 0; i < stars.length; i++) drawStar(stars[i], now);
+      }
+
+      function frame(now) {
+        if (!running) return;
+        if (!last) last = now;
+        var dt = (now - last) / 1000;
+        last = now;
+        if (dt < 0) dt = 0;
+        if (dt > 0.05) dt = 0.05;
+
+        sample(now);
+        if (!reduce) {
+          stepStars(dt);
+          maybeDash(now);
+        }
+        draw(now);
+        if (running) requestAnimationFrame(frame);
+      }
+
+      function start() {
+        if (running) return;
+        running = true;
+        last = 0;
+        requestAnimationFrame(frame);
+      }
+
+      function stop() {
+        running = false;
+      }
+
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) stop();
+        else start();
+      });
+
+      window.addEventListener("resize", resize);
+      if (window.visualViewport) window.visualViewport.addEventListener("resize", resize);
+
+      var now0 = performance.now();
+      opacity = 0;
+      fade = { from: 0, to: 0, start: now0, dur: 1, done: true };
+      queued = { at: now0 + WAIT_IN, to: 1, dur: FADE_IN };
+      nextDash = now0 + 14000 + Math.random() * 4000;
+      resize();
+      if (!document.hidden) start();
+    })();
+  </script>
+</body>
+</html>
