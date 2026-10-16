@@ -2062,12 +2062,13 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
 
     /* 大小、亮度、快慢都是每颗自己抽的。七成很慢（往下四到十一像素一秒，
        从屏幕顶上淌到底要一两分钟），两成快一点，少数几颗一直在滑。 */
-    function dress(s){
+    /* u：快慢那一下由 fill() 发好了递进来（见下）；不给就自己抽 */
+    function dress(s, u){
       var roll = Math.random();
       if (roll < 0.66)      { s.r = 0.55 + Math.random() * 0.25; s.a = 0.45 + Math.random() * 0.25; }
       else if (roll < 0.94) { s.r = 0.80 + Math.random() * 0.30; s.a = 0.60 + Math.random() * 0.25; }
       else                  { s.r = 1.10 + Math.random() * 0.40; s.a = 0.80 + Math.random() * 0.20; }
-      var v = Math.random();
+      var v = u == null ? Math.random() : u;
       s.v = v < 0.72 ? 4 + Math.random() * 7
           : v < 0.94 ? 14 + Math.random() * 16
           :            40 + Math.random() * 30;
@@ -2130,10 +2131,15 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       }
     }
 
+    /* 快慢按比例发，不各抽各的：各抽各的话，一屏三十几颗里一颗快的都抽不到的
+       时候有八分之一，「少数几颗一直在滑」就没了。把 0 到 1 切成 k 段，
+       每颗各分一段、在段里再随机，顺序打乱——每颗单看还是七成慢、两成快一点、
+       少数很快，合起来每回天黑都齐。 */
     function fill(now){
-      var n = want();
-      while (stars.length < n){
-        var s = dress({});
+      var n = want(), k = n - stars.length, deck = [];
+      for (var i = 0; i < k; i++) deck.splice((Math.random() * (i + 1)) | 0, 0, i);
+      for (i = 0; i < k; i++){
+        var s = dress({}, (deck[i] + Math.random()) / k);
         scatter(s);
         s.at = now; s.fd = 1600;
         stars.push(s);
@@ -2194,7 +2200,9 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
        找东西的框开着时：输入框那一格整格擦掉（打字的时候字底下别有星星跑过去），
        底下「找到几件」那行只擦字。
        滚动、开合抽屉、找东西、换屏幕方向、找东西的框收放（页面整体挪动，
-       靠 transitionrun 和 focusout 知道）的那一会儿每帧都量，平时三百毫秒量一次。 */
+       靠 transitionrun 和 focusin / focusout 知道——「减弱动态效果」开着时
+       框是一下子弹开的，没有 transition，只能靠焦点）的那一会儿每帧都量，
+       平时三百毫秒量一次。 */
     var holes = [], measuredAt = 0, busyUntil = 0;
     var RINGS = [12, 10, 0.4,   7, 7, 0.6,   3, 4, 1];   /* 左右多擦几像素、上下多擦几像素、擦多重 */
     var range = document.createRange ? document.createRange() : null;
@@ -2251,7 +2259,7 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       });
     }
     function stir(){ busyUntil = performance.now() + 700; }
-    ['scroll', 'toggle', 'input', 'click', 'touchmove', 'transitionrun', 'focusout'].forEach(function(t){
+    ['scroll', 'toggle', 'input', 'click', 'touchmove', 'transitionrun', 'focusin', 'focusout'].forEach(function(t){
       document.addEventListener(t, stir, { capture: true, passive: true });
     });
 
