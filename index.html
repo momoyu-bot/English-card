@@ -2010,7 +2010,7 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
    流星不应该是斜的嘛、有一点点密了、总感觉哪里不对。所以第三版：
      · 整片天朝同一个斜的方向淌（右上往左下，跟竖直差三十度左右），
        突然滑过去的那几颗也顺着这个方向，各自只歪一点点；
-     · 少三成，大点的也少放几颗；
+     · 少四分之一，大点的也少放几颗；
      · 星星不压字（见 CSS「夜里」那段和下面的 measure()）。
 
    省电：天亮了画布整张拿掉，什么都不画。 */
@@ -2096,18 +2096,28 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
     }
 
     /* 淌出去的，从上游重新进来：斜着走，所以上边和右边都会进来星星，
-       按两条边各自「迎着」多少来分，屏幕哪儿都不会淌空。 */
+       按两条边各自「迎着」多少来分，屏幕哪儿都不会淌空。
+       大小亮度重抽，快慢不重抽：重抽的话快的星淌得快、回来得勤，
+       每回来一次都有七成抽成慢的，淌十几秒以后快的、带尾巴的就几乎没了。
+       也贴着边进来、整颗连尾巴出了屏幕才回去，不在屏幕外面白白耗着。 */
     function reenter(s){
+      var v = s.dash ? s.v0 : s.v;
       dress(s);
+      s.v = v;
       var top = W, side = H * Math.abs(LEAN);
       if (Math.random() * (top + side) < top){
         s.x = Math.random() * W;
-        s.y = -8 - Math.random() * 40;
+        s.y = -(s.r + 1);
       } else {
-        s.x = W + 8 + Math.random() * 40;
+        s.x = W + s.r + 1;
         s.y = Math.random() * H;
       }
       s.at = 0; s.fd = 1;
+    }
+    /* 尾巴往上量有多高（跟 draw() 里同一个算法），不拖尾巴的是 0 */
+    function tailOf(s){
+      var len = Math.min(s.dash ? 120 : 40, s.v * (s.dash ? 0.4 : 0.6));
+      return len >= 8 ? len : 0;
     }
 
     /* 越亮的越早出来（天刚黑先看见的总是最亮的那几颗）。
@@ -2162,47 +2172,77 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
         }
         s.y += s.v * dt;
         s.x += s.v * s.lean * dt;
-        if (s.y > H + 40 || s.x < -40 || s.x > W + 60) reenter(s);
+        var tl = tailOf(s);
+        if (s.y > H + tl + s.r + 1 || s.x < -(-s.lean * tl + s.r + 1) || s.x > W + 60) reenter(s);
       }
     }
 
     /* ---- 字前面没有星星 ----
        量出页面上「字」占的那几块（视口里的位置），每一帧画完星星，
        把这几块从画布上擦掉。量的是字本身的那一行行小框（用 Range 量，
-       不是整个格子），所以字和字、行和行之间的缝里星星照样露得出来。
-       只量看得见的：合着的抽屉里那几百条不量，屏幕外面的不量。
+       不是整个格子），所以条目左边的空地、短行右边的空地星星照样露得出来；
+       同一条里行和行之间的窄缝，由 draw() 里的擦圈一起擦掉。
+       只量看得见的：
+         · 合着的抽屉里那几百条不量。只看货架开着不够——货架开着、小抽屉
+           合着的时候，合着的那些照样量得出整整一列位置（浏览器只是不画），
+           第三版头一回就栽在这儿，大半个屏幕的星星全被擦没了。
+           所以选的时候要求一路上的 <details> 全开着（下面那两串 > ）。
+         · 滑到吸顶牌子底下、或者在主屏模式下滑出 <main> 上沿的那几行不量：
+           字已经被牌子挡住了，再擦就是在空牌子上平白擦掉星星。
+           每一块从「挡在它上面的最低那条边」往下才算，见 under()。
+         · 屏幕外面的不量。
        滚动、开合抽屉、找东西、换屏幕方向的那一会儿每帧都量，平时三百毫秒量一次。 */
     var holes = [], measuredAt = 0, busyUntil = 0;
     var RINGS = [12, 10, 0.4,   7, 7, 0.6,   3, 4, 1];   /* 左右多擦几像素、上下多擦几像素、擦多重 */
     var range = document.createRange ? document.createRange() : null;
 
-    function hole(el){
+    /* cut：这条线以上的部分被挡住了，不擦 */
+    function hole(el, cut){
       if (!el || !range) return;
       range.selectNodeContents(el);
       var rs = range.getClientRects();
       for (var i = 0; i < rs.length; i++){
         var r = rs[i];
-        if (r.width < 1 || r.height < 1 || r.bottom < -20 || r.top > H + 20) continue;
-        holes.push(r.left, r.top, r.width, r.height);
+        if (r.width < 1 || r.height < 1 || r.bottom <= cut || r.top > H + 20) continue;
+        var t = Math.max(r.top, cut);
+        holes.push(r.left, t, r.width, r.bottom - t);
       }
     }
     function each(list, fn){ for (var i = 0; i < list.length; i++) fn(list[i]); }
+    function bottomOf(d){
+      var t = d && d.firstElementChild;          /* <details> 的第一个孩子就是它的牌子 <summary> */
+      return t ? t.getBoundingClientRect().bottom : -1e9;
+    }
+    /* 挡在 el 上面的最低那条边：<main> 的上沿、所在机器的门牌、所在抽屉的货架牌。
+       牌子没吸住的时候本来就在内容上面，取它的下沿不会挡掉任何看得见的字；
+       吸住了，下沿就是牌子盖到哪儿。 */
+    function under(el, top0){
+      var pack = el.tagName === 'SUMMARY' ? null : el.closest('details.pack');
+      return Math.max(top0, bottomOf(el.closest('details.group')), pack ? bottomOf(pack) : -1e9);
+    }
 
     function measure(){
       holes.length = 0;
+      var main = document.querySelector('main');
+      var top0 = main ? Math.max(0, main.getBoundingClientRect().top) : 0;
       each(document.querySelectorAll('.masthead .who, .masthead .lamp, .masthead .tally, #find.open, ' +
-                                     'summary.tag, details.group[open] summary.pack-tag, ' +
-                                     'details.group[open] .soon, footer'), hole);
+                                     'summary.tag, footer'), function(el){ hole(el, top0); });
+      each(document.querySelectorAll('details.group[open] > details.pack > summary.pack-tag, ' +
+                                     'details.group[open] > details.pack[open] > .soon, ' +
+                                     'details.group[open] > .soon'),
+           function(el){ hole(el, under(el, top0)); });
       /* 条目按顺序排，看得见的那一段之前的跳过、之后的直接停 */
-      each(document.querySelectorAll('details.group[open] ul.list'), function(ul){
+      each(document.querySelectorAll('details.group[open] > ul.list, ' +
+                                     'details.group[open] > details.pack[open] > ul.list'), function(ul){
         var b = ul.getBoundingClientRect();
         if (!b.height || b.bottom < -10 || b.top > H + 10) return;
+        var cut = under(ul, top0);
         for (var li = ul.firstElementChild; li; li = li.nextElementSibling){
           var c = li.getBoundingClientRect();
           if (c.top > H + 10) break;
-          if (!c.height || c.bottom < -10) continue;
-          hole(li.firstElementChild);                 /* 名字 */
-          hole(li.querySelector('.blurb'));           /* 附注 */
+          if (!c.height || c.bottom <= cut) continue;
+          hole(li.firstElementChild, cut);            /* 名字 */
+          hole(li.querySelector('.blurb'), cut);      /* 附注 */
         }
       });
     }
@@ -2221,13 +2261,13 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
         var k = s.at ? (now - s.at) / s.fd : 1;
         if (k <= 0) continue;
         if (k > 1) k = 1; else k = k * k * (3 - 2 * k);
-        var al = s.a * k, tail = 0.4, cap = 40;
+        var al = s.a * k, tail = 0.4;
         if (s.tw) al *= 1 - s.tw * (0.5 + 0.5 * Math.sin(now * s.w + s.ph));
         if (s.dash){
           var p = (now - s.dash) / s.dd;
           al *= Math.min(1.25, 1 + 0.25 * Math.sin(Math.PI * Math.min(1, p / 0.35)));
           if (p > 0.45){ var f = (p - 0.45) / 0.55; al *= 1 - f * f * (3 - 2 * f); }
-          tail = 0.65; cap = 120;
+          tail = 0.65;
         }
         if (al > 1) al = 1;
         if (al < 0.01) continue;
@@ -2235,8 +2275,8 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
         /* 尾巴根上那条细线：越快越长。最慢的那七成不拖——
            试过给它们也拖一小截，满屏一根根小火柴，像在下雨。
            len 是往上量的高度，斜着走，所以线本身比它长一点。 */
-        var len = Math.min(cap, s.v * (s.dash ? 0.4 : 0.6));
-        if (len >= 8){
+        var len = tailOf(s);
+        if (len){
           var tx = s.x - s.lean * len, ty = s.y - len;
           var g = ctx.createLinearGradient(tx, ty, s.x, s.y);
           g.addColorStop(0, 'rgba(255,255,255,0)');
@@ -2277,9 +2317,12 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       ctx.globalAlpha = 1;
     }
 
+    /* 量画布自己占的那块，不用 innerWidth：电脑上有滚动条的时候
+       innerWidth 把滚动条也算进去，画布的像素会被横着挤一点，擦的位置就偏了。 */
     function fit(){
-      W = window.innerWidth || root.clientWidth;
-      H = window.innerHeight || root.clientHeight;
+      var b = cv.getBoundingClientRect();
+      W = b.width || root.clientWidth || window.innerWidth;
+      H = b.height || root.clientHeight || window.innerHeight;
       dpr = Math.min(window.devicePixelRatio || 1, 3);
       cv.width = Math.max(1, Math.round(W * dpr));
       cv.height = Math.max(1, Math.round(H * dpr));
@@ -2296,9 +2339,14 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       draw(now);
     }
 
+    /* 手机横过来：星星跟着屏幕按比例挪，还是这片天，不会半边空着等它淌过来 */
     window.addEventListener('resize', function(){
       if (!running) return;
+      var w0 = W, h0 = H;
       fit();
+      if (w0 && h0 && w0 !== W){
+        for (var i = 0; i < stars.length; i++){ stars[i].x *= W / w0; stars[i].y *= H / h0; }
+      }
       fill(performance.now());
     });
 
