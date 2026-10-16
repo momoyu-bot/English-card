@@ -44,6 +44,7 @@ git config user.email "318139614+momoyu-bot@users.noreply.github.com"
 ## 只给 Grok（Build 和 Chat）
 
 - 你那一格是 `grok/`。
+- Build 做的页，文件名结尾加 `-build`（如 `安静星空-build.html`）；Chat 做的不加。只改文件名，`<title>` 里不带它。
 - Chat 那条管子两万字节左右就送不完整了，比这大的文件别用 Chat 推，算推不了。
 - grok.me 上的网页、Build 里的预览，都不算交完。
 - `GROK.md` 已经并进这里，别再新建。
@@ -51,4 +52,5 @@ git config user.email "318139614+momoyu-bot@users.noreply.github.com"
 ## 只给反重力（Antigravity）
 
 - 你那一格是 `gemini/`，不管这次的芯是 Gemini 还是 Claude。`claude/` 只放 Claude Code 和 claude.ai 做的。
+- 文件名结尾加这次的芯：Gemini 用 `-gemini`，Opus 用 `-opus`，换了别的模型就写它的名字（如 `星空-opus.html`）。只改文件名，`<title>` 里不带它。
 - 这份和 `CLAUDE.md` 里说到「Claude」「cc」的地方，指的都是 Claude Code 和 claude.ai 里的那两位，不是你——就算你这次的芯是 Opus 也一样。
