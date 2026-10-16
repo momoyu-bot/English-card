@@ -500,7 +500,7 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
        所以渐变跑没跑完都不影响字看不看得见（淡入那条教训，见上）。
      · 星星和流星画在一张透明的画布上，盖在最上层、不挡手指。
        不能垫在底下：吸顶的牌子必须是不透明的（「改这里的人注意」第 2 条），
-       垫在底下的话，流星每路过一块牌子都会被切断一截。
+       垫在底下的话，星星往下淌，每路过一块牌子都会凭空消失一截。
      · 记得住：她点进一页再回来，还是夜里。存在这台手机自己的浏览器里，
        清了网站数据就忘了，忘了就是白天，不碍事。
      · 店猫夜里睁着眼（猫夜里本来就醒着），点它回白天时慢慢眨一下再眯回去。
@@ -1983,17 +1983,24 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
    「眯」是这一页自己加的一帧：只留下面那一行蓝。
 
    2026-10-16 起，点它就是关灯、开灯（为什么、长什么样，见 CSS 里「夜里」那段）：
-     白天点它 → 睁眼，天黑，星星从最亮的那几颗开始一颗一颗亮起来，
-                过一会儿开始下流星。夜里它一直睁着眼。
+     白天点它 → 睁眼，天黑。等一会儿，星星才从最亮的那几颗开始一颗一颗浮出来。
+                夜里它一直睁着眼。
      夜里点它 → 慢慢眨一下（眯 → 闭 → 眯），天亮，停在眯着。
-   点了才有，所以跟原来眨眼一样，「减弱动态效果」开着也照样黑、照样下。
+   点了才有，所以跟原来眨眼一样，「减弱动态效果」开着也照样黑、照样淌。
 
-   流星雨：每一颗都是从右上角屏幕外面同一个点（辐射点）散开来的，
-   方向各不相同但都背对着那一点，真的流星雨就是这样。隔一两秒到五六秒一颗，
-   偶尔两颗前后脚，偶尔一颗亮一点、长一点。都不大、不闪、不带光晕。
+   星空照的是她记得的那一版：SuperGrok 测试版首页的星空（4 月 29 号她截过一张，
+   官方后来下架了）。她自己的话，一条一条对着做的：
+     · 不是静态的，星星会像流星一样，很慢很慢地从上往下划过去；
+     · 点不是一样大的；
+     · 有些快一点、有些慢一点，还有些突然滑过去的，但总体是慢慢的、很安静；
+     · 在动的时候是划过去的，尾巴根部跟着一条细细的线；
+     · 点稍微稀疏一点，是很安静的夜晚；
+     · 要等一会儿它才出现。
+   第一版（10-16 上午）做成了「星星不动、流星从右上角斜着散开」，她看了说星星太少——
+   当时七成的星星半径不到 0.65 像素，透明度一半以下，手机上几乎看不见。
+   现在每颗都看得见，就是不挤；也不再有斜着的流星，往下淌的这些就是流星雨。
 
-   省电：天亮了画布整张拿掉，什么都不画；夜里没流星的时候只画三十帧，
-   星星本来就动得慢，看不出来。 */
+   省电：天亮了画布整张拿掉，什么都不画。 */
 (function(){
   var cat = document.getElementById('shopcat');
   if (!cat) return;
@@ -2031,66 +2038,156 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
 
     var TAU = Math.PI * 2;
     var W = 0, H = 0, dpr = 1;
-    var running = false, raf = 0, lastDraw = 0, offTimer = 0;
-
-    /* 星星的位置按屏幕的比例记（0 到 1），手机横过来也还是这片天。
-       先备 320 颗，屏幕多大就亮多少颗。 */
+    var running = false, raf = 0, last = 0, offTimer = 0, nextDash = 0, pairDash = 0;
     var stars = [];
-    for (var i = 0; i < 320; i++){
-      var roll = Math.random(), r, a;
-      if (roll < 0.72)      { r = 0.30 + Math.random() * 0.35; a = 0.22 + Math.random() * 0.33; }
-      else if (roll < 0.95) { r = 0.55 + Math.random() * 0.30; a = 0.45 + Math.random() * 0.30; }
-      else                  { r = 0.85 + Math.random() * 0.30; a = 0.70 + Math.random() * 0.20; }
-      var tint = Math.random();
-      stars.push({
-        x: Math.random(), y: Math.random(), r: r, a: a,
-        /* 大多是白的，少数偏一点蓝、偏一点暖，跟真的天一样 */
-        c: tint < 0.14 ? 'rgb(206,220,255)' : (tint < 0.22 ? 'rgb(255,238,214)' : '#fff'),
-        tw: Math.random() < 0.6 ? 0.12 + Math.random() * 0.33 : 0,   /* 闪的幅度，四成不闪 */
-        w: TAU / (3000 + Math.random() * 7000),                       /* 三到十秒闪一轮 */
-        ph: Math.random() * TAU,
-        at: 0                                                         /* 什么时候开始亮 */
-      });
-    }
-    function count(){ return Math.max(50, Math.min(stars.length, Math.round(W * H / 4200))); }
 
-    /* 天黑的时候，越亮的星越早出来（天刚黑先看见的总是那几颗最亮的）。 */
-    function lightUp(now, spread){
+    /* 手机一屏五六十颗，电脑上最多一百六十颗 */
+    function want(){ return Math.max(30, Math.min(160, Math.round(W * H / 6000))); }
+
+    /* 大小、亮度、快慢都是每颗自己抽的。七成很慢（四到十一像素一秒，
+       从屏幕顶上淌到底要一两分钟），两成快一点，少数几颗一直在滑。 */
+    function dress(s){
+      var roll = Math.random();
+      if (roll < 0.55)     { s.r = 0.55 + Math.random() * 0.25; s.a = 0.45 + Math.random() * 0.25; }
+      else if (roll < 0.9) { s.r = 0.80 + Math.random() * 0.35; s.a = 0.60 + Math.random() * 0.25; }
+      else                 { s.r = 1.15 + Math.random() * 0.45; s.a = 0.80 + Math.random() * 0.20; }
+      var v = Math.random();
+      s.v = v < 0.72 ? 4 + Math.random() * 7
+          : v < 0.94 ? 14 + Math.random() * 16
+          :            40 + Math.random() * 30;
+      s.lean = (Math.random() - 0.5) * 0.06;          /* 几乎是直着往下，各自歪一点点 */
+      s.tw = Math.random() < 0.5 ? 0.08 + Math.random() * 0.2 : 0;
+      s.w = TAU / (3000 + Math.random() * 6000);
+      s.ph = Math.random() * TAU;
+      s.dash = 0;
+      return s;
+    }
+
+    /* 撒满一屏，彼此隔开一点，不扎堆 */
+    function scatter(s){
+      var gap = 0.55 * Math.sqrt(W * H / want()), x = 0, y = 0;
+      for (var t = 0; t < 12; t++){
+        x = Math.random() * W; y = Math.random() * H;
+        var ok = true;
+        for (var i = 0; i < stars.length; i++){
+          var o = stars[i];
+          if (o === s) continue;
+          if ((o.x - x) * (o.x - x) + (o.y - y) * (o.y - y) < gap * gap){ ok = false; break; }
+        }
+        if (ok) break;
+      }
+      s.x = x; s.y = y;
+    }
+
+    /* 淌出底边的，从顶上外面重新进来 */
+    function reenter(s){
+      dress(s);
+      s.x = Math.random() * W;
+      s.y = -8 - Math.random() * 60;
+      s.at = 0; s.fd = 1;
+    }
+
+    /* 越亮的越早出来（天刚黑先看见的总是最亮的那几颗）。
+       wait 是先等多久，spread 是最暗的那批要再晚多久。 */
+    function appear(now, wait, spread){
       for (var i = 0; i < stars.length; i++){
         var s = stars[i];
-        s.at = now + 300 + spread * (1.15 - s.a) * (0.45 + 0.55 * Math.random());
+        s.at = now + wait + spread * (1.1 - s.a) * (0.4 + 0.6 * Math.random());
+        s.fd = 1600 + Math.random() * 1200;
       }
     }
 
-    var meteors = [], nextAt = 0, pairAt = 0;
-
-    function spawn(now){
-      /* 辐射点在右上角屏幕外面 */
-      var rx = W * 1.18, ry = -H * 0.32;
-      var sx = W * (0.08 + Math.random() * 0.95), sy = H * (Math.random() * 0.62 - 0.04);
-      var dx = sx - rx, dy = sy - ry, d = Math.sqrt(dx * dx + dy * dy) || 1;
-      dx /= d; dy /= d;
-      var j = (Math.random() - 0.5) * 0.1, cj = Math.cos(j), sj = Math.sin(j);
-      var big = Math.random() < 0.08;
-      meteors.push({
-        x: sx, y: sy,
-        ux: dx * cj - dy * sj, uy: dx * sj + dy * cj,
-        go:   (big ? 260 : 150) + Math.random() * 140,   /* 头走多远 */
-        tail: (big ? 150 :  80) + Math.random() * 60,    /* 尾巴最长多长 */
-        dur:  (big ? 1300 : 750) + Math.random() * 500,
-        a:    big ? 0.9 : 0.5 + Math.random() * 0.25,
-        lw:   big ? 1.3 : 0.9,
-        t0: now
-      });
+    function fill(now){
+      var n = want();
+      while (stars.length < n){
+        var s = dress({});
+        scatter(s);
+        s.at = now; s.fd = 1600;
+        stars.push(s);
+      }
+      if (stars.length > n) stars.length = n;
     }
 
-    function schedule(now){
-      if (pairAt && now >= pairAt){ pairAt = 0; if (meteors.length < 3) spawn(now); }
-      if (now < nextAt) return;
-      if (meteors.length < 3) spawn(now);
-      if (Math.random() < 0.18) pairAt = now + 180 + Math.random() * 520;
-      nextAt = now + (Math.random() < 0.12 ? 6000 + Math.random() * 3000
-                                            : 1400 + Math.random() * 3600);
+    /* 突然滑过去的那一颗：从已经亮着的星里挑一颗，猛地快起来，
+       划出一截再慢慢熄掉，然后从顶上重新进来。 */
+    function dash(now){
+      for (var t = 0; t < 10; t++){
+        var s = stars[(Math.random() * stars.length) | 0];
+        if (!s || s.dash || now < s.at + s.fd || s.y < 8 || s.y > H * 0.7) continue;
+        s.dash = now;
+        s.v0 = s.v;
+        s.top = 170 + Math.random() * 150;
+        s.dd = 1000 + Math.random() * 700;
+        return;
+      }
+    }
+
+    function step(now, dt){
+      if (pairDash && now >= pairDash){ pairDash = 0; dash(now); }
+      if (now >= nextDash){
+        dash(now);
+        if (Math.random() < 0.15) pairDash = now + 400 + Math.random() * 600;
+        nextDash = now + 3500 + Math.random() * 4500;
+      }
+      for (var i = 0; i < stars.length; i++){
+        var s = stars[i];
+        if (s.dash){
+          var p = (now - s.dash) / s.dd;
+          if (p >= 1){ reenter(s); continue; }
+          var q = Math.min(1, p / 0.25);
+          s.v = s.v0 + (s.top - s.v0) * q * q * (3 - 2 * q);
+        }
+        s.y += s.v * dt;
+        s.x += s.v * s.lean * dt;
+        if (s.y > H + 40 || s.x < -40 || s.x > W + 40) reenter(s);
+      }
+    }
+
+    function draw(now){
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.lineCap = 'round';
+
+      for (var i = 0; i < stars.length; i++){
+        var s = stars[i];
+        var k = s.at ? (now - s.at) / s.fd : 1;
+        if (k <= 0) continue;
+        if (k > 1) k = 1; else k = k * k * (3 - 2 * k);
+        var al = s.a * k, tail = 0.4, cap = 40;
+        if (s.tw) al *= 1 - s.tw * (0.5 + 0.5 * Math.sin(now * s.w + s.ph));
+        if (s.dash){
+          var p = (now - s.dash) / s.dd;
+          al *= Math.min(1.25, 1 + 0.25 * Math.sin(Math.PI * Math.min(1, p / 0.35)));
+          if (p > 0.45){ var f = (p - 0.45) / 0.55; al *= 1 - f * f * (3 - 2 * f); }
+          tail = 0.65; cap = 120;
+        }
+        if (al > 1) al = 1;
+        if (al < 0.01) continue;
+
+        /* 尾巴根上那条细线：越快越长。最慢的那七成不拖——
+           试过给它们也拖一小截，满屏一根根小火柴，像在下雨。 */
+        var len = Math.min(cap, s.v * (s.dash ? 0.4 : 0.6));
+        if (len >= 8){
+          var tx = s.x - s.lean * len, ty = s.y - len;
+          var g = ctx.createLinearGradient(tx, ty, s.x, s.y);
+          g.addColorStop(0, 'rgba(255,255,255,0)');
+          g.addColorStop(1, 'rgba(255,255,255,' + (al * tail).toFixed(3) + ')');
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = g;
+          ctx.lineWidth = Math.max(0.5, s.r * 0.55);
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.lineTo(s.x, s.y);
+          ctx.stroke();
+        }
+
+        ctx.globalAlpha = al;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
 
     function fit(){
@@ -2099,84 +2196,39 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       dpr = Math.min(window.devicePixelRatio || 1, 3);
       cv.width = Math.max(1, Math.round(W * dpr));
       cv.height = Math.max(1, Math.round(H * dpr));
-      lastDraw = 0;
-    }
-
-    function draw(now){
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-
-      var n = count();
-      for (var i = 0; i < n; i++){
-        var s = stars[i];
-        var k = (now - s.at) / 1400;
-        if (k <= 0) continue;
-        if (k > 1) k = 1; else k = k * k * (3 - 2 * k);
-        var al = s.a * k;
-        if (s.tw) al *= 1 - s.tw * (0.5 + 0.5 * Math.sin(now * s.w + s.ph));
-        if (al < 0.01) continue;
-        ctx.globalAlpha = al;
-        ctx.fillStyle = s.c;
-        ctx.beginPath();
-        ctx.arc(s.x * W, s.y * H, s.r, 0, TAU);
-        ctx.fill();
-      }
-
-      ctx.lineCap = 'round';
-      for (var m = meteors.length - 1; m >= 0; m--){
-        var o = meteors[m];
-        var p = (now - o.t0) / o.dur;
-        if (p >= 1){ meteors.splice(m, 1); continue; }
-        if (p <= 0) continue;
-        var walked = o.go * (1 - Math.pow(1 - p, 1.6));     /* 一开始快，后面慢一点 */
-        var b = o.a * Math.sin(Math.PI * Math.pow(p, 0.7));  /* 很快亮起来，慢慢熄 */
-        var hx = o.x + o.ux * walked, hy = o.y + o.uy * walked;
-        var tl = Math.min(o.tail, walked + 6);
-        var tx = hx - o.ux * tl, ty = hy - o.uy * tl;
-        var g = ctx.createLinearGradient(tx, ty, hx, hy);
-        g.addColorStop(0, 'rgba(225,235,255,0)');
-        g.addColorStop(1, 'rgba(225,235,255,' + b.toFixed(3) + ')');
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = g;
-        ctx.lineWidth = o.lw;
-        ctx.beginPath();
-        ctx.moveTo(tx, ty);
-        ctx.lineTo(hx, hy);
-        ctx.stroke();
-        ctx.globalAlpha = b;
-        ctx.fillStyle = 'rgb(235,242,255)';
-        ctx.beginPath();
-        ctx.arc(hx, hy, o.lw * 0.7, 0, TAU);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
     }
 
     function frame(now){
       if (!running) return;
       raf = requestAnimationFrame(frame);
-      schedule(now);
-      if (!meteors.length && lastDraw && now - lastDraw < 33) return;
-      lastDraw = now;
+      var dt = last ? (now - last) / 1000 : 0;
+      last = now;
+      if (dt > 0.05) dt = 0.05;               /* 切走再回来，别一下跳一大截 */
+      step(now, dt);
       draw(now);
     }
 
-    window.addEventListener('resize', function(){ if (running) fit(); });
+    window.addEventListener('resize', function(){
+      if (!running) return;
+      fit();
+      fill(performance.now());
+    });
 
     return {
-      /* fast：上回就是夜里，一进门就该是夜，星星出得快一点 */
+      /* fast：上回就是夜里，一进门就该是夜，等得短一点 */
       rise: function(fast){
         clearTimeout(offTimer);
         if (!cv.parentNode){
           document.body.appendChild(cv);
           fit();
+          stars.length = 0;
           var now = performance.now();
-          lightUp(now, fast ? 1200 : 2600);
-          meteors.length = 0;
-          pairAt = 0;
-          nextAt = now + (fast ? 1800 : 3200) + Math.random() * 1500;
+          fill(now);
+          appear(now, fast ? 300 : 900, fast ? 1800 : 3200);
+          nextDash = now + (fast ? 3500 : 6000) + Math.random() * 3000;
+          pairDash = 0;
         }
-        if (!running){ running = true; raf = requestAnimationFrame(frame); }
+        if (!running){ running = true; last = 0; raf = requestAnimationFrame(frame); }
       },
       /* 画布自己淡出去（CSS 管），淡完整张拿掉 */
       set: function(){
@@ -2186,7 +2238,6 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
           cancelAnimationFrame(raf);
           if (cv.parentNode) cv.parentNode.removeChild(cv);
           cv.width = cv.height = 1;
-          meteors.length = 0;
         }, 1800);
       }
     };
