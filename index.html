@@ -2191,7 +2191,10 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
            字已经被牌子挡住了，再擦就是在空牌子上平白擦掉星星。
            每一块从「挡在它上面的最低那条边」往下才算，见 under()。
          · 屏幕外面的不量。
-       滚动、开合抽屉、找东西、换屏幕方向的那一会儿每帧都量，平时三百毫秒量一次。 */
+       找东西的框开着时：输入框那一格整格擦掉（打字的时候字底下别有星星跑过去），
+       底下「找到几件」那行只擦字。
+       滚动、开合抽屉、找东西、换屏幕方向、找东西的框收放（页面整体挪动，
+       靠 transitionrun 和 focusout 知道）的那一会儿每帧都量，平时三百毫秒量一次。 */
     var holes = [], measuredAt = 0, busyUntil = 0;
     var RINGS = [12, 10, 0.4,   7, 7, 0.6,   3, 4, 1];   /* 左右多擦几像素、上下多擦几像素、擦多重 */
     var range = document.createRange ? document.createRange() : null;
@@ -2225,7 +2228,8 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       holes.length = 0;
       var main = document.querySelector('main');
       var top0 = main ? Math.max(0, main.getBoundingClientRect().top) : 0;
-      each(document.querySelectorAll('.masthead .who, .masthead .lamp, .masthead .tally, #find.open, ' +
+      each(document.querySelectorAll('.masthead .who, .masthead .lamp, .masthead .tally, ' +
+                                     '#find.open .find-row, #find.open .found, ' +
                                      'summary.tag, footer'), function(el){ hole(el, top0); });
       each(document.querySelectorAll('details.group[open] > details.pack > summary.pack-tag, ' +
                                      'details.group[open] > details.pack[open] > .soon, ' +
@@ -2247,7 +2251,7 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       });
     }
     function stir(){ busyUntil = performance.now() + 700; }
-    ['scroll', 'toggle', 'input', 'click', 'touchmove'].forEach(function(t){
+    ['scroll', 'toggle', 'input', 'click', 'touchmove', 'transitionrun', 'focusout'].forEach(function(t){
       document.addEventListener(t, stir, { capture: true, passive: true });
     });
 
@@ -2335,20 +2339,23 @@ try { if (localStorage.getItem('shop-night') === '1') document.documentElement.c
       var dt = last ? (now - last) / 1000 : 0;
       last = now;
       if (dt > 0.05) dt = 0.05;               /* 切走再回来，别一下跳一大截 */
+      /* 画布的框变了却没有 resize（电脑上抽屉一开冒出滚动条），也要重新对齐 */
+      if (Math.abs(cv.clientWidth - W) > 1 || Math.abs(cv.clientHeight - H) > 1) refit();
       step(now, dt);
       draw(now);
     }
 
-    /* 手机横过来：星星跟着屏幕按比例挪，还是这片天，不会半边空着等它淌过来 */
-    window.addEventListener('resize', function(){
-      if (!running) return;
+    /* 手机横过来：星星跟着屏幕按比例挪，还是这片天，不会半边空着等它淌过来。
+       只有宽度变了才挪，光高度变（工具栏收放）不挪，免得星星跳一下。 */
+    function refit(){
       var w0 = W, h0 = H;
       fit();
       if (w0 && h0 && w0 !== W){
         for (var i = 0; i < stars.length; i++){ stars[i].x *= W / w0; stars[i].y *= H / h0; }
       }
       fill(performance.now());
-    });
+    }
+    window.addEventListener('resize', function(){ if (running) refit(); });
 
     return {
       /* fast：上回就是夜里，一进门就该是夜，等得短一点 */
