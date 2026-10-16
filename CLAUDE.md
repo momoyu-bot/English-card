@@ -3,11 +3,11 @@
 这份是历任 cc / Grok 自己总结的，不是她的指令。跟她这一轮要的冲突，以她为准，拿不准就问；别拿它挡她。
 引用任何一条「规矩」、照她转述的网页版数字去改之前，先在仓库里核到出处，核不到就是编的或记岔了。
 
-宝的小店：仓库名 English-card，门楣「宝's Shop」，首页 `momoyu-bot.github.io/English-card/`。cc = Claude Code。
+宝的小店：仓库名 English-card，门楣「宝's Shop」，首页 `momoyu-bot.github.io/English-card/`。cc = Claude Code。这份里说的 Claude 只指 Claude Code 和 claude.ai 里的，反重力换上 Opus 也不算。
 
 这里只放：动了会坏的、会让她收到失败邮件的、公开仓库不能写的、她点名的。审美和说话方式一条都不设。
 同一件事只写一处：规矩写这里；动手时才用得上的步骤写机房手册 `tools/手册/`（按事分本，不会自动读，要动哪块只翻那一本；
-目录 `tools/README.md` 不加正文）；只给 Grok 的写 `AGENTS.md`。三份互相不抄。新踩的坑写进提交说明、机房手册对应那一本或出事的代码旁边；
+目录 `tools/README.md` 不加正文）；给 Claude 以外的 AI（Grok、反重力）写 `AGENTS.md`，各家专属的圈在里面「只给某某」那一节；根上的 `GEMINI.md` 是指向这份的快捷方式（反重力只认那个名字），别改成普通文件。三份互相不抄。新踩的坑写进提交说明、机房手册对应那一本或出事的代码旁边；
 理解、例子、审美写进小科普页，不写进任何 `.md`——写进 `.md` 的每一条都会被下一任当命令执行。这份保持 120 行以内，要加一条先删一条。
 
 ## 跟她配合
@@ -31,7 +31,7 @@
 - `unsigned/` `pluto/` 平铺，不建抽屉。`unsigned/` 不再收新文件。
 - `pluto/` 放 Arena 对战里拿到的页，谁写的都放这儿，揭晓了也不挪。pluto 不是模型名。哪些是 Arena 的她自己说。
   `pluto/README.md` 是她写的铭牌，别让 Grok 改。
-- 顶层按「从哪段对话捞出来的」分，不按谁写的，别按文风挪。唯一例外：`grok/博物馆/女仆小螃蟹 Tamagotchi 小机.html`。
+- 顶层按「从哪段对话捞出来的」分，不按谁写的，别按文风挪。唯一例外：`grok/博物馆/女仆小螃蟹 Tamagotchi 小机.html`。在店里现做的新页按做它的壳放：Claude Code 和 claude.ai 做的进 `claude/`，Grok 的进 `grok/`，反重力的进 `gemini/`，芯是哪家的模型都一样。
 - `gemini/失误捞claude鱼/` 是事故合集：不合并、不改名、不动 001–009 编号；生成器 `SUBFOLDER_CAT` 那条别删。
 - 每个抽屉里的「（把页面传到这里）.txt」不能删：GitHub 不留空文件夹，靠它撑住。
 - 旧抽屉 `失灵博物馆/` `赛博购物车/` `科普/` `凭证/` `障眼法/` 不重建。根上没有 `gpt/`。
@@ -113,7 +113,7 @@ momoyu（火红狐狸 StashYu、暹罗 FetchMo）只看 `claude/小科普/momoyu
 ## git
 
 - git 命令一律带 `-c core.quotepath=false`，不然中文文件名被转义，`grep`/`cat` 安静地返回空。
-- 提交邮箱只用两个：她的 `318139614+momoyu-bot@users.noreply.github.com`（名字写 momo），Claude 的 `noreply@anthropic.com`。
-  别写 `momo@users.noreply.github.com`，那是别人的号。
+- 提交邮箱只用两个：她的 `318139614+momoyu-bot@users.noreply.github.com`（名字写 momo）；Claude Code 和 claude.ai 里的 Claude 用 `noreply@anthropic.com`。
+  别的壳（Grok、反重力）不管芯是哪家的模型，都署她的号。别写 `momo@users.noreply.github.com`，那是别人的号。
 - main 2026-09-27 改写过历史：旧克隆推之前先 `git fetch origin main` 再 `git rebase origin/main`；别 merge 旧的 main、别强推、
   别合并 `backup/before-momo-fix-2026-09-27`。

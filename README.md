@@ -11,4 +11,4 @@
 - [`梦境.md`](梦境.md) 是小文件之间的关系表，前台是并排的 [`梦境.html`](梦境.html)。两个不要拆开。
 - [`momoyu造型宪法`](claude/小科普/momoyu造型宪法.html)：店里的两只小精灵，火红狐狸 StashYu、暹罗 FetchMo。
 
-店务笔记在 [CLAUDE.md](CLAUDE.md)，给 Grok 的几条在 [AGENTS.md](AGENTS.md)，动手时的细节在 [tools/README.md](tools/README.md)。
+店务笔记在 [CLAUDE.md](CLAUDE.md)（根上的 `GEMINI.md` 是它的快捷方式，反重力只认那个名字）；给 Claude 以外的 AI 的几条在 [AGENTS.md](AGENTS.md)；动手时的细节在 [tools/README.md](tools/README.md)。
