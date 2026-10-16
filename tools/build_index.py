@@ -327,6 +327,9 @@ PHONE_EN = {
     "claude/小游戏/Clawd的第三通电话.html": (
         "Clawd's Third Call",
         "Nobody's mid-line this time. You know the three knocks — the fourth is yours to name."),
+    "claude/哄睡/嗯就行.html": (
+        "Just Say Mm",
+        "Call, and this end talks slowly. You just go mm. Go quiet, and the line stays open."),
 }
 
 # 用更安全的范围，避免 Python 3.14 的 bad character range 错误

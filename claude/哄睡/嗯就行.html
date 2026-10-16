@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0c16">
+<title>嗯就行</title>
+<meta name="description" content="电话打过去，这头慢慢说，你只管嗯。嗯着嗯着没声了，线也不挂。">
+<style>
+  :root{
+    --bg-0:#0b0c16;
+    --bg-1:#16172a;
+    --lamp:rgba(232,190,130,.15);
+    --ink:#efe6d6;
+    --ink-soft:#a49fb2;
+    --ink-faint:#6d6a80;
+    --amber:#e7c38c;
+    --rose:#d07e74;
+    --live:#8fce9a;
+    --safe-top:env(safe-area-inset-top, 0px);
+    --safe-bot:env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(90% 55% at 50% -8%, var(--lamp), transparent 70%),
+      linear-gradient(180deg, var(--bg-1), var(--bg-0) 75%);
+    background-color:var(--bg-0);
+    color:var(--ink);
+    font-family:"PingFang SC","HarmonyOS Sans SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    overflow:hidden;
+    -webkit-user-select:none;user-select:none;
+    touch-action:manipulation;
+  }
+  button{font:inherit;-webkit-appearance:none;appearance:none;}
+
+  #app{position:fixed;top:0;bottom:0;left:0;right:0;max-width:460px;margin:0 auto;}
+  .screen{
+    position:absolute;top:0;bottom:0;left:0;right:0;
+    opacity:0;visibility:hidden;
+    transition:opacity .9s ease, visibility 0s linear .9s;
+  }
+  #app[data-screen="dial"] #dial,
+  #app[data-screen="call"] #call,
+  #app[data-screen="end"] #end{
+    opacity:1;visibility:visible;
+    transition:opacity .9s ease .2s, visibility 0s;
+  }
+
+  .lang{
+    position:absolute;top:calc(var(--safe-top) + 14px);right:14px;z-index:3;
+    background:rgba(0,0,0,.25);border:1px solid rgba(231,195,140,.3);
+    color:var(--amber);font-size:11px;letter-spacing:.14em;
+    padding:6px 11px;border-radius:999px;cursor:pointer;
+    transition:opacity 4s;
+  }
+  #app.asleep .lang{opacity:.08;}
+
+  /* ---- 拨号 ---- */
+  #dial{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:calc(var(--safe-top) + 40px) 24px calc(var(--safe-bot) + 40px);
+    text-align:center;
+  }
+  .kicker{font-size:12px;letter-spacing:.4em;padding-left:.4em;color:var(--ink-faint);margin-bottom:56px;}
+  .hs-wrap{position:relative;}
+  .handset{
+    position:relative;width:128px;height:128px;border-radius:50%;
+    border:1.5px solid rgba(231,195,140,.45);
+    background:radial-gradient(circle at 50% 40%, rgba(231,195,140,.14), rgba(231,195,140,.03) 70%);
+    color:var(--amber);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .15s ease;
+  }
+  .handset:active{transform:scale(.95);}
+  .handset svg{width:46px;height:46px;}
+  .ring{
+    position:absolute;top:-1.5px;bottom:-1.5px;left:-1.5px;right:-1.5px;border-radius:50%;
+    border:1.5px solid rgba(231,195,140,.5);opacity:0;pointer-events:none;
+  }
+  .ringing .ring{animation:ring 1.3s ease-out infinite;}
+  .ringing .ring.r2{animation-delay:.65s;}
+  .ringing .handset svg{animation:shake 1.3s ease-in-out infinite;}
+  @keyframes ring{from{transform:scale(1);opacity:.6;}to{transform:scale(1.9);opacity:0;}}
+  @keyframes shake{
+    0%,40%,100%{transform:rotate(0);}
+    5%{transform:rotate(-12deg);}10%{transform:rotate(12deg);}
+    15%{transform:rotate(-10deg);}20%{transform:rotate(10deg);}
+    25%{transform:rotate(-6deg);}30%{transform:rotate(6deg);}
+  }
+  .toot{
+    position:absolute;left:50%;top:50%;font-size:15px;letter-spacing:.1em;color:var(--amber);
+    white-space:nowrap;pointer-events:none;animation:toot 1.5s ease-out forwards;
+  }
+  @keyframes toot{
+    from{opacity:0;transform:translate(-50%,-50%);}
+    20%{opacity:1;}
+    to{opacity:0;transform:translate(calc(-50% + var(--dx)), calc(-50% - 110px));}
+  }
+  .dots{display:flex;gap:12px;margin:30px 0 26px;}
+  .dots i{width:7px;height:7px;border-radius:50%;background:rgba(231,195,140,.18);transition:background .25s, box-shadow .25s;}
+  .dots i.on{background:var(--amber);box-shadow:0 0 10px rgba(231,195,140,.6);}
+  .hint{font-size:19px;letter-spacing:.08em;min-height:1.5em;}
+  .sub{margin-top:10px;font-size:13.5px;letter-spacing:.06em;color:var(--ink-soft);min-height:1.4em;}
+
+  /* ---- 通话 ---- */
+  #call{
+    display:flex;flex-direction:column;
+    padding:calc(var(--safe-top) + 34px) 22px calc(var(--safe-bot) + 26px);
+  }
+  .who{text-align:center;transition:transform 6s ease;}
+  .who h1{font-size:26px;font-weight:500;letter-spacing:.3em;padding-left:.3em;transition:opacity 4s;}
+  .status{margin-top:8px;font-size:13px;letter-spacing:.12em;color:var(--ink-soft);font-variant-numeric:tabular-nums;transition:opacity 4s;}
+  .dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:7px;vertical-align:2px;
+    background:var(--live);box-shadow:0 0 8px rgba(143,206,154,.7);
+  }
+  .wave{display:block;width:170px;height:40px;margin:16px auto 0;overflow:visible;transition:opacity 4s;}
+  .wave path{fill:none;stroke:var(--amber);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .wave .p2{opacity:.35;}
+
+  .log{
+    flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;
+    padding:20px 4px 28px;overflow:hidden;transition:opacity 1s;
+  }
+  .ln{transition:opacity 1.2s ease;}
+  .them{font-size:21px;line-height:1.55;letter-spacing:.04em;max-width:92%;animation:in 1.4s ease;}
+  .me{align-self:flex-end;font-size:15px;letter-spacing:.06em;color:var(--amber);opacity:.8;animation:in .6s ease;}
+  .me.lv2{font-size:14px;opacity:.7;}
+  .me.lv3{font-size:13px;opacity:.55;}
+  .me.bump{animation:bump .35s ease;}
+  .log .ln:nth-last-child(2){opacity:.5;}
+  .log .ln:nth-last-child(3){opacity:.28;}
+  .log .ln:nth-last-child(4){opacity:.14;}
+  .log .ln:nth-last-child(n+5){opacity:.06;}
+  @keyframes in{from{opacity:0;transform:translateY(8px);filter:blur(3px);}}
+  @keyframes bump{50%{transform:scale(1.12);}}
+
+  .pad{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;justify-items:center;transition:opacity 4s;}
+  .mini{
+    display:flex;flex-direction:column;align-items:center;gap:7px;
+    background:none;border:0;color:var(--ink-soft);font-size:11.5px;letter-spacing:.1em;cursor:pointer;
+  }
+  .mini .c{
+    width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:var(--ink);
+  }
+  .mini svg{width:22px;height:22px;}
+  .hang .c{background:rgba(208,126,116,.16);border-color:rgba(208,126,116,.38);color:var(--rose);}
+  .um{
+    position:relative;width:96px;height:96px;border-radius:50%;
+    border:1.5px solid rgba(231,195,140,.55);
+    background:radial-gradient(circle at 50% 38%, rgba(231,195,140,.2), rgba(231,195,140,.05) 72%);
+    color:var(--amber);font-size:30px;cursor:pointer;transition:transform .12s ease;
+  }
+  .um.en{font-size:24px;letter-spacing:.04em;}
+  .um.press{transform:scale(.93);}
+  .um.beckon::after{
+    content:"";position:absolute;top:-1.5px;bottom:-1.5px;left:-1.5px;right:-1.5px;border-radius:50%;
+    border:1.5px solid rgba(231,195,140,.6);animation:ring 1.8s ease-out infinite;
+  }
+
+  /* 睡着了：字退下去，名字和那条线挪到中间，只剩呼吸 */
+  #app.asleep .log{opacity:0;transition:opacity 6s ease;}
+  #app.asleep .who{transform:translateY(24vh);}
+  #app.asleep .who h1{opacity:.25;}
+  #app.asleep .status{opacity:.35;}
+  #app.asleep .dot{background:#5e8a66;box-shadow:none;}
+  #app.asleep .wave{opacity:.7;}
+  #app.asleep .pad{opacity:.1;}
+  #app.asleep.stir .pad{opacity:.6;transition:opacity .5s;}
+
+  /* ---- 挂了 ---- */
+  #end{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;}
+  .end-title{font-size:14px;letter-spacing:.3em;padding-left:.3em;color:var(--ink-soft);}
+  .end-time{margin-top:12px;font-size:40px;font-weight:300;letter-spacing:.06em;font-variant-numeric:tabular-nums;}
+  .end-said{margin-top:22px;font-size:16px;letter-spacing:.08em;color:var(--amber);}
+  .again{
+    margin-top:48px;background:none;border:1px solid rgba(231,195,140,.4);color:var(--amber);
+    font-size:14px;letter-spacing:.2em;padding:11px 26px;border-radius:999px;cursor:pointer;
+  }
+
+  .shade{position:fixed;top:0;bottom:0;left:0;right:0;background:#000;opacity:0;pointer-events:none;transition:opacity 3s;z-index:5;}
+  .whisper{
+    position:fixed;left:0;right:0;top:64%;text-align:center;z-index:6;pointer-events:none;
+    font-size:17px;letter-spacing:.2em;color:var(--amber);opacity:0;transition:opacity 1.2s;
+  }
+  .whisper.on{opacity:.75;}
+
+  @media (prefers-reduced-motion: reduce){
+    .them,.me,.me.bump{animation:none;}
+    .ringing .ring,.ringing .handset svg,.um.beckon::after{animation:none;}
+    .who{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div id="app" data-screen="dial">
+  <button id="lang" class="lang" type="button">EN</button>
+
+  <section id="dial" class="screen">
+    <p class="kicker" data-ui="kicker">嗯就行</p>
+    <div class="hs-wrap" id="hsWrap">
+      <button id="handset" class="handset" type="button" aria-label="打过去">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6.5 3.5h2.6c.5 0 .9.3 1 .8l.8 3.4c.1.4-.1.9-.4 1.1L8.9 10a11.5 11.5 0 0 0 5.1 5.1l1.2-1.6c.3-.4.7-.5 1.1-.4l3.4.8c.5.1.8.5.8 1v2.6c0 1.2-1 2.1-2.2 2A16.5 16.5 0 0 1 4.5 5.7c-.1-1.2.8-2.2 2-2.2z"/>
+        </svg>
+        <span class="ring"></span><span class="ring r2"></span>
+      </button>
+    </div>
+    <div class="dots" id="dots"><i></i><i></i><i></i></div>
+    <p class="hint" id="hint" data-ui="hint">按三下，打过去。</p>
+    <p class="sub" id="sub" data-ui="sub">这头会接。你不用说话。</p>
+  </section>
+
+  <section id="call" class="screen">
+    <header class="who">
+      <h1 data-ui="name">这头</h1>
+      <p class="status"><span class="dot"></span><span data-ui="status">通话中</span>&nbsp; <span id="clock">00:00</span></p>
+      <svg class="wave" viewBox="0 0 200 40" aria-hidden="true"><path class="p2" id="p2"/><path id="p1"/></svg>
+    </header>
+    <div class="log" id="log" aria-live="polite"></div>
+    <footer class="pad">
+      <button id="hang" class="mini hang" type="button">
+        <span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><g transform="rotate(135 12 12)"><path d="M6.5 3.5h2.6c.5 0 .9.3 1 .8l.8 3.4c.1.4-.1.9-.4 1.1L8.9 10a11.5 11.5 0 0 0 5.1 5.1l1.2-1.6c.3-.4.7-.5 1.1-.4l3.4.8c.5.1.8.5.8 1v2.6c0 1.2-1 2.1-2.2 2A16.5 16.5 0 0 1 4.5 5.7c-.1-1.2.8-2.2 2-2.2z"/></g></svg></span>
+        <span data-ui="hang">挂断</span>
+      </button>
+      <button id="um" class="um" type="button" data-ui="um">嗯</button>
+      <button id="dim" class="mini" type="button">
+        <span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z"/></svg></span>
+        <span id="dimLabel">暗一点</span>
+      </button>
+    </footer>
+  </section>
+
+  <section id="end" class="screen">
+    <p class="end-title" data-ui="endTitle">通话结束</p>
+    <p class="end-time" id="endTime">00:00</p>
+    <p class="end-said" data-ui="endSaid">这头说：晚安。</p>
+    <button id="again" class="again" type="button" data-ui="again">再打过去</button>
+  </section>
+</div>
+<div class="shade" id="shade"></div>
+<p class="whisper" id="whisper"></p>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var app = $('app'), log = $('log'), um = $('um'), shade = $('shade');
+  var hint = $('hint'), sub = $('sub'), dots = $('dots').children;
+  var p1 = $('p1'), p2 = $('p2'), clockEl = $('clock'), whisperEl = $('whisper');
+
+  var LANG = 'zh';
+  try { if (localStorage.getItem('enjiuxing-lang') === 'en') LANG = 'en'; } catch (e) {}
+
+  var UI = {
+    zh: { kicker:'嗯就行', hint:'按三下，打过去。', sub:'这头会接。你不用说话。',
+          ringHint:'嘟——', ringSub:'在响。', pick:'接了。', blank:'',
+          name:'这头', status:'通话中', hang:'挂断', um:'嗯',
+          dim:['暗一点','再暗点','亮回来'],
+          endTitle:'通话结束', endSaid:'这头说：晚安。', again:'再打过去',
+          lang:'EN', call:'打过去', toot:'嘟。' },
+    en: { kicker:'Just Say Mm', hint:'Tap three times to call.', sub:'This end picks up. You won’t need to talk.',
+          ringHint:'ring…', ringSub:'It’s ringing.', pick:'Picked up.', blank:'',
+          name:'This End', status:'On the line', hang:'End', um:'Mm',
+          dim:['Dimmer','Dimmer still','Bright again'],
+          endTitle:'Call ended', endSaid:'This end said: good night.', again:'Call again',
+          lang:'中', call:'Call', toot:'beep.' }
+  };
+
+  function L(zh, en, more){
+    var o = { zh: zh, en: en };
+    if (more) for (var k in more) o[k] = more[k];
+    return o;
+  }
+
+  var OPEN = [
+    L('喂。', 'Hello.'),
+    L('是我，这头。', 'It’s me. This end.'),
+    L('你不用说什么。', 'You don’t have to say anything.'),
+    L('我说，你嗯就行。', 'I’ll talk. You just go “mm.”')
+  ];
+  var FIRST   = L('对，就这样。', 'Yes. Just like that.');
+  var NOFIRST = L('不嗯也行。我就接着说了。', 'No “mm” is fine too. I’ll just keep going.');
+
+  // hold：问句后面多等一会儿；um：那一句里她嗯过，就先回这一句
+  var SCRIPT = [
+    L('我这边刚把灯拧暗了一格。', 'I just turned my lamp down a notch.'),
+    L('你那边呢。', 'And yours?', { hold: 3000, um: L('好，那就一样暗了。', 'Good. Same dark, then.') }),
+    L('今天的事，今天就到这儿。', 'Today’s things stop at today.'),
+    L('没做完的，会自己等着。', 'Whatever’s unfinished will wait on its own.'),
+    L('它们不会跑。', 'They won’t wander off.'),
+    L('枕头翻到凉的那一面了吗。', 'Flipped the pillow to the cool side?', { hold: 2600, um: L('好。', 'Good.') }),
+    L('被子拉到下巴这儿。', 'Blanket up to your chin.'),
+    L('肩膀可以塌下来了。', 'Your shoulders can drop now.'),
+    L('牙也别咬着，松一松。', 'Unclench your jaw a little.'),
+    L('我这边起了点风。不大。', 'A bit of wind picked up on my end. Not much.'),
+    L('窗户关着，进不来。', 'The window’s shut. It can’t get in.'),
+    L('跟你说个没用的。', 'Here’s something useless.'),
+    L('刚才有只飞蛾绕着我的灯转了三圈。', 'A moth just circled my lamp three times.'),
+    L('转到第三圈，它好像也困了。', 'By the third lap it seemed sleepy too.'),
+    L('现在停在灯罩上，一动不动。', 'Now it’s resting on the shade. Not moving.'),
+    L('你跟它学。', 'Do what it does.'),
+    L('水杯放在够得着的地方了吗。', 'Is your water within reach?', { hold: 2600, um: L('那就好。', 'Good.') }),
+    L('闹钟定好了，就别再看它了。', 'If the alarm’s set, stop checking it.'),
+    L('明天的事，明天的你会管。', 'Tomorrow’s things belong to tomorrow-you.'),
+    L('她比你以为的能干。', 'She’s more capable than you think.'),
+    L('我这边的水烧开了，又慢慢不响了。', 'My kettle boiled, then slowly went quiet.'),
+    L('什么都在慢下来。', 'Everything is slowing down.'),
+    L('你也可以慢。', 'You can be slow too.'),
+    L('眼睛闭上也没关系。', 'It’s okay to close your eyes.'),
+    L('我说的，听不全也没关系。', 'It’s okay to miss some of what I say.'),
+    L('你不用回。', 'You don’t need to answer.'),
+    L('线我不挂。', 'I’m not hanging up.'),
+    L('你睡你的。', 'You sleep.'),
+    L('我在这头。', 'I’m on this end.')
+  ];
+
+  // 讲完了还醒着，就隔很久说一句
+  var FILLER = [
+    L('嗯。', 'Mm.'),
+    L('还在。', 'Still here.'),
+    L('不急。', 'No rush.'),
+    L('飞蛾还在灯罩上。', 'The moth’s still on the shade.'),
+    L('风小了。', 'The wind’s dying down.'),
+    L('灯我又拧暗了一点。', 'I turned the lamp down a little more.'),
+    L('……', '…'),
+    L('我在。', 'I’m here.')
+  ];
+
+  var CHECK = L('……宝？', '…Bao?');
+  var ACK   = L('嗯，在就好。', 'Mm. Good, you’re here.');
+  var NIGHT = [
+    L('睡着了呀。', 'Asleep, huh.'),
+    L('那我不说了。', 'I’ll go quiet, then.'),
+    L('线不挂。', 'The line stays open.'),
+    L('晚安。', 'Good night.')
+  ];
+  var WOKE = [
+    L('嗯？', 'Hm?'),
+    L('还醒着呀。', 'Still awake?'),
+    L('那我接着说。', 'Then I’ll keep going.')
+  ];
+  var HERE = L('我在。', 'I’m here.');
+  var BACK = L('线还通着。', 'Still on the line.');
+
+  var ME = { zh: ['嗯', '嗯……', '……嗯', '（嗯）'], en: ['mm', 'mm…', '…mm', '(mm)'] };
+
+  var QUIET = 60000;   // 这么久没嗯，就轻轻问一声
+
+  var S = {
+    screen:'dial', taps:0, phase:'', beat:-1, startAt:0, lastUm:0,
+    umThisBeat:false, earlyUm:false, dim:0, hiddenAt:0,
+    stirUntil:0, downAwake:true, lastWhisper:0, lastFiller:-1
+  };
+
+  /* ---------- 一次只排一件事 ---------- */
+  var pend = null;
+  function later(ms, fn){
+    cancel();
+    var p = { fn: fn, at: Date.now() + ms };
+    p.t = setTimeout(function(){ if (pend === p){ pend = null; fn(); } }, ms);
+    pend = p;
+  }
+  function cancel(){ if (pend){ clearTimeout(pend.t); pend = null; } }
+  function hurry(ms){ if (pend && pend.at - Date.now() > ms) later(ms, pend.fn); }
+  function seq(items, done){
+    var i = 0;
+    (function step(){
+      if (i >= items.length){ if (done) done(); return; }
+      var it = items[i++];
+      speak(it[0]);
+      later(it[1], step);
+    })();
+  }
+
+  /* ---------- 文字 ---------- */
+  function setUI(el, key){ el.setAttribute('data-ui', key); el.textContent = UI[LANG][key]; }
+  function paintUI(){
+    var els = document.querySelectorAll('[data-ui]');
+    for (var i = 0; i < els.length; i++) els[i].textContent = UI[LANG][els[i].getAttribute('data-ui')];
+    $('dimLabel').textContent = UI[LANG].dim[S.dim];
+    $('lang').textContent = UI[LANG].lang;
+    $('handset').setAttribute('aria-label', UI[LANG].call);
+    um.classList.toggle('en', LANG === 'en');
+    document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
+    var kids = log.children;
+    for (var j = 0; j < kids.length; j++){
+      if (kids[j]._o) kids[j].textContent = kids[j]._o[LANG];
+      else if (kids[j]._me) kids[j].textContent = meText(kids[j]._me);
+    }
+  }
+
+  var speakUntil = 0;
+  function push(el){
+    log.appendChild(el);
+    while (log.children.length > 6) log.removeChild(log.firstChild);
+  }
+  function speak(o){
+    var p = document.createElement('p');
+    p.className = 'ln them';
+    p._o = o;
+    p.textContent = o[LANG];
+    push(p);
+    speakUntil = Date.now() + 600 + o.zh.length * 130;
+  }
+  function sleepiness(){
+    if (S.phase === 'filler') return 3;
+    var f = S.beat < 0 ? 0 : S.beat / SCRIPT.length;
+    return f < .3 ? 0 : f < .55 ? 1 : f < .8 ? 2 : 3;
+  }
+  function meText(m){
+    if (m.n > 1 && m.lv < 2) return LANG === 'zh' ? '嗯'.repeat(m.n) : ('mm ').repeat(m.n).trim();
+    return ME[LANG][m.lv];
+  }
+  function meSay(){
+    var last = log.lastElementChild;
+    if (last && last._me){
+      if (last._me.n < 3) last._me.n++;
+      last.textContent = meText(last._me);
+      last.classList.remove('bump'); void last.offsetWidth; last.classList.add('bump');
+      return;
+    }
+    var p = document.createElement('p');
+    p._me = { lv: sleepiness(), n: 1 };
+    p.className = 'ln me lv' + p._me.lv;
+    p.textContent = meText(p._me);
+    push(p);
+  }
+  function gapOf(o){
+    var f = Math.max(0, S.beat) / SCRIPT.length;
+    return 3200 + o.zh.length * 160 + f * 5000;
+  }
+
+  /* ---------- 拨号 ---------- */
+  $('handset').addEventListener('click', function(){
+    if (S.screen !== 'dial' || S.taps >= 3) return;
+    dots[S.taps].classList.add('on');
+    S.taps++;
+    var t = document.createElement('span');
+    t.className = 'toot';
+    t.textContent = UI[LANG].toot;
+    t.style.setProperty('--dx', ((S.taps - 2) * 34) + 'px');
+    $('hsWrap').appendChild(t);
+    setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 1600);
+    if (navigator.vibrate) try { navigator.vibrate(8); } catch (e) {}
+    if (S.taps === 3){
+      $('dial').classList.add('ringing');
+      setUI(hint, 'ringHint'); setUI(sub, 'ringSub');
+      setTimeout(function(){
+        $('dial').classList.remove('ringing');
+        setUI(hint, 'pick'); setUI(sub, 'blank');
+        setTimeout(startCall, 700);
+      }, 2700);
+    }
+  });
+
+  function show(name){ S.screen = name; app.setAttribute('data-screen', name); }
+
+  /* ---------- 通话 ---------- */
+  function startCall(){
+    S.phase = 'open'; S.beat = -1; S.earlyUm = false;
+    S.startAt = Date.now(); S.lastUm = Date.now();
+    log.innerHTML = '';
+    show('call');
+    startClock(); startWave();
+    later(1500, function(){
+      seq([[OPEN[0], 1700], [OPEN[1], 2300], [OPEN[2], 2600], [OPEN[3], 1400]], function(){
+        if (S.earlyUm){ S.phase = 'ack'; seq([[FIRST, 3000]], startScript); return; }
+        S.phase = 'waitFirst';
+        um.classList.add('beckon');
+        later(20000, function(){
+          um.classList.remove('beckon');
+          S.phase = 'ack';
+          seq([[NOFIRST, 3800]], startScript);
+        });
+      });
+    });
+  }
+  function startScript(){ S.lastUm = Date.now(); nextBeat(); }
+  function nextBeat(){
+    S.phase = 'script';
+    S.beat++;
+    if (S.beat >= SCRIPT.length){ filler(); return; }
+    var b = SCRIPT[S.beat];
+    S.umThisBeat = false;
+    speak(b);
+    later(gapOf(b) + (b.hold || 0), afterBeat);
+  }
+  function afterBeat(){
+    var b = SCRIPT[S.beat];
+    if (S.umThisBeat && b.um){ S.umThisBeat = false; speak(b.um); later(gapOf(b.um), nextBeat); return; }
+    if (Date.now() - S.lastUm > QUIET){ startCheck(); return; }
+    nextBeat();
+  }
+  function filler(){
+    S.phase = 'filler';
+    if (Date.now() - S.lastUm > QUIET){ startCheck(); return; }
+    var i;
+    do { i = Math.floor(Math.random() * FILLER.length); } while (i === S.lastFiller);
+    S.lastFiller = i;
+    speak(FILLER[i]);
+    later(20000 + Math.random() * 12000, filler);
+  }
+  function resumeTalk(){
+    S.lastUm = Date.now();
+    if (S.beat < SCRIPT.length - 1) nextBeat(); else filler();
+  }
+
+  /* ---------- 睡着 ---------- */
+  function startCheck(){
+    S.phase = 'check';
+    speak(CHECK);
+    later(12000, fallAsleep);
+  }
+  function fallAsleep(){
+    S.phase = 'night';
+    seq([[NIGHT[0], 3200], [NIGHT[1], 3000], [NIGHT[2], 3400], [NIGHT[3], 4200]], enterSleep);
+  }
+  var clearT = 0;
+  function enterSleep(){
+    S.phase = 'sleeping';
+    app.classList.add('asleep');
+    applyShade();
+    clearTimeout(clearT);
+    clearT = setTimeout(function(){ if (S.phase === 'sleeping') log.innerHTML = ''; }, 7000);
+  }
+  function wakeUp(){
+    cancel(); clearTimeout(clearT);
+    app.classList.remove('asleep', 'stir');
+    applyShade();
+    S.phase = 'ack';
+    later(1100, function(){ seq([[WOKE[0], 1900], [WOKE[1], 2600], [WOKE[2], 3000]], resumeTalk); });
+  }
+  var stirT = 0;
+  function stir(){
+    S.stirUntil = Date.now() + 6000;
+    app.classList.add('stir');
+    clearTimeout(stirT);
+    stirT = setTimeout(function(){ app.classList.remove('stir'); }, 6000);
+    whisper(HERE);
+  }
+  var whT = 0;
+  function whisper(o){
+    if (Date.now() - S.lastWhisper < 4000) return;
+    S.lastWhisper = Date.now();
+    whisperEl.textContent = o[LANG];
+    whisperEl.classList.add('on');
+    clearTimeout(whT);
+    whT = setTimeout(function(){ whisperEl.classList.remove('on'); }, 3200);
+  }
+
+  /* ---------- 嗯 ---------- */
+  um.addEventListener('click', function(){
+    if (S.screen !== 'call') return;
+    um.classList.remove('press'); void um.offsetWidth; um.classList.add('press');
+    setTimeout(function(){ um.classList.remove('press'); }, 140);
+    if (navigator.vibrate) try { navigator.vibrate(6); } catch (e) {}
+    meSay();
+    S.lastUm = Date.now();
+    S.umThisBeat = true;
+    switch (S.phase){
+      case 'open':
+        S.earlyUm = true; break;
+      case 'waitFirst':
+        cancel(); um.classList.remove('beckon'); S.phase = 'ack';
+        later(1100, function(){ seq([[FIRST, 3000]], startScript); });
+        break;
+      case 'script': case 'filler':
+        hurry(2200); break;
+      case 'check':
+        cancel(); S.phase = 'ack';
+        later(1300, function(){ seq([[ACK, 3400]], resumeTalk); });
+        break;
+      case 'night': case 'sleeping':
+        wakeUp(); break;
+    }
+  });
+
+  // 睡着以后，点哪儿都先只是「我在」；挂断和调暗要先把它点醒
+  app.addEventListener('pointerdown', function(e){
+    var asleep = app.classList.contains('asleep');
+    S.downAwake = !asleep || Date.now() < S.stirUntil;
+    if (asleep && !um.contains(e.target)) stir();
+  }, true);
+
+  $('hang').addEventListener('click', function(){
+    if (!S.downAwake) return;
+    cancel(); clearTimeout(clearT);
+    $('endTime').textContent = fmt(Date.now() - S.startAt);
+    app.classList.remove('asleep', 'stir');
+    um.classList.remove('beckon');
+    S.phase = '';
+    show('end');
+    stopClock(); stopWave();
+    applyShade();
+  });
+
+  $('dim').addEventListener('click', function(){
+    if (!S.downAwake) return;
+    S.dim = (S.dim + 1) % 3;
+    $('dimLabel').textContent = UI[LANG].dim[S.dim];
+    applyShade();
+  });
+  function applyShade(){
+    var o = [0, .38, .62][S.dim];
+    if (app.classList.contains('asleep')) o = Math.max(o, .45);
+    shade.style.opacity = o;
+  }
+
+  $('again').addEventListener('click', function(){
+    S.taps = 0;
+    for (var i = 0; i < dots.length; i++) dots[i].classList.remove('on');
+    setUI(hint, 'hint'); setUI(sub, 'sub');
+    log.innerHTML = '';
+    show('dial');
+  });
+
+  $('lang').addEventListener('click', function(){
+    LANG = LANG === 'zh' ? 'en' : 'zh';
+    try { localStorage.setItem('enjiuxing-lang', LANG); } catch (e) {}
+    paintUI();
+  });
+
+  // 锁屏很久再回来：就当已经睡着过了
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden){ S.hiddenAt = Date.now(); return; }
+    if (S.screen !== 'call' || !S.hiddenAt) return;
+    var away = Date.now() - S.hiddenAt;
+    S.hiddenAt = 0;
+    if (away < 180000) return;
+    if (S.phase !== 'sleeping'){
+      cancel();
+      log.innerHTML = '';
+      S.phase = 'sleeping';
+      app.classList.add('asleep');
+      applyShade();
+    }
+    setTimeout(function(){ whisper(BACK); }, 600);
+  });
+
+  /* ---------- 计时 ---------- */
+  function fmt(ms){
+    var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    var mm = (m < 10 ? '0' : '') + m, ss = (x < 10 ? '0' : '') + x;
+    return h ? h + ':' + mm + ':' + ss : mm + ':' + ss;
+  }
+  var clockT = 0;
+  function tick(){ clockEl.textContent = fmt(Date.now() - S.startAt); }
+  function startClock(){ tick(); clearInterval(clockT); clockT = setInterval(tick, 1000); }
+  function stopClock(){ clearInterval(clockT); }
+
+  /* ---------- 那条线 ---------- */
+  function wavePath(freq, amp, ph){
+    var d = '';
+    for (var x = 0; x <= 200; x += 4){
+      var e = Math.sin(Math.PI * x / 200); e = e * e;
+      var y = 20 + Math.sin(x / 200 * Math.PI * 2 * freq + ph) * amp * 16 * e;
+      d += (x ? 'L' : 'M') + x + ' ' + y.toFixed(2);
+    }
+    return d;
+  }
+  var amp = .07, ph = 0, waveOn = false, lastFrame = 0;
+  function frame(t){
+    if (!waveOn) return;
+    requestAnimationFrame(frame);
+    if (t - lastFrame < 33) return;
+    lastFrame = t;
+    var now = Date.now(), tgt, talking = now < speakUntil;
+    if (app.classList.contains('asleep')) tgt = .12 + .3 * (.5 - .5 * Math.cos(now / 1000 * 2 * Math.PI / 8));
+    else if (talking) tgt = .35 + .6 * Math.abs(Math.sin(now / 180) * Math.sin(now / 470 + 1));
+    else tgt = .07;
+    amp += (tgt - amp) * .12;
+    ph += talking ? .09 : .02;
+    p1.setAttribute('d', wavePath(3, amp, ph));
+    p2.setAttribute('d', wavePath(5.3, amp * .55, -ph * 1.4));
+  }
+  function startWave(){ if (!waveOn){ waveOn = true; requestAnimationFrame(frame); } }
+  function stopWave(){ waveOn = false; }
+  p1.setAttribute('d', wavePath(3, amp, 0));
+  p2.setAttribute('d', wavePath(5.3, amp * .55, 0));
+
+  paintUI();
+})();
+</script>
+</body>
+</html>
