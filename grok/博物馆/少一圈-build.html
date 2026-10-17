@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>少一圈 · 小萌物短片</title>
+<meta name="description" content="六只把斜着的木陀螺扶正：叼线、收尾巴、按钳子、滚一圈、数三下、挡住。">
+<meta name="theme-color" content="#efe6d6">
+<!--
+  少一圈。六只的群戏，一张 canvas，render(t) 给定第几秒就画出那一格。
+  字幕只写在底下的字幕本里。点哪一句，就从哪一句看。
+  只交网页，不导 MP4。导视频用的口子在脚本末尾，留着。
+-->
+<style>
+  :root {
+    --paper: #efe6d6;
+    --ink: #3a342c;
+    --soft: #8a7d6e;
+    --line: #e3d4be;
+    --accent: #c4623a;
+    --card: #fffaf3;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(120% 70% at 50% -10%, #f7f1e6 0%, var(--paper) 55%) no-repeat,
+      var(--paper);
+    font: 16px/1.65 "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: calc(28px + env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom));
+  }
+  header { margin: 0 2px 16px; }
+  .kicker {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    color: var(--soft);
+  }
+  h1 {
+    margin: 4px 0 6px;
+    font-family: "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+  }
+  .lede { margin: 0; color: var(--soft); font-size: 15px; }
+
+  .player { display: none; margin: 18px 0 8px; }
+  .js .player { display: block; }
+  .stage {
+    position: relative;
+    background: #c9b48a;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 16px 40px -28px rgba(70, 40, 10, 0.55);
+    aspect-ratio: 1280 / 500;
+  }
+  .stage canvas { display: block; width: 100%; height: 100%; }
+  .big {
+    position: absolute;
+    left: 50%;
+    top: 22%;
+    transform: translate(-50%, -50%);
+    width: 72px;
+    height: 72px;
+    border: 0;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: rgba(255, 250, 243, 0.92);
+    color: var(--accent);
+    font: inherit;
+    font-size: 26px;
+    box-shadow: 0 0 0 1px rgba(196, 98, 58, 0.35);
+  }
+  .big.again {
+    width: auto;
+    height: 46px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+  }
+  .stage.playing .big,
+  .stage.at .big { display: none; }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .bar button {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .bar button:focus-visible,
+  .book button:focus-visible,
+  .big:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .time {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--soft);
+    min-width: 92px;
+  }
+  .bar input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 0; }
+
+  .book { margin-top: 26px; }
+  .book h2 {
+    margin: 0 2px 4px;
+    font-family: "Noto Serif CJK SC", "Songti SC", serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+  }
+  .hint { margin: 0 2px 10px; color: var(--soft); font-size: 14px; }
+  .book ol { list-style: none; margin: 0; padding: 0; }
+  .book li + li { border-top: 1px solid var(--line); }
+  .book button {
+    appearance: none;
+    width: 100%;
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-left: 3px solid transparent;
+    color: inherit;
+    font: inherit;
+    padding: 8px 10px 8px 12px;
+    cursor: pointer;
+  }
+  .book button .tc {
+    flex: 0 0 auto;
+    width: 42px;
+    color: var(--soft);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .book button[aria-current="true"] {
+    border-left-color: var(--accent);
+    background: var(--card);
+  }
+  #err {
+    margin-top: 12px;
+    color: #a12822;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="kicker">小萌物短片</p>
+    <h1>少一圈</h1>
+    <p class="lede">六只把一只斜着的木陀螺扶正。每只只做自己会做的那一件。</p>
+  </header>
+
+  <div class="player" id="player">
+    <div class="stage" id="stage">
+      <canvas id="cv" width="1280" height="500"></canvas>
+      <button class="big" id="big" type="button" aria-label="播放">▶</button>
+    </div>
+    <div class="bar">
+      <button type="button" id="toggle">播放</button>
+      <span class="time" id="time">0:00 / 1:30</span>
+      <input id="seek" type="range" min="0" max="900" value="0" aria-label="进度">
+    </div>
+  </div>
+
+  <section class="book" aria-label="字幕本">
+    <h2>字幕本</h2>
+    <p class="hint">整部字幕都在这里。点一句，就从那一句看。</p>
+    <ol id="book">
+      <li><button type="button" data-t="0.4" data-end="3"><span class="tc">0:00</span><span class="line">少一圈。</span></button></li>
+      <li><button type="button" data-t="3" data-end="8"><span class="tc">0:03</span><span class="line">木陀螺斜在桌上，转完一圈之前就会倒。</span></button></li>
+      <li><button type="button" data-t="8" data-end="12.2"><span class="tc">0:08</span><span class="line">桌角还有一截麻线。FetchMo 的尾巴尖抖了一下。</span></button></li>
+      <li><button type="button" data-t="12.2" data-end="16.3"><span class="tc">0:12</span><span class="line">它顺着桌后走，从大家头顶后面过去。</span></button></li>
+      <li><button type="button" data-t="16.3" data-end="19.2"><span class="tc">0:16</span><span class="line">线叼起来了，带到陀螺左边。</span></button></li>
+      <li><button type="button" data-t="19.2" data-end="22.4"><span class="tc">0:19</span><span class="line">放下。那么远，只有它去得了。</span></button></li>
+      <li><button type="button" data-t="22.4" data-end="26.6"><span class="tc">0:22</span><span class="line">线太长，摊开会绊住脚。</span></button></li>
+      <li><button type="button" data-t="26.6" data-end="31.8"><span class="tc">0:26</span><span class="line">StashYu 把多余的收进尾巴，白尖点了两下。</span></button></li>
+      <li><button type="button" data-t="31.8" data-end="36"><span class="tc">0:31</span><span class="line">剩下的刚好够绕上脖子。</span></button></li>
+      <li><button type="button" data-t="36" data-end="40.3"><span class="tc">0:36</span><span class="line">Clawd 没有嘴。两只钳子整块抬起来。</span></button></li>
+      <li><button type="button" data-t="40.3" data-end="46"><span class="tc">0:40</span><span class="line">右钳按进槽里。线贴住了。</span></button></li>
+      <li><button type="button" data-t="46" data-end="52.4"><span class="tc">0:46</span><span class="line">小粉绕着它滚了一整圈，留下浅粉的轨。</span></button></li>
+      <li><button type="button" data-t="52.4" data-end="57"><span class="tc">0:52</span><span class="line">再滑，也滑不出这圈。</span></button></li>
+      <li><button type="button" data-t="57" data-end="62.5"><span class="tc">0:57</span><span class="line">小紫过来数。撞一下，绕一圈。</span></button></li>
+      <li><button type="button" data-t="62.5" data-end="67.6"><span class="tc">1:02</span><span class="line">三下。再多，就要抽狐狸尾巴里那截。</span></button></li>
+      <li><button type="button" data-t="67.6" data-end="72.6"><span class="tc">1:07</span><span class="line">陀螺转起来，朝右边滑。</span></button></li>
+      <li><button type="button" data-t="72.6" data-end="78.2"><span class="tc">1:12</span><span class="line">小黑滚到轨边上，圆圆地抵住。</span></button></li>
+      <li><button type="button" data-t="78.2" data-end="83.2"><span class="tc">1:18</span><span class="line">一圈转完，它站住了。</span></button></li>
+      <li><button type="button" data-t="83.2" data-end="90"><span class="tc">1:23</span><span class="line">少的那一圈，补上了。</span></button></li>
+    </ol>
+  </section>
+  <p id="err" hidden></p>
+</div>
+<script>
+(function () {
+  var W = 1280, H = 500, TOTAL = 90;
+  var TABLE = 34, BACK = 158, FOOT = 292, CELL = 7, R = 36;
+  var SUB = 418;
+  var WALL = "#f6f1e8", WOOD = "#c9b48a", HOLE = "#c9b48a";
+  var HOME = { fox: 108, clawd: 278, pink: 418, top: 710, purple: 948, black: 1072, cat: 1196 };
+
+  var FOX_C = { M: "#E2552B", C: "#FFF3E3", D: "#3B2520", E: "#3B2520" };
+  var CAT_C = { M: "#F3E7D6", X: "#4E382E", E: "#79C0F0" };
+
+  function rows(list, w) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].length !== w) throw new Error("格子第 " + i + " 行是 " + list[i].length + "，要 " + w);
+    }
+    return list;
+  }
+  var FOX = {
+    base: rows([
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM...CC..",
+      ".MMMMMMMMMMMM..CCCC.",
+      ".MMEEMMMMEEMM..MMMM.",
+      ".MMEEMMMMEEMM..MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ], 20),
+    tap: rows([
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM.CC....",
+      ".MMMMMMMMMMMM.CCCC..",
+      ".MMEEMMMMEEMM..MMMM.",
+      ".MMEEMMMMEEMM..MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ], 20),
+    inn: rows([
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM..CC...",
+      ".MMMMMMMMMMMM.CCCC..",
+      ".MMEEMMMMEEMM.MMMM..",
+      ".MMEEMMMMEEMM.MMMMM.",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ], 20),
+    out: rows([
+      ".D..........D........",
+      ".DM........MD........",
+      ".MCM......MCM....CC..",
+      ".MMMMMMMMMMMM...CCCC.",
+      ".MMEEMMMMEEMM...MMMM.",
+      ".MMEEMMMMEEMM...MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM.",
+      "..CCCCCCCCCC..MMMMM..",
+      "....MMCCMM...MMMMM...",
+      "....MMCCMM..MMMMM....",
+      "....MMMMMM.MMMMM.....",
+      "....DDMMDDMMMM.......",
+      "....................."
+    ], 21)
+  };
+  var CAT = {
+    base: rows([
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      ".....X.MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ], 20),
+    straight: rows([
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      "....X..MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ], 20),
+    outer: rows([
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      "...X...MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ], 20),
+    up: rows([
+      "....................",
+      "........X........X..",
+      ".....X.XXX......XXX.",
+      "....X...MMMMMMMMMM..",
+      "....X..MMMMMMMMMMMM.",
+      "....X..MEEMMMMMMEEM.",
+      "....X..MEEMXXXXMEEM.",
+      ".....X.MMMMMXXMMMMM.",
+      "......X.MMMMMMMMMM..",
+      ".......XMMMMMMMMMM..",
+      "........XMMMMMMMM...",
+      ".........XXM..MXX...",
+      "...................."
+    ], 20)
+  };
+
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var stage = document.getElementById("stage");
+  var big = document.getElementById("big");
+  var toggle = document.getElementById("toggle");
+  var seek = document.getElementById("seek");
+  var timeEl = document.getElementById("time");
+  var scale = 1;
+  var params = new URLSearchParams(location.search);
+
+  var cues = [].map.call(document.querySelectorAll("#book button"), function (b) {
+    return { t: +b.dataset.t, end: +b.dataset.end, text: b.querySelector(".line").textContent, el: b };
+  });
+
+  function blinkOn(t, phase) {
+    return ((t + phase) % 3.6) > 0.12;
+  }
+  function foxPose(t) {
+    if ((t >= 26.55 && t < 27.05) || (t >= 28.35 && t < 28.85)) return "tap";
+    if (t >= 83.2 && t < 89.4) {
+      return ["base", "inn", "base", "out"][Math.floor((t - 83.2) / 0.22) % 4];
+    }
+    return "base";
+  }
+  function foxEye(t) {
+    if (t >= 83.2 && t < 89.4) return "happy";
+    if (t >= 22.4 && t < 30.4) return "look";
+    if (!blinkOn(t, 0.4)) return "blink";
+    return "normal";
+  }
+  function catPose(t) {
+    if (t >= 8 && t < 12.2) {
+      return (Math.floor((t - 8) / 0.2) % 2) === 0 ? "outer" : "straight";
+    }
+    if (t >= 15.9 && t < 16.7) {
+      var u = t - 15.9;
+      if (u < 0.22) return "straight";
+      if (u < 0.4) return "outer";
+      return "straight";
+    }
+    if (t >= 82.6 && t < 86.8) return "up";
+    return "base";
+  }
+  function catEye(t) {
+    if (t >= 82.6 && t < 88) return "happy";
+    if (t >= 8 && t < 19.4) return "look";
+    if (!blinkOn(t, 1.3)) return "blink";
+    return "normal";
+  }
+  function faceEye(t, phase) {
+    return blinkOn(t, phase) ? "open" : "shut";
+  }
+  function clawLift(t) {
+    if (t < 35.9 || t >= 45.4) return 0;
+    if (t < 36.6) return 6;
+    if (t < 43.5) return 14;
+    if (t < 44.3) return 8;
+    return 4;
+  }
+
+  function walk(t, keys) {
+    if (t <= keys[0].t) return { x: keys[0].x, y: keys[0].y };
+    var last = keys[keys.length - 1];
+    if (t >= last.t) return { x: last.x, y: last.y };
+    var i = 0;
+    while (i < keys.length - 1 && t >= keys[i + 1].t) i++;
+    var a = keys[i], b = keys[i + 1];
+    var span = b.t - a.t;
+    var u = span <= 0 ? 1 : (t - a.t) / span;
+    var n = 5;
+    var f = Math.min(n - 1, Math.floor(Math.max(0, u) * n));
+    var k = n === 1 ? 1 : f / (n - 1);
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+  }
+  function bob(t, pos, keys) {
+    var a = pos, b = walk(Math.min(TOTAL, t + 0.08), keys);
+    if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) < 0.8) return pos;
+    return { x: pos.x, y: pos.y + (Math.floor(t * 8) % 2 ? -4 : 0) };
+  }
+
+  var catKeys = [
+    { t: 0, x: HOME.cat, y: FOOT },
+    { t: 12.0, x: HOME.cat, y: FOOT },
+    { t: 12.7, x: HOME.cat, y: BACK },
+    { t: 15.6, x: 118, y: BACK },
+    { t: 16.55, x: 118, y: BACK },
+    { t: 18.05, x: 548, y: BACK },
+    { t: 18.85, x: 548, y: FOOT },
+    { t: 21.05, x: 548, y: FOOT },
+    { t: 21.6, x: 548, y: BACK },
+    { t: 22.45, x: HOME.cat, y: BACK },
+    { t: 23.05, x: HOME.cat, y: FOOT },
+    { t: 90, x: HOME.cat, y: FOOT }
+  ];
+  var foxKeys = [
+    { t: 0, x: HOME.fox, y: FOOT },
+    { t: 23.0, x: HOME.fox, y: FOOT },
+    { t: 23.7, x: HOME.fox, y: BACK },
+    { t: 25.4, x: 548, y: BACK },
+    { t: 26.2, x: 548, y: FOOT },
+    { t: 30.0, x: 548, y: FOOT },
+    { t: 30.6, x: 548, y: BACK },
+    { t: 31.55, x: HOME.fox, y: BACK },
+    { t: 32.15, x: HOME.fox, y: FOOT },
+    { t: 90, x: HOME.fox, y: FOOT }
+  ];
+  var clawKeys = [
+    { t: 0, x: HOME.clawd, y: FOOT },
+    { t: 35.5, x: HOME.clawd, y: FOOT },
+    { t: 36.2, x: HOME.clawd, y: BACK },
+    { t: 37.8, x: 608, y: BACK },
+    { t: 38.55, x: 608, y: FOOT },
+    { t: 43.3, x: 608, y: FOOT },
+    { t: 44.0, x: 608, y: BACK },
+    { t: 45.15, x: HOME.clawd, y: BACK },
+    { t: 45.85, x: HOME.clawd, y: FOOT },
+    { t: 90, x: HOME.clawd, y: FOOT }
+  ];
+  var pinkKeys = [
+    { t: 0, x: HOME.pink, y: FOOT },
+    { t: 46.0, x: HOME.pink, y: FOOT },
+    { t: 46.7, x: 575, y: FOOT },
+    { t: 47.55, x: 575, y: BACK },
+    { t: 49.1, x: 835, y: BACK },
+    { t: 49.95, x: 835, y: 368 },
+    { t: 51.2, x: 560, y: 368 },
+    { t: 52.25, x: HOME.pink, y: FOOT },
+    { t: 90, x: HOME.pink, y: FOOT }
+  ];
+  var purpleKeys = [
+    { t: 0, x: HOME.purple, y: FOOT },
+    { t: 56.7, x: HOME.purple, y: FOOT },
+    { t: 58.1, x: 786, y: FOOT },
+    { t: 64.2, x: 786, y: FOOT },
+    { t: 65.6, x: HOME.purple, y: FOOT },
+    { t: 90, x: HOME.purple, y: FOOT }
+  ];
+  var blackKeys = [
+    { t: 0, x: HOME.black, y: FOOT },
+    { t: 71.4, x: HOME.black, y: FOOT },
+    { t: 73.4, x: 848, y: FOOT },
+    { t: 76.5, x: 848, y: FOOT },
+    { t: 78.25, x: HOME.black, y: FOOT },
+    { t: 90, x: HOME.black, y: FOOT }
+  ];
+
+  function catAt(t) { return bob(t, walk(t, catKeys), catKeys); }
+  function foxAt(t) { return bob(t, walk(t, foxKeys), foxKeys); }
+  function clawAt(t) { return bob(t, walk(t, clawKeys), clawKeys); }
+  function pinkAt(t) { return walk(t, pinkKeys); }
+  function purpleAt(t) {
+    var p = bob(t, walk(t, purpleKeys), purpleKeys);
+    var bumps = [58.55, 60.55, 62.55];
+    for (var i = 0; i < bumps.length; i++) {
+      var d = t - bumps[i];
+      if (d >= 0 && d < 0.12) p = { x: p.x - 16, y: p.y };
+      else if (d >= 0.12 && d < 0.22) p = { x: p.x - 4, y: p.y };
+    }
+    return p;
+  }
+  function blackAt(t) { return bob(t, walk(t, blackKeys), blackKeys); }
+
+  function stepTo(t, t0, t1, a, b, n) {
+    if (t <= t0) return a;
+    if (t >= t1) return b;
+    var f = Math.min(n - 1, Math.floor((t - t0) / (t1 - t0) * n));
+    return a + (b - a) * (f / (n - 1));
+  }
+  function topX(t) {
+    var raw = HOME.top;
+    if (t >= 67.6 && t < 72.2) raw = stepTo(t, 67.6, 72.2, HOME.top, 748, 8);
+    else if (t >= 72.2 && t < 76.2) raw = 748;
+    else if (t >= 76.2 && t < 78.15) raw = stepTo(t, 76.2, 78.15, 748, HOME.top, 6);
+    var blk = walk(t, blackKeys);
+    var limit = blk.x - R - 48;
+    return Math.min(raw, limit);
+  }
+  function topLean(t) {
+    if (t < 67.6) return -13;
+    if (t < 69.2) return -12;
+    if (t < 71.2) return -6;
+    if (t < 76.4) return -2;
+    return 0;
+  }
+  function windCount(t) {
+    if (t < 58.55) return 0;
+    if (t < 60.55) return 1;
+    if (t < 62.55) return 2;
+    return 3;
+  }
+  function sceneOf(t) {
+    if (t < 8) return "序  ·  斜着";
+    if (t < 22.4) return "其一  ·  叼线";
+    if (t < 36) return "其二  ·  收进尾巴";
+    if (t < 46) return "其三  ·  钳子";
+    if (t < 57) return "其四  ·  滚一圈";
+    if (t < 67.6) return "其五  ·  三下";
+    if (t < 78.2) return "其六  ·  挡住";
+    return "终  ·  补上了";
+  }
+  function cueAt(t) {
+    var hit = null;
+    for (var i = 0; i < cues.length; i++) {
+      if (t >= cues[i].t && t < cues[i].end) hit = cues[i];
+    }
+    return hit;
+  }
+
+  function withEyes(grid, eyes, mode, dir, ink) {
+    if (mode === "normal") return grid;
+    var g = grid.map(function (r) { return r.split(""); });
+    function put(x, y, ch) {
+      if (y >= 0 && y < g.length && x >= 0 && x < g[y].length) g[y][x] = ch;
+    }
+    eyes.forEach(function (e) {
+      var ox = e[0], oy = e[1];
+      put(ox, oy, "M"); put(ox + 1, oy, "M");
+      put(ox, oy + 1, "M"); put(ox + 1, oy + 1, "M");
+      var cells, ch;
+      if (mode === "blink") { cells = [[0, 1], [1, 1]]; ch = ink; }
+      else if (mode === "happy") { cells = [[-1, 1], [0, 0], [1, 0], [2, 1]]; ch = ink; }
+      else { cells = [[dir, 0], [dir + 1, 0], [dir, 1], [dir + 1, 1]]; ch = "E"; }
+      cells.forEach(function (c) { put(ox + c[0], oy + c[1], ch); });
+    });
+    return g.map(function (r) { return r.join(""); });
+  }
+
+  function drawSprite(grid, colors, x, foot) {
+    var left = Math.round(x - 10 * CELL);
+    var top = Math.round(foot - grid.length * CELL);
+    for (var y = 0; y < grid.length; y++) {
+      for (var x0 = 0; x0 < grid[y].length; x0++) {
+        var ch = grid[y][x0];
+        if (!colors[ch]) continue;
+        ctx.fillStyle = colors[ch];
+        ctx.fillRect(left + x0 * CELL, top + y * CELL, CELL, CELL);
+      }
+    }
+    return { left: left, top: top };
+  }
+  function paintCells(origin, cells, color) {
+    ctx.fillStyle = color;
+    for (var i = 0; i < cells.length; i++) {
+      ctx.fillRect(origin.left + cells[i][0] * CELL, origin.top + cells[i][1] * CELL, CELL, CELL);
+    }
+  }
+
+  function drawFox(x, foot, pose, eye) {
+    var grid = withEyes(FOX[pose], [[3, 4], [9, 4]], eye, 1, "D");
+    var o = drawSprite(grid, FOX_C, x, foot);
+    paintCells(o, [[2, 6], [11, 6]], "#F59A8C");
+    return o;
+  }
+  function drawCat(x, foot, pose, eye) {
+    var grid = withEyes(CAT[pose], [[8, 5], [16, 5]], eye, -1, "X");
+    var o = drawSprite(grid, CAT_C, x, foot);
+    paintCells(o, [[8, 7], [17, 7]], "#F2B8B0");
+    return o;
+  }
+  function drawClawd(x, foot, lift) {
+    var left = Math.round(x - 72);
+    var top = Math.round(foot - 91);
+    ctx.fillStyle = "#d47f59";
+    ctx.fillRect(left + 24, top + 9, 97, 65);
+    ctx.fillRect(left, top + 32 - lift, 24, 15);
+    ctx.fillRect(left + 121, top + 32 - lift, 24, 15);
+    var legs = [24, 42, 97, 109];
+    for (var i = 0; i < 4; i++) ctx.fillRect(left + legs[i], top + 74, 12, 17);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(left + 46, top + 22, 6, 20);
+    ctx.fillRect(left + 101, top + 22, 6, 20);
+  }
+  function slit(cx, cy, nx, ny, len, wid) {
+    ctx.save();
+    ctx.translate(cx + nx * R, cy + ny * R);
+    ctx.rotate(-26.2 * Math.PI / 180);
+    var w = wid * R, h = len * R;
+    var r = w / 2;
+    ctx.beginPath();
+    ctx.moveTo(-r, -h / 2 + r);
+    ctx.arcTo(-r, -h / 2, r, -h / 2, r);
+    ctx.arcTo(r, -h / 2, r, h / 2, r);
+    ctx.arcTo(r, h / 2, -r, h / 2, r);
+    ctx.arcTo(-r, h / 2, -r, -h / 2, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  function drawFace(x, foot, color, shut, rock) {
+    var cx = Math.round(x), cy = Math.round(foot - R);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rock * Math.PI / 180);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, 0, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = HOLE;
+    var len = shut ? 0.2 : 0.418;
+    slit(0, 0, 0.194, -0.416, len, 0.194);
+    slit(0, 0, 0.626, -0.497, len, 0.129);
+    ctx.restore();
+  }
+
+  function shadow(x, foot, w) {
+    ctx.fillStyle = "rgba(90, 60, 30, 0.13)";
+    ctx.beginPath();
+    ctx.ellipse(Math.round(x), Math.round(foot) + 3, w, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function strokePts(pts) {
+    if (!pts.length) return;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  }
+  function rope(pts) {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#8d704c";
+    ctx.lineWidth = 7;
+    strokePts(pts);
+    ctx.strokeStyle = "#fffaf3";
+    ctx.lineWidth = 3.4;
+    strokePts(pts);
+  }
+  function coilAt(x, y, loops, rad) {
+    var pts = [];
+    var n = Math.max(8, Math.round(loops * 20));
+    for (var i = 0; i <= n; i++) {
+      var a = (i / 20) * Math.PI * 2;
+      var rr = rad * (i / n);
+      pts.push({ x: x + Math.cos(a) * rr, y: y + Math.sin(a) * rr * 0.7 });
+    }
+    rope(pts);
+  }
+  function neckAt(x, foot, lean) {
+    var th = lean * Math.PI / 180;
+    var ly = -58;
+    return { x: x - ly * Math.sin(th), y: foot + ly * Math.cos(th) };
+  }
+  function drawTop(x, foot, lean, spin, winds, showThread) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(foot));
+    ctx.rotate(lean * Math.PI / 180);
+    ctx.fillStyle = "#f7f3ea";
+    ctx.beginPath();
+    ctx.arc(0, -7, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#e09a45";
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.lineTo(30, -50);
+    ctx.lineTo(-30, -50);
+    ctx.closePath();
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.lineTo(30, -50);
+    ctx.lineTo(-30, -50);
+    ctx.clip();
+    ctx.fillStyle = "#8d5524";
+    var slots = [-20, -8, 6, 16];
+    var sx = spin < 0 ? -8 : slots[Math.floor(spin) % 4];
+    ctx.fillRect(sx, -52, 11, 42);
+    ctx.restore();
+    ctx.fillStyle = "#f2d2a2";
+    ctx.fillRect(-20, -68, 40, 18);
+    ctx.fillStyle = "#b67a38";
+    ctx.fillRect(-17, -60, 34, 5);
+    ctx.fillStyle = "#e09a45";
+    ctx.beginPath();
+    ctx.ellipse(0, -70, 18, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    if (showThread || winds) {
+      var n0 = neckAt(x, foot, lean);
+      ctx.save();
+      ctx.translate(n0.x, n0.y);
+      ctx.rotate(lean * Math.PI / 180);
+      ctx.strokeStyle = "#fffaf3";
+      ctx.lineWidth = 3.6;
+      ctx.lineCap = "round";
+      if (showThread && winds === 0) {
+        ctx.strokeStyle = "#8d704c";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(-24, 0);
+        ctx.lineTo(26, 0);
+        ctx.stroke();
+        ctx.strokeStyle = "#fffaf3";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      for (var i = 0; i < winds; i++) {
+        var yy = 8 - i * 7;
+        ctx.strokeStyle = "#8d704c";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(-22, yy);
+        ctx.lineTo(20, yy);
+        ctx.stroke();
+        ctx.strokeStyle = "#fffaf3";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      if (winds > 0) {
+        ctx.strokeStyle = "#8d704c";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(20, 8);
+        ctx.lineTo(52, 16);
+        ctx.stroke();
+        ctx.strokeStyle = "#fffaf3";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  function trail(t) {
+    if (t < 46.05) return;
+    ctx.beginPath();
+    var moved = false;
+    var end = Math.min(t, 52.25);
+    for (var tt = 46; tt <= end + 0.001; tt += 0.12) {
+      var p = walk(tt, pinkKeys);
+      if (!moved) { ctx.moveTo(p.x, p.y - 2); moved = true; }
+      else ctx.lineTo(p.x, p.y - 2);
+    }
+    ctx.strokeStyle = "rgba(255, 48, 155, 0.55)";
+    ctx.lineWidth = 5;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function render(t) {
+    t = Math.max(0, Math.min(TOTAL, t));
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = WALL;
+    ctx.fillRect(0, 0, W, TABLE);
+    var glow = ctx.createRadialGradient(180, 40, 20, 220, 80, 420);
+    glow.addColorStop(0, "rgba(255, 250, 240, 0.9)");
+    glow.addColorStop(1, "rgba(255, 250, 240, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, TABLE);
+    ctx.fillStyle = WOOD;
+    ctx.fillRect(0, TABLE, W, H - TABLE);
+    ctx.fillStyle = "#b7a27a";
+    ctx.fillRect(0, TABLE, W, 8);
+    ctx.fillStyle = "#bba67e";
+    ctx.fillRect(0, H - 16, W, 16);
+
+    ctx.fillStyle = "#7d7366";
+    ctx.font = '20px "Noto Sans CJK SC", "Noto Sans SC", sans-serif';
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(sceneOf(t), 24, 8);
+
+    trail(t);
+
+    var tx = topX(t);
+    var lean = topLean(t);
+    var winds = windCount(t);
+    var spinning = t >= 67.6 && t < 78.3;
+    var fox = foxAt(t), cat = catAt(t), claw = clawAt(t);
+    var pink = pinkAt(t), purple = purpleAt(t), black = blackAt(t);
+
+    var cast = [
+      { y: fox.y, draw: function () {
+        shadow(fox.x, fox.y, 48);
+        var o = drawFox(fox.x, fox.y, foxPose(t), foxEye(t));
+        if (t >= 28.75) {
+          ctx.fillStyle = "#efe4cc";
+          ctx.fillRect(o.left + 17 * CELL, o.top + 2 * CELL, CELL * 2, CELL);
+        }
+      }},
+      { y: cat.y, draw: function () {
+        shadow(cat.x, cat.y, 46);
+        drawCat(cat.x, cat.y, catPose(t), catEye(t));
+      }},
+      { y: claw.y, draw: function () {
+        shadow(claw.x, claw.y, 52);
+        drawClawd(claw.x, claw.y, clawLift(t));
+      }},
+      { y: pink.y, draw: function () {
+        shadow(pink.x, pink.y, 28);
+        var rock = (t >= 46 && t < 52.3) ? ((Math.floor(t * 6) % 2) ? 7 : -7) : 0;
+        drawFace(pink.x, pink.y, "#FF309B", faceEye(t, 0.2) === "shut", rock);
+      }},
+      { y: purple.y, draw: function () {
+        shadow(purple.x, purple.y, 28);
+        drawFace(purple.x, purple.y, "#9159FE", faceEye(t, 1.7) === "shut", 0);
+      }},
+      { y: black.y, draw: function () {
+        shadow(black.x, black.y, 28);
+        drawFace(black.x, black.y, "#000000", faceEye(t, 2.4) === "shut", 0);
+      }},
+      { y: FOOT - 8, draw: function () {
+        shadow(tx, FOOT, 30);
+        drawTop(tx, FOOT, lean, spinning ? (t - 67.6) * 9 : -1, winds, t >= 40.2);
+      }}
+    ];
+    cast.sort(function (a, b) { return a.y - b.y; });
+    for (var i = 0; i < cast.length; i++) cast[i].draw();
+
+    var neck = neckAt(tx, FOOT, lean);
+    if (t < 16.35) {
+      coilAt(72, 108, 3.2, 22);
+    } else if (t < 19.15) {
+      coilAt(cat.x + 62, cat.y - 58, 2.2, 16);
+    } else if (t < 26.6) {
+      coilAt(640, FOOT + 18, 2.6, 14);
+      rope([{ x: 656, y: FOOT + 4 }, neck]);
+    } else if (t < 29.1) {
+      var tailX = fox.x + 66, tailY = fox.y - 76;
+      var u = stepTo(t, 26.6, 29.1, 0, 1, 5);
+      var cx = 640 + (tailX - 640) * u;
+      var cy = (FOOT + 18) + (tailY - (FOOT + 18)) * u;
+      var rad = 16 * (1 - u);
+      if (rad > 4) coilAt(cx, cy, 2.4, rad);
+      rope([{ x: cx, y: cy }, neck]);
+    } else if (t < 40.2) {
+      rope([{ x: 650, y: FOOT + 8 }, neck]);
+    }
+    if (t >= 39.4 && t < 43.8) {
+      var left = Math.round(claw.x - 72);
+      var top = Math.round(claw.y - 91);
+      var tip = { x: left + 141, y: top + 32 - clawLift(t) + 7 };
+      rope([tip, neck]);
+    }
+
+    var cue = cueAt(t);
+    if (cue) {
+      ctx.font = '26px "Noto Sans CJK SC", "Noto Sans SC", sans-serif';
+      var text = cue.text;
+      var tw = ctx.measureText(text).width;
+      var pw = Math.min(W - 80, tw + 48);
+      var px = (W - pw) / 2, py = SUB;
+      ctx.fillStyle = "rgba(255, 250, 243, 0.94)";
+      roundRect(px, py, pw, 52, 14);
+      ctx.fill();
+      ctx.fillStyle = "#3a342c";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, W / 2, py + 27);
+    }
+  }
+
+  function fmt(t) {
+    t = Math.max(0, Math.floor(t));
+    var m = Math.floor(t / 60), s = t % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+  function ui() {
+    timeEl.textContent = fmt(cur) + " / " + fmt(TOTAL);
+    seek.value = Math.round(cur * 10);
+    toggle.textContent = playing ? "暂停" : (cur >= TOTAL - 0.05 ? "重看" : "播放");
+    big.textContent = cur >= TOTAL - 0.05 ? "再看一遍" : "▶";
+    big.classList.toggle("again", cur >= TOTAL - 0.05);
+    big.setAttribute("aria-label", cur >= TOTAL - 0.05 ? "再看一遍" : "播放");
+    for (var i = 0; i < cues.length; i++) {
+      var on = cur >= cues[i].t && cur < cues[i].end;
+      if (on) cues[i].el.setAttribute("aria-current", "true");
+      else cues[i].el.removeAttribute("aria-current");
+    }
+  }
+
+  var cur = 0, playing = false, last = 0;
+  function paint() { render(cur); ui(); }
+  function tick(now) {
+    if (!playing) return;
+    if (!last) last = now;
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    cur += dt;
+    if (cur >= TOTAL) { cur = TOTAL - 0.001; playing = false; last = 0; stage.classList.remove("playing"); }
+    paint();
+    if (playing) requestAnimationFrame(tick);
+  }
+  function play() {
+    if (cur >= TOTAL - 0.05) cur = 0;
+    playing = true;
+    last = 0;
+    stage.classList.add("playing");
+    requestAnimationFrame(tick);
+    ui();
+  }
+  function pause() {
+    playing = false;
+    last = 0;
+    stage.classList.remove("playing");
+    ui();
+  }
+  function jump(t) {
+    cur = Math.max(0, Math.min(TOTAL - 0.001, t));
+    paint();
+    var cue = cueAt(cur);
+    if (cue) cue.el.scrollIntoView({ block: "nearest" });
+  }
+
+  big.addEventListener("click", function (e) { e.stopPropagation(); playing ? pause() : play(); });
+  toggle.addEventListener("click", function () { playing ? pause() : play(); });
+  stage.addEventListener("click", function () { playing ? pause() : play(); });
+  seek.addEventListener("input", function () { jump(seek.value / 10); });
+  document.getElementById("book").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    jump(+b.dataset.t + 0.05);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== " " || e.target.closest("input, button")) return;
+    e.preventDefault();
+    playing ? pause() : play();
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden && playing) pause(); });
+
+  function fit() {
+    var w = stage.clientWidth || 960;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    scale = (w * dpr) / W;
+    cv.width = Math.round(W * scale);
+    cv.height = Math.round(H * scale);
+    paint();
+  }
+  window.addEventListener("resize", fit);
+
+  document.documentElement.classList.add("js");
+  if (params.has("t")) {
+    stage.classList.add("at");
+    cur = Math.max(0, Math.min(TOTAL - 0.001, parseFloat(params.get("t")) || 0));
+  }
+  fit();
+
+  /* 导视频用的口子：给定宽度和第几秒，画出那一格。不在页面上露按钮。 */
+  window.FILM = {
+    W: W, H: H, TOTAL: TOTAL, canvas: cv,
+    setup: function (pxW) {
+      scale = pxW / W;
+      cv.width = Math.round(W * scale);
+      cv.height = Math.round(H * scale);
+    },
+    render: function (t) { cur = t; render(t); }
+  };
+})();
+window.onerror = function (msg) {
+  var e = document.getElementById("err");
+  e.hidden = false;
+  e.textContent = String(msg);
+};
+</script>
+</body>
+</html>
