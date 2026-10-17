@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>桌沿的糖</title>
+<style>
+  :root {
+    --ink: #241c16;
+    --paper: #f4ecdf;
+    --page: #14110e;
+    --muted: #a89886;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page);
+    color: var(--paper);
+    font-family: "Noto Serif CJK SC", "Noto Sans CJK SC", serif;
+  }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 16px 64px;
+  }
+  h1 {
+    margin: 0 0 14px;
+    text-align: center;
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+  }
+  #stage {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: #2c3344;
+    aspect-ratio: 960 / 540;
+  }
+  #caption {
+    margin-top: 12px;
+    min-height: 3.4em;
+    padding: 14px 18px;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 22px;
+    line-height: 1.45;
+  }
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin: 12px 0 0;
+  }
+  .controls button {
+    font: inherit;
+    font-size: 15px;
+    color: var(--paper);
+    background: transparent;
+    border: 1px solid #5c5146;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .controls button:hover { border-color: var(--paper); }
+  #bar {
+    margin-top: 12px;
+    height: 6px;
+    background: #3a322a;
+    cursor: pointer;
+    position: relative;
+  }
+  #bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: #e4c9a4;
+  }
+  h2 {
+    margin: 28px 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    color: var(--muted);
+  }
+  #script {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid #3a322a;
+  }
+  #script button {
+    width: 100%;
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    text-align: left;
+    font: inherit;
+    font-size: 17px;
+    line-height: 1.45;
+    color: var(--paper);
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid #3a322a;
+    padding: 11px 12px 11px 14px;
+    cursor: pointer;
+  }
+  #script button .n {
+    flex: 0 0 1.8em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  #script button .pip {
+    flex: 0 0 10px;
+    height: 10px;
+    border-radius: 50%;
+    align-self: center;
+    box-shadow: 0 0 0 1px rgba(244, 236, 223, 0.35);
+  }
+  #script button:hover { background: #221c17; }
+  #script button.active {
+    background: var(--paper);
+    color: var(--ink);
+  }
+  #script button.active .n { color: #8a7564; }
+</style>
+</head>
+<body>
+<main>
+  <h1>桌沿的糖</h1>
+  <svg id="stage" viewBox="0 0 960 540" role="img" aria-label="桌沿的糖">
+    <g id="scenery"></g>
+    <g id="cast"></g>
+  </svg>
+  <div id="caption"></div>
+  <div class="controls">
+    <button id="play" type="button">暂停</button>
+    <button id="replay" type="button">从头</button>
+  </div>
+  <div id="bar" aria-hidden="true"><i></i></div>
+  <h2>字幕本</h2>
+  <ol id="script"></ol>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const STAGE_W = 960;
+  const STAGE_H = 540;
+  const DURATION = 72;
+  const FPS = 12;
+
+  const COL = {
+    clawd: "#d47f59",
+    fen: "#FF309B",
+    zi: "#9159FE",
+    hei: "#000000",
+    stashM: "#E2552B",
+    stashC: "#FFF3E3",
+    stashD: "#3B2520",
+    fetchM: "#F3E7D6",
+    fetchX: "#4E382E",
+    fetchE: "#79C0F0",
+    blushS: "#F59A8C",
+    blushF: "#F2B8B0",
+    candy: "#fff6e4",
+    band: "#FF309B",
+    gold: "#e0a030"
+  };
+
+  const BEAT = {
+    fenGo: 4.2,
+    fenArrive: 6.6,
+    fenLine: 8.2,
+    fetchStart: 12.2,
+    fetchLine: 14.8,
+    fetchPocket: 16.6,
+    fetchDown: 20.2,
+    shadowTell: 21.6,
+    heiGo: 23.6,
+    heiLine: 26.4,
+    shadowDone: 29.2,
+    heiAside: 31.4,
+    windTell: 32.2,
+    stashGo: 33.8,
+    stashIn: 36.6,
+    stashLine: 37.4,
+    stashCross0: 38.6,
+    stashCross1: 41.6,
+    stashOut: 42.4,
+    ziTell: 43.6,
+    ziSight: 45.0,
+    ziLock: 47.6,
+    ziPush0: 48.6,
+    ziPush1: 51.6,
+    clawGo: 53.2,
+    clawUp0: 56.0,
+    clawUp1: 57.4,
+    clawOver0: 57.6,
+    clawOver1: 59.2,
+    clawDown0: 59.4,
+    clawDown1: 61.2,
+    settle: 62.4,
+    end1: 63.2,
+    end2: 66.4
+  };
+
+  const LINES = [
+    { t: 0.2, pip: "#cbb892", text: "窗缝里的风，一下一下，把糖往桌沿推。" },
+    { t: 3.4, pip: "#cbb892", text: "碟子翻在书后的影子里。" },
+    { t: BEAT.fenGo, pip: COL.fen, text: "小粉滚到桌沿，挡在糖前面。" },
+    { t: BEAT.fenLine, pip: COL.fen, text: "小粉：贴着我。这阵风推不动。" },
+    { t: BEAT.fetchStart, pip: COL.fetchE, text: "FetchMo 盯住那条缝，尾巴尖抖了抖。" },
+    { t: BEAT.fetchLine, pip: COL.fetchE, text: "FetchMo：我去衔。" },
+    { t: 17.6, pip: COL.fetchE, text: "他从影子里把碟子衔出来，放上桌。" },
+    { t: BEAT.shadowTell, pip: "#3a342c", text: "碟子上还披着一层影子，放不稳。" },
+    { t: BEAT.heiGo, pip: COL.hei, text: "小黑滚过去。她最圆，影子刚好披满。" },
+    { t: BEAT.heiLine, pip: COL.hei, text: "小黑：给我。我披着。" },
+    { t: BEAT.shadowDone, pip: COL.hei, text: "影子离开碟子，落在小黑身上。" },
+    { t: BEAT.windTell, pip: COL.stashM, text: "糖还在小粉身边。中间隔着一道风口。" },
+    { t: BEAT.stashGo, pip: COL.stashM, text: "StashYu 把糖收进尾巴，白尖点了两下。" },
+    { t: BEAT.stashLine, pip: COL.stashM, text: "StashYu：收好了。过。" },
+    { t: 39.2, pip: COL.stashM, text: "风吹过火红的背，糖一粒都没露出来。" },
+    { t: BEAT.ziTell, pip: COL.zi, text: "碟子歪着。这样放糖，还会滚出来。" },
+    { t: BEAT.ziSight, pip: COL.zi, text: "小紫用两道缝去对桌上的刻度。" },
+    { t: BEAT.ziLock, pip: COL.zi, text: "小紫：对齐了。放这儿。" },
+    { t: 49.2, pip: COL.zi, text: "她把碟子推进圆圈，圈边定住了。" },
+    { t: BEAT.clawGo, pip: COL.clawd, text: "Clawd 走到糖旁边。" },
+    { t: BEAT.clawUp0, pip: COL.clawd, text: "Clawd 把两只钳整块抬起来。" },
+    { t: 57.8, pip: COL.clawd, text: "Clawd：进去吧。" },
+    { t: BEAT.clawDown0, pip: COL.clawd, text: "糖放进碟子正中。钳回到原来的高度。" },
+    { t: BEAT.end1, pip: "#cbb892", text: "风还在吹。糖停着。" },
+    { t: BEAT.end2, pip: "#cbb892", text: "六只都在。今晚它不会掉下去。" }
+  ];
+
+  const RING = { x: 455, y: 392 };
+  const DISH_SET = { x: 268, y: 328 };
+  const CANDY_DROP = { x: 590, y: 368 };
+  const BALL = 84;
+  const BALL_R = BALL / 2;
+
+  function el(name, attrs, parent) {
+    const n = document.createElementNS(SVGNS, name);
+    if (attrs) {
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+
+  function qtime(t) {
+    return Math.floor(Math.max(0, t) * FPS) / FPS;
+  }
+
+  function step01(t, t0, t1) {
+    if (t <= t0) return 0;
+    if (t >= t1) return 1;
+    const n = Math.max(1, Math.round((t1 - t0) * FPS));
+    const u = (t - t0) / (t1 - t0);
+    return Math.floor(u * n) / n;
+  }
+
+  function sample(keys, t) {
+    if (t <= keys[0].t) return { x: keys[0].x, y: keys[0].y };
+    const last = keys[keys.length - 1];
+    if (t >= last.t) return { x: last.x, y: last.y };
+    let i = 1;
+    while (keys[i].t < t) i++;
+    const a = keys[i - 1];
+    const b = keys[i];
+    const u = step01(t, a.t, b.t);
+    return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+  }
+
+  function swayDeg(t, phase) {
+    const seq = [0, 2, 3.2, 2, 0, -2, -3.2, -2];
+    const i = Math.floor((t * 2.4 + phase) % seq.length);
+    return seq[i];
+  }
+
+  function blinkScale(t, period, phase, hold) {
+    if (hold) return hold;
+    const p = (t + phase) % period;
+    if (p > period - 0.22 && p < period - 0.08) return 0.16;
+    return 1;
+  }
+
+  function walking(keys, t) {
+    const a = sample(keys, t);
+    const b = sample(keys, t + 0.12);
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) > 1;
+  }
+
+  function bob(t, phase, on) {
+    if (!on) {
+      const seq = [0, -1, 0, 0];
+      return seq[Math.floor((t + phase) * 2) % 4];
+    }
+    const seq = [0, -3, 0, -2];
+    return seq[Math.floor((t + phase) * 8) % 4];
+  }
+
+  /* ---------- 格子：尾巴换帧，身子不动 ---------- */
+  const STASH = {
+    base: [
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM...CC..",
+      ".MMMMMMMMMMMM..CCCC.",
+      ".MMEEMMMMEEMM..MMMM.",
+      ".MMEEMMMMEEMM..MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ],
+    tap: [
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM.CC....",
+      ".MMMMMMMMMMMM.CCCC..",
+      ".MMEEMMMMEEMM..MMMM.",
+      ".MMEEMMMMEEMM..MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ],
+    in: [
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM..CC...",
+      ".MMMMMMMMMMMM.CCCC..",
+      ".MMEEMMMMEEMM.MMMM..",
+      ".MMEEMMMMEEMM.MMMMM.",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ],
+    out: [
+      ".D..........D........",
+      ".DM........MD........",
+      ".MCM......MCM....CC..",
+      ".MMMMMMMMMMMM...CCCC.",
+      ".MMEEMMMMEEMM...MMMM.",
+      ".MMEEMMMMEEMM...MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM.",
+      "..CCCCCCCCCC..MMMMM..",
+      "....MMCCMM...MMMMM...",
+      "....MMCCMM..MMMMM....",
+      "....MMMMMM.MMMMM.....",
+      "....DDMMDDMMMM.......",
+      "....................."
+    ]
+  };
+
+  const FETCH = {
+    base: [
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      ".....X.MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ],
+    straight: [
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      "....X..MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ],
+    outer: [
+      "....................",
+      "........X........X..",
+      ".......XXX......XXX.",
+      "........MMMMMMMMMM..",
+      ".......MMMMMMMMMMMM.",
+      ".......MEEMMMMMMEEM.",
+      "...X...MEEMXXXXMEEM.",
+      "....X..MMMMMXXMMMMM.",
+      "....X...MMMMMMMMMM..",
+      "....X...MMMMMMMMMM..",
+      ".....X...MMMMMMMM...",
+      "......XXXXXM..MXX...",
+      "...................."
+    ],
+    up: [
+      "....................",
+      "........X........X..",
+      ".....X.XXX......XXX.",
+      "....X...MMMMMMMMMM..",
+      "....X..MMMMMMMMMMMM.",
+      "....X..MEEMMMMMMEEM.",
+      "....X..MEEMXXXXMEEM.",
+      ".....X.MMMMMXXMMMMM.",
+      "......X.MMMMMMMMMM..",
+      ".......XMMMMMMMMMM..",
+      "........XMMMMMMMM...",
+      ".........XXM..MXX...",
+      "...................."
+    ]
+  };
+
+  function assertGrids() {
+    const bad = [];
+    function check(name, rows, w) {
+      rows.forEach(function (r, i) {
+        if (r.length !== w) bad.push(name + " 第" + i + "行是 " + r.length + " 格");
+      });
+      if (rows.length !== 13) bad.push(name + " 不是 13 行");
+    }
+    check("StashYu", STASH.base, 20);
+    check("StashYu·点一下", STASH.tap, 20);
+    check("StashYu·往里", STASH.in, 20);
+    check("StashYu·往外", STASH.out, 21);
+    check("FetchMo", FETCH.base, 20);
+    check("FetchMo·直", FETCH.straight, 20);
+    check("FetchMo·外", FETCH.outer, 20);
+    check("FetchMo·竖", FETCH.up, 20);
+    if (bad.length) throw new Error(bad.join("；"));
+  }
+  assertGrids();
+
+  const PAL_S = { M: COL.stashM, C: COL.stashC, D: COL.stashD, E: COL.stashD };
+  const PAL_F = { M: COL.fetchM, X: COL.fetchX, E: COL.fetchE };
+
+  /* 表情：先把 2×2 涂回身子色，再按相对左上角涂。瞄是整块挪一格。 */
+  const EYES_S = [[3, 4], [9, 4]];
+  const EYES_F = [[8, 5], [16, 5]];
+
+  function eyeCells(kind, side, dir) {
+    if (kind === "normal") return { ch: "E", cells: [[0, 0], [1, 0], [0, 1], [1, 1]] };
+    if (kind === "blink") return { ch: "D", cells: [[0, 1], [1, 1]] };
+    if (kind === "happy") return { ch: "D", cells: [[-1, 1], [0, 0], [1, 0], [2, 1]] };
+    if (kind === "sleep") return { ch: "D", cells: [[-1, 0], [0, 1], [1, 1], [2, 0]] };
+    if (kind === "aim") {
+      const s = dir;
+      return { ch: "E", cells: [[s, 0], [s + 1, 0], [s, 1], [s + 1, 1]] };
+    }
+    if (kind === "wink") {
+      if (side === 0) return { ch: "E", cells: [[0, 0], [1, 0], [0, 1], [1, 1]] };
+      return { ch: "D", cells: [[-1, 1], [0, 0], [1, 0], [2, 1]] };
+    }
+    if (kind === "daze") {
+      return side === 0
+        ? { ch: "E", cells: [[1, 1]] }
+        : { ch: "E", cells: [[0, 1]] };
+    }
+    return { ch: "E", cells: [[0, 0], [1, 0], [0, 1], [1, 1]] };
+  }
+
+  function paintSprite(rows, eyes, kind, aimDir, blush, blushColor, mark) {
+    const g = rows.map(function (r) { return r.split(""); });
+    const h = g.length;
+    const lineCh = "D";
+    eyes.forEach(function (eye, side) {
+      const ex = eye[0];
+      const ey = eye[1];
+      for (let dy = 0; dy < 2; dy++) {
+        for (let dx = 0; dx < 2; dx++) {
+          const y = ey + dy;
+          const x = ex + dx;
+          if (y >= 0 && y < h && x >= 0 && x < g[y].length) g[y][x] = "M";
+        }
+      }
+      const spec = eyeCells(kind, side, aimDir);
+      spec.cells.forEach(function (c) {
+        const x = ex + c[0];
+        const y = ey + c[1];
+        if (y >= 0 && y < h && x >= 0 && x < g[y].length) {
+          g[y][x] = spec.ch === "D" ? lineCh : "E";
+        }
+      });
+    });
+    const dots = [];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < g[y].length; x++) {
+        const ch = g[y][x];
+        if (ch !== ".") dots.push([x, y, ch]);
+      }
+    }
+    if (blush) {
+      blush.forEach(function (p) {
+        dots.push([p[0], p[1], "B"]);
+      });
+    }
+    if (mark) {
+      dots.push([15, 3, "G"]);
+      dots.push([16, 3, "G"]);
+    }
+    return { dots: dots, cols: g[0].length, blushColor: blushColor };
+  }
+
+  function drawDots(parent, painted, palette, scale) {
+    while (parent.firstChild) parent.removeChild(parent.firstChild);
+    painted.dots.forEach(function (d) {
+      let fill = palette[d[2]];
+      if (d[2] === "B") fill = painted.blushColor;
+      if (d[2] === "G") fill = COL.gold;
+      if (!fill) return;
+      el("rect", {
+        x: d[0] * scale,
+        y: d[1] * scale,
+        width: scale,
+        height: scale,
+        fill: fill
+      }, parent);
+    });
+    return painted.cols * scale;
+  }
+
+  /* ---------- 布景 ---------- */
+  const scenery = document.getElementById("scenery");
+  const cast = document.getElementById("cast");
+
+  el("rect", { x: 0, y: 0, width: 960, height: 540, fill: "#2c3344" }, scenery);
+  el("rect", { x: 688, y: 26, width: 214, height: 128, fill: "#cbb892" }, scenery);
+  el("rect", { x: 702, y: 40, width: 186, height: 100, fill: "#93a6c4" }, scenery);
+  el("circle", { cx: 754, cy: 86, r: 16, fill: "#f3ead4" }, scenery);
+  el("rect", { x: 792, y: 40, width: 5, height: 100, fill: "#243044" }, scenery);
+
+  el("polygon", {
+    points: "36,214 924,214 960,468 0,468",
+    fill: "#efd0a4"
+  }, scenery);
+  el("polygon", {
+    points: "0,468 960,468 960,540 0,540",
+    fill: "#c49255"
+  }, scenery);
+  el("rect", { x: 0, y: 466, width: 960, height: 4, fill: "#a6743c" }, scenery);
+  el("rect", { x: 900, y: 214, width: 60, height: 254, fill: "#e0b888" }, scenery);
+
+  el("rect", { x: 62, y: 236, width: 108, height: 16, fill: "#7a5362" }, scenery);
+  el("rect", { x: 74, y: 252, width: 118, height: 15, fill: "#3e5278" }, scenery);
+  el("rect", { x: 56, y: 267, width: 112, height: 16, fill: "#b65c42" }, scenery);
+  el("rect", { x: 96, y: 284, width: 58, height: 22, fill: "#2a241c" }, scenery);
+  const peekEl = el("ellipse", {
+    cx: 122, cy: 298, rx: 16, ry: 6, fill: "#f7f3ea"
+  }, scenery);
+
+  const ringEl = el("ellipse", {
+    cx: RING.x, cy: RING.y, rx: 46, ry: 18,
+    fill: "none", stroke: "#a07848", "stroke-width": 2,
+    "stroke-dasharray": "4 4"
+  }, scenery);
+
+  const tickL = el("rect", { fill: "#6e5438" }, scenery);
+  const tickR = el("rect", { fill: "#6e5438" }, scenery);
+
+  const windG = el("g", { "stroke-linecap": "butt" }, scenery);
+  const shadowEl = el("ellipse", { fill: "#3a332b" }, cast);
+  const sightEl = el("line", {
+    stroke: COL.zi, "stroke-width": 2, "stroke-linecap": "butt", opacity: 0
+  }, cast);
+
+  /* 碟子：中间挖空，底下的桌面透出来 */
+  const dishG = el("g", {}, cast);
+  const dishSvg = el("svg", { x: -40, y: -18, width: 80, height: 36, viewBox: "0 0 80 36", overflow: "visible" }, dishG);
+  const dishMask = el("mask", { id: "dish-hole", maskUnits: "userSpaceOnUse", x: 0, y: 0, width: 80, height: 36 }, dishSvg);
+  el("rect", { width: 80, height: 36, fill: "#fff" }, dishMask);
+  el("ellipse", { cx: 40, cy: 18, rx: 22, ry: 8, fill: "#000" }, dishMask);
+  el("ellipse", {
+    cx: 40, cy: 18, rx: 36, ry: 15, fill: "#f7f3ea", mask: "url(#dish-hole)"
+  }, dishSvg);
+  el("ellipse", {
+    cx: 40, cy: 18, rx: 36, ry: 15, fill: "none", stroke: "#c8ae8c", "stroke-width": 1.5
+  }, dishSvg);
+
+  const candyG = el("g", {}, cast);
+  el("circle", { cx: 0, cy: 0, r: 11, fill: COL.candy }, candyG);
+  el("rect", { x: -11, y: -3, width: 22, height: 6, fill: COL.band }, candyG);
+
+  /* ---------- 小脸蛋 ---------- */
+  function makeBall(id, color, roundest) {
+    const g = el("g", { id: id }, cast);
+    const svg = el("svg", {
+      x: -BALL_R, y: -BALL_R, width: BALL, height: BALL,
+      viewBox: "0 0 100 100", overflow: "visible"
+    }, g);
+    const mask = el("mask", {
+      id: "mask-" + id,
+      maskUnits: "userSpaceOnUse",
+      x: 0, y: 0, width: 100, height: 100
+    }, svg);
+    el("rect", { width: 100, height: 100, fill: "#fff" }, mask);
+    const eyes = el("g", {}, mask);
+    const R = 50;
+    const specs = [
+      { mx: 0.194 * R, my: -0.416 * R, w: 0.194 * R, h: 0.418 * R },
+      { mx: 0.626 * R, my: -0.497 * R, w: 0.129 * R, h: 0.418 * R }
+    ];
+    const eyeNodes = specs.map(function (s) {
+      // 指南里的 y 朝下，负值才是上方。顶端要比底端靠左，所以 rotate(-26.2)。
+      const cx = 50 + s.mx;
+      const cy = 50 + s.my;
+      const eg = el("g", {}, eyes);
+      eg._cx = cx;
+      eg._cy = cy;
+      el("rect", {
+        x: -s.w / 2,
+        y: -s.h / 2,
+        width: s.w,
+        height: s.h,
+        rx: s.w / 2,
+        ry: s.w / 2,
+        fill: "#000"
+      }, eg);
+      return eg;
+    });
+    const ry = roundest ? 50 : 49.85;
+    el("ellipse", {
+      cx: 50, cy: 50, rx: 50, ry: ry, fill: color, mask: "url(#mask-" + id + ")"
+    }, svg);
+    return { g: g, eyes: eyeNodes };
+  }
+
+  const fen = makeBall("fen", COL.fen, false);
+  const zi = makeBall("zi", COL.zi, false);
+  const hei = makeBall("hei", COL.hei, true);
+
+  function setBall(ball, x, y, deg, blink) {
+    ball.g.setAttribute("transform",
+      "translate(" + Math.round(x) + " " + Math.round(y) + ") rotate(" + deg + ")");
+    ball.eyes.forEach(function (eg) {
+      eg.setAttribute("transform",
+        "translate(" + eg._cx + " " + eg._cy + ") rotate(-26.2) scale(1 " + blink + ")");
+    });
+  }
+
+  /* ---------- Clawd：底模按尺子，钳整块上移 ---------- */
+  const CLAWD_S = 0.56;
+  const clawdG = el("g", { id: "clawd" }, cast);
+  function crect(x, y, w, h, fill, parent) {
+    return el("rect", { x: x, y: y, width: w, height: h, fill: fill }, parent);
+  }
+  crect(44, 50, 147, 98, COL.clawd, clawdG);
+  crect(44, 148, 15, 21, COL.clawd, clawdG);
+  crect(68, 148, 15, 21, COL.clawd, clawdG);
+  crect(152, 148, 15, 21, COL.clawd, clawdG);
+  crect(176, 148, 15, 21, COL.clawd, clawdG);
+  crect(70, 78, 8, 21, "#000", clawdG);
+  crect(158, 78, 8, 21, "#000", clawdG);
+  const glint = el("g", { opacity: 0 }, clawdG);
+  crect(71, 80, 3, 4, "#f6d2c0", glint);
+  crect(159, 80, 3, 4, "#f6d2c0", glint);
+  const clawL = el("g", {}, clawdG);
+  const clawR = el("g", {}, clawdG);
+  crect(20, 99, 24, 21, COL.clawd, clawL);
+  crect(191, 99, 25, 21, COL.clawd, clawR);
+
+  /* ---------- momoyu ---------- */
+  const PX = 6;
+  const stashG = el("g", { "shape-rendering": "crispEdges" }, cast);
+  const fetchG = el("g", { "shape-rendering": "crispEdges" }, cast);
+  let stashKey = "";
+  let fetchKey = "";
+
+  function momoPlace(g, bodyX, footY, spriteW) {
+    const left = Math.round(bodyX - 10 * PX);
+    const top = Math.round(footY - 12 * PX);
+    g.setAttribute("transform", "translate(" + left + " " + top + ")");
+    return { left: left, top: top, footY: footY, bodyX: bodyX };
+  }
+
+  /* ---------- 刻度：两道缝的间距，小紫对准用 ---------- */
+  /* 缝在球面右上方。小紫站到这儿时，两道缝正好套住两道刻度。 */
+  const EYE_OFF = [
+    { x: 0.194 * BALL_R, y: -0.416 * BALL_R },
+    { x: 0.626 * BALL_R, y: -0.497 * BALL_R }
+  ];
+  const ZI_STAND = { x: 392, y: 430 };
+  (function placeTicks() {
+    const ticks = [tickL, tickR];
+    EYE_OFF.forEach(function (off, i) {
+      const w = i === 0 ? 5 : 3.4;
+      ticks[i].setAttribute("x", (ZI_STAND.x + off.x - w / 2).toFixed(2));
+      ticks[i].setAttribute("y", (ZI_STAND.y + off.y - 5).toFixed(2));
+      ticks[i].setAttribute("width", w);
+      ticks[i].setAttribute("height", 10);
+    });
+  })();
+
+  /* ---------- 轨迹 ---------- */
+  const keys = {
+    fen: [
+      { t: 0, x: 868, y: 408 },
+      { t: BEAT.fenGo, x: 868, y: 408 },
+      { t: 5.1, x: 868, y: 246 },
+      { t: 5.95, x: 922, y: 246 },
+      { t: BEAT.fenArrive, x: 922, y: 346 },
+      { t: 39.0, x: 922, y: 346 },
+      { t: 44.2, x: 820, y: 418 },
+      { t: DURATION, x: 820, y: 418 }
+    ],
+    hei: [
+      { t: 0, x: 236, y: 410 },
+      { t: BEAT.heiGo, x: 236, y: 410 },
+      { t: 26.0, x: DISH_SET.x, y: DISH_SET.y + 18 },
+      { t: BEAT.shadowDone, x: DISH_SET.x, y: DISH_SET.y + 18 },
+      { t: BEAT.heiAside, x: 148, y: 432 },
+      { t: DURATION, x: 148, y: 432 }
+    ],
+    zi: [
+      { t: 0, x: 348, y: 416 },
+      { t: BEAT.ziSight, x: 348, y: 416 },
+      { t: BEAT.ziSight + 1.2, x: ZI_STAND.x, y: ZI_STAND.y },
+      { t: BEAT.ziPush0, x: ZI_STAND.x, y: ZI_STAND.y },
+      { t: BEAT.ziPush0 + 0.7, x: DISH_SET.x - 72, y: DISH_SET.y },
+      { t: BEAT.ziPush1, x: RING.x - 72, y: RING.y },
+      { t: 54, x: 392, y: 424 },
+      { t: DURATION, x: 392, y: 424 }
+    ],
+    clawd: [
+      { t: 0, x: 132, y: 432 },
+      { t: BEAT.clawGo, x: 132, y: 432 },
+      { t: BEAT.clawUp0, x: CANDY_DROP.x, y: 424 },
+      { t: BEAT.clawOver0, x: CANDY_DROP.x, y: 424 },
+      { t: BEAT.clawOver1, x: RING.x, y: 428 },
+      { t: BEAT.clawDown1, x: RING.x, y: 428 },
+      { t: BEAT.clawDown1 + 1.6, x: RING.x + 92, y: 432 },
+      { t: DURATION, x: RING.x + 92, y: 432 }
+    ],
+    stash: [
+      { t: 0, x: 575, y: 430 },
+      { t: BEAT.stashGo, x: 575, y: 430 },
+      { t: BEAT.stashIn - 0.3, x: 800, y: 392 },
+      { t: BEAT.stashCross0, x: 800, y: 392 },
+      { t: BEAT.stashCross1, x: 520, y: 414 },
+      { t: 46.5, x: 680, y: 430 },
+      { t: DURATION, x: 700, y: 430 }
+    ],
+    fetch: [
+      { t: 0, x: 710, y: 430 },
+      { t: BEAT.fetchStart, x: 710, y: 430 },
+      { t: 13.8, x: 710, y: 300 },
+      { t: BEAT.fetchPocket, x: 168, y: 308 },
+      { t: BEAT.fetchDown, x: 210, y: 340 },
+      { t: 23.6, x: 262, y: 440 },
+      { t: DURATION, x: 262, y: 440 }
+    ]
+  };
+
+  function fenPos(t) { return sample(keys.fen, t); }
+  function heiPos(t) { return sample(keys.hei, t); }
+  function ziPos(t) { return sample(keys.zi, t); }
+  function clawdFoot(t) { return sample(keys.clawd, t); }
+  function stashPos(t) { return sample(keys.stash, t); }
+  function fetchPos(t) { return sample(keys.fetch, t); }
+
+  function clawdBox(t) {
+    const p = clawdFoot(t);
+    const bobY = bob(t, 0.2, walking(keys.clawd, t));
+    const left = p.x - 117.5 * CLAWD_S;
+    const top = p.y + bobY - 169 * CLAWD_S;
+    return { left: left, top: top, footY: p.y, shellX: p.x };
+  }
+
+  function liftAmount(t) {
+    if (t < BEAT.clawUp0) return 0;
+    if (t < BEAT.clawUp1) return step01(t, BEAT.clawUp0, BEAT.clawUp1);
+    if (t < BEAT.clawDown0) return 1;
+    if (t < BEAT.clawDown1) return 1 - step01(t, BEAT.clawDown0, BEAT.clawDown1);
+    return 0;
+  }
+
+  function heldCandy(t) {
+    const box = clawdBox(t);
+    return {
+      x: box.left + 117.5 * CLAWD_S,
+      y: box.top + 42 * CLAWD_S,
+      box: box
+    };
+  }
+
+  function dishPos(t) {
+    if (t < BEAT.fetchPocket) return { x: 124, y: 308 };
+    if (t < BEAT.fetchPocket + 1.1) {
+      const u = step01(t, BEAT.fetchPocket, BEAT.fetchPocket + 1.1);
+      const f = fetchPos(t);
+      const carry = { x: f.x + 36, y: f.y - 46 };
+      return { x: 124 + (carry.x - 124) * u, y: 308 + (carry.y - 308) * u };
+    }
+    if (t < BEAT.fetchDown) {
+      const f = fetchPos(t);
+      return { x: f.x + 54, y: f.y - 6 };
+    }
+    if (t < BEAT.ziPush0 + 0.7) return { x: DISH_SET.x, y: DISH_SET.y };
+    if (t < BEAT.ziPush1) {
+      const u = step01(t, BEAT.ziPush0 + 0.7, BEAT.ziPush1);
+      return {
+        x: DISH_SET.x + (RING.x - DISH_SET.x) * u,
+        y: DISH_SET.y + (RING.y - DISH_SET.y) * u
+      };
+    }
+    return { x: RING.x, y: RING.y };
+  }
+
+  function dishAngle(t) {
+    if (t < BEAT.fetchDown) return -14;
+    if (t < BEAT.ziPush0 + 0.7) {
+      const wob = [0, -3, 0, 2][Math.floor(t * 3) % 4];
+      return -16 + wob;
+    }
+    if (t < BEAT.ziPush1) return -16 * (1 - step01(t, BEAT.ziPush0 + 0.7, BEAT.ziPush1));
+    return 0;
+  }
+
+  function candyFree(t) {
+    return { x: 888 + t * 6.5, y: 308 };
+  }
+
+  function candyPosClean(t) {
+    const fenP = fenPos(t);
+    if (t < BEAT.fenArrive - 0.45) return { x: candyFree(t).x, y: candyFree(t).y, show: true, scale: 1 };
+    if (t < BEAT.fenArrive) {
+      const free = candyFree(t);
+      const arrived = fenPos(BEAT.fenArrive);
+      const stop = arrived.x - BALL_R - 13;
+      const u = step01(t, BEAT.fenArrive - 0.45, BEAT.fenArrive);
+      return {
+        x: free.x + (Math.min(stop, free.x) - free.x) * u,
+        y: free.y + (arrived.y - free.y) * u,
+        show: true,
+        scale: 1
+      };
+    }
+    if (t < BEAT.stashIn) {
+      return { x: fenP.x - BALL_R - 13, y: fenP.y, show: true, scale: 1 };
+    }
+    if (t < BEAT.stashIn + 0.5) {
+      const u = step01(t, BEAT.stashIn, BEAT.stashIn + 0.5);
+      const fromX = fenPos(BEAT.stashIn).x - BALL_R - 13;
+      const fromY = fenPos(BEAT.stashIn).y;
+      const st = stashPos(t);
+      const tipX = st.x + 7 * PX;
+      const tipY = st.y - 9 * PX;
+      return {
+        x: fromX + (tipX - fromX) * u,
+        y: fromY + (tipY - fromY) * u,
+        show: u < 1,
+        scale: 1 - u
+      };
+    }
+    if (t < BEAT.stashOut) return { show: false, x: 0, y: 0, scale: 0 };
+    if (t < BEAT.stashOut + 0.5) {
+      const u = step01(t, BEAT.stashOut, BEAT.stashOut + 0.5);
+      const st = stashPos(BEAT.stashOut);
+      const tipX = st.x + 4 * PX;
+      const tipY = st.y - 8 * PX;
+      return {
+        x: tipX + (CANDY_DROP.x - tipX) * u,
+        y: tipY + (CANDY_DROP.y - tipY) * u,
+        show: true,
+        scale: u
+      };
+    }
+    if (t < BEAT.clawUp0) return { x: CANDY_DROP.x, y: CANDY_DROP.y, show: true, scale: 1 };
+    const heldNow = heldCandy(t);
+    if (t < BEAT.clawUp1) {
+      const u = step01(t, BEAT.clawUp0, BEAT.clawUp1);
+      return {
+        x: CANDY_DROP.x + (heldNow.x - CANDY_DROP.x) * u,
+        y: CANDY_DROP.y + (heldNow.y - CANDY_DROP.y) * u,
+        show: true,
+        scale: 1
+      };
+    }
+    if (t < BEAT.clawDown0) return { x: heldNow.x, y: heldNow.y, show: true, scale: 1 };
+    if (t < BEAT.clawDown1) {
+      const u = step01(t, BEAT.clawDown0, BEAT.clawDown1);
+      const start = heldCandy(BEAT.clawDown0);
+      const d = dishPos(BEAT.clawDown1);
+      return {
+        x: start.x + (d.x - start.x) * u,
+        y: start.y + (d.y - start.y) * u,
+        show: true,
+        scale: 1
+      };
+    }
+    const d = dishPos(t);
+    return { x: d.x, y: d.y, show: true, scale: 1 };
+  }
+
+  function shadowGeom(t) {
+    const d = dishPos(t);
+    const h = heiPos(t);
+    if (t < BEAT.heiGo) {
+      return { cx: d.x, cy: d.y + 8, rx: 52, ry: 20, opacity: t < BEAT.fetchPocket ? 0 : 0.92 };
+    }
+    if (t < BEAT.shadowDone) {
+      const u = step01(t, BEAT.heiLine, BEAT.shadowDone);
+      return {
+        cx: d.x + (h.x - d.x) * u,
+        cy: d.y + (h.y + 18 - d.y) * u,
+        rx: 34 + (BALL_R + 8 - 34) * u,
+        ry: 13 + (16 - 13) * u,
+        opacity: 0.95
+      };
+    }
+    return { cx: h.x, cy: h.y + 20, rx: BALL_R + 10, ry: 16, opacity: 0.95 };
+  }
+
+  function stashFrame(t) {
+    function tapCycle(t0) {
+      const dt = t - t0;
+      if (dt < 0.18) return "tap";
+      if (dt < 0.36) return "base";
+      if (dt < 0.54) return "tap";
+      return "base";
+    }
+    if (t >= BEAT.stashIn && t < BEAT.stashIn + 0.7) return tapCycle(BEAT.stashIn);
+    if (t >= BEAT.stashOut && t < BEAT.stashOut + 0.7) return tapCycle(BEAT.stashOut);
+    if (t >= BEAT.stashOut + 0.7) {
+      const seq = ["base", "in", "base", "out"];
+      const i = Math.floor((t - BEAT.stashOut) / 0.22) % 4;
+      return seq[i];
+    }
+    return "base";
+  }
+
+  function fetchFrame(t) {
+    if (t >= BEAT.fetchStart && t < BEAT.fetchPocket + 0.4) {
+      const cycle = 0.8 + 0.14 + 0.14 + 0.14;
+      const p = (t - BEAT.fetchStart) % cycle;
+      if (p < 0.8) return "base";
+      if (p < 0.94) return "straight";
+      if (p < 1.08) return "outer";
+      return "straight";
+    }
+    if (t >= BEAT.fetchPocket + 0.4 && t < 24.5) return "up";
+    if (t >= BEAT.end2) return "up";
+    return "base";
+  }
+
+  function stashExpr(t) {
+    const blink = blinkScale(t, 4.8, 0.4);
+    if (t >= BEAT.stashGo && t < BEAT.stashIn) return "aim";
+    if (t >= BEAT.stashOut + 0.4) return blink < 1 && Math.floor(t) % 5 === 0 ? "blink" : "happy";
+    if (blink < 1 && t < BEAT.stashGo) return "blink";
+    return "normal";
+  }
+
+  function fetchExpr(t) {
+    const blink = blinkScale(t, 5.2, 1.2);
+    if (t >= BEAT.fetchStart && t < BEAT.fetchPocket + 0.3) return "aim";
+    if (t >= BEAT.fetchPocket + 0.3) {
+      if (blink < 1 && t > 25) return "blink";
+      return "happy";
+    }
+    if (blink < 1) return "blink";
+    return "normal";
+  }
+
+  function renderWind(t) {
+    while (windG.firstChild) windG.removeChild(windG.firstChild);
+    const fenP = fenPos(t);
+    const blocked = t >= BEAT.fenArrive;
+    for (let i = 0; i < 8; i++) {
+      const y = 300 + i * 16;
+      const span = 150;
+      const speed = 46;
+      const base = (i * 37 + t * speed);
+      const x = 430 + (Math.floor(base / (span / 6)) * (span / 6)) % span;
+      let x2 = x + 36;
+      if (blocked && x2 > fenP.x - 10 && y > 320 && y < 420) x2 = Math.min(x2, fenP.x - BALL_R);
+      if (x2 - x < 8) continue;
+      el("line", {
+        x1: Math.round(x),
+        y1: y,
+        x2: Math.round(x2),
+        y2: y,
+        stroke: "#fff8ec",
+        "stroke-width": 2,
+        opacity: 0.55
+      }, windG);
+    }
+  }
+
+  function render(t) {
+    const ft = qtime(t);
+    renderWind(ft);
+
+    const fp = fenPos(ft);
+    const fenBlink = (ft >= BEAT.fenArrive && ft < BEAT.fenArrive + 0.35) ? 0.16
+      : blinkScale(ft, 4.2, 0.2);
+    setBall(fen, fp.x, fp.y + bob(ft, 0.1, walking(keys.fen, ft)), swayDeg(ft, 0), fenBlink);
+
+    const hp = heiPos(ft);
+    const heiBlink = (ft >= BEAT.heiLine && ft < BEAT.heiLine + 0.35) ? 0.16
+      : blinkScale(ft, 5.4, 2.1);
+    setBall(hei, hp.x, hp.y + bob(ft, 1.4, walking(keys.hei, ft)), swayDeg(ft, 2), heiBlink);
+
+    const zp = ziPos(ft);
+    const ziPlanted = ft >= BEAT.ziSight + 1.2 && ft < BEAT.ziPush0;
+    const ziBlink = (ft >= BEAT.ziLock && ft < BEAT.ziLock + 0.28) ? 0.16
+      : blinkScale(ft, 4.6, 3.3, ziPlanted ? 1 : 0);
+    const ziBob = ziPlanted ? 0 : bob(ft, 2.2, walking(keys.zi, ft));
+    const ziSway = ziPlanted ? 0 : swayDeg(ft, 4);
+    setBall(zi, zp.x, zp.y + ziBob, ziSway, ziBlink);
+
+    const sh = shadowGeom(ft);
+    shadowEl.setAttribute("cx", Math.round(sh.cx));
+    shadowEl.setAttribute("cy", Math.round(sh.cy));
+    shadowEl.setAttribute("rx", sh.rx);
+    shadowEl.setAttribute("ry", sh.ry);
+    shadowEl.setAttribute("opacity", sh.opacity);
+
+    const aligned = ft >= BEAT.ziLock;
+    ringEl.setAttribute("stroke", aligned ? COL.zi : "#a07848");
+    if (aligned) ringEl.removeAttribute("stroke-dasharray");
+    else ringEl.setAttribute("stroke-dasharray", "4 4");
+    ringEl.setAttribute("stroke-width", aligned ? 3 : 2);
+    if (ft >= BEAT.ziSight && ft < BEAT.ziPush0 + 0.2) {
+      const u = step01(ft, BEAT.ziSight, BEAT.ziLock);
+      const fromX = DISH_SET.x;
+      const fromY = DISH_SET.y;
+      const skew = (1 - u) * 36;
+      sightEl.setAttribute("x1", fromX);
+      sightEl.setAttribute("y1", fromY);
+      sightEl.setAttribute("x2", RING.x + skew);
+      sightEl.setAttribute("y2", RING.y - skew * 0.3);
+      sightEl.setAttribute("opacity", 0.9);
+    } else {
+      sightEl.setAttribute("opacity", 0);
+    }
+
+    const d = dishPos(ft);
+    const dishOut = ft >= BEAT.fetchPocket - 0.15;
+    dishG.setAttribute("opacity", dishOut ? 1 : 0);
+    peekEl.setAttribute("opacity", dishOut ? 0 : 1);
+    dishG.setAttribute("transform",
+      "translate(" + Math.round(d.x) + " " + Math.round(d.y) + ") rotate(" + dishAngle(ft) + ")");
+
+    const c = candyPosClean(ft);
+    if (!c.show || c.scale <= 0.02) {
+      candyG.setAttribute("opacity", 0);
+    } else {
+      candyG.setAttribute("opacity", 1);
+      const sc = Math.max(0.05, c.scale);
+      candyG.setAttribute("transform",
+        "translate(" + Math.round(c.x) + " " + Math.round(c.y) + ") scale(" + sc + ")");
+    }
+
+    const box = clawdBox(ft);
+    const lift = liftAmount(ft);
+    clawdG.setAttribute("transform",
+      "translate(" + Math.round(box.left) + " " + Math.round(box.top) + ") scale(" + CLAWD_S + ")");
+    const up = lift * 74;
+    clawL.setAttribute("transform", "translate(0 " + (-up) + ")");
+    clawR.setAttribute("transform", "translate(0 " + (-up) + ")");
+    glint.setAttribute("opacity", ft >= BEAT.clawDown1 ? 1 : 0);
+
+    const sp = stashPos(ft);
+    const sFrame = stashFrame(ft);
+    const sExpr = stashExpr(ft);
+    const sMark = ft >= BEAT.stashIn + 0.35 && ft < BEAT.stashOut + 0.15;
+    const sBlush = ft >= BEAT.stashOut + 0.5;
+    const sKey = sFrame + sExpr + (sMark ? 1 : 0) + (sBlush ? 1 : 0);
+    if (sKey !== stashKey) {
+      stashKey = sKey;
+      const painted = paintSprite(
+        STASH[sFrame], EYES_S, sExpr, 1,
+        sBlush ? [[2, 6], [11, 6]] : null,
+        COL.blushS,
+        sMark
+      );
+      drawDots(stashG, painted, PAL_S, PX);
+    }
+    const stPlace = momoPlace(stashG, sp.x, sp.y + bob(ft, 0.6, walking(keys.stash, ft)), 20);
+
+    const fpos = fetchPos(ft);
+    const fFrame = fetchFrame(ft);
+    const fExpr = fetchExpr(ft);
+    const fBlush = ft >= BEAT.fetchPocket + 0.6;
+    const fKey = fFrame + fExpr + (fBlush ? 1 : 0);
+    if (fKey !== fetchKey) {
+      fetchKey = fKey;
+      const painted = paintSprite(
+        FETCH[fFrame], EYES_F, fExpr, -1,
+        fBlush ? [[8, 7], [17, 7]] : null,
+        COL.blushF,
+        false
+      );
+      const pal = { M: COL.fetchM, X: COL.fetchX, E: COL.fetchE, D: COL.fetchX };
+      drawDots(fetchG, painted, pal, PX);
+    }
+    momoPlace(fetchG, fpos.x, fpos.y + bob(ft, 1.7, walking(keys.fetch, ft)), 20);
+
+    const order = [
+      { g: shadowEl, y: sh.cy - 36 },
+      { g: dishG, y: d.y },
+      { g: candyG, y: c.y || 0 },
+      { g: clawdG, y: box.footY },
+      { g: fen.g, y: fp.y },
+      { g: zi.g, y: zp.y },
+      { g: hei.g, y: hp.y },
+      { g: stashG, y: stPlace.footY },
+      { g: fetchG, y: fpos.y }
+    ];
+    order.sort(function (a, b) { return a.y - b.y; });
+    order.forEach(function (o) { cast.appendChild(o.g); });
+    cast.appendChild(sightEl);
+
+    const frac = Math.min(1, t / DURATION);
+    document.querySelector("#bar i").style.width = (frac * 100) + "%";
+
+    let idx = 0;
+    for (let i = 0; i < LINES.length; i++) {
+      if (LINES[i].t <= t + 0.001) idx = i;
+    }
+    const cap = document.getElementById("caption");
+    cap.textContent = LINES[idx].text;
+    const buttons = document.querySelectorAll("#script button");
+    buttons.forEach(function (b, i) {
+      if (i === idx) {
+        if (!b.classList.contains("active")) b.classList.add("active");
+      } else {
+        b.classList.remove("active");
+      }
+    });
+  }
+
+  const list = document.getElementById("script");
+  LINES.forEach(function (line, i) {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.t = String(line.t);
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = String(i + 1).padStart(2, "0");
+    const pip = document.createElement("span");
+    pip.className = "pip";
+    pip.style.background = line.pip;
+    const tx = document.createElement("span");
+    tx.textContent = line.text;
+    btn.appendChild(n);
+    btn.appendChild(pip);
+    btn.appendChild(tx);
+    btn.addEventListener("click", function () {
+      t = line.t;
+      playing = true;
+      last = 0;
+      syncPlay();
+      render(t);
+      document.getElementById("stage").scrollIntoView({ block: "start" });
+    });
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+
+  let t = 0;
+  let playing = true;
+  let last = 0;
+  const params = new URLSearchParams(location.search);
+  if (params.has("t")) {
+    t = Math.max(0, Math.min(DURATION, parseFloat(params.get("t")) || 0));
+    playing = params.get("play") === "1";
+  }
+
+  const playBtn = document.getElementById("play");
+  function syncPlay() {
+    playBtn.textContent = playing ? "暂停" : (t >= DURATION - 0.05 ? "再看一遍" : "播放");
+  }
+  playBtn.addEventListener("click", function () {
+    if (t >= DURATION - 0.05 && !playing) {
+      t = 0;
+      playing = true;
+    } else {
+      playing = !playing;
+    }
+    last = 0;
+    syncPlay();
+  });
+  document.getElementById("replay").addEventListener("click", function () {
+    t = 0;
+    playing = true;
+    last = 0;
+    syncPlay();
+    render(0);
+  });
+  document.getElementById("bar").addEventListener("click", function (ev) {
+    const r = ev.currentTarget.getBoundingClientRect();
+    const u = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+    t = u * DURATION;
+    playing = true;
+    last = 0;
+    syncPlay();
+    render(t);
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.code === "Space" && ev.target === document.body) {
+      ev.preventDefault();
+      playBtn.click();
+    }
+  });
+
+  window.addEventListener("error", function (ev) {
+    document.getElementById("caption").textContent = "出错了：" + ev.message;
+  });
+
+  function loop(now) {
+    if (!last) last = now;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (playing) {
+      t += dt;
+      if (t >= DURATION) {
+        t = DURATION;
+        playing = false;
+        syncPlay();
+      }
+    }
+    render(t);
+    requestAnimationFrame(loop);
+  }
+
+  syncPlay();
+  render(t);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
