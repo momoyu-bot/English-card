@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>找零不必了 · 小萌物短片</title>
+<meta name="description" content="打烊后热敏机吐出一张小票，五行对上店里那五张。纸卷住了。六只把它按平，合计才肯印。">
+<meta name="theme-color" content="#f3eadc">
+<!--
+  找零不必了。六只的群戏，一张 canvas，render(t) 给定第几秒就画出那一格。
+  字幕只写在底下的字幕本里。点哪一句，就从那一句看。
+  只交网页，不导 MP4。导视频用的口子在脚本末尾，留着。
+  票上五行是店里那五张热敏小票的短名，页底有链接。
+-->
+<style>
+  :root {
+    --paper: #f3eadc;
+    --ink: #3a342c;
+    --soft: #8a7d6e;
+    --line: #e4d3bc;
+    --accent: #c4623a;
+    --card: #fffaf3;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(120% 70% at 50% -10%, #f8f3ea 0%, var(--paper) 55%) no-repeat,
+      var(--paper);
+    font: 16px/1.65 "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: calc(28px + env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom));
+  }
+  header { margin: 0 2px 16px; }
+  .kicker {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    color: var(--soft);
+  }
+  h1 {
+    margin: 4px 0 6px;
+    font-family: "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+  }
+  .lede { margin: 0; color: var(--soft); font-size: 15px; }
+  .kin { margin: 12px 2px 0; }
+  .kin p { margin: 0; color: var(--soft); font-size: 14px; }
+  .kin ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .kin a { color: var(--accent); text-underline-offset: 3px; }
+  .kin a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .player { display: none; margin: 18px 0 8px; }
+  .js .player { display: block; }
+  .stage {
+    position: relative;
+    background: #e6d2ae;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 16px 40px -28px rgba(70, 40, 10, 0.55);
+    aspect-ratio: 1280 / 560;
+  }
+  .stage canvas { display: block; width: 100%; height: 100%; }
+  .big {
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    transform: translate(-50%, -50%);
+    width: 72px;
+    height: 72px;
+    border: 0;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: rgba(255, 250, 243, 0.92);
+    color: var(--accent);
+    font: inherit;
+    font-size: 26px;
+    box-shadow: 0 0 0 1px rgba(196, 98, 58, 0.35);
+  }
+  .big.again {
+    width: auto;
+    height: 46px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+  }
+  .stage.playing .big,
+  .stage.at .big { display: none; }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .bar button {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .bar button:focus-visible,
+  .book button:focus-visible,
+  .big:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .time {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--soft);
+    min-width: 92px;
+  }
+  .bar input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 0; }
+
+  .book { margin-top: 26px; }
+  .book h2 {
+    margin: 0 2px 4px;
+    font-family: "Noto Serif CJK SC", "Songti SC", serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+  }
+  .hint { margin: 0 2px 10px; color: var(--soft); font-size: 14px; }
+  .book ol { list-style: none; margin: 0; padding: 0; }
+  .book li + li { border-top: 1px solid var(--line); }
+  .book button {
+    appearance: none;
+    width: 100%;
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-left: 3px solid transparent;
+    color: inherit;
+    font: inherit;
+    padding: 8px 10px 8px 12px;
+    cursor: pointer;
+  }
+  .book button .tc {
+    flex: 0 0 auto;
+    width: 42px;
+    color: var(--soft);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .book button[aria-current="true"] {
+    border-left-color: var(--accent);
+    background: var(--card);
+  }
+  #err {
+    margin-top: 12px;
+    color: #a12822;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="kicker">小萌物短片</p>
+    <h1>找零不必了</h1>
+    <p class="lede">打烊了。热敏机把店里那五张小票并成今晚这一张。纸自己卷起来，合计那一行不肯印。</p>
+    <nav class="kin" aria-label="热敏小票">
+      <p>对上店里那五张</p>
+      <ol>
+        <li><a href="../../claude/小卡/claude_code_receipt_generator.html">一次对话的小票</a></li>
+        <li><a href="../../gemini/小卡/赛博小票.html">赛博小票</a></li>
+        <li><a href="grok-receipt.html">收据</a></li>
+        <li><a href="../../unsigned/gpt_only_receipt_artifact.html">只要你 · 小票</a></li>
+        <li><a href="../../unsigned/ai_receipt_artifact.html">对话小票生成器</a></li>
+      </ol>
+    </nav>
+  </header>
+
+  <div class="player" id="player">
+    <div class="stage" id="stage">
+      <canvas id="cv" width="1280" height="560"></canvas>
+      <button class="big" id="big" type="button" aria-label="播放">▶</button>
+    </div>
+    <div class="bar">
+      <button type="button" id="toggle">播放</button>
+      <span class="time" id="time">0:00 / 1:36</span>
+      <input id="seek" type="range" min="0" max="960" value="0" aria-label="进度">
+    </div>
+  </div>
+
+  <section class="book" aria-label="字幕本">
+    <h2>字幕本</h2>
+    <p class="hint">整部字幕都在这里。点一句，就从那一句看。</p>
+    <ol id="book">
+      <li><button type="button" data-t="0.4" data-end="4.2"><span class="tc">0:00</span><span class="line">打烊了。热敏机还亮着一点绿。</span></button></li>
+      <li><button type="button" data-t="4.2" data-end="8.6"><span class="tc">0:04</span><span class="line">店里那五张小票，今晚并成这一张。</span></button></li>
+      <li><button type="button" data-t="8.6" data-end="12.6"><span class="tc">0:08</span><span class="line">纸垂到台沿，底下一截自己卷成筒。</span></button></li>
+      <li><button type="button" data-t="12.6" data-end="16.4"><span class="tc">0:12</span><span class="line">FetchMo 从大家身后绕到筒跟前。</span></button></li>
+      <li><button type="button" data-t="16.4" data-end="20.6"><span class="tc">0:16</span><span class="line">叼住，往下一顿。筒平了。</span></button></li>
+      <li><button type="button" data-t="20.6" data-end="24.6"><span class="tc">0:20</span><span class="line">第一行印出来：一次对话。</span></button></li>
+      <li><button type="button" data-t="24.6" data-end="28.2"><span class="tc">0:24</span><span class="line">纸角又往回卷。</span></button></li>
+      <li><button type="button" data-t="28.2" data-end="33.2"><span class="tc">0:28</span><span class="line">StashYu 把卷边收进尾巴，白尖点了两下。</span></button></li>
+      <li><button type="button" data-t="33.2" data-end="36.8"><span class="tc">0:33</span><span class="line">赛博小票。收据。两行都在。</span></button></li>
+      <li><button type="button" data-t="36.8" data-end="40.4"><span class="tc">0:36</span><span class="line">底下那排齿还粘在一起。</span></button></li>
+      <li><button type="button" data-t="40.4" data-end="43.6"><span class="tc">0:40</span><span class="line">Clawd 没有嘴。两只钳子整块抬起来。</span></button></li>
+      <li><button type="button" data-t="43.6" data-end="46.6"><span class="tc">0:43</span><span class="line">右钳按下去。撕口齐了。</span></button></li>
+      <li><button type="button" data-t="46.6" data-end="50.2"><span class="tc">0:46</span><span class="line">绿灯灭了。纸卡住。</span></button></li>
+      <li><button type="button" data-t="50.2" data-end="54.6"><span class="tc">0:50</span><span class="line">小粉对着那一截，撞了上去。</span></button></li>
+      <li><button type="button" data-t="54.6" data-end="58.8"><span class="tc">0:54</span><span class="line">机器让了。只要你。对话小票。</span></button></li>
+      <li><button type="button" data-t="58.8" data-end="63.2"><span class="tc">0:58</span><span class="line">五行齐了。小紫过来对。</span></button></li>
+      <li><button type="button" data-t="63.2" data-end="67.4"><span class="tc">1:03</span><span class="line">撞一下，亮一行。</span></button></li>
+      <li><button type="button" data-t="67.4" data-end="70.6"><span class="tc">1:07</span><span class="line">五下。它停住，看了看大家。</span></button></li>
+      <li><button type="button" data-t="70.6" data-end="73.6"><span class="tc">1:10</span><span class="line">第六下。空出一行，没有字。</span></button></li>
+      <li><button type="button" data-t="73.6" data-end="77.2"><span class="tc">1:13</span><span class="line">底下那一角又卷起来。</span></button></li>
+      <li><button type="button" data-t="77.2" data-end="81.4"><span class="tc">1:17</span><span class="line">小黑滚到卷筒上，圆圆地坐住。</span></button></li>
+      <li><button type="button" data-t="81.4" data-end="84.6"><span class="tc">1:21</span><span class="line">卷边平了。</span></button></li>
+      <li><button type="button" data-t="84.6" data-end="89.2"><span class="tc">1:24</span><span class="line">合计印出来：六只都在。</span></button></li>
+      <li><button type="button" data-t="89.2" data-end="96"><span class="tc">1:29</span><span class="line">找零：不必了。</span></button></li>
+    </ol>
+  </section>
+  <p id="err" hidden></p>
+</div>
+<script>
+(function () {
+  var W = 1280, H = 560, TOTAL = 96;
+  var FOOT = 470, LANE = 368, CELL = 7, R = 36, SUB = 500;
+  var PAPER_X = 460, PAPER_Y = 18, PAPER_W = 360, PAPER_B = 408;
+  var COUNTER = "#e6d2ae", PAPER_C = "#f7f4ee", INK = "#2c2824";
+  var HOME = { cat: 80, fox: 230, clawd: 385, work: 640, pink: 900, purple: 1055, black: 1205 };
+
+  var FOX_C = { M: "#E2552B", C: "#FFF3E3", D: "#3B2520", E: "#3B2520" };
+  var CAT_C = { M: "#F3E7D6", X: "#4E382E", E: "#79C0F0" };
+
+  function rows(list, w) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].length !== w) throw new Error("格子第 " + i + " 行是 " + list[i].length + "，要 " + w);
+    }
+    return list;
+  }
+  var FOX = {
+    base: rows([
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM...CC..",
+      ".MMMMMMMMMMMM..CCCC.",
+      ".MMEEMMMMEEMM..MMMM.",
+      ".MMEEMMMMEEMM..MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ], 20),
+    tap: rows([
+      ".D..........D.......",
+      ".DM........MD.......",
+      ".MCM......MCM.CC....",
+      ".MMMMMMMMMMMM.CCCC..",
+      ".MMEEMMMMEEMM..MMMM.",
+      ".MMEEMMMMEEMM..MMMMM",
+      "CCCCCCDDCCCCCC.MMMMM",
+      "..CCCCCCCCCC..MMMMM.",
+      "....MMCCMM...MMMMM..",
+      "....MMCCMM..MMMMM...",
+      "....MMMMMM.MMMMM....",
+      "....DDMMDDMMMM......",
+      "...................."
+    ], 20)
+  };
+  var CAT = rows([
+    "....................",
+    "........X........X..",
+    ".......XXX......XXX.",
+    "........MMMMMMMMMM..",
+    ".......MMMMMMMMMMMM.",
+    ".......MEEMMMMMMEEM.",
+    ".....X.MEEMXXXXMEEM.",
+    "....X..MMMMMXXMMMMM.",
+    "....X...MMMMMMMMMM..",
+    "....X...MMMMMMMMMM..",
+    ".....X...MMMMMMMM...",
+    "......XXXXXM..MXX...",
+    "...................."
+  ], 20);
+
+  var LINES = [
+    { text: "一次对话", y: 132, t: 20.6 },
+    { text: "赛博小票", y: 154, t: 30.6 },
+    { text: "收据", y: 176, t: 32.4 },
+    { text: "只要你", y: 198, t: 54.8 },
+    { text: "对话小票", y: 220, t: 55.4 },
+    { text: "合计", value: "六只都在", y: 252, t: 84.6 },
+    { text: "找零", value: "不必了", y: 274, t: 89.2 }
+  ];
+
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var stage = document.getElementById("stage");
+  var big = document.getElementById("big");
+  var toggle = document.getElementById("toggle");
+  var seek = document.getElementById("seek");
+  var timeEl = document.getElementById("time");
+  var scale = 1;
+  var params = new URLSearchParams(location.search);
+
+  var cues = [].map.call(document.querySelectorAll("#book button"), function (b) {
+    return { t: +b.dataset.t, end: +b.dataset.end, text: b.querySelector(".line").textContent, el: b };
+  });
+
+  function blinkOn(t, phase) {
+    return ((t + phase) % 3.6) > 0.12;
+  }
+  function foxPose(t) {
+    if ((t >= 29.2 && t < 29.65) || (t >= 30.7 && t < 31.15)) return "tap";
+    return "base";
+  }
+  function foxEye(t) {
+    if (t >= 84.6) return "happy";
+    if (t >= 28.2 && t < 33.2) return "look";
+    if (!blinkOn(t, 0.4)) return "blink";
+    return "normal";
+  }
+  function catEye(t) {
+    if (t >= 84.6) return "happy";
+    if (t >= 16.4 && t < 20.6) return "happy";
+    if (!blinkOn(t, 1.3)) return "blink";
+    return "normal";
+  }
+  function faceEye(t, phase) {
+    if (t >= 84.6 && t < 93.5) return "open";
+    return blinkOn(t, phase) ? "open" : "shut";
+  }
+  function clawLift(t) {
+    if (t < 40.4 || t >= 46.2) return 0;
+    if (t < 41.1) return 6;
+    if (t < 44.8) return 14;
+    if (t < 45.5) return 6;
+    return 0;
+  }
+
+  function walk(t, keys) {
+    if (t <= keys[0].t) return { x: keys[0].x, y: keys[0].y };
+    var last = keys[keys.length - 1];
+    if (t >= last.t) return { x: last.x, y: last.y };
+    var i = 0;
+    while (i < keys.length - 1 && t >= keys[i + 1].t) i++;
+    var a = keys[i], b = keys[i + 1];
+    var span = b.t - a.t;
+    var u = span <= 0 ? 1 : (t - a.t) / span;
+    var n = 5;
+    var f = Math.min(n - 1, Math.floor(Math.max(0, u) * n));
+    var k = n === 1 ? 1 : f / (n - 1);
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+  }
+  function bob(t, pos, keys) {
+    var a = pos, b = walk(Math.min(TOTAL, t + 0.08), keys);
+    if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) < 0.8) return pos;
+    return { x: pos.x, y: pos.y + (Math.floor(t * 8) % 2 ? -4 : 0) };
+  }
+  function stepTo(t, t0, t1, a, b, n) {
+    if (t <= t0) return a;
+    if (t >= t1) return b;
+    var f = Math.min(n - 1, Math.floor((t - t0) / (t1 - t0) * n));
+    return a + (b - a) * (f / (n - 1));
+  }
+  function go(home, tLeave, tThere, tBack, tHome) {
+    var keys = [
+      { t: 0, x: home, y: FOOT },
+      { t: tLeave, x: home, y: FOOT },
+      { t: tLeave + 0.7, x: home, y: LANE },
+      { t: tThere - 0.7, x: HOME.work, y: LANE },
+      { t: tThere, x: HOME.work, y: FOOT },
+      { t: tBack, x: HOME.work, y: FOOT },
+      { t: tBack + 0.7, x: HOME.work, y: LANE },
+      { t: tHome - 0.7, x: home, y: LANE },
+      { t: tHome, x: home, y: FOOT },
+      { t: TOTAL, x: home, y: FOOT }
+    ];
+    for (var i = 1; i < keys.length; i++) {
+      if (keys[i].t < keys[i - 1].t) throw new Error("路径时间倒了 " + home);
+    }
+    return keys;
+  }
+
+  var catKeys = go(HOME.cat, 12.6, 16.2, 20.6, 24.4);
+  var foxKeys = go(HOME.fox, 24.6, 28.0, 33.2, 36.6);
+  var clawKeys = go(HOME.clawd, 36.8, 40.2, 46.4, 49.8);
+  var pinkKeys = go(HOME.pink, 50.2, 53.2, 56.6, 58.4);
+  var purpleKeys = [
+    { t: 0, x: HOME.purple, y: FOOT },
+    { t: 58.8, x: HOME.purple, y: FOOT },
+    { t: 59.5, x: HOME.purple, y: LANE },
+    { t: 61.9, x: HOME.work, y: LANE },
+    { t: 62.6, x: HOME.work, y: FOOT },
+    { t: 67.6, x: HOME.work, y: FOOT },
+    { t: 68.3, x: 740, y: FOOT },
+    { t: 69.0, x: 790, y: FOOT },
+    { t: 70.2, x: 790, y: FOOT },
+    { t: 70.7, x: HOME.work, y: FOOT },
+    { t: 72.2, x: HOME.work, y: FOOT },
+    { t: 72.9, x: HOME.work, y: LANE },
+    { t: 73.7, x: HOME.purple, y: LANE },
+    { t: 74.4, x: HOME.purple, y: FOOT },
+    { t: TOTAL, x: HOME.purple, y: FOOT }
+  ];
+  var blackKeys = [
+    { t: 0, x: HOME.black, y: FOOT },
+    { t: 74.6, x: HOME.black, y: FOOT },
+    { t: 75.3, x: HOME.black, y: LANE },
+    { t: 76.5, x: 708, y: LANE },
+    { t: 77.2, x: 708, y: FOOT },
+    { t: TOTAL, x: 708, y: FOOT }
+  ];
+
+  function catAt(t) {
+    var p = bob(t, walk(t, catKeys), catKeys);
+    if (t >= 17.2 && t < 17.45) p = { x: p.x, y: p.y + 8 };
+    else if (t >= 18.3 && t < 18.55) p = { x: p.x, y: p.y + 8 };
+    return p;
+  }
+  function foxAt(t) { return bob(t, walk(t, foxKeys), foxKeys); }
+  function clawAt(t) { return bob(t, walk(t, clawKeys), clawKeys); }
+  function pinkAt(t) {
+    var p = walk(t, pinkKeys);
+    if (t >= 53.5 && t < 53.75) p = { x: p.x + 18, y: p.y };
+    else if (t >= 53.75 && t < 54.05) p = { x: p.x + 6, y: p.y };
+    return p;
+  }
+  function purpleAt(t) {
+    var p = walk(t, purpleKeys);
+    var bumps = [63.4, 64.2, 65.0, 65.8, 66.6, 70.8];
+    for (var i = 0; i < bumps.length; i++) {
+      var d = t - bumps[i];
+      if (d >= 0 && d < 0.12) p = { x: p.x - 14, y: p.y };
+      else if (d >= 0.12 && d < 0.24) p = { x: p.x - 4, y: p.y };
+    }
+    return p;
+  }
+  function blackAt(t) { return bob(t, walk(t, blackKeys), blackKeys); }
+
+  function curlRad(t) {
+    if (t < 16.4) return 36;
+    if (t < 20.0) return stepTo(t, 16.4, 20.0, 36, 0, 5);
+    if (t < 24.6) return 0;
+    if (t < 26.6) return stepTo(t, 24.6, 26.6, 0, 26, 4);
+    if (t < 28.2) return 26;
+    if (t < 32.2) return stepTo(t, 28.2, 32.2, 26, 0, 5);
+    if (t < 73.6) return 0;
+    if (t < 75.4) return stepTo(t, 73.6, 75.4, 0, 30, 4);
+    if (t < 77.2) return 30;
+    if (t < 79.4) return stepTo(t, 77.2, 79.4, 30, 0, 4);
+    return 0;
+  }
+  function hiRow(t) {
+    if (t < 63.4) return -1;
+    if (t < 64.2) return 0;
+    if (t < 65.0) return 1;
+    if (t < 65.8) return 2;
+    if (t < 66.6) return 3;
+    if (t < 68.0) return 4;
+    if (t < 70.6) return -1;
+    if (t < 73.4) return 5;
+    return -1;
+  }
+  function ledColor(t) {
+    if (t >= 46.6 && t < 54.6) return "#e0a15a";
+    if (blinkOn(t, 0.8)) return "#3d9a5a";
+    return "#6e8f74";
+  }
+  function sceneOf(t) {
+    if (t < 8.6) return "序  ·  还亮着";
+    if (t < 24.6) return "其一  ·  叼平";
+    if (t < 36.8) return "其二  ·  尾巴";
+    if (t < 50.2) return "其三  ·  齿";
+    if (t < 58.8) return "其四  ·  撞一下";
+    if (t < 73.6) return "其五  ·  第六下";
+    if (t < 84.6) return "其六  ·  坐住";
+    return "终  ·  不必了";
+  }
+  function cueAt(t) {
+    var hit = null;
+    for (var i = 0; i < cues.length; i++) {
+      if (t >= cues[i].t && t < cues[i].end) hit = cues[i];
+    }
+    return hit;
+  }
+
+  function withEyes(grid, eyes, mode, dir, ink) {
+    if (mode === "normal") return grid;
+    var g = grid.map(function (r) { return r.split(""); });
+    function put(x, y, ch) {
+      if (y >= 0 && y < g.length && x >= 0 && x < g[y].length) g[y][x] = ch;
+    }
+    eyes.forEach(function (e) {
+      var ox = e[0], oy = e[1];
+      put(ox, oy, "M"); put(ox + 1, oy, "M");
+      put(ox, oy + 1, "M"); put(ox + 1, oy + 1, "M");
+      var cells, ch;
+      if (mode === "blink") { cells = [[0, 1], [1, 1]]; ch = ink; }
+      else if (mode === "happy") { cells = [[-1, 1], [0, 0], [1, 0], [2, 1]]; ch = ink; }
+      else { cells = [[dir, 0], [dir + 1, 0], [dir, 1], [dir + 1, 1]]; ch = "E"; }
+      cells.forEach(function (c) { put(ox + c[0], oy + c[1], ch); });
+    });
+    return g.map(function (r) { return r.join(""); });
+  }
+
+  function drawSprite(grid, colors, x, foot) {
+    var left = Math.round(x - 10 * CELL);
+    var top = Math.round(foot - grid.length * CELL);
+    for (var y = 0; y < grid.length; y++) {
+      for (var x0 = 0; x0 < grid[y].length; x0++) {
+        var ch = grid[y][x0];
+        if (!colors[ch]) continue;
+        ctx.fillStyle = colors[ch];
+        ctx.fillRect(left + x0 * CELL, top + y * CELL, CELL, CELL);
+      }
+    }
+    return { left: left, top: top };
+  }
+  function paintCells(origin, cells, color) {
+    ctx.fillStyle = color;
+    for (var i = 0; i < cells.length; i++) {
+      ctx.fillRect(origin.left + cells[i][0] * CELL, origin.top + cells[i][1] * CELL, CELL, CELL);
+    }
+  }
+  function drawFox(x, foot, pose, eye) {
+    var grid = withEyes(FOX[pose], [[3, 4], [9, 4]], eye, 1, "D");
+    var o = drawSprite(grid, FOX_C, x, foot);
+    paintCells(o, [[2, 6], [11, 6]], "#F59A8C");
+  }
+  function drawCat(x, foot, pose, eye) {
+    var grid = withEyes(CAT, [[8, 5], [16, 5]], eye, -1, "X");
+    var o = drawSprite(grid, CAT_C, x, foot);
+    paintCells(o, [[8, 7], [17, 7]], "#F2B8B0");
+  }
+  function drawClawd(x, foot, lift) {
+    var left = Math.round(x - 72);
+    var top = Math.round(foot - 91);
+    ctx.fillStyle = "#d47f59";
+    ctx.fillRect(left + 24, top + 9, 97, 65);
+    ctx.fillRect(left, top + 32 - lift, 24, 15);
+    ctx.fillRect(left + 121, top + 32 - lift, 24, 15);
+    var legs = [24, 42, 97, 109];
+    for (var i = 0; i < 4; i++) ctx.fillRect(left + legs[i], top + 74, 12, 17);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(left + 46, top + 22, 6, 20);
+    ctx.fillRect(left + 101, top + 22, 6, 20);
+  }
+  function slit(cx, cy, nx, ny, len, wid) {
+    ctx.save();
+    ctx.translate(cx + nx * R, cy + ny * R);
+    ctx.rotate(-26.2 * Math.PI / 180);
+    var w = wid * R, h = len * R;
+    var r = w / 2;
+    ctx.beginPath();
+    ctx.moveTo(-r, -h / 2 + r);
+    ctx.arcTo(-r, -h / 2, r, -h / 2, r);
+    ctx.arcTo(r, -h / 2, r, h / 2, r);
+    ctx.arcTo(r, h / 2, -r, h / 2, r);
+    ctx.arcTo(-r, h / 2, -r, -h / 2, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  function faceHole(x, foot) {
+    var cy = foot - R;
+    if (x > PAPER_X && x < PAPER_X + PAPER_W && cy > PAPER_Y && cy < PAPER_B) return PAPER_C;
+    return COUNTER;
+  }
+  function drawFace(x, foot, color, shut, rock) {
+    var cx = Math.round(x), cy = Math.round(foot - R);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rock * Math.PI / 180);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, 0, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = faceHole(x, foot);
+    var len = shut ? 0.2 : 0.418;
+    slit(0, 0, 0.194, -0.416, len, 0.194);
+    slit(0, 0, 0.626, -0.497, len, 0.129);
+    ctx.restore();
+  }
+  function shadow(x, foot, w) {
+    ctx.fillStyle = "rgba(90, 60, 30, 0.13)";
+    ctx.beginPath();
+    ctx.ellipse(Math.round(x), Math.round(foot) + 3, w, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function drawPaperText(t) {
+    ctx.fillStyle = INK;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = '22px "Noto Sans Mono CJK SC", "Noto Sans CJK SC", sans-serif';
+    ctx.fillText("宝's Shop", PAPER_X + PAPER_W / 2, 62);
+    ctx.font = '14px "Noto Sans Mono CJK SC", "Noto Sans CJK SC", sans-serif';
+    ctx.fillStyle = "#6d655c";
+    ctx.fillText("热敏小票", PAPER_X + PAPER_W / 2, 84);
+
+    var bars = [2, 1, 3, 1, 1, 2, 1, 3, 2, 1, 1, 2, 3, 1, 2, 1, 1, 3, 1, 2];
+    var bw = 0;
+    for (var bi = 0; bi < bars.length; bi++) bw += bars[bi] + 2;
+    var bx = PAPER_X + Math.round((PAPER_W - bw) / 2);
+    ctx.fillStyle = INK;
+    for (bi = 0; bi < bars.length; bi++) {
+      ctx.fillRect(bx, 98, bars[bi], 12);
+      bx += bars[bi] + 2;
+    }
+
+    ctx.strokeStyle = "#c9c1b6";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(PAPER_X + 24, 114);
+    ctx.lineTo(PAPER_X + PAPER_W - 24, 114);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    var hi = hiRow(t);
+    ctx.textAlign = "left";
+    ctx.font = '20px "Noto Sans Mono CJK SC", "Noto Sans CJK SC", sans-serif';
+    for (var li = 0; li < LINES.length; li++) {
+      var line = LINES[li];
+      var shown = t >= line.t;
+      if (hi === li) {
+        ctx.fillStyle = shown ? "#f3e2c4" : "#f3eee4";
+        ctx.fillRect(PAPER_X + 18, line.y - 14, PAPER_W - 36, 24);
+      }
+      if (!shown) continue;
+      if (li === 5) {
+        ctx.strokeStyle = "#c9c1b6";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.moveTo(PAPER_X + 24, line.y - 18);
+        ctx.lineTo(PAPER_X + PAPER_W - 24, line.y - 18);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.fillStyle = INK;
+      ctx.textAlign = "left";
+      ctx.fillText(line.text, PAPER_X + 36, line.y);
+      if (line.value) {
+        ctx.textAlign = "right";
+        ctx.fillText(line.value, PAPER_X + PAPER_W - 24, line.y);
+        ctx.textAlign = "left";
+      }
+      ctx.fillStyle = "#c4623a";
+      ctx.fillRect(PAPER_X + 22, line.y - 5, 8, 8);
+    }
+  }
+  function drawCurl(cx, cy, rad) {
+    if (rad < 3) return;
+    ctx.save();
+    ctx.translate(Math.round(cx), Math.round(cy));
+    ctx.fillStyle = PAPER_C;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rad, rad * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#cfc8bc";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, Math.max(3, rad * 0.42), Math.max(2, rad * 0.28), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  function render(t) {
+    t = Math.max(0, Math.min(TOTAL, t));
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = COUNTER;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#f6f1e6";
+    ctx.fillRect(0, 0, W, 14);
+    ctx.fillStyle = "#d8c4a0";
+    ctx.fillRect(0, H - 18, W, 18);
+
+    ctx.fillStyle = "#7d7366";
+    ctx.font = '20px "Noto Sans CJK SC", "Noto Sans SC", sans-serif';
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(sceneOf(t), 24, 22);
+
+    ctx.fillStyle = "rgba(90, 60, 30, 0.08)";
+    ctx.fillRect(PAPER_X + 8, PAPER_Y + 10, PAPER_W, PAPER_B - PAPER_Y);
+    ctx.fillStyle = PAPER_C;
+    ctx.fillRect(PAPER_X, PAPER_Y, PAPER_W, PAPER_B - PAPER_Y);
+
+    ctx.fillStyle = "#efe8dc";
+    ctx.fillRect(PAPER_X, PAPER_Y, PAPER_W, 22);
+    ctx.fillStyle = "#2c2824";
+    ctx.fillRect(PAPER_X + 36, PAPER_Y + 22, PAPER_W - 72, 5);
+
+    var ledOn = ledColor(t);
+    ctx.fillStyle = ledOn;
+    ctx.fillRect(PAPER_X + PAPER_W - 26, PAPER_Y + 6, 10, 10);
+
+    drawPaperText(t);
+
+    var rad = curlRad(t);
+    if (rad > 2) drawCurl(732, 418, rad);
+
+    var teeth = t >= 43.6;
+    if (teeth) {
+      var y0 = PAPER_B - 1;
+      var n = 18;
+      var dw = PAPER_W / n;
+      ctx.fillStyle = PAPER_C;
+      ctx.beginPath();
+      ctx.moveTo(PAPER_X, y0);
+      for (var ti = 0; ti < n; ti++) {
+        ctx.lineTo(PAPER_X + ti * dw + dw / 2, y0 + 12);
+        ctx.lineTo(PAPER_X + (ti + 1) * dw, y0);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    var fox = foxAt(t), cat = catAt(t), claw = clawAt(t);
+    var pink = pinkAt(t), purple = purpleAt(t), black = blackAt(t);
+    var cast = [
+      { y: fox.y, draw: function () {
+        shadow(fox.x, fox.y, 48);
+        drawFox(fox.x, fox.y, foxPose(t), foxEye(t));
+      }},
+      { y: cat.y, draw: function () {
+        shadow(cat.x, cat.y, 46);
+        drawCat(cat.x, cat.y, "base", catEye(t));
+      }},
+      { y: claw.y, draw: function () {
+        shadow(claw.x, claw.y, 52);
+        drawClawd(claw.x, claw.y, clawLift(t));
+      }},
+      { y: pink.y, draw: function () {
+        shadow(pink.x, pink.y, 28);
+        var rock = (t >= 53.2 && t < 54.4) ? ((Math.floor(t * 8) % 2) ? 8 : -8) : 0;
+        drawFace(pink.x, pink.y, "#FF309B", faceEye(t, 0.2) === "shut", rock);
+      }},
+      { y: purple.y, draw: function () {
+        shadow(purple.x, purple.y, 28);
+        drawFace(purple.x, purple.y, "#9159FE", faceEye(t, 1.7) === "shut", 0);
+      }},
+      { y: black.y, draw: function () {
+        shadow(black.x, black.y, 28);
+        drawFace(black.x, black.y, "#000000", faceEye(t, 2.4) === "shut", 0);
+      }}
+    ];
+    cast.sort(function (a, b) { return a.y - b.y; });
+    for (var ci = 0; ci < cast.length; ci++) cast[ci].draw();
+
+    var cue = cueAt(t);
+    if (cue) {
+      ctx.font = '26px "Noto Sans CJK SC", "Noto Sans SC", sans-serif';
+      var text = cue.text;
+      var tw = ctx.measureText(text).width;
+      var pw = Math.min(W - 80, tw + 48);
+      var px = (W - pw) / 2, py = SUB;
+      ctx.fillStyle = "rgba(255, 250, 243, 0.94)";
+      roundRect(px, py, pw, 46, 14);
+      ctx.fill();
+      ctx.fillStyle = "#3a342c";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, W / 2, py + 24);
+    }
+  }
+
+  function fmt(t) {
+    t = Math.max(0, Math.floor(t));
+    var m = Math.floor(t / 60), s = t % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+  function ui() {
+    timeEl.textContent = fmt(cur) + " / " + fmt(TOTAL);
+    seek.value = Math.round(cur * 10);
+    toggle.textContent = playing ? "暂停" : (cur >= TOTAL - 0.05 ? "重看" : "播放");
+    big.textContent = cur >= TOTAL - 0.05 ? "再看一遍" : "▶";
+    big.classList.toggle("again", cur >= TOTAL - 0.05);
+    big.setAttribute("aria-label", cur >= TOTAL - 0.05 ? "再看一遍" : "播放");
+    for (var i = 0; i < cues.length; i++) {
+      var on = cur >= cues[i].t && cur < cues[i].end;
+      if (on) cues[i].el.setAttribute("aria-current", "true");
+      else cues[i].el.removeAttribute("aria-current");
+    }
+  }
+
+  var cur = 0, playing = false, last = 0;
+  function paint() { render(cur); ui(); }
+  function tick(now) {
+    if (!playing) return;
+    if (!last) last = now;
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    cur += dt;
+    if (cur >= TOTAL) { cur = TOTAL - 0.001; playing = false; last = 0; stage.classList.remove("playing"); }
+    paint();
+    if (playing) requestAnimationFrame(tick);
+  }
+  function play() {
+    if (cur >= TOTAL - 0.05) cur = 0;
+    playing = true;
+    last = 0;
+    stage.classList.add("playing");
+    requestAnimationFrame(tick);
+    ui();
+  }
+  function pause() {
+    playing = false;
+    last = 0;
+    stage.classList.remove("playing");
+    ui();
+  }
+  function jump(t) {
+    cur = Math.max(0, Math.min(TOTAL - 0.001, t));
+    paint();
+    var cue = cueAt(cur);
+    if (cue) cue.el.scrollIntoView({ block: "nearest" });
+  }
+
+  big.addEventListener("click", function (e) { e.stopPropagation(); playing ? pause() : play(); });
+  toggle.addEventListener("click", function () { playing ? pause() : play(); });
+  stage.addEventListener("click", function () { playing ? pause() : play(); });
+  seek.addEventListener("input", function () { jump(seek.value / 10); });
+  document.getElementById("book").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    jump(+b.dataset.t + 0.05);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== " " || e.target.closest("input, button")) return;
+    e.preventDefault();
+    playing ? pause() : play();
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden && playing) pause(); });
+
+  function fit() {
+    var w = stage.clientWidth || 960;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    scale = (w * dpr) / W;
+    cv.width = Math.round(W * scale);
+    cv.height = Math.round(H * scale);
+    paint();
+  }
+  window.addEventListener("resize", fit);
+
+  document.documentElement.classList.add("js");
+  if (params.has("t")) {
+    stage.classList.add("at");
+    cur = Math.max(0, Math.min(TOTAL - 0.001, parseFloat(params.get("t")) || 0));
+  }
+  fit();
+
+  window.FILM = {
+    W: W, H: H, TOTAL: TOTAL, canvas: cv,
+    setup: function (pxW) {
+      scale = pxW / W;
+      cv.width = Math.round(W * scale);
+      cv.height = Math.round(H * scale);
+    },
+    render: function (t) { cur = t; render(t); }
+  };
+})();
+window.onerror = function (msg) {
+  var e = document.getElementById("err");
+  e.hidden = false;
+  e.textContent = String(msg);
+};
+</script>
+</body>
+</html>
