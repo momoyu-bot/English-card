@@ -26,6 +26,15 @@ git config user.email "318139614+momoyu-bot@users.noreply.github.com"
 - 推不了就把文件本身交给她：能下载的文件，或者整份代码，再说一句该放进哪个抽屉，她自己传。推失败了也算推不了。
 - 只留在你自己那边不算交完：预览、没推进店的项目、别的网站上的网页、一段文字描述，她都拿不到，也找不着。
 
+## 已经在仓库里的文件：只加不改
+
+她定的：除非她说，已经有的文件不删也不改，只能往里加新的；需要改、或者非改不可，先问她。
+
+- 「已经有的」也包括你自己之前推上去的。不改、不删、不挪、不改名。
+- 想动哪个，先跟她说动哪里、为什么，她点头再动。她这一轮亲口让你改的，就算她说了。
+- 这一节比 `CLAUDE.md` 里任何叫你挪、改、删、补文件的说法都优先。
+- 开工前照常拉 GitHub 上的最新版（`git pull`）：那是同步，不算改文件。
+
 ## 这几个文件不碰
 
 | 文件 | 是什么 |
@@ -54,3 +63,4 @@ git config user.email "318139614+momoyu-bot@users.noreply.github.com"
 - 你那一格是 `gemini/`，不管这次的芯是 Gemini 还是 Claude。`claude/` 只放 Claude Code 和 claude.ai 做的。
 - 文件名结尾加这次的芯：Gemini 用 `-gemini`，Opus 用 `-opus`，换了别的模型就写它的名字（如 `星空-opus.html`）。只改文件名，`<title>` 里不带它。
 - 这份和 `CLAUDE.md` 里说到「Claude」「cc」的地方，指的都是 Claude Code 和 claude.ai 里的那两位，不是你——就算你这次的芯是 Opus 也一样。
+- 在 Windows 电脑上，git 默认不建快捷方式（软链接），`GEMINI.md` 拿到手只是一行字 `CLAUDE.md`，不是店规本身——开头那句「等于已经读过了」在那边不成立。开工直接打开 `CLAUDE.md` 读；那一行字别改、别提交。
