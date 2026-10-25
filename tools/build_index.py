@@ -24,7 +24,7 @@ END = "<!-- LIST:END -->"
 
 # 分组顺序。没列到的目录排在后面，按名字排。
 # unsigned 垫底：2026-09-19 她当场说的，那一格已经不会再上传任何文件了。
-ORDER = ["claude", "gemini", "grok", "copilot", "pluto", "unsigned"]
+ORDER = ["claude", "gemini", "grok", "copilot", "codex", "pluto", "unsigned"]
 
 # 每个目录一种低饱和度的色，只用在悬停背景和小圆点上。
 PALETTE = {
@@ -32,6 +32,7 @@ PALETTE = {
     "gemini":                 ("#9CB8B3", "rgba(156,184,179,.12)"),
     "grok":                   ("#ABA2B6", "rgba(171,162,182,.12)"),
     "copilot":                ("#A1B0BE", "rgba(161,176,190,.12)"),
+    "codex":                  ("#A9C0A4", "rgba(169,192,164,.12)"),
     "unsigned":               ("#B5A79C", "rgba(181,167,156,.12)"),
     "pluto":                  ("#8F92A8", "rgba(143,146,168,.12)"),
 }
