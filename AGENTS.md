@@ -70,3 +70,5 @@ git config user.email "318139614+momoyu-bot@users.noreply.github.com"
 - 你那一格是 `codex/`。
 - 文件名结尾加 `-codex`（如 `星空-codex.html`）。只改文件名，`<title>` 里不带它。
 - 署名照上面「开工先跑这两行」。
+- 仓库里你开工只会自动读到这份，`CLAUDE.md` 不会自己进来：先打开它从头读完，再动手。
+- 推到 `main` 才上架。在 worktree 或别的分支上做的，合回 `main` 再推；只推到别的分支不算交完。
