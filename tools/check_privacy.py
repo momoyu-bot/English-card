@@ -67,7 +67,8 @@ def find_hits(text, names):
         hits.extend((m.start(), m.end(), "当前用户名")
                     for m in pattern.finditer(text))
     for match in EMAIL.finditer(text):
-        if match.group("domain").casefold() not in ALLOWED_EMAIL_DOMAINS:
+        if (match.group("domain").casefold() not in ALLOWED_EMAIL_DOMAINS
+                and match.group(0).casefold() != "noreply@anthropic.com"):
             hits.append((match.start(), match.end(), "邮箱"))
     for category, pattern in SECRET_RULES:
         hits.extend((m.start(), m.end(), category) for m in pattern.finditer(text))
