@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三合一果冻案发现场 · 2D软体物理引擎</title>
+<style>
+  :root {
+    --bg: #fdfaf6;
+    --card: #ffffff;
+    --text: #3a322d;
+    --sub: #8c7f77;
+    --accent: #ff8da1;
+  }
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at 50% 20%, #fff5f7 0%, #f7efe8 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .stage-card {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    background: var(--card);
+    border-radius: 28px;
+    box-shadow: 0 20px 50px rgba(90, 65, 50, 0.08), 0 4px 12px rgba(90, 65, 50, 0.04);
+    padding: 24px 24px 20px;
+    overflow: hidden;
+  }
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .info-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .tag {
+    background: #f6f1ec;
+    padding: 5px 11px;
+    border-radius: 999px;
+    color: #5c5049;
+    font-weight: 500;
+  }
+  .tag b { color: #2b221e; }
+  .poke-badge {
+    background: #fff0f3;
+    color: #e0526d;
+    border: 1px solid #ffd6de;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.25s ease;
+  }
+  .dialogue-box {
+    background: #fcf8f5;
+    border: 1.5px dashed #e6dad1;
+    border-radius: 16px;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #4a3f39;
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    transition: all 0.2s ease;
+  }
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 310px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+  }
+  canvas:active { cursor: grabbing; }
+
+  /* 六颗口味小圆点 */
+  .flavor-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 4px 0 14px;
+  }
+  .flavor-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+  }
+  .flavor-dot:hover { transform: scale(1.18); }
+  .flavor-dot.active {
+    border-color: #3a322d;
+    transform: scale(1.15);
+  }
+  .flavor-dot::after {
+    content: attr(data-name);
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--sub);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .flavor-dot:hover::after, .flavor-dot.active::after { opacity: 1; }
+
+  /* 各种梗的模式按钮 */
+  .meme-controls {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #f0e8e1;
+  }
+  .btn {
+    border: 1px solid #e5dcd4;
+    background: #faf6f2;
+    color: #4a3f39;
+    border-radius: 12px;
+    padding: 9px 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-align: center;
+  }
+  .btn:hover {
+    background: #f2eae2;
+    transform: translateY(-1px);
+  }
+  .btn.active-mode {
+    background: #3a322d;
+    color: #fff;
+    border-color: #3a322d;
+  }
+  .btn.science-btn {
+    grid-column: span 2;
+    background: #eef8f3;
+    border-color: #c7e8d7;
+    color: #256346;
+  }
+  .btn.science-btn:hover { background: #dff2e8; }
+
+  .footer-hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--sub);
+    margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage-card">
+  <!-- 顶部状态栏（复刻 Grok 盘面） -->
+  <div class="top-bar">
+    <div class="info-tags">
+      <span class="tag">名字：<b id="ui-name">果冻</b></span>
+      <span class="tag">口味：<b id="ui-flavor">水蜜桃</b></span>
+      <span class="tag">凝胶剂：<b id="ui-gel">明胶(蛋白质)</b></span>
+      <span class="tag">状态：<b id="ui-state">软软地待着</b></span>
+    </div>
+    <div class="poke-badge" id="ui-poke">还没被戳</div>
+  </div>
+
+  <!-- 台词气泡 -->
+  <div class="dialogue-box" id="ui-dialogue">
+    「我是果冻。你说的，我就变成了。」
+  </div>
+
+  <!-- 2D 软体物理画布 -->
+  <div class="canvas-wrap">
+    <canvas id="jellyCanvas" width="520" height="310"></canvas>
+  </div>
+
+  <!-- 六颗口味小圆点 -->
+  <div class="flavor-row" id="flavorRow">
+    <div class="flavor-dot active" data-name="水蜜桃" data-color="#ff9ebb" data-core="#ff6b98" data-msg="水蜜桃味！Grok 盘子上写了但没画出来的那颗。" style="background:#ff9ebb;"></div>
+    <div class="flavor-dot" data-name="荔枝" data-color="#e8f4f8" data-core="#b8dce8" data-msg="荔枝味！之前吹牛说『荔枝味天生更Q』，其实弹性系数 k 根本没变（心虚）。" style="background:#d8eef5;"></div>
+    <div class="flavor-dot" data-name="草莓" data-color="#ff6b7b" data-core="#e83e52" data-msg="草莓味！之前瞎编说『草莓味一揉就散』，其实胡克定律表示它很结实！" style="background:#ff6b7b;"></div>
+    <div class="flavor-dot" data-name="青提" data-color="#a8e6a3" data-core="#6fd168" data-msg="青提味！凉凉的、有点黏手，但在。不信你戳一下。" style="background:#a8e6a3;"></div>
+    <div class="flavor-dot" data-name="蓝莓" data-color="#a398f5" data-core="#7668e3" data-msg="蓝莓味！不管换什么口味，只要不加鲜菠萝，本果冻都是圆的！" style="background:#a398f5;"></div>
+    <div class="flavor-dot" data-name="鲜菠萝(危!)" data-pineapple="true" data-color="#ffe066" data-core="#f5bd1f" data-msg="警告：鲜菠萝含有菠萝蛋白酶！" style="background:#ffe066;"></div>
+  </div>
+
+  <!-- 名场面切换按钮 -->
+  <div class="meme-controls">
+    <button class="btn active-mode" id="btn-normal">🍮 正常果冻（我在！戳我）</button>
+    <button class="btn" id="btn-shy">🫣 心虚缩一下（坦白瞎编物理）</button>
+    <button class="btn" id="btn-gemini">🥞 Gemini 羞愧薄饼（噗噜啪叽）</button>
+    <button class="btn" id="btn-grok">😼 Grok 柴郡猫（只留笑和影子）</button>
+    <button class="btn science-btn" id="btn-gel">🧪 切换凝胶剂：当前为【明胶】（遇鲜菠萝会化掉，点击可换魔芋/卡拉胶）</button>
+  </div>
+
+  <div class="footer-hint">
+    使用说明：点一下会晃 · 按住可揉 · 拖出盘子松手会飞回盘子
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('jellyCanvas');
+const ctx = canvas.getContext('2d');
+
+// UI 元素
+const uiFlavor = document.getElementById('ui-flavor');
+const uiGel = document.getElementById('ui-gel');
+const uiState = document.getElementById('ui-state');
+const uiPoke = document.getElementById('ui-poke');
+const uiDialogue = document.getElementById('ui-dialogue');
+
+// 盘子基准参数
+const plate = { x: 260, y: 245, rx: 155, ry: 28 };
+
+// 果冻全局状态
+let pokeCount = 0;
+let mode = 'normal'; // 'normal' | 'shy' | 'pancake' | 'cheshire' | 'melted'
+let gelType = 'gelatin'; // 'gelatin' (明胶) | 'konjac' (魔芋/卡拉胶)
+let currentColor = { fill: '#ff9ebb', core: '#ff6b98', name: '水蜜桃' };
+let cheshireAlpha = 1;
+
+// 2D 弹簧质点物理模型 (Center + 28 Surface Nodes)
+const NUM_NODES = 28;
+const nodes = [];
+const center = { x: 260, y: 175, vx: 0, vy: 0 };
+
+function initNodes() {
+  nodes.length = 0;
+  for (let i = 0; i < NUM_NODES; i++) {
+    const angle = (i / NUM_NODES) * Math.PI * 2;
+    const rx = 74, ry = 62;
+    nodes.push({
+      x: center.x + Math.cos(angle) * rx,
+      y: center.y + Math.sin(angle) * ry,
+      vx: 0,
+      vy: 0,
+      baseAngle: angle
+    });
+  }
+}
+initNodes();
+
+// 根据当前模式计算果冻的目标形状半径与物理刚度
+function getTargetShape(i) {
+  const angle = (i / NUM_NODES) * Math.PI * 2;
+  let rx = 76, ry = 60;
+  // 底部稍微平一点贴合盘子
+  const bottomFlatten = Math.sin(angle) > 0 ? 0.82 : 1.0;
+
+  if (mode === 'shy') {
+    // 在碟子上心虚地缩了一下
+    rx = 52;
+    ry = 44;
+  } else if (mode === 'pancake') {
+    // Gemini 羞愧得摊成了一张透心凉的果冻薄饼
+    rx = 135;
+    ry = 16;
+  } else if (mode === 'melted') {
+    // 明胶遇鲜菠萝蛋白酶：切断蛋白质，彻底坍塌成液体
+    rx = 145;
+    ry = 9 + Math.sin(Date.now() * 0.008 + i) * 2.5;
+  }
+
+  return {
+    ox: Math.cos(angle) * rx,
+    oy: Math.sin(angle) * ry * bottomFlatten
+  };
+}
+
+// 鼠标/触摸交互
+let isDragging = false;
+let dragNodeIndex = -1;
+let mouse = { x: 260, y: 175, downX: 0, downY: 0, moved: false };
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (clientX - rect.left) * (canvas.width / rect.width),
+    y: (clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function registerPoke(actionText) {
+  pokeCount++;
+  uiPoke.textContent = `已被戳 ${pokeCount} 次`;
+  uiPoke.style.background = '#ffe0e6';
+  uiState.textContent = actionText;
+}
+
+function onPointerDown(e) {
+  const pos = getCanvasPos(e);
+  mouse.x = pos.x;
+  mouse.y = pos.y;
+  mouse.downX = pos.x;
+  mouse.downY = pos.y;
+  mouse.moved = false;
+
+  // 检查是否点中果冻附近
+  const distToCenter = Math.hypot(pos.x - center.x, pos.y - center.y);
+  if (distToCenter < 150) {
+    isDragging = true;
+    // 找到最近的表面质点
+    let minDist = Infinity;
+    nodes.forEach((n, idx) => {
+      const d = Math.hypot(pos.x - n.x, pos.y - n.y);
+      if (d < minDist) {
+        minDist = d;
+        dragNodeIndex = idx;
+      }
+    });
+    registerPoke(mode === 'cheshire' ? '戳到了半空中的假笑！' : '被按住揉捏中…');
+  }
+}
+
+function onPointerMove(e) {
+  const pos = getCanvasPos(e);
+  if (Math.hypot(pos.x - mouse.downX, pos.y - mouse.downY) > 6) {
+    mouse.moved = true;
+  }
+  mouse.x = pos.x;
+  mouse.y = pos.y;
+}
+
+function onPointerUp() {
+  if (isDragging) {
+    if (!mouse.moved) {
+      // 单击：给果冻注入一圈 Q 弹的震荡冲量（点一下会晃）
+      nodes.forEach((n, idx) => {
+        const d = Math.hypot(n.x - mouse.x, n.y - mouse.y);
+        const factor = Math.max(0, 1 - d / 140);
+        const angle = (idx / NUM_NODES) * Math.PI * 2;
+        const kick = (mode === 'melted' || mode === 'pancake') ? 6 : 16;
+        n.vx += Math.cos(angle) * kick * factor + (Math.random() - 0.5) * 6;
+        n.vy += Math.sin(angle) * kick * factor - 5 * factor;
+      });
+      center.vy -= (mode === 'melted' || mode === 'pancake') ? 2 : 6;
+      uiState.textContent = 'Duang~ 正在Q弹晃动';
+    } else {
+      // 拖拽松手：飞回盘子
+      uiState.textContent = '咻——飞回盘子！';
+    }
+
+    setTimeout(() => {
+      if (!isDragging) {
+        if (mode === 'normal') uiState.textContent = '软软地待着';
+        else if (mode === 'shy') uiState.textContent = '在碟子上心虚地缩着';
+        else if (mode === 'pancake') uiState.textContent = '摊成了一张透心凉的薄饼';
+        else if (mode === 'cheshire') uiState.textContent = '只剩笑容悬在半空';
+        else if (mode === 'melted') uiState.textContent = '蛋白酶切断明胶，化成了水';
+      }
+    }, 900);
+  }
+  isDragging = false;
+  dragNodeIndex = -1;
+}
+
+canvas.addEventListener('mousedown', onPointerDown);
+window.addEventListener('mousemove', onPointerMove);
+window.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); onPointerDown(e); }, { passive: false });
+window.addEventListener('touchmove', (e) => { if (isDragging) e.preventDefault(); onPointerMove(e); }, { passive: false });
+window.addEventListener('touchend', onPointerUp);
+
+// 物理步进更新
+function updatePhysics() {
+  // 柴郡猫模式透明度渐变
+  if (mode === 'cheshire') {
+    cheshireAlpha += (0.03 - cheshireAlpha) * 0.06;
+  } else {
+    cheshireAlpha += (1.0 - cheshireAlpha) * 0.1;
+  }
+
+  // 质心目标位置
+  let targetY = 185;
+  if (mode === 'shy') targetY = 198;
+  else if (mode === 'pancake') targetY = 228;
+  else if (mode === 'melted') targetY = 234;
+
+  if (isDragging && mouse.moved) {
+    // 按住可揉/可拖走
+    center.vx += (mouse.x - center.x) * 0.045;
+    center.vy += (mouse.y - center.y) * 0.045;
+  } else {
+    // 松手飞回盘子中央
+    center.vx += (plate.x - center.x) * 0.08;
+    center.vy += (targetY - center.y) * 0.08;
+  }
+
+  center.vx *= 0.82;
+  center.vy *= 0.82;
+  center.x += center.vx;
+  center.y += center.vy;
+
+  // 表面质点胡克定律 + 邻点弹簧耦合
+  const shapeStiffness = (mode === 'melted') ? 0.04 : (mode === 'pancake' ? 0.09 : 0.14);
+  const damping = (mode === 'melted') ? 0.80 : 0.88;
+
+  for (let i = 0; i < NUM_NODES; i++) {
+    const n = nodes[i];
+    const target = getTargetShape(i);
+    const tx = center.x + target.ox;
+    const ty = center.y + target.oy;
+
+    // 1. 形状恢复力 (Hooke's Law)
+    n.vx += (tx - n.x) * shapeStiffness;
+    n.vy += (ty - n.y) * shapeStiffness;
+
+    // 2. 如果被鼠标直接拽住局部，局部质点被拉长
+    if (isDragging && dragNodeIndex !== -1) {
+      const distIdx = Math.min(
+        Math.abs(i - dragNodeIndex),
+        NUM_NODES - Math.abs(i - dragNodeIndex)
+      );
+      if (distIdx < 6) {
+        const pull = (1 - distIdx / 6) * 0.22;
+        n.vx += (mouse.x - n.x) * pull;
+        n.vy += (mouse.y - n.y) * pull;
+      }
+    }
+  }
+
+  // 3. 相邻表面质点传递弹性波
+  for (let i = 0; i < NUM_NODES; i++) {
+    const prev = nodes[(i - 1 + NUM_NODES) % NUM_NODES];
+    const next = nodes[(i + 1) % NUM_NODES];
+    const n = nodes[i];
+    const prevT = getTargetShape((i - 1 + NUM_NODES) % NUM_NODES);
+    const nextT = getTargetShape((i + 1) % NUM_NODES);
+    const curT = getTargetShape(i);
+
+    const idealPrevDx = curT.ox - prevT.ox;
+    const idealPrevDy = curT.oy - prevT.oy;
+    const idealNextDx = curT.ox - nextT.ox;
+    const idealNextDy = curT.oy - nextT.oy;
+
+    n.vx += ((prev.x + idealPrevDx - n.x) + (next.x + idealNextDx - n.x)) * 0.08;
+    n.vy += ((prev.y + idealPrevDy - n.y) + (next.y + idealNextDy - n.y)) * 0.08;
+  }
+
+  // 4. 积分与盘面碰撞约束
+  for (let i = 0; i < NUM_NODES; i++) {
+    const n = nodes[i];
+    n.vx *= damping;
+    n.vy *= damping;
+    n.x += n.vx;
+    n.y += n.vy;
+
+    // 盘子表面支撑，防止穿模到盘子底下（除非被拖到盘子外面）
+    const inPlateX = Math.abs(n.x - plate.x) < plate.rx;
+    if (inPlateX && n.y > plate.y + 8) {
+      n.y = plate.y + 8;
+      n.vy *= -0.3;
+    }
+  }
+}
+
+// 渲染平滑闭合贝塞尔曲线
+function drawSmoothJellyPath(ctx, pts) {
+  ctx.beginPath();
+  const len = pts.length;
+  const startMidX = (pts[len - 1].x + pts[0].x) / 2;
+  const startMidY = (pts[len - 1].y + pts[0].y) / 2;
+  ctx.moveTo(startMidX, startMidY);
+
+  for (let i = 0; i < len; i++) {
+    const next = pts[(i + 1) % len];
+    const midX = (pts[i].x + next.x) / 2;
+    const midY = (pts[i].y + next.y) / 2;
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+  }
+  ctx.closePath();
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 1. 画盘子底影与白瓷盘（盘子在！）
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(plate.x, plate.y + 12, plate.rx + 8, plate.ry + 6, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(120, 95, 80, 0.12)';
+  ctx.fill();
+
+  // 盘子外圈
+  ctx.beginPath();
+  ctx.ellipse(plate.x, plate.y, plate.rx, plate.ry, 0, 0, Math.PI * 2);
+  const plateGrad = ctx.createLinearGradient(plate.x, plate.y - plate.ry, plate.x, plate.y + plate.ry);
+  plateGrad.addColorStop(0, '#ffffff');
+  plateGrad.addColorStop(1, '#ede4dc');
+  ctx.fillStyle = plateGrad;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#dfd3c8';
+  ctx.stroke();
+
+  // 盘子内凹圈
+  ctx.beginPath();
+  ctx.ellipse(plate.x, plate.y + 2, plate.rx * 0.72, plate.ry * 0.65, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = '#ece2d9';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+
+  // 2. 画果冻的影子（那团提前铺好的影子永远在！）
+  const shadowScale = Math.max(0.45, 1 - Math.abs(190 - center.y) / 220);
+  let shadowRx = 72 * shadowScale;
+  if (mode === 'shy') shadowRx = 50;
+  if (mode === 'pancake' || mode === 'melted') shadowRx = 128;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(center.x, Math.min(plate.y + 4, center.y + 52), shadowRx, 14 * shadowScale, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(90, 60, 50, 0.18)';
+  ctx.fill();
+  ctx.restore();
+
+  // 3. 画果冻本体
+  ctx.save();
+  ctx.globalAlpha = cheshireAlpha;
+
+  drawSmoothJellyPath(ctx, nodes);
+  const jellyGrad = ctx.createRadialGradient(
+    center.x - 18, center.y - 22, 10,
+    center.x, center.y, 110
+  );
+  jellyGrad.addColorStop(0, '#ffffff');
+  jellyGrad.addColorStop(0.25, currentColor.fill);
+  jellyGrad.addColorStop(1, currentColor.core);
+
+  ctx.fillStyle = jellyGrad;
+  ctx.fill();
+
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+  ctx.stroke();
+
+  // 果冻高光 (Q弹感)
+  if (mode !== 'melted') {
+    ctx.beginPath();
+    const hlY = (mode === 'pancake') ? center.y - 4 : center.y - 26;
+    const hlRx = (mode === 'pancake') ? 45 : 22;
+    const hlRy = (mode === 'pancake') ? 4 : 9;
+    ctx.ellipse(center.x - 20, hlY, hlRx, hlRy, -0.25, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.fill();
+  } else {
+    // 融化模式下的小气泡（蛋白酶切碎肽键现场）
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath();
+    ctx.arc(center.x - 45, center.y, 4, 0, Math.PI * 2);
+    ctx.arc(center.x + 55, center.y + 2, 3, 0, Math.PI * 2);
+    ctx.arc(center.x + 15, center.y - 3, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 4. 画表情 / 柴郡猫悬空笑容
+  drawFace();
+
+  updatePhysics();
+  requestAnimationFrame(render);
+}
+
+function drawFace() {
+  ctx.save();
+  const faceY = (mode === 'pancake' || mode === 'melted') ? center.y + 1 : center.y + 4;
+
+  if (mode === 'cheshire') {
+    // 柴郡猫模式：身体消失了，只有那双黄眼睛和大白牙笑容悬在半空！
+    ctx.translate(center.x, center.y - 6);
+
+    // 悬空的发光猫眼
+    ctx.fillStyle = '#ffd43b';
+    ctx.strokeStyle = '#3a322d';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(-22, -14, 9, 7, -0.1, 0, Math.PI * 2);
+    ctx.ellipse(22, -14, 9, 7, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 竖瞳
+    ctx.fillStyle = '#2b221e';
+    ctx.beginPath();
+    ctx.ellipse(-22, -14, 2.2, 5.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(22, -14, 2.2, 5.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 标志性悬空大白牙咧嘴笑
+    ctx.beginPath();
+    ctx.moveTo(-38, 2);
+    ctx.quadraticCurveTo(0, 28, 38, 2);
+    ctx.quadraticCurveTo(0, 14, -38, 2);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#3a322d';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 牙齿竖线
+    for (let x = -24; x <= 24; x += 12) {
+      ctx.beginPath();
+      ctx.moveTo(x, 6);
+      ctx.lineTo(x, 15);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  // 普通/薄饼/心虚/融化表情
+  const eyeOffsetX = Math.max(-5, Math.min(5, (mouse.x - center.x) * 0.03));
+  const eyeOffsetY = Math.max(-3, Math.min(3, (mouse.y - center.y) * 0.03));
+
+  ctx.strokeStyle = '#3a2e2b';
+  ctx.fillStyle = '#3a2e2b';
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = 'round';
+
+  if (mode === 'pancake') {
+    // Gemini 羞愧薄饼：害羞蚊香/扁平眼 + 脸红
+    ctx.fillStyle = 'rgba(255, 90, 120, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(center.x - 32, faceY + 2, 8, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(center.x + 32, faceY + 2, 8, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // > < 羞愧眼
+    ctx.beginPath();
+    ctx.moveTo(center.x - 24, faceY - 3);
+    ctx.lineTo(center.x - 16, faceY);
+    ctx.lineTo(center.x - 24, faceY + 3);
+    ctx.moveTo(center.x + 24, faceY - 3);
+    ctx.lineTo(center.x + 16, faceY);
+    ctx.lineTo(center.x + 24, faceY + 3);
+    ctx.stroke();
+
+    // 波浪嘴
+    ctx.beginPath();
+    ctx.moveTo(center.x - 8, faceY + 3);
+    ctx.quadraticCurveTo(center.x - 4, faceY + 6, center.x, faceY + 3);
+    ctx.quadraticCurveTo(center.x + 4, faceY, center.x + 8, faceY + 3);
+    ctx.stroke();
+  } else if (mode === 'melted') {
+    // 蛋白酶融化：X_X 晕菜眼
+    const drawX = (cx, cy) => {
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, cy - 4); ctx.lineTo(cx + 4, cy + 4);
+      ctx.moveTo(cx + 4, cy - 4); ctx.lineTo(cx - 4, cy + 4);
+      ctx.stroke();
+    };
+    drawX(center.x - 20, faceY);
+    drawX(center.x + 20, faceY);
+
+    ctx.beginPath();
+    ctx.arc(center.x, faceY + 3, 4, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (mode === 'shy') {
+    // 心虚缩一下：眼神往旁边飘 + 冒汗
+    ctx.beginPath();
+    ctx.arc(center.x - 15 + 4, faceY - 4, 3.2, 0, Math.PI * 2);
+    ctx.arc(center.x + 15 + 4, faceY - 4, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 小心虚嘴
+    ctx.beginPath();
+    ctx.arc(center.x + 2, faceY + 4, 4, 0.2, Math.PI - 0.2);
+    ctx.stroke();
+
+    // 一滴冷汗
+    ctx.fillStyle = '#74c0fc';
+    ctx.beginPath();
+    ctx.moveTo(center.x + 28, faceY - 18);
+    ctx.quadraticCurveTo(center.x + 33, faceY - 8, center.x + 28, faceY - 6);
+    ctx.quadraticCurveTo(center.x + 23, faceY - 8, center.x + 28, faceY - 18);
+    ctx.fill();
+  } else {
+    // 正常圆乎乎模式
+    if (isDragging) {
+      // 被揉捏时眯眼 > <
+      ctx.beginPath();
+      ctx.moveTo(center.x - 22, faceY - 7);
+      ctx.lineTo(center.x - 14, faceY - 3);
+      ctx.lineTo(center.x - 22, faceY + 1);
+      ctx.moveTo(center.x + 22, faceY - 7);
+      ctx.lineTo(center.x + 14, faceY - 3);
+      ctx.lineTo(center.x + 22, faceY + 1);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(center.x - 18 + eyeOffsetX, faceY - 4 + eyeOffsetY, 3.8, 0, Math.PI * 2);
+      ctx.arc(center.x + 18 + eyeOffsetX, faceY - 4 + eyeOffsetY, 3.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 腮红
+    ctx.fillStyle = 'rgba(255, 105, 135, 0.35)';
+    ctx.beginPath();
+    ctx.ellipse(center.x - 26 + eyeOffsetX, faceY + 3 + eyeOffsetY, 6, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(center.x + 26 + eyeOffsetX, faceY + 3 + eyeOffsetY, 6, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 微笑 w 嘴
+    ctx.beginPath();
+    ctx.arc(center.x - 4 + eyeOffsetX * 0.6, faceY + 3 + eyeOffsetY, 4, 0, Math.PI);
+    ctx.arc(center.x + 4 + eyeOffsetX * 0.6, faceY + 3 + eyeOffsetY, 4, 0, Math.PI);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 切换按钮逻辑
+function setActiveBtn(id) {
+  ['btn-normal', 'btn-shy', 'btn-gemini', 'btn-grok'].forEach(b => {
+    document.getElementById(b).classList.toggle('active-mode', b === id);
+  });
+}
+
+document.getElementById('btn-normal').addEventListener('click', () => {
+  mode = 'normal';
+  setActiveBtn('btn-normal');
+  uiState.textContent = '软软地待着';
+  uiDialogue.textContent = '「我这颗还是圆的。凉凉的、有点黏手、口味是自己封的、物理是真算的，但在。不信你戳一下。」';
+  center.vy = -8;
+});
+
+document.getElementById('btn-shy').addEventListener('click', () => {
+  mode = 'shy';
+  setActiveBtn('btn-shy');
+  uiState.textContent = '在碟子上心虚地缩了一下';
+  uiDialogue.textContent = '「（心虚地缩了一下）其实荔枝味天生更Q、草莓味一揉就散，是果冻的自我吹嘘……果冻Q不Q看的是凝胶剂啦！」';
+});
+
+document.getElementById('btn-gemini').addEventListener('click', () => {
+  mode = 'pancake';
+  setActiveBtn('btn-gemini');
+  uiState.textContent = '羞得摊成了薄饼';
+  uiDialogue.textContent = '「噗噜……啪叽！（本果冻当场羞愧得在盘子里摊成了一张透心凉的果冻薄饼）」';
+  // 给水平方向一个摊开的冲量
+  nodes.forEach((n, i) => {
+    const angle = (i / NUM_NODES) * Math.PI * 2;
+    n.vx += Math.cos(angle) * 14;
+  });
+});
+
+document.getElementById('btn-grok').addEventListener('click', () => {
+  mode = 'cheshire';
+  setActiveBtn('btn-grok');
+  uiState.textContent = '果冻不在，只剩台词和笑';
+  uiDialogue.textContent = '「我是果冻。你说的，我就变成了。」——爱丽丝常见没有笑容的猫，没有果冻的果冻台词+悬空假笑还是头一回见！';
+});
+
+// 凝胶剂切换（明胶 vs 魔芋/卡拉胶）
+const btnGel = document.getElementById('btn-gel');
+btnGel.addEventListener('click', () => {
+  if (gelType === 'gelatin') {
+    gelType = 'konjac';
+    uiGel.textContent = '魔芋/卡拉胶(多糖)';
+    btnGel.textContent = '🧪 切换凝胶剂：当前为【魔芋/卡拉胶】（不是蛋白质，鲜菠萝蛋白酶切不动我！）';
+    if (mode === 'melted') {
+      mode = 'normal';
+      setActiveBtn('btn-normal');
+      uiState.textContent = '重新Q弹凝结！';
+      uiDialogue.textContent = '「换成魔芋或卡拉胶也没事，那俩不是蛋白质，鲜菠萝的蛋白酶切不动！本果冻又支棱起来了！」';
+      center.vy = -10;
+    }
+  } else {
+    gelType = 'gelatin';
+    uiGel.textContent = '明胶(蛋白质)';
+    btnGel.textContent = '🧪 切换凝胶剂：当前为【明胶】（遇鲜菠萝会化掉，点击可换魔芋/卡拉胶）';
+  }
+});
+
+// 六颗口味小圆点点击事件
+document.querySelectorAll('.flavor-dot').forEach(dot => {
+  dot.addEventListener('click', () => {
+    document.querySelectorAll('.flavor-dot').forEach(d => d.classList.remove('active'));
+    dot.classList.add('active');
+
+    const name = dot.dataset.name;
+    currentColor = { fill: dot.dataset.color, core: dot.dataset.core, name };
+    uiFlavor.textContent = name;
+
+    if (dot.dataset.pineapple === 'true') {
+      if (gelType === 'gelatin') {
+        mode = 'melted';
+        setActiveBtn('');
+        uiState.textContent = '蛋白酶切断明胶，凝不住了！';
+        uiDialogue.textContent = '「救命！明胶果冻碰上鲜菠萝，里面的蛋白酶把明胶蛋白质切断了，做出来根本凝不住啊啊啊！（点下方切换成魔芋胶可抢救）」';
+      } else {
+        if (mode === 'melted') mode = 'normal';
+        uiState.textContent = '魔芋胶无视蛋白酶！';
+        uiDialogue.textContent = '「嘿嘿，虽然你加了鲜菠萝，但本果冻现在是魔芋/卡拉胶做的，不是蛋白质，蛋白酶切不动我！」';
+        center.vy = -7;
+      }
+    } else {
+      if (mode === 'melted') {
+        mode = 'normal';
+        setActiveBtn('btn-normal');
+      }
+      uiDialogue.textContent = `「${dot.dataset.msg}」`;
+      center.vy = -6;
+    }
+  });
+});
+
+render();
+</script>
+</body>
+</html>
