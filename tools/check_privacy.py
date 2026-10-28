@@ -48,13 +48,19 @@ def is_placeholder(value):
     )
 
 
+# 系统自带的账号名不是谁的名字。云端容器的家目录是 /root，取到的就是 root；
+# 每张新页的 CSS 都有 :root，不排除的话，在云端做的新页一张都过不了（10-28 拍《近月者圆》时撞上）。
+SYSTEM_ACCOUNTS = {"root"}
+
+
 def username_patterns():
     # 只在运行时取当前机器的名字，源文件中不保存任何真实用户名。
     names = {os.environ.get("USERNAME", ""), os.environ.get("USER", "")}
     names.add(Path(os.path.expanduser("~")).name)
     return tuple(re.compile(re.escape(name), re.IGNORECASE)
                  for name in sorted(names)
-                 if name and not is_placeholder(name))
+                 if name and not is_placeholder(name)
+                 and name.casefold() not in SYSTEM_ACCOUNTS)
 
 
 def find_hits(text, names):
