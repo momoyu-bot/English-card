@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>名副其实 · 小萌物短片</title>
+<meta name="description" content="店名叫 English-card，狐狸和猫却一个英文词都不会——可黑话里，天天在喊它俩。">
+<meta name="theme-color" content="#F5F0E6">
+<!--
+  跟《近月者圆》《今日有效》是同一套做法：整部片子是一张 canvas，render(t) 给定第几秒就画出那一格。
+  字幕不写在脚本里：底下「字幕本」那几行就是字幕，data-t 是它在这一场里出现和消失的秒数。
+  点字幕本的哪一句，就跳到哪一句。只交网页，不导 MP4；底下「导视频用的口子」没拆。
+
+  宝 2026-10-28 许的愿：仓库叫 English-card，店里会英文的只有小脸蛋和 Clawd；店猫和狐狸不会英语，
+  那四只用加密的「黑话」交流，另外两只听不懂。她的原话没有写进字幕。
+
+  从店里别处来的：
+    StashYu 职务「藏」、FetchMo 职务「叼回来」，工牌上写着名字（claude/小卡/momoyu员工证.html）；
+    名字是一个动作，Stash 是存下来，Fetch 是叼回来（claude/小科普/momoyu造型宪法.html「它们是谁」）；
+    尾巴各张是什么意思，照宪法「尾巴 DLC」每段后面写的「什么时候用」：点一下是收好了，来回摆是高兴，
+    垂下来是睡觉，尖儿抖一下是盯上了，竖起来是打招呼、想跟你玩；
+    小黑最圆（小脸蛋造型宪法「小黑那位最圆」，《近月者圆》里又圆了千分之三）。
+  片子自己编的：店的大名写在软木板上那张卡片、早上的 GM、四只的缩写黑话、O 飘出去、猫扑住小黑、
+    尾巴里收满字母、Clawd 干活举的那几块黑牌子、工牌对上牌子、小紫做的双面卡片、最后那块 GN。
+  缩写都是网上常见的写法：LGTM 看着不错，FYI 跟你说一声，LOL 笑死，IDK 不知道，GM 早，GN 晚安；
+  git stash、git fetch 是 Clawd 干活时真会敲的两条命令。顺带一提，git stash 也是后放进去的先出来，
+  跟《池鱼之殃》里写的 StashYu 一样。
+
+  六只照店里的造型宪法画，底模一格不动；工牌、牌子、卡片、字母、问号都是叠在外面的：
+    Clawd  → claude/小科普/Clawd造型宪法（Code版）.html（踩角站姿；举牌只把钳子整块往上挪）
+    小脸蛋 → claude/小科普/小脸蛋造型宪法（实测版） (1).html（sRGB 色、反斜杠缝、缝是挖空的）
+    StashYu / FetchMo → claude/小科普/momoyu造型宪法.html（逐格照抄，3 倍；尾巴照「尾巴 DLC」整张换）
+  整部片子里各自的个头不变：狐狸、猫一格 3 像素，Clawd 0.3 倍，小脸蛋半径 14。
+  站位跟着剧情走：狐狸和猫在左，两条尾巴挨着，好「说话」；会英文的四只在右；下午 Clawd 挪到中间干活。
+  曲子是 cc 自己写的一支 C 大调小曲：早上八音盒，下午换成小方波，尾巴那场拨弦，夜里又回到八音盒。
+-->
+<style>
+  :root{
+    --paper:#F5F0E6; --paper-2:#EBE4D6; --ink:#3A332D; --ink-2:#776C62; --ink-3:#B0A598;
+    --acc:#3F5E8C; --line:#E2D9CA; --deep:#2B241F;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.7;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:calc(30px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))}
+
+  header{text-align:center;margin-bottom:20px}
+  .tag{font-size:12px;letter-spacing:.18em;color:var(--ink-3)}
+  h1{
+    margin:6px 0 8px;font-weight:500;font-size:30px;line-height:1.3;letter-spacing:.12em;text-indent:.12em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--acc);
+  }
+  .lede{margin:0;color:var(--ink-2);font-size:14.5px}
+
+  /* 播放器：不跑 JS 就不出现，只剩下面的字幕本 */
+  .player{display:none}
+  .js .player{display:block}
+  .player{width:100%;max-width:min(100%, calc((100vh - 120px) * 9 / 16));margin:0 auto 26px}
+  @supports (height:100svh){
+    .player{max-width:min(100%, calc((100svh - 120px) * 9 / 16))}
+  }
+  .screen{
+    position:relative;border-radius:14px;overflow:hidden;background:#D7DFD3;
+    box-shadow:0 0 0 1px var(--line);
+    aspect-ratio:9/16;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  .screen canvas{display:block;width:100%;height:100%}
+  .big{
+    /* 封面是 Clawd 两只钳子各举一块牌子、狐狸和猫红着脸那一格；按钮放在柜台上 */
+    position:absolute;left:50%;top:84%;transform:translate(-50%,-50%);
+    width:74px;height:74px;border-radius:50%;border:0;padding:0;cursor:pointer;
+    background:rgba(245,240,230,.92);color:var(--acc);font:inherit;font-size:26px;line-height:74px;text-align:center;
+    box-shadow:0 0 0 1px rgba(63,94,140,.45);
+  }
+  .big.again{width:auto;padding:0 20px;border-radius:99px;height:46px;line-height:46px;font-size:15px;letter-spacing:.08em}
+  .playing .big{display:none}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin:10px 2px 2px;font-size:12.5px;color:var(--ink-2)}
+  .ctrl button{
+    font:inherit;font-size:12.5px;color:var(--ink);background:transparent;cursor:pointer;
+    border:1px solid #D8CDBD;border-radius:99px;padding:4px 13px;
+  }
+  .ctrl button:active{background:var(--paper-2)}
+  .ctrl .time{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .ctrl .sp{flex:1}
+  input[type=range]{width:100%;margin:6px 0 4px;accent-color:#3F5E8C;height:26px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chips button{
+    font:inherit;font-size:12.5px;color:var(--ink-2);background:transparent;cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:3px 11px;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  }
+  .chips button.on{color:var(--deep);border-color:#9DB0CF}
+
+  /* 字幕本：也是片子里的字幕本身 */
+  .script{margin:8px 0 0;padding:20px 18px 8px;border-radius:14px;background:var(--paper-2)}
+  .script h2{margin:0 0 12px;font-size:13px;font-weight:500;letter-spacing:.16em;color:var(--ink-3);text-align:center}
+  .sc{margin:0 0 16px}
+  .sc h3{
+    margin:0 0 4px;font-size:13px;font-weight:400;color:var(--ink-2);
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .sc h3 .no{
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--acc);font-size:14px;
+  }
+  .sc p{margin:0;padding:3px 0 3px 10px;border-left:2px solid transparent;color:var(--ink);font-size:14.5px}
+  .js .sc p{cursor:pointer}
+  .sc p.on{border-left-color:var(--acc);color:var(--deep)}
+  footer{margin:26px 0 0;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.9}
+</style>
+</head>
+<body>
+<script>document.documentElement.className='js';</script>
+<div class="wrap">
+  <header>
+    <div class="tag">小萌物 · 短片</div>
+    <h1>名副其实</h1>
+    <p class="lede">店的大名叫 English-card，<br>店里却有两只，一个英文词也不会。<br>另外四只，说的还是黑话。</p>
+  </header>
+
+  <div class="player" id="player">
+    <div class="screen" id="screen">
+      <canvas id="film" width="360" height="640" role="img" aria-label="名副其实：店里四只用英文缩写说黑话，狐狸和猫一个词也听不懂；后来 Clawd 干活时举的牌子上写着 stash 和 fetch，正是它俩工牌上的名字，一个把牌子收进尾巴，一个把牌子叼了回来；最后它们用尾巴聊天，轮到另外四只听不懂，小紫做了一叠一面英文、一面尾巴的卡片"></canvas>
+      <button class="big" id="big" type="button" aria-label="播放">▶</button>
+    </div>
+    <div class="ctrl">
+      <button type="button" id="pp">播放</button>
+      <span class="time" id="time">0:00 / 0:00</span>
+      <span class="sp"></span>
+      <button type="button" id="snd" aria-pressed="true">声音 开</button>
+    </div>
+    <input type="range" id="seek" min="0" max="1900" step="1" value="0" aria-label="进度">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section class="script" id="script">
+    <h2>字 幕 本</h2>
+    <div class="sc" data-scene="intro" data-dur="27" data-chip="序">
+      <h3><span class="no">序</span>大名</h3>
+      <p data-t="4.4-6.6">这家店的门楣上，写的是「宝's Shop」。</p>
+      <p data-t="6.9-9.0">它还有个大名：English-card。</p>
+      <p data-t="9.4-11.4">早上开门，Clawd 先举牌：</p>
+      <p data-t="11.6-13.4">Morning!</p>
+      <p data-t="13.8-16.0">三颗小脸蛋回：GM，GM，GM。</p>
+      <p data-t="16.2-17.6">（译：早。）</p>
+      <p data-t="18.0-20.2">StashYu 和 FetchMo，什么也没回。</p>
+      <p data-t="20.6-22.8">它俩一个英文词也不会。</p>
+      <p data-t="23.2-25.6">看得懂的，只有头顶这个问号。</p>
+    </div>
+    <div class="sc" data-scene="slang" data-dur="43.5" data-card="第一场" data-sub="黑话" data-chip="一">
+      <h3><span class="no">一</span>黑话</h3>
+      <p data-t="0.5-2.6">四只凑到一起，话越说越短。</p>
+      <p data-t="3.0-4.6">Clawd：LGTM。</p>
+      <p data-t="4.8-6.4">（译：看着不错。）</p>
+      <p data-t="6.8-8.4">小紫：FYI。</p>
+      <p data-t="8.6-10.2">（译：跟你说一声。）</p>
+      <p data-t="10.6-12.2">小粉：LOL。</p>
+      <p data-t="12.4-13.8">（译：笑死。）</p>
+      <p data-t="14.2-16.2">这哪是英语，这是黑话。</p>
+      <p data-t="16.6-18.8">在狐狸和猫看来，是这样的——</p>
+      <p data-t="21.0-23.0">LOL 中间那个 O，飘了出去。</p>
+      <p data-t="23.2-25.0">FetchMo 盯上了它。</p>
+      <p data-t="25.4-26.6">扑！</p>
+      <p data-t="27.0-29.0">扑住一看——是小黑。</p>
+      <p data-t="29.6-31.0">小黑：IDK。</p>
+      <p data-t="31.2-32.6">（译：不知道。）</p>
+      <p data-t="33.0-35.0">在 FetchMo 眼里，圆的都是 O。</p>
+      <p data-t="35.4-37.8">StashYu 呢，听不懂的，一律先收进尾巴。</p>
+      <p data-t="38.2-40.2">尾巴点两下：收着，回头再说。</p>
+      <p data-t="40.6-42.6">一上午，收了一尾巴字母。</p>
+    </div>
+    <div class="sc" data-scene="names" data-dur="46.5" data-card="第二场" data-sub="喊到名字了" data-chip="二">
+      <h3><span class="no">二</span>喊到名字了</h3>
+      <p data-t="0.5-2.4">下午，Clawd 开始干活。</p>
+      <p data-t="2.8-5.0">干活时举的牌子，黑话更多。</p>
+      <p data-t="5.4-7.0">git stash。</p>
+      <p data-t="7.4-9.4">StashYu 一下子蹦了起来。</p>
+      <p data-t="9.8-12.2">它不识字，可工牌上自己的名字，它认得。</p>
+      <p data-t="12.6-14.4">是在喊它！</p>
+      <p data-t="14.8-17.2">它扑过去，把牌子收进了尾巴。</p>
+      <p data-t="17.6-19.4">Clawd 只好举下一块：</p>
+      <p data-t="19.6-21.0">git fetch。</p>
+      <p data-t="21.4-23.4">这回，轮到 FetchMo 蹦起来了。</p>
+      <p data-t="23.8-26.2">它从狐狸尾巴里，把牌子叼了回来。</p>
+      <p data-t="26.6-28.4">Clawd 愣了好一会儿。</p>
+      <p data-t="28.8-30.8">小紫先反应过来：</p>
+      <p data-t="31.0-32.8">stash，是「先收起来」；</p>
+      <p data-t="33.0-34.8">fetch，是「取回来」。</p>
+      <p data-t="35.2-37.2">两只一个英文词也不会——</p>
+      <p data-t="37.4-39.4">活儿，一点没干错。</p>
+      <p data-t="39.8-41.4">Clawd 举牌：LGTM。</p>
+      <p data-t="41.6-43.6">这句它俩还是听不懂，</p>
+      <p data-t="43.8-45.8">可小脸蛋蹦成这样，看得懂。</p>
+    </div>
+    <div class="sc" data-scene="tails" data-dur="30" data-card="第三场" data-sub="尾巴的话" data-chip="三" data-out="night">
+      <h3><span class="no">三</span>尾巴的话</h3>
+      <p data-t="0.5-2.6">被夸了，狐狸和猫聊起天来——</p>
+      <p data-t="2.8-4.2">用尾巴。</p>
+      <p data-t="4.6-6.2">（狐狸语，译：高兴。）</p>
+      <p data-t="6.6-8.2">（猫语，译：来玩呀。）</p>
+      <p data-t="8.6-10.2">（狐狸语，译：收好了。）</p>
+      <p data-t="10.6-12.2">（猫语，译：盯上了。）</p>
+      <p data-t="12.6-14.8">这一回，轮到四只听不懂了。</p>
+      <p data-t="15.2-16.8">Clawd 举牌：???</p>
+      <p data-t="17.2-19.4">小紫用英文数尾巴：one，two……</p>
+      <p data-t="19.8-22.0">小粉没有尾巴，只好整颗摇。</p>
+      <p data-t="22.4-23.8">小黑：IDK。</p>
+      <p data-t="24.2-26.4">其实译出来，也没说什么。</p>
+      <p data-t="26.8-29.0">跟早上那几句黑话一样。</p>
+    </div>
+    <div class="sc" data-scene="fin" data-dur="44" data-card="终" data-sub="名副其实" data-chip="终" data-in="night">
+      <h3><span class="no">终</span>名副其实</h3>
+      <p data-t="0.6-2.6">晚上，小紫做了一叠卡片。</p>
+      <p data-t="2.8-4.8">一面写英文，一面画尾巴。</p>
+      <p data-t="5.2-7.2">stash：尾巴点两下。</p>
+      <p data-t="7.4-9.4">fetch：尾巴竖起来。</p>
+      <p data-t="9.6-11.6">happy：尾巴来回摆。</p>
+      <p data-t="12.0-14.2">狐狸和猫学英文，四只学尾巴。</p>
+      <p data-t="14.6-16.8">一张张钉在板子上，钉在大名旁边。</p>
+      <p data-t="17.2-19.2">StashYu 顺手收了一张进尾巴，</p>
+      <p data-t="19.4-21.2">FetchMo 又给叼了回来。</p>
+      <p data-t="21.6-23.8">这家店的大名，这回名副其实了。</p>
+      <p data-t="24.2-26.2">它俩的名字，本来就是。</p>
+      <p data-t="26.6-28.6">Clawd 举起最后一块牌：GN。</p>
+      <p data-t="28.8-30.2">（译：晚安。）</p>
+      <p data-t="30.6-32.6">StashYu 的尾巴，垂了下来。</p>
+      <p data-t="33.0-34.8">这一句，小黑看懂了。</p>
+      <p data-t="35.2-36.8">（狐狸语，也是晚安。）</p>
+      <p data-t="37.2-38.8">晚安。</p>
+    </div>
+  </section>
+
+  <footer>
+    StashYu 职务是「藏」，FetchMo 职务是「叼回来」，<br>写在它俩的员工证上。<br>
+    尾巴各是什么意思，照 momoyu 造型宪法的尾巴 DLC。<br>
+    LGTM、FYI、LOL、IDK、GM、GN 都是网上常见的缩写；<br>git stash、git fetch 是 Clawd 干活真会敲的命令。<br>
+    六只都照各自的造型宪法：底模一格不动；<br>工牌、牌子、卡片、字母，都是叠在外面的。<br>
+    曲子和画面都是一格一格写出来的 · cc 做的 · 2026.10
+  </footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+var W=360, H=640, TAU=Math.PI*2;
+var cv=document.getElementById('film'), ctx=cv.getContext('2d');
+var S=1;
+var SANS='-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei","WenQuanYi Zen Hei",sans-serif';
+var SERIF='"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun","Noto Sans CJK SC","WenQuanYi Zen Hei",serif';
+var EN='"Avenir Next","Helvetica Neue",Helvetica,Arial,"Noto Sans","DejaVu Sans",sans-serif';
+var ENS='Georgia,"Times New Roman","Noto Serif","DejaVu Serif",serif';
+var MONO='Menlo,"SF Mono","DejaVu Sans Mono",Consolas,ui-monospace,monospace';
+
+/* ---------- 场次和字幕：从下面的字幕本里读 ---------- */
+var SCENES=[], TOTAL=0;
+Array.prototype.forEach.call(document.querySelectorAll('.sc'),function(el){
+  var d=el.dataset;
+  var sc={id:d.scene, dur:+d.dur, card:d.card||'', sub:d.sub||'', chipText:d.chip||'',
+          fin:d['in']||'paper', fout:d.out||'paper', cy:56, start:TOTAL, caps:[], el:el};
+  Array.prototype.forEach.call(el.querySelectorAll('p[data-t]'),function(p){
+    var a=p.dataset.t.split('-');
+    sc.caps.push({t0:+a[0], t1:+a[1], text:p.textContent.trim(), el:p});
+  });
+  TOTAL+=sc.dur; SCENES.push(sc);
+});
+
+/* ---------- 画笔：有一台镜头，世界坐标经过它才落到屏幕上 ---------- */
+function setup(pxW){
+  pxW=Math.max(180,Math.round(pxW));
+  cv.width=pxW; cv.height=Math.round(pxW*H/W); S=cv.width/W;
+}
+var CAM={x:180,y:320,z:1};
+function cam(x,y,z){ CAM.x=x; CAM.y=y; CAM.z=z; }
+function flat(){ cam(180,320,1); }
+function X(x){ return ((x-CAM.x)*CAM.z+180)*S; }
+function Y(y){ return ((y-CAM.y)*CAM.z+320)*S; }
+function worldT(){ var z=CAM.z*S; ctx.setTransform(z,0,0,z,(180-CAM.x*CAM.z)*S,(320-CAM.y*CAM.z)*S); }
+var A=1, NOW=0;
+function R(x,y,w,h,c,a){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c;
+  var x0=Math.round(X(x)), y0=Math.round(Y(y)), x1=Math.round(X(x+w)), y1=Math.round(Y(y+h));
+  if(x1>x0&&y1>y0) ctx.fillRect(x0,y0,x1-x0,y1-y0);
+  ctx.globalAlpha=1;
+}
+/* 不对齐像素的小方块：细东西用它，放大缩小都不会糊成一团 */
+function F(x,y,w,h,c,a){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  worldT(); ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c; ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function roundPathOn(c,x,y,w,h,r){
+  r=Math.max(0,Math.min(r,w/2,h/2));
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+function roundPath(x,y,w,h,r){ roundPathOn(ctx,x,y,w,h,r); }
+function rrect(x,y,w,h,r,fill,a,stroke,lw){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a;
+  ctx.beginPath(); roundPath(x,y,w,h,r);
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.stroke(); }
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function dot(x,y,r,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function line(pts,c,lw,a,dash){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  ctx.lineJoin='round'; ctx.lineCap='round'; if(dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.stroke(); ctx.lineCap='butt'; ctx.setLineDash([]);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function poly(pts,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 竖着渐变的一块（窗里的天） */
+function vgrad(x,y,w,h,stops,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); var g=ctx.createLinearGradient(0,y,0,y+h);
+  stops.forEach(function(s){ g.addColorStop(s[0],s[1]); });
+  ctx.globalAlpha=a>1?1:a; ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 一团光：rgb 写成 '255,200,150'，中间亮、往外淡到没有 */
+function glow(x,y,r,rgb,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return; a=Math.min(1,a);
+  worldT(); var g=ctx.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,'rgba('+rgb+','+a+')'); g.addColorStop(.42,'rgba('+rgb+','+(a*.42)+')'); g.addColorStop(1,'rgba('+rgb+',0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+  ctx.setTransform(1,0,0,1,0,0);
+}
+/* 一圈线；frac 是从正上方顺时针画到几成，dash 是虚线 */
+function ringS(x,y,r,c,lw,a,dash,frac){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  if(dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.arc(x,y,r,-Math.PI/2,-Math.PI/2+TAU*(frac===undefined?1:frac)); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function clamp(v){return v<0?0:v>1?1:v;}
+function lerp(a,b,p){return a+(b-a)*p;}
+function smooth(p){p=clamp(p);return p*p*(3-2*p);}
+function inR(t,a,b){return t>=a&&t<b;}
+function p2(n){ return ('0'+n).slice(-2); }
+function hexRGB(c){ c=c.replace('#',''); return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)]; }
+/* 早上 → 傍晚 → 夜里：三个颜色里取一个 */
+function tone(a,b,c,dk,nt){
+  var u=hexRGB(a), v=hexRGB(b), w=hexRGB(c), o=[0,0,0];
+  for(var i=0;i<3;i++) o[i]=Math.round(lerp(lerp(u[i],v[i],clamp(dk)),w[i],clamp(nt)));
+  return 'rgb('+o[0]+','+o[1]+','+o[2]+')';
+}
+/* 一段时间里连着跳 */
+function every(t,t0,t1,per,h,ph){ if(t<t0||t>=t1) return 0; return ((t-t0+(ph||0))%per)<per/2?-h:0; }
+/* 一张时间表里挑当前那一格：[[从, 到, 值], …]，都不中就用 d */
+function pick(t,list,d){ var v=d; for(var i=0;i<list.length;i++) if(t>=list[i][0]&&t<list[i][1]) v=list[i][2]; return v; }
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function spark(x,y,s,c,a){ R(x-s/2,y-s*1.5,s,s*3,c,a); R(x-s*1.5,y-s/2,s*3,s,c,a); }
+function glyph(rows,x,y,cell,c,a){
+  for(var r=0;r<rows.length;r++) for(var k=0;k<rows[r].length;k++)
+    if(rows[r][k]==='X') R(x+k*cell,y+r*cell,cell,cell,c,a);
+}
+var QM=['.XXX.','X...X','....X','...X.','..X..','.....','..X..'];
+var EXM=['..X..','..X..','..X..','..X..','..X..','.....','..X..'];
+/* 镜头关键帧：[[秒, x, y, 放大]]，中间平滑过去，放大按比例走 */
+function ck(t,keys){
+  if(t<=keys[0][0]) return keys[0].slice(1);
+  for(var i=1;i<keys.length;i++){
+    if(t<keys[i][0]){
+      var a=keys[i-1], b=keys[i], p=smooth((t-a[0])/(b[0]-a[0]));
+      return [lerp(a[1],b[1],p), lerp(a[2],b[2],p), a[3]*Math.pow(b[3]/a[3],p)];
+    }
+  }
+  return keys[keys.length-1].slice(1);
+}
+/* 停一段、挪一段：[[从, 到, x, y, 放大], …]，每段在「从」到「到」之间停住 */
+function holds(list){ var k=[]; list.forEach(function(h){ k.push([h[0],h[2],h[3],h[4]]); k.push([h[1],h[2],h[3],h[4]]); }); return k; }
+/* 封面那一格自己取景（PCAM），六只都要在画里 */
+var PCAM=null;
+function camK(t,keys){ if(PCAM){ cam(PCAM[0],PCAM[1],PCAM[2]); return; } var k=ck(t,keys); cam(k[0],k[1],k[2]); }
+/* 整只挪位置：segs = [[起跳秒, 用几秒, 落到 x, 落到 y, 跳多高]]。
+   跳的时候一秒只走 15 格，像素不停在半格上。 */
+function path(t,x,y,segs){
+  for(var i=0;i<segs.length;i++){
+    var s=segs[i];
+    if(t<s[0]) break;
+    if(t<s[0]+s[1]){
+      var p=Math.min(1,Math.floor((t-s[0])*15)/15/s[1]);
+      return {x:lerp(x,s[2],p), y:lerp(y,s[3],p)-s[4]*4*p*(1-p), air:true};
+    }
+    x=s[2]; y=s[3];
+  }
+  return {x:x,y:y,air:false};
+}
+/* 原地往上蹦一下，也是一秒 15 格 */
+function jump(t,t0,d,h){
+  if(!inR(t,t0,t0+d)) return 0;
+  var p=Math.min(1,Math.floor((t-t0)*15)/15/d);
+  return -h*4*p*(1-p);
+}
+/* 小东西飞一段：一格一格走，n 步到 */
+function fly(t,t0,d,x0,y0,x1,y1,h,n){
+  n=n||10; var p=Math.floor(clamp((t-t0)/d)*n)/n;
+  return [lerp(x0,x1,p), lerp(y0,y1,p)-(h||0)*4*p*(1-p), p];
+}
+/* 一格一格往前走的进度（0→1），n 步 */
+function stepP(t,t0,d,n){ return Math.floor(clamp((t-t0)/d)*(n||8))/(n||8); }
+/* 一张循环换的帧表：[[帧, 停几秒], …] */
+function cyc(t,t0,list){
+  var tot=0, i; for(i=0;i<list.length;i++) tot+=list[i][1];
+  var u=((t-t0)%tot+tot)%tot;
+  for(i=0;i<list.length;i++){ if(u<list[i][1]) return list[i][0]; u-=list[i][1]; }
+  return list[0][0];
+}
+/* 每隔 per 秒眨一下 */
+function blinkOn(t,per,off){ return ((t+off)%per)<.14; }
+/* 淡入淡出：在 [t0, t1) 里是 1，两头各用 f 秒 */
+function fade(t,t0,t1,f){ f=f||.2; return Math.min(clamp((t-t0)/f),clamp((t1-t)/f)); }
+
+/* ---------- 字 ---------- */
+/* 世界里的字（跟着镜头放大）。ls 是字距，单位 em；al 可以是 center / right */
+function wt(s,x,y,o){
+  var a=(o.a===undefined?1:o.a)*A; if(a<=0||!s) return;
+  var size=o.size*CAM.z*S;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.font=(o.wt||400)+' '+size+'px '+(o.fam||SANS);
+  ctx.fillStyle=o.c; ctx.globalAlpha=a>1?1:a;
+  ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+  var ls=(o.ls||0)*size, px0=X(x), py0=Y(y), ws=[], tot=0, i;
+  for(i=0;i<s.length;i++){ var w=ctx.measureText(s[i]).width; ws.push(w); tot+=w+ls; }
+  if(o.al==='center') px0-=(tot-ls)/2; else if(o.al==='right') px0-=(tot-ls);
+  for(i=0;i<s.length;i++){ ctx.fillText(s[i],px0,py0); px0+=ws[i]+ls; }
+  ctx.globalAlpha=1;
+}
+/* 一串字在世界里有多宽（不算字距） */
+function tw(s,size,fam,w){
+  ctx.setTransform(1,0,0,1,0,0); ctx.font=(w||400)+' '+size+'px '+fam;
+  var x=0; for(var i=0;i<s.length;i++) x+=ctx.measureText(s[i]).width; return x;
+}
+/* 英文：平时就是字；在狐狸和猫眼里（SCR），每个字母都成了一团认不出的格子 */
+var SCR=0;
+function etext(s,x,y,o){
+  o=o||{}; var size=o.size||12, fam=o.fam||EN, w8=o.wt||800, ls=o.ls||0;
+  if(!SCR){ wt(s,x,y,{size:size,c:o.c,al:o.al||'center',a:o.a,fam:fam,wt:w8,ls:ls}); return; }
+  var total=tw(s,size,fam,w8)+(s.length-1)*ls*size, x0=o.al==='left'?x:(o.al==='right'?x-total:x-total/2), cx=x0;
+  var cell=size/4.6;
+  for(var i=0;i<s.length;i++){
+    var cw=tw(s[i],size,fam,w8);
+    if(s[i]!==' '){
+      var r=rng(s.charCodeAt(i)*131+i*17+Math.floor(NOW*6)*7), gx=cx+(cw-3.3*cell)/2;
+      for(var yy=0;yy<5;yy++) for(var xx=0;xx<3;xx++) if(r()<.56) F(gx+xx*cell*1.1,y-size*1.0+yy*cell*1.1,cell,cell,o.c,o.a);
+    }
+    cx+=cw+ls*size;
+  }
+}
+/* 一行汉字，每个字一格（片名） */
+function cjk(s,x,y,cs,cols,o){
+  o=o||{}; var gap=cs*(o.sp||1.12), x0=x-(s.length-1)*gap/2;
+  for(var i=0;i<s.length;i++)
+    wt(s[i],x0+i*gap,y,{size:cs,c:typeof cols==='string'?cols:cols[i],al:'center',a:o.a,fam:o.fam||SERIF,wt:o.wt||600});
+}
+/* 屏幕上的字（片名、场名、字幕），不跟镜头 */
+function text(s,x,y,font,c,a,align){
+  a*=A; if(a<=0) return;
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.globalAlpha=clamp(a); ctx.font=font; ctx.fillStyle=c;
+  ctx.textAlign=align||'center'; ctx.textBaseline='middle';
+  ctx.fillText(s,x,y);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+var PUNCT='，。、！？；：…—」』）';
+function wrap(s,max){
+  if(ctx.measureText(s).width<=max) return [s];
+  var best=-1, mid=s.length/2;
+  for(var i=1;i<s.length-1;i++){
+    if('，。？！…—：；'.indexOf(s[i])>=0 && PUNCT.indexOf(s[i+1])<0){
+      if(best<0||Math.abs(i+1-mid)<Math.abs(best-mid)) best=i+1;
+    }
+  }
+  if(best>0){
+    var a=s.slice(0,best), b=s.slice(best);
+    if(ctx.measureText(a).width<=max&&ctx.measureText(b).width<=max) return [a,b];
+  }
+  var out=[], cur='';
+  s.split('').forEach(function(k){
+    var t=cur+k;
+    if(cur&&ctx.measureText(t).width>max&&PUNCT.indexOf(k)<0){ out.push(cur); cur=k; } else cur=t;
+  });
+  if(cur) out.push(cur);
+  return out;
+}
+/* 字幕：垫一条纸，字是深的 */
+function caption(s,a){
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.font='500 16px '+SANS; ctx.textAlign='center'; ctx.textBaseline='middle';
+  var lines=wrap(s,296), lh=25, y0=598-(lines.length-1)*lh/2;
+  ctx.globalAlpha=clamp(a);
+  var w=0; lines.forEach(function(ln){ w=Math.max(w,ctx.measureText(ln).width); });
+  ctx.fillStyle='rgba(245,240,230,.93)';
+  var bx=180-w/2-16, by=y0-lh/2-6, bw=w+32, bh=lines.length*lh+12;
+  ctx.beginPath(); roundPath(bx,by,bw,bh,10); ctx.fill();
+  lines.forEach(function(ln,i){ ctx.fillStyle='#382F29'; ctx.fillText(ln,180,y0+i*lh); });
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function twinkle(t,t0,d,x,y,c,big){
+  if(!inR(t,t0,t0+d)) return;
+  var on=Math.floor(t/.1)%2; spark(x,y,on?(big||3):(big||3)*.66,c||GOLD,1);
+}
+/* 冒一个英文词：冒出来先大一点，往上飘一点，最后淡掉 */
+function bubble(t,t0,d,s,x,y,o){
+  if(!inR(t,t0,t0+d)) return;
+  o=o||{}; var u=t-t0, a=Math.min(clamp(u/.1),clamp((t0+d-t)/.35));
+  etext(s,x,y-stepP(t,t0,d,8)*(o.rise===undefined?8:o.rise),{size:(o.size||12)*(u<.08?1.3:1),c:o.c||'#3A2A20',a:a,fam:o.fam||EN,wt:800,ls:.04});
+}
+/* 问号、感叹号：头顶冒一下 */
+function mark(t,t0,t1,rows,x,y,cell,c){
+  if(!inR(t,t0,t1)) return;
+  var u=t-t0, a=Math.min(clamp(u/.08),clamp((t1-t)/.25)), h=rows.length*cell, w=rows[0].length*cell;
+  glyph(rows,x-w/2,y-h-(u<.1?2:(u<.2?1:0)),cell,c,a);
+}
+
+var PAPER='#F5F0E6', INK='#221C18', ACC='#3F5E8C', RED='#C8402F', GOLD='#E2B04A', MOONC='#F8F0D4';
+/* 三颗冒的字，用各自身上的颜色往深里压一点，墙上看得清 */
+var FACE_INK=['#D81F80','#7448E0','#1E1E1E'];
+
+/* ---------- Clawd：照 Code 版宪法的数，踩角站姿；钳子只整块上下挪 ---------- */
+var CL_C='#d47f59', CL_INK='#120d1d', CK=.3;
+var CL_EYES={
+  bar:[[70,78,8,21],[158,78,8,21]],
+  dot:[[66,81,16,16],[154,81,16,16]],
+  smile:[[62,88,8,8],[70,80,8,11],[78,88,8,8],[150,88,8,8],[158,80,8,11],[166,88,8,8]],
+  shut:[[62,86,24,8],[150,86,24,8]],
+  left:[[62,78,8,21],[150,78,8,21]],
+  right:[[78,78,8,21],[166,78,8,21]]
+};
+function clawd(x,y,k,o){
+  o=o||{}; var la=o.la||0, ra=o.ra||0;
+  function r(a,b,w,h,c){R(x+a*k,y+b*k,w*k,h*k,c);}
+  r(44,50,147,98,CL_C);
+  r(20,99+la,24,21,CL_C); r(191,99+ra,25,21,CL_C);
+  r(44,148,15,21,CL_C); r(68,148,15,21,CL_C); r(152,148,15,21,CL_C); r(176,148,15,21,CL_C);
+  (CL_EYES[o.eyes||'bar']).forEach(function(e){r(e[0],e[1],e[2],e[3],CL_INK);});
+  if(o.blush){ r(48,106,18,10,'#e59a9a'); r(169,106,18,10,'#e59a9a'); }
+}
+/* 按「身子中线 x、脚底 y」放 */
+function clawdAt(cx,foot,o){ clawd(cx-118*CK,foot-169*CK,CK,o); }
+/* 钳子举起来以后，钳子正中的 x：右钳、左钳 */
+function clawTipX(cx){ return cx-118*CK+(191+12.5)*CK; }
+function clawLX(cx){ return cx-118*CK+(20+12)*CK; }
+function clawTopY(foot,ra){ return foot-169*CK+(99+(ra||0))*CK; }
+
+/* ---------- 小脸蛋：实测版宪法，缝是挖空的；眨眼只把缝压扁，圆不动 ---------- */
+var FACE=['#FF309B','#9159FE','#000000'];
+function slit(cx,cy,w,h,deg){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(deg*Math.PI/180);
+  roundPathOn(ctx,-w/2,-h/2,w,h,Math.min(w,h)/2);
+  ctx.restore();
+}
+/* bl：0 睁着，1 眨眼那一下（压扁），1.25 闭上（缝压到没有，只剩一个圆） */
+function face(cx,cy,r,col,rot,bl){
+  if(A<=0) return;
+  var h=.418*Math.max(0,1-.8*(bl||0));
+  worldT(); ctx.translate(cx,cy); ctx.rotate((rot||0)*Math.PI/180);
+  ctx.globalAlpha=A>1?1:A;
+  ctx.beginPath(); ctx.arc(0,0,r,0,TAU);
+  if(h>.004){ slit(.194*r,-.416*r,.194*r,h*r,-26.2); slit(.626*r,-.497*r,.129*r,h*r,-26.5); }
+  ctx.fillStyle=col; ctx.fill('evenodd');
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function idleRot(t,i){ return -8+(((Math.floor(t/.9)+i)%2)?3:0); }
+function laughRot(t,i){ return ((Math.floor(t/.18)+i)%2)?10:-10; }
+
+/* ---------- StashYu 和 FetchMo：momoyu 宪法的格子图，逐格照抄 ---------- */
+var FOX={rows:[".D..........D.......",".DM........MD.......",".MCM......MCM...CC..",".MMMMMMMMMMMM..CCCC.",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."],
+  pal:{M:'#E2552B',C:'#FFF3E3',D:'#3B2520'}, line:'#3B2520', eye:'#3B2520',
+  eyes:[[3,4],[9,4]], blush:[[2,6],[11,6]], blushC:'#F59A8C'};
+var CAT={rows:["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.",".....X.MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."],
+  pal:{M:'#F3E7D6',X:'#4E382E'}, line:'#4E382E', eye:'#79C0F0',
+  eyes:[[8,5],[16,5]], blush:[[8,7],[17,7]], blushC:'#F2B8B0'};
+/* 尾巴 DLC：整张换，跟换眼睛一样 */
+var FOX_TAP=[".D..........D.......",".DM........MD.......",".MCM......MCM.CC....",".MMMMMMMMMMMM.CCCC..",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+var FOX_IN=[".D..........D.......",".DM........MD.......",".MCM......MCM..CC...",".MMMMMMMMMMMM.CCCC..",".MMEEMMMMEEMM.MMMM..",".MMEEMMMMEEMM.MMMMM.","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+var FOX_OUT=[".D..........D........",".DM........MD........",".MCM......MCM....CC..",".MMMMMMMMMMMM...CCCC.",".MMEEMMMMEEMM...MMMM.",".MMEEMMMMEEMM...MMMMM","CCCCCCDDCCCCCC.MMMMM.","..CCCCCCCCCC..MMMMM..","....MMCCMM...MMMMM...","....MMCCMM..MMMMM....","....MMMMMM.MMMMM.....","....DDMMDDMMMM.......","....................."];
+var FOX_DROOP=[".D..........D........",".DM........MD........",".MCM......MCM........",".MMMMMMMMMMMM........",".MMEEMMMMEEMM........",".MMEEMMMMEEMM........","CCCCCCDDCCCCCC.......","..CCCCCCCCCC.........","....MMCCMM...MM......","....MMCCMM..MMMMM....","....MMMMMM.MMMMMMMCC.","....DDMMDDMMMMMMMCCCC","....................."];
+var CAT_STR=["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."];
+var CAT_OUT=["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","...X...MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."];
+var CAT_UP=["....................","........X........X..",".....X.XXX......XXX.","....X...MMMMMMMMMM..","....X..MMMMMMMMMMMM.","....X..MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.",".....X.MMMMMXXMMMMM.","......X.MMMMMMMMMM..",".......XMMMMMMMMMM..","........XMMMMMMMM...",".........XXM..MXX...","...................."];
+var FOX_WAG=[[FOX.rows,.22],[FOX_IN,.22],[FOX.rows,.22],[FOX_OUT,.22]];
+/* 收东西：白尖马上点两下，再歇着（DLC 写的是先停 0.9 秒，这里东西一进去就点） */
+var FOX_STASH=[[FOX_TAP,.18],[FOX.rows,.18],[FOX_TAP,.18],[FOX.rows,1.2]];
+var CAT_TWITCH=[[CAT.rows,.8],[CAT_STR,.14],[CAT_OUT,.14],[CAT_STR,.14]];
+
+var N4=[[0,0],[1,0],[0,1],[1,1]];
+function eyeCells(e,i){
+  switch(e){
+    case 'blink':  return {c:[[0,1],[1,1]], k:'L'};
+    case 'happy':  return {c:[[-1,1],[0,0],[1,0],[2,1]], k:'L'};
+    case 'asleep': return {c:[[-1,0],[0,1],[1,1],[2,0]], k:'L'};
+    case 'wink':   return i?{c:[[-1,1],[0,0],[1,0],[2,1]], k:'L'}:{c:N4, k:'E'};
+    case 'squeeze':return {c:i?[[1,-1],[0,0],[1,1]]:[[0,-1],[1,0],[0,1]], k:'L'};
+    case 'blank':  return {c:i?[[0,1]]:[[1,1]], k:'E'};
+    case 'glanceL':return {c:N4.map(function(p){return [p[0]-1,p[1]];}), k:'E'};
+    case 'glanceR':return {c:N4.map(function(p){return [p[0]+1,p[1]];}), k:'E'};
+    default:       return {c:N4, k:'E'};
+  }
+}
+/* x,y 是格子图左上角；cell 是一格多大。o.rows 换尾巴那一张；o.eyes 换眼睛；o.blush 腮红 */
+function momo(ch,x,y,cell,o){
+  o=o||{};
+  var rows=o.rows||ch.rows, g={}, r, c, k;
+  function put(r,c,v){ (g[r]||(g[r]={}))[c]=v; }
+  for(r=0;r<rows.length;r++) for(c=0;c<rows[r].length;c++){ k=rows[r][c]; if(k!=='.') put(r,c,k); }
+  ch.eyes.forEach(function(p,i){
+    N4.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],'M'); });
+    var e=eyeCells(o.eyes||'normal',i);
+    e.c.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],e.k); });
+  });
+  if(o.blush) ch.blush.forEach(function(p){ put(p[1],p[0],'B'); });
+  function col(v){
+    if(!v) return null;
+    return v==='E'?ch.eye : v==='L'?ch.line : v==='B'?ch.blushC : ch.pal[v];
+  }
+  for(r=-2;r<=13;r++){
+    var row=g[r]; if(!row) continue;
+    c=-10;
+    while(c<=30){
+      var cc=col(row[c]); if(!cc){c++;continue;}
+      var c2=c; while(c2+1<=30&&col(row[c2+1])===cc) c2++;
+      R(x+c*cell,y+r*cell,(c2-c+1)*cell,cell,cc);
+      c=c2+1;
+    }
+  }
+}
+/* 狐狸尾巴尖在哪：这一张格子图里，第 14 列往右最上面那一排奶油白的正中 */
+function tailTip(rows,x,y,cell){
+  cell=cell||MC;
+  for(var r=0;r<rows.length;r++){
+    var s=0,n=0; for(var c=14;c<rows[r].length;c++) if(rows[r][c]==='C'){ s+=c; n++; }
+    if(n) return [x+(s/n+.5)*cell, y+r*cell];
+  }
+  return [x+17*cell, y+2*cell];
+}
+
+/* ---------- 叠在外面的东西 ---------- */
+/* 工牌：挂在胸口。样子照《momoyu 员工证》：白卡、蓝边、一道蓝章，名字印在底下 */
+function badgeOn(isFox,x,y){
+  var bx=isFox?x+5.6*MC:x+11.6*MC, by=y+8.25*MC, bw=2.8*MC, bh=2.1*MC;
+  F(bx+1.3,by-1.5,.6,1.7,'#8F8A9A'); F(bx+bw-1.9,by-1.5,.6,1.7,'#8F8A9A');
+  rrect(bx,by,bw,bh,.8,'#FFFFFF',1,'#7D8FB3',.5);
+  F(bx+.7,by+.7,bw-1.4,1.4,'#4F5F8C');
+  wt(isFox?'StashYu':'FetchMo',bx+bw/2,by+bh-1.05,{size:2.05,c:'#2B2622',al:'center',fam:EN,wt:800});
+}
+/* 尾巴里收着的东西，从尾巴尖探出半截。先画它，再画狐狸，下半截就藏进尾巴里了 */
+function tailPeek(rows,x,y,list){
+  var tp=tailTip(rows,x,y), offs=[[-4.2,2.8],[.6,1.4],[5.2,3.0]];
+  for(var i=0;i<list.length&&i<3;i++){
+    var it=list[i], px=tp[0]+offs[i][0], py=tp[1]+offs[i][1];
+    if(it==='sign'){ R(px-4.5,py-4.6,9,6,'#1F2128'); F(px-3.5,py-3.4,1.6,.9,'#7FD18B'); F(px-1.2,py-3.4,4.4,.9,'#EDE6CF'); }
+    else if(it==='card'){ R(px-4.6,py-5.2,9.2,6.6,'#FFFFFF'); F(px-4.6,py-4.2,9.2,.6,RED); }
+    else wt(it,px,py,{size:6.2,c:'#3A2A20',al:'center',fam:EN,wt:800});
+  }
+}
+/* 木牌：钳子整块往上挪 30，竿子顶着牌子；left 用左钳，lift 把竿子再加长一截 */
+function signBoard(cx,foot,txt,o){
+  o=o||{}; var a=o.a===undefined?1:o.a; if(a<=0) return;
+  var fs=o.size||10, pad=5, lift=o.lift||0, fam=o.fam||EN;
+  var bw=Math.max(fs*1.8,tw(txt,fs,fam,800)+(txt.length-1)*fs*.06+2*pad), bh=fs+2*pad;
+  var sx=o.left?clawLX(cx):clawTipX(cx), top=clawTopY(foot,-30)-8-lift-bh;
+  R(sx-1,top+bh,2,9+lift,'#7A5432',a);
+  rrect(sx-bw/2,top,bw,bh,2,'#EAD8B6',a,'#9C7A55',1);
+  etext(txt,sx,top+pad+fs*.84,{size:fs,c:'#3A2A20',a:a,fam:fam,wt:800,ls:.06});
+}
+/* 黑牌子：Clawd 干活时举的，像一小块终端；$ 是绿的。k 整块缩放，hl 描一圈金边 */
+function termSize(txt,k){ k=k||1; var fs=7.5*k, pad=4*k; return [tw('$ '+txt,fs,MONO,600)+2*pad, fs+2*pad]; }
+function termBox(cx,cy,txt,k,a,hl){
+  k=k||1; a=a===undefined?1:a; if(a<=0) return;
+  var fs=7.5*k, pad=4*k, sz=termSize(txt,k), x0=cx-sz[0]/2, y0=cy-sz[1]/2;
+  if(hl) rrect(x0-2.5*k,y0-2.5*k,sz[0]+5*k,sz[1]+5*k,3*k,null,a*hl,GOLD,1.6*k);
+  rrect(x0,y0,sz[0],sz[1],2*k,'#1F2128',a,'#3A3D48',k);
+  etext('$',x0+pad,y0+pad+fs*.8,{size:fs,c:'#7FD18B',a:a,fam:MONO,wt:700,al:'left'});
+  etext(txt,x0+pad+tw('$ ',fs,MONO,600),y0+pad+fs*.8,{size:fs,c:'#EDE6CF',a:a,fam:MONO,wt:600,al:'left'});
+}
+/* 举在钳子上的黑牌子在哪：返回牌子正中 */
+function termAt(cx,foot,txt,o){
+  o=o||{}; var sz=termSize(txt), lift=o.lift||0;
+  var sx=o.left?clawLX(cx):clawTipX(cx), top=clawTopY(foot,-30)-8-lift-sz[1];
+  return [sx,top+sz[1]/2,top];
+}
+function termSign(cx,foot,txt,o){
+  o=o||{}; var p=termAt(cx,foot,txt,o), sz=termSize(txt), lift=o.lift||0;
+  R(p[0]-1,p[2]+sz[1],2,9+lift,'#55575F',o.a);
+  if(!o.bare) termBox(p[0],p[1],txt,1,o.a,o.hl);
+}
+
+/* ---------- 店里 ---------- */
+var FLOOR=470, MC=3, FR=14, PY=FLOOR-12*MC, PFY=FLOOR-FR;
+/* 早上、晚上：狐狸和猫在左，两条尾巴挨着；三颗小脸蛋和 Clawd 在右。fx 是 [小粉, 小紫, 小黑] */
+var HOME={fox:24, cat:90, fx:[236,205,174], cl:302};
+/* 一：四只凑近一点 */
+var HUD={fox:24, cat:90, fx:[244,213,182], cl:296};
+/* 下午：Clawd 挪到中间干活，三颗挪到右边 */
+var WORK={fox:24, cat:90, fx:[312,281,250], cl:186};
+/* 软木板：店的大名钉在它正中上方，最后那几张卡片也钉在这儿 */
+var BD={x:128,y:236,w:184,h:132}, NAMEC=[220,258];
+var CARDS=[[152,320],[196,324],[240,320],[284,324]];
+function shopBG(t,o){
+  o=o||{}; var nt=o.nt||0, dk=o.dk||0;
+  R(-300,-300,960,FLOOR+300,tone('#D7DFD3','#DDD2BC','#B4BDB0',dk,nt));
+  for(var i=-12;i<26;i++) R(i*24+10,-300,2,FLOOR+300,tone('#CFD8CB','#D4C8AF','#ACB5A8',dk,nt));
+  R(-300,FLOOR-46,960,46,tone('#C9BBA2','#C6B190','#A79A84',dk,nt)); R(-300,FLOOR-46,960,2,tone('#B6A386','#B09772','#968670',dk,nt));
+  windowBox(t,dk,nt);
+  plaque();
+  wallClock(o.clock||[9,0],nt);
+  corkBoard(t,o);
+  if(dk>0) glow(62,150,250,'255,176,104',.15*dk);
+  if(nt>0) glow(200,270,270,'255,214,150',.17*nt);
+  counter(dk,nt);
+}
+function windowBox(t,dk,nt){
+  var x=22, y=100, w=80, h=104, fr=tone('#9C7A5B','#94704F','#7A5E46',dk,nt);
+  rrect(x-5,y-5,w+10,h+10,3,fr);
+  vgrad(x,y,w,h,[[0,'#DCEAF2'],[1,'#F7EBD2']]);
+  if(dk>0) vgrad(x,y,w,h,[[0,'#F5C88C'],[1,'#EC9A66']],dk);
+  if(nt>0){
+    vgrad(x,y,w,h,[[0,'#111834'],[1,'#29325C']],nt);
+    [[8,16],[22,44],[34,10],[12,76],[64,70],[70,14],[46,88]].forEach(function(p,i){
+      R(x+p[0],y+p[1],1.4,1.4,'#F4EBC8',nt*(.5+.4*((Math.floor(t*1.2)+i)%2)));
+    });
+    glow(x+54,y+30,30,'248,232,170',.4*nt);
+    dot(x+54,y+30,11,MOONC,nt);
+  }
+  if(dk>0&&nt<1) dot(x+22,y+80,13,'#F7B26A',dk*(1-nt));
+  R(x+w/2-1.5,y,3,h,fr); R(x,y+h*.48,w,3,fr);
+  R(x-8,y+h+5,w+16,5,tone('#8C6C50','#86654A','#6E5440',dk,nt));
+}
+function plaque(){
+  line([166,64,180,52,194,64],'#7A5A44',.8);
+  dot(180,52,1.6,'#6B4F3A');
+  rrect(136,62,88,26,4,'#5B4334',1,'#7A5B47',1);
+  wt("宝's Shop",180,80,{size:12,wt:700,c:'#F3E3C8',al:'center',fam:SERIF,ls:.04});
+}
+/* 墙上的钟：早上八点多，中午十一点，下午三点，傍晚五点，晚上九点 */
+function wallClock(hm,nt){
+  var x=300, y=132, r=16;
+  dot(x,y,r+2.4,'#7A5A44'); dot(x,y,r,nt>.5?'#E9E1CF':'#F7F1E2');
+  for(var i=0;i<12;i++){ var an=i/12*TAU; F(x+Math.sin(an)*(r-3)-.6,y-Math.cos(an)*(r-3)-.6,1.2,1.2,'#8C7F75'); }
+  var ha=((hm[0]%12)+hm[1]/60)/12*TAU, ma=hm[1]/60*TAU;
+  line([x,y,x+Math.sin(ha)*8,y-Math.cos(ha)*8],'#3A2A20',1.8);
+  line([x,y,x+Math.sin(ma)*12,y-Math.cos(ma)*12],'#3A2A20',1.1);
+  dot(x,y,1.6,'#3A2A20');
+}
+/* 店的大名那张卡：白卡、一道红线、两道淡蓝线，像单词卡 */
+function nameCard(x,y){
+  rrect(x-43,y-14,86,28,1.5,'#FFFFFF',1,'#CFC4B4',.8);
+  F(x-43,y-8.5,86,.7,'#E58C80'); F(x-43,y+1.5,86,.5,'#B9CCE3'); F(x-43,y+8,86,.5,'#B9CCE3');
+  wt('English-card',x,y+4.6,{size:11,c:'#2B2622',al:'center',fam:ENS,wt:700});
+  pin(x,y-14,'#C8402F');
+}
+function pin(x,y,c){ dot(x,y,2.4,c); dot(x-.7,y-.7,.8,'rgba(255,255,255,.7)'); }
+function corkBoard(t,o){
+  var b=BD;
+  rrect(b.x-6,b.y-6,b.w+12,b.h+12,3,'#8A6646');
+  R(b.x,b.y,b.w,b.h,'#C9A27A');
+  var r=rng(5);
+  for(var i=0;i<90;i++) R(b.x+r()*(b.w-2),b.y+r()*(b.h-2),1.2,1.2,r()<.5?'#B88F68':'#D4B08A');
+  /* 角上一张拍立得：六只上次的合影，太小了看不清是谁 */
+  rrect(b.x+10,b.y+14,30,34,1,'#FBF8F2',1,'#D6CDBF',.6);
+  R(b.x+13,b.y+17,24,20,'#9CB3C9');
+  R(b.x+13,b.y+31,24,6,'#B89A72');
+  R(b.x+16,b.y+27,4,4,'#E2552B'); R(b.x+22,b.y+28,3,3,'#FF309B'); R(b.x+26,b.y+28,3,3,'#9159FE'); R(b.x+30,b.y+28,3,3,'#000000');
+  pin(b.x+25,b.y+15,'#4F7FB8');
+  nameCard(NAMEC[0],NAMEC[1]);
+  if(o.cards) o.cards(t);
+}
+function counter(dk,nt){
+  R(-300,FLOOR,960,9,tone('#C4955F','#BE8C55','#A88052',dk,nt)); R(-300,FLOOR,960,1.5,tone('#D8AE7A','#D3A26C','#BF9867',dk,nt));
+  R(-300,FLOOR+9,960,400,tone('#A9794D','#A27146','#906844',dk,nt));
+  for(var i=0;i<4;i++){
+    rrect(14+i*86,FLOOR+30,72,36,3,null,1,tone('#946840','#8E623A','#7C5838',dk,nt),1.2);
+    R(14+i*86+30,FLOOR+46,12,3,tone('#7E5835','#785230','#6A4A2E',dk,nt));
+  }
+}
+
+/* ---------- 单词卡：一面写英文，一面画尾巴（狐狸、猫一格 1 像素，尾巴照 DLC 那几张循环换） ---------- */
+var VOC=[
+  {w:'stash', who:'fox', frames:FOX_STASH, eyes:'happy'},
+  {w:'fetch', who:'cat', frames:[[CAT_UP,1]], eyes:'happy'},
+  {w:'happy', who:'fox', frames:FOX_WAG, eyes:'happy'},
+  {w:'good night', who:'fox', frames:[[FOX_DROOP,1]], eyes:'asleep'}
+];
+/* side：0 英文那面，1 尾巴那面；sq 是翻面时横着缩（0 就是侧过去了） */
+function vocCard(t,cx,cy,v,side,sq,k){
+  k=k||1; sq=sq===undefined?1:sq;
+  var w=38*k, h=28*k, ww=Math.max(1.5,w*sq);
+  rrect(cx-ww/2,cy-h/2,ww,h,1.5,side?'#FFF9EE':'#FFFFFF',1,'#CFC4B4',.7);
+  if(sq<.35) return;
+  if(!side){
+    F(cx-ww/2,cy-h/2+6*k,ww,.6*k,'#E58C80');
+    etext(v.w,cx,cy+3.6*k,{size:(v.w.length>6?6.6:8)*k,c:'#2B2622',fam:EN,wt:800});
+  } else {
+    var rows=cyc(t,0,v.frames), ch=v.who==='fox'?FOX:CAT, cw=rows[0].length*k;
+    var A0=A; A=A*clamp((sq-.35)/.3);
+    momo(ch,cx-cw/2,cy-6.5*k,k,{rows:rows,eyes:v.eyes});
+    A=A0;
+  }
+}
+/* 一张卡在 t 秒是哪一面、翻到几成：钉上以后先给看英文，tb 秒开始翻，然后每 per 秒翻一回 */
+function cardFace(t,tb,per){
+  if(t<tb) return [0,1];
+  var u=t-tb, n=Math.floor(u/per), f=u-n*per, side=n%2?0:1;
+  if(f<.4){ var p=stepP(t,tb+n*per,.4,6); return [p<.5?1-side:side, Math.abs(Math.cos(Math.PI*p))]; }
+  return [side,1];
+}
+
+/* ---------- 六只一起画；o 里给了的照给的，没给的站在自己的位置上，隔一会儿眨一下眼 ----------
+   o.fox / o.cat / o.cl 是各自的 {x,y,eyes,rows,blush,hide,peek,after}，o.faces 是三颗的 [{x,y,rot,bl,hide}]；
+   ord 是画的先后：f 狐狸，c 猫，C Clawd，s 三颗小脸蛋 */
+function troupe(t,o,P,ord){
+  o=o||{}; var f=o.fox||{}, c=o.cat||{}, l=o.cl||{}, fs=o.faces||[];
+  function dFox(){ if(f.hide) return; var x=f.x===undefined?P.fox:f.x, y=f.y===undefined?PY:f.y, rows=f.rows||FOX.rows;
+    if(f.peek) tailPeek(rows,x,y,f.peek);
+    momo(FOX,x,y,MC,{eyes:f.eyes||(blinkOn(t,3.7,.3)?'blink':'normal'),rows:rows,blush:f.blush});
+    badgeOn(true,x,y); if(f.after) f.after(x,y,rows); }
+  function dCat(){ if(c.hide) return; var x=c.x===undefined?P.cat:c.x, y=c.y===undefined?PY:c.y;
+    momo(CAT,x,y,MC,{eyes:c.eyes||(blinkOn(t,4.3,1.7)?'blink':'normal'),rows:c.rows,blush:c.blush});
+    badgeOn(false,x,y); if(c.after) c.after(x,y); }
+  function dCl(){ if(l.hide) return; var x=l.x===undefined?P.cl:l.x, y=l.y===undefined?FLOOR:l.y;
+    clawdAt(x,y,{eyes:l.eyes||(blinkOn(t,5.1,2.6)?'shut':'bar'),la:l.la||0,ra:l.ra||0,blush:l.blush}); if(l.after) l.after(x,y); }
+  function dFaces(){ for(var i=0;i<3;i++){ var q=fs[i]||{}; if(q.hide) continue;
+    face(q.x===undefined?P.fx[i]:q.x, q.y===undefined?PFY:q.y, FR, FACE[i],
+         q.rot===undefined?idleRot(t,i):q.rot, q.bl===undefined?(blinkOn(t,4.1+i*.6,i*1.3)?1:0):q.bl); } }
+  (ord||'fcCs').split('').forEach(function(k){ if(k==='f') dFox(); else if(k==='c') dCat(); else if(k==='C') dCl(); else dFaces(); });
+}
+/* 头顶在哪（冒问号用） */
+function foxHead(x){ return [x+19.5,PY-3]; }
+function catHead(x){ return [x+39,PY]; }
+
+/* =========================================================
+   序 · 大名（早上）
+   ========================================================= */
+function sIntro(t){
+  camK(t,holds([[0,4.0,180,320,1],[4.6,6.6,180,92,2.3],[7.1,9.0,220,262,2.6],[9.5,13.4,276,418,1.8],[13.9,17.6,205,430,1.9],[18.1,25.4,74,440,2.1],[26.0,27,180,350,1.05]]));
+  shopBG(t,{clock:[8,40]});
+  var up=inR(t,10.0,15.8), gm=[13.9,14.35,14.8];
+  var look=inR(t,18.9,20.0), lost=inR(t,20.0,25.8);
+  troupe(t,{
+    fox:{eyes:look?'glanceR':(lost?'blank':undefined)},
+    cat:{eyes:look?'glanceL':(lost?'blank':undefined)},
+    cl:{la:up?-30:0, eyes:inR(t,11.6,13.4)?'smile':undefined,
+        after:function(x,y){ if(up) signBoard(x,y,'Morning!',{left:true,size:10}); }},
+    faces:[{y:PFY+jump(t,gm[0],.3,6)},{y:PFY+jump(t,gm[1],.3,6)},{y:PFY+jump(t,gm[2],.3,6)}]
+  },HOME);
+  for(var i=0;i<3;i++) bubble(t,gm[i],3.0,'GM',HOME.fx[i],PFY-22,{c:FACE_INK[i],size:11});
+  var fh=foxHead(HOME.fox), chd=catHead(HOME.cat);
+  mark(t,23.3,26.2,QM,fh[0],fh[1],2.2,'#3A2A20'); mark(t,23.6,26.2,QM,chd[0],chd[1],2.2,'#3A2A20');
+  if(t<4.3){
+    var ta=fade(t,.3,4.1,.5);
+    rrect(84,214,192,96,10,PAPER,.9*ta);
+    cjk('名副其实',180,266,34,ACC,{a:ta,sp:1.2,wt:500});
+    wt('小萌物 · 短片',180,294,{size:12,c:'#6E6459',al:'center',fam:SANS,ls:.2,a:ta});
+  }
+}
+
+/* =========================================================
+   一 · 黑话（还是上午）
+   ========================================================= */
+/* 冒出来的字母，飘在半空不散：t0 冒出来，p0 冒的地方，p1 飘到的地方，tS 被狐狸收走的那一秒 */
+var L1=[
+  {c:'F',t0:6.9, p0:[205,442],p1:[196,394],who:1},
+  {c:'Y',t0:7.05,p0:[213,438],p1:[212,386],who:1},
+  {c:'I',t0:7.2, p0:[221,442],p1:[228,394],who:1},
+  {c:'L',t0:10.7,p0:[236,442],p1:[242,406],who:0},
+  {c:'O',t0:10.85,p0:[244,438],p1:[258,398],who:0,isO:true},
+  {c:'L',t0:11.0,p0:[252,442],p1:[274,406],who:0},
+  {c:'I',t0:29.7,p0:[176,442],p1:[164,410],who:2},
+  {c:'D',t0:29.85,p0:[182,438],p1:[180,402],who:2},
+  {c:'K',t0:30.0,p0:[188,442],p1:[196,410],who:2}
+];
+(function(){
+  /* 被收的先后：离狐狸近的先收 */
+  var order=[8,7,6,0,1,2,3,5];
+  order.forEach(function(k,i){ L1[k].tS=35.6+i*.28; });
+  L1.forEach(function(L,i){ L.ph=i*.23; });
+})();
+var TIP1=tailTip(FOX.rows,HOME.fox,PY);
+function letterAt(L,t){
+  if(t<L.t0) return null;
+  var u=t-L.t0, k=1, x, y, a=1;
+  if(u<.5){ var p=stepP(t,L.t0,.5,6); x=lerp(L.p0[0],L.p1[0],p); y=lerp(L.p0[1],L.p1[1],p); k=u<.08?1.35:1; a=clamp(u/.08); }
+  else { x=L.p1[0]; y=L.p1[1]+(((Math.floor((t+L.ph)/.7))%2)?-1:0); }
+  if(L.isO){
+    /* O 飘出去：先挪到小黑头顶，停在那儿上下晃；猫扑下来那一下就没了 */
+    if(t>=25.9) return null;
+    if(t>=21.0){
+      var q=fly(t,21.0,2.0,L.p1[0],L.p1[1],182,424,-10,14);
+      x=q[0]; y=q[1]+(t>=23.0?(((Math.floor(t/.5))%2)?-1:0):0);
+    }
+  }
+  if(L.tS!==undefined&&t>=L.tS){
+    if(t>=L.tS+.45) return null;
+    var f2=fly(t,L.tS,.45,L.p1[0],L.p1[1],TIP1[0],TIP1[1]+6,18,9);
+    x=f2[0]; y=f2[1]; k=lerp(1,.35,f2[2]);
+  }
+  return {x:x,y:y,k:k,a:a};
+}
+function letters1(t){
+  L1.forEach(function(L){
+    var s=letterAt(L,t); if(!s) return;
+    etext(L.c,s.x,s.y,{size:13*s.k,c:FACE_INK[L.who],a:s.a});
+  });
+}
+function stashedCount(t){ var n=0; L1.forEach(function(L){ if(L.tS!==undefined&&t>=L.tS+.45) n++; }); return n; }
+var PEEK=['K','F','L'];
+function sSlang(t){
+  camK(t,holds([[0,2.6,238,420,1.45],[3.0,6.4,262,420,2.1],[6.8,10.2,214,408,2.0],[10.6,13.8,248,410,2.0],[14.2,16.2,205,404,1.3],[16.6,20.5,150,412,1.45],[21.0,22.9,212,410,1.75],[23.3,29.3,150,428,1.75],[29.7,32.6,184,416,2.0],[33.0,35.0,165,432,1.45],[35.4,40.2,140,418,1.15],[40.6,43.5,70,440,3.0]]));
+  shopBG(t,{clock:[11,5]});
+  SCR=inR(t,16.7,20.5)?1:0;
+  /* 凑过去：小黑先挪，小紫、小粉跟上，Clawd 往左半步 */
+  var hop=[0.9,0.7,0.5], fp=[];
+  for(var i=0;i<3;i++) fp.push(path(t,HOME.fx[i],PFY,[[hop[i],.3,HUD.fx[i],PFY,6]]));
+  var clp=path(t,HOME.cl,FLOOR,[[1.1,.3,HUD.cl,FLOOR,5]]);
+  var sign=inR(t,3.0,6.5);
+  /* 猫：盯着 O，尾巴尖抖；扑上去，站在小黑头顶；再跳回来 */
+  var cp=path(t,HUD.cat,PY,[[25.4,.5,151,FLOOR-2*FR-36,30],[29.0,.45,HUD.cat,PY,16]]);
+  var onHei=inR(t,25.9,29.0);
+  var heiRot=onHei&&t<27.0?-8+((Math.floor(t/.12))%2?6:-6):undefined;
+  var heiBl=inR(t,25.9,26.3)?1:(inR(t,26.3,28.2)?0:undefined);
+  var n=stashedCount(t), peek=PEEK.slice(0,n>=7?3:(n>=4?2:(n>=1?1:0)));
+  var stashing=t>=35.9&&t<39.6;
+  troupe(t,{
+    fox:{rows:stashing?cyc(t,35.9,FOX_STASH):undefined, peek:peek,
+         eyes:SCR?'blank':(stashing||t>=40.6?'happy':(inR(t,3.0,14.0)?'glanceR':undefined))},
+    cat:{x:cp.x, y:cp.y, rows:inR(t,23.0,25.4)?cyc(t,23.0,CAT_TWITCH):undefined,
+         eyes:SCR?'blank':(inR(t,21.0,25.4)?'glanceR':(inR(t,25.9,26.3)?'squeeze':(onHei?'blank':(inR(t,33.0,35.0)?'glanceR':(inR(t,3.0,14.0)?'glanceR':undefined)))))},
+    cl:{x:clp.x, la:sign?-30:0, eyes:inR(t,4.8,6.4)?'smile':undefined,
+        after:function(x,y){ if(sign) signBoard(x,y,'LGTM',{left:true,size:10}); }},
+    faces:[{x:fp[0].x, y:fp[0].y, rot:inR(t,10.6,13.8)?laughRot(t,0):undefined},
+           {x:fp[1].x, y:fp[1].y+jump(t,6.8,.3,5)},
+           {x:fp[2].x, y:fp[2].y+jump(t,29.6,.3,5), rot:heiRot, bl:heiBl}]
+  },HUD,'fsCc');
+  letters1(t);
+  if(inR(t,25.9,26.3)){ var u=stepP(t,25.9,.4,6); ringS(182,424,lerp(5,16,u),'#8C7F75',1.2,1-u); }
+  /* 狐狸和猫头上的问号：在它俩眼里那一段 */
+  var fh=foxHead(HUD.fox), chd=catHead(HUD.cat);
+  if(SCR){ mark(t,16.8,20.5,QM,fh[0],fh[1],2.2,'#3A2A20'); mark(t,17.0,20.5,QM,chd[0],chd[1],2.2,'#3A2A20'); }
+  /* 圆的都是 O：三颗外面各描一圈虚线 */
+  if(t>=33.0&&t<35.2) for(var j=0;j<3;j++)
+    ringS(HUD.fx[j],PFY,18,'#5A4C42',1.1,fade(t,33.0,35.2,.2),[2.4,2],stepP(t,33.1+j*.25,.6,10));
+  if(SCR){ ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='rgba(60,70,110,.10)'; ctx.fillRect(0,0,cv.width,cv.height); }
+}
+
+/* =========================================================
+   二 · 喊到名字了（下午）
+   ========================================================= */
+var CMD=[[2.9,3.6,'git pull'],[3.7,4.4,'git log'],[4.5,5.2,'git status'],[5.3,15.5,'git stash']];
+/* 对照卡：左边工牌，右边牌子，两边那五个字母各划一道红线 */
+function insert(t,t0,t1,fox){
+  var a=fade(t,t0,t1,.25); if(a<=0) return;
+  var sv=[CAM.x,CAM.y,CAM.z], A0=A; flat(); A=a;
+  var y0=176;
+  rrect(16,y0,328,176,12,'#FBF7EE',.97,'#CDBB9C',1);
+  /* 工牌：白卡，挂绳，照片那一格是本体（一格 2 像素） */
+  var bx=30, by=y0+24, bw=118, bh=130;
+  F(bx+bw/2-12,by-13,24,10,'#CFC4B4');
+  rrect(bx,by,bw,bh,6,'#FFFFFF',1,'#7D8FB3',1.2);
+  R(bx+6,by+6,bw-12,34,fox?'#FDF3E4':'#EEF4F8');
+  momo(fox?FOX:CAT,bx+bw/2-20,by+10,2,{eyes:'normal'});
+  wt("宝's Shop · 员工证",bx+bw/2,by+56,{size:7.5,c:'#9A8F84',al:'center',fam:SANS});
+  var nm=fox?'StashYu':'FetchMo', ns=19, nw=tw(nm,ns,EN,800), nx=bx+bw/2-nw/2, ny=by+86;
+  wt(nm,bx+bw/2,ny,{size:ns,c:'#2B2622',al:'center',fam:EN,wt:800});
+  wt(fox?'职务：藏':'职务：叼回来',bx+bw/2,by+111,{size:9,c:'#8A7E72',al:'center',fam:SANS});
+  /* 牌子 */
+  var cmd=fox?'git stash':'git fetch', k=1.85, sz=termSize(cmd,k), tx=252, ty=y0+80;
+  termBox(tx,ty,cmd,k,1);
+  var fs=7.5*k, pad=4*k, sx0=tx-sz[0]/2+pad+tw('$ git ',fs,MONO,600), sw=tw(fox?'stash':'fetch',fs,MONO,600);
+  var hw=tw(nm.slice(0,5),ns,EN,800);
+  var p=stepP(t,t0+.45,.5,8), q=stepP(t,t0+.95,.5,8);
+  F(nx,ny+3.5,hw*p,2,RED); F(sx0,ty+sz[1]/2+4,sw*q,2,RED);
+  if(t>=t0+1.45){
+    line([nx+hw+3,ny+3,sx0-4,ty+sz[1]/2+5],RED,1.2,clamp((t-t0-1.45)/.2),[3,2.5]);
+    wt('一样！',sx0+sw/2,ty+sz[1]/2+30,{size:14,c:RED,al:'center',fam:SANS,wt:700,a:clamp((t-t0-1.5)/.2)});
+  }
+  if(t>=t0+1.5){ twinkle(t,t0+1.5,1.2,sx0+sw+6,ty-8,GOLD,2.6); twinkle(t,t0+1.6,1.1,nx-6,ny-12,GOLD,2.2); }
+  A=A0; cam(sv[0],sv[1],sv[2]);
+}
+function sNames(t){
+  camK(t,holds([[0,2.4,180,330,1],[2.8,5.0,186,412,1.6],[5.4,7.0,172,406,2.4],[7.4,9.4,62,432,2.2],[9.8,12.2,120,400,1.2],[12.6,14.4,62,432,2.2],[14.8,17.2,112,410,1.35],[17.6,21.0,196,404,1.9],[21.4,23.4,112,432,2.0],[23.8,26.2,108,420,1.45],[26.6,28.4,188,402,2.0],[28.8,30.8,232,414,1.5],[31.0,34.8,170,410,1.45],[35.2,39.4,86,436,1.9],[39.8,41.4,168,412,1.8],[41.9,46.5,170,410,1.2]]));
+  shopBG(t,{dk:.45,clock:[15,0]});
+  var P=WORK;
+  /* 狐狸：蹦一下 → 扑向牌子 → 回来 */
+  var fp=path(t,P.fox,PY,[[15.0,.5,100,372,20],[15.5,.55,P.fox,PY,22]]);
+  var fy=fp.y+jump(t,7.4,.4,14);
+  var fRows=inR(t,12.6,14.6)?cyc(t,12.6,FOX_WAG):(inR(t,16.1,17.9)?cyc(t,16.1,FOX_STASH):(inR(t,31.0,32.8)?cyc(t,31.0,FOX_STASH):(inR(t,43.6,46.5)?cyc(t,43.6,FOX_WAG):undefined)));
+  /* 猫：蹦一下 → 跳过去从狐狸尾巴里叼出牌子 → 回来，把牌子递给 Clawd */
+  var cp=path(t,P.cat,PY,[[24.3,.4,52,392,12],[24.7,.45,P.cat,PY,12]]);
+  var cy=cp.y+jump(t,21.4,.4,14);
+  var cRows=inR(t,23.7,24.3)?cyc(t,23.7,CAT_TWITCH):(inR(t,25.2,28.4)||inR(t,33.0,34.8)||inR(t,43.6,46.5)?CAT_UP:undefined);
+  /* 牌子：在哪只钳子上、在不在 */
+  var cmd=pick(t,CMD,null);
+  var la=(t>=2.9&&t<15.9)||(t>=25.3&&t<39.6)?-30:0, ra=inR(t,19.0,39.6)?-30:0;
+  if(inR(t,39.8,46.5)) la=-30;
+  var heldStash=t>=25.7&&t<39.6;
+  var blank=inR(t,15.5,17.6)||inR(t,26.6,28.6);
+  /* 牌子在尾巴里那几秒：探出一个小黑角 */
+  var peek=PEEK.slice();
+  if(t>=15.85&&t<24.3) peek=['K','sign','L'];
+  troupe(t,{
+    fox:{x:fp.x, y:fy, rows:fRows, peek:peek, blush:inR(t,12.6,14.6)||inR(t,37.4,39.4),
+         eyes:inR(t,7.4,9.6)?'blank':(inR(t,12.6,17.9)||inR(t,37.4,39.4)||t>=43.6?'happy':(inR(t,35.2,37.4)?'blank':(inR(t,41.6,43.6)?'blank':undefined)))},
+    cat:{x:cp.x, y:cy, rows:cRows, blush:inR(t,25.2,26.4)||inR(t,37.4,39.4),
+         eyes:inR(t,21.4,21.8)?'blank':(inR(t,21.8,23.7)?'happy':(inR(t,23.7,24.3)?'glanceL':(inR(t,25.2,26.4)||inR(t,37.4,39.4)||t>=43.6?'happy':(inR(t,35.2,37.4)||inR(t,41.6,43.6)?'blank':undefined))))},
+    cl:{la:la, ra:ra, eyes:blank?'dot':(inR(t,39.8,46.5)?'smile':undefined), blush:t>=39.8,
+        after:function(x,y){
+          if(cmd&&t<15.5) termSign(x,y,cmd,{left:true});
+          if(inR(t,15.5,15.9)) termSign(x,y,'git stash',{left:true,bare:true});
+          if(inR(t,19.0,39.6)) termSign(x,y,'git fetch',{lift:22,hl:inR(t,33.0,34.8)?1:0});
+          if(heldStash) termSign(x,y,'git stash',{left:true,hl:inR(t,31.0,32.8)?1:0});
+          if(inR(t,39.8,46.5)) signBoard(x,y,'LGTM',{left:true,size:10});
+        }},
+    faces:[{y:PFY+every(t,43.6,46.4,.36,8,.0)},
+           {y:PFY+jump(t,28.9,.36,12)+every(t,43.6,46.4,.36,8,.12), rot:inR(t,28.9,30.8)?-26:undefined},
+           {y:PFY+every(t,43.6,46.4,.36,8,.24)}]
+  },P,'fcCs');
+  /* 牌子飞进狐狸尾巴：从钳子上，追着狐狸的尾巴尖去 */
+  var home=termAt(P.cl,FLOOR,'git stash',{left:true});
+  if(inR(t,15.5,15.85)){
+    var tip=tailTip(FOX.rows,fp.x,fp.y), q=stepP(t,15.5,.35,6);
+    termBox(lerp(home[0],tip[0],q),lerp(home[1],tip[1]+3,q),'git stash',lerp(1,.3,q),1);
+  }
+  /* 猫把牌子叼出来：先飞到猫嘴边，跟着猫回来，再递到 Clawd 左钳上 */
+  var mouth=[cp.x+37.5,cp.y+23.5];
+  if(inR(t,24.3,24.7)){
+    var tp2=tailTip(FOX.rows,P.fox,PY), q2=stepP(t,24.3,.4,6);
+    termBox(lerp(tp2[0],mouth[0],q2),lerp(tp2[1]+3,mouth[1],q2),'git stash',lerp(.3,.45,q2),1);
+  }
+  if(inR(t,24.7,25.3)) termBox(mouth[0],mouth[1],'git stash',.45,1);
+  if(inR(t,25.3,25.7)){
+    var q3=fly(t,25.3,.4,mouth[0],mouth[1],home[0],home[1],18,6);
+    termBox(q3[0],q3[1],'git stash',lerp(.45,1,q3[2]),1);
+  }
+  /* 小紫先反应过来 */
+  mark(t,29.0,30.8,EXM,P.fx[1],PFY-22,2.2,'#7448E0');
+  /* 小脸蛋蹦，狐狸和猫头上又冒问号 */
+  var fh=foxHead(P.fox), chd=catHead(P.cat);
+  mark(t,41.7,43.7,QM,fh[0],fh[1],2.2,'#3A2A20'); mark(t,41.9,43.7,QM,chd[0],chd[1],2.2,'#3A2A20');
+  if(t>=37.4&&t<39.4){ twinkle(t,37.5,1.6,P.fox+52,PY-8,GOLD,2.4); twinkle(t,37.7,1.5,P.cat+24,PY-8,GOLD,2.2); }
+  insert(t,9.8,12.3,true);
+  insert(t,21.6,23.5,false);
+}
+
+/* =========================================================
+   三 · 尾巴的话（傍晚）
+   ========================================================= */
+var COUNT=[[17.35,'one'],[17.85,'two']];
+function sTails(t){
+  camK(t,holds([[0,2.6,92,432,1.6],[3.0,12.2,86,448,2.8],[12.6,14.8,250,420,1.6],[15.2,16.8,196,412,1.9],[17.2,19.4,180,418,1.45],[19.8,22.0,300,430,2.2],[22.4,23.8,252,430,2.2],[24.2,30,180,380,1.0]]));
+  shopBG(t,{dk:.85,clock:[17,10]});
+  var P=WORK;
+  var fRows=inR(t,4.4,6.4)?cyc(t,4.4,FOX_WAG):(inR(t,8.5,10.4)?cyc(t,8.5,FOX_STASH):(inR(t,17.3,17.48)||inR(t,17.8,17.98)?FOX_TAP:(inR(t,18.3,19.6)?cyc(t,18.3,[[FOX.rows,.11],[FOX_IN,.11],[FOX.rows,.11],[FOX_OUT,.11]]):(t>=26.8?cyc(t,26.8,FOX_WAG):undefined))));
+  var cRows=inR(t,6.5,8.4)?CAT_UP:(inR(t,10.5,12.4)?cyc(t,10.5,CAT_TWITCH):(t>=26.8?CAT_UP:undefined));
+  var chat=t<2.8;
+  var sway=inR(t,19.8,22.2)?((Math.floor(t/.2))%2?3:-3):0;
+  troupe(t,{
+    fox:{rows:fRows, peek:PEEK, eyes:chat?'glanceR':(inR(t,4.4,12.4)||t>=26.8?'happy':undefined)},
+    cat:{rows:cRows, eyes:chat?'glanceL':(inR(t,6.5,8.4)||t>=26.8?'happy':(inR(t,10.5,12.4)?'glanceL':undefined))},
+    cl:{la:inR(t,15.2,17.0)?-30:0, eyes:inR(t,12.6,15.2)?'dot':(t>=26.8?'smile':undefined),
+        after:function(x,y){ if(inR(t,15.2,17.0)) signBoard(x,y,'???',{left:true,size:10}); }},
+    faces:[{x:P.fx[0]+sway, rot:inR(t,19.8,22.2)?(sway>0?12:-12):(t>=26.8?laughRot(t,0):undefined)},
+           {rot:inR(t,18.6,19.6)?-28:(t>=26.8?laughRot(t,1):undefined), y:PFY+jump(t,17.35,.25,5)+jump(t,17.85,.25,5)},
+           {y:PFY+jump(t,22.4,.3,5), rot:t>=26.8?laughRot(t,2):undefined}]
+  },P);
+  /* 四只头上的问号 */
+  for(var i=0;i<3;i++) mark(t,12.8+i*.18,14.9,QM,P.fx[i],PFY-20,2,'#3A2A20');
+  mark(t,12.7,14.9,QM,P.cl,FLOOR-44,2.2,'#3A2A20');
+  /* 小紫数尾巴 */
+  COUNT.forEach(function(c,i){ bubble(t,c[0],1.9-i*.5,c[1],P.fx[1]-6+i*8,PFY-22-i*12,{c:FACE_INK[1],size:12}); });
+  bubble(t,18.6,1.4,'thr…?',P.fx[1]-4,PFY-48,{c:FACE_INK[1],size:11});
+  /* 小黑：IDK */
+  bubble(t,22.4,1.6,'IDK',P.fx[2],PFY-22,{c:FACE_INK[2],size:11});
+}
+
+/* =========================================================
+   终 · 名副其实（夜里）
+   ========================================================= */
+/* 每张卡：从小紫头顶那一叠飞到软木板上的秒数；第一张后来被狐狸收走、又被猫叼回来 */
+var PIN=[5.4,7.6,9.8,35.6];
+/* 小紫顶着那一叠：一蹦，蹦到最高那一下飞出去一张 */
+function ziY(t){ var y=jump(t,.9,.3,8); PIN.forEach(function(p){ y+=jump(t,p-.58,.36,12); }); return y; }
+function cardPos(i,t){
+  var t1=PIN[i], t0=t1-.4;
+  if(t<t0) return null;
+  var src=[205,428+ziY(t0)], dst=CARDS[i];
+  if(t<t1){ var q=fly(t,t0,.4,src[0],src[1],dst[0],dst[1],24,6); return [q[0],q[1],lerp(.8,1,q[2])]; }
+  return [dst[0],dst[1],1];
+}
+function sFin(t){
+  camK(t,holds([[0,2.6,205,420,1.6],[3.0,4.8,205,418,2.6],[5.2,11.6,218,320,1.9],[12.0,16.8,180,360,1.05],[17.2,21.2,150,380,1.25],[21.6,23.8,220,296,2.1],[24.2,26.2,78,446,2.4],[26.6,30.2,284,412,1.8],[30.6,32.6,66,442,2.6],[33.0,34.8,176,446,2.4],[35.2,39.4,180,345,1.0],[39.5,44,180,345,1.0]]));
+  var F_LEAP=17.3, C_LEAP=19.5;
+  shopBG(t,{nt:1,clock:[21,0],cards:function(tt){
+    for(var i=0;i<4;i++){
+      if(i===0&&inR(tt,F_LEAP+.45,C_LEAP+.45)) continue;   // 在狐狸尾巴里、在猫嘴里
+      var p=cardPos(i,tt); if(!p) continue;
+      var cf=tt>=PIN[i]?cardFace(tt,PIN[i]+(i===3?0:.8),2.6):[0,1];
+      if(i===3&&tt>=PIN[i]) cf=[1,1];
+      vocCard(tt,p[0],p[1],VOC[i],cf[0],cf[1],p[2]);
+      if(tt>=PIN[i]) pin(p[0],p[1]-14*p[2],['#4F7FB8','#3E9A6B','#D9A23A','#8C6BC8'][i]);
+    }
+  }});
+  var P=HOME, k;
+  /* 狐狸跳起来收走第一张，猫跳起来把它叼回板子上 */
+  var fp=path(t,P.fox,PY,[[F_LEAP,.45,96,296,14],[F_LEAP+.45,.5,P.fox,PY,14]]);
+  var cp=path(t,P.cat,PY,[[C_LEAP,.45,112,282,14],[C_LEAP+.45,.5,P.cat,PY,14]]);
+  var peek=PEEK.slice(); if(inR(t,F_LEAP+.7,C_LEAP)) peek=['K','card','L'];
+  /* 谁先睡：狐狸 30.6，小黑 33.4，猫 35.8，小粉 36.0，小紫 36.4，Clawd 36.6 */
+  var droop=t>=30.6;
+  troupe(t,{
+    fox:{x:fp.x, y:fp.y, peek:peek, rows:droop?FOX_DROOP:(inR(t,F_LEAP+.95,F_LEAP+2.6)?cyc(t,F_LEAP+.95,FOX_STASH):undefined),
+         eyes:droop?'asleep':(inR(t,12.0,14.2)?'glanceR':(inR(t,24.2,26.2)?'happy':undefined)), blush:inR(t,24.2,26.2)},
+    cat:{x:cp.x, y:cp.y, rows:inR(t,C_LEAP+.95,C_LEAP+2.4)?CAT_UP:undefined,
+         eyes:t>=35.8?'asleep':(inR(t,C_LEAP+.95,C_LEAP+2.4)||inR(t,24.2,26.2)?'happy':(inR(t,12.0,14.2)?'glanceR':undefined)), blush:inR(t,24.2,26.2)},
+    cl:{la:inR(t,26.6,30.4)?-30:0, eyes:t>=36.6?'shut':(inR(t,28.8,30.4)?'smile':undefined), y:FLOOR+jump(t,5.45,.3,6),
+        after:function(x,y){ if(inR(t,26.6,30.4)) signBoard(x,y,'GN',{left:true,size:11}); }},
+    faces:[{y:PFY+jump(t,7.65,.3,8)+jump(t,9.85,.3,8), bl:t>=36.0?1.25:undefined},
+           {y:PFY+ziY(t), bl:t>=36.4?1.25:undefined},
+           {y:PFY, bl:t>=33.4?1.25:undefined}]
+  },P);
+  /* 小紫头顶那一叠：前三张还没飞走的摞在一起，最上面那张翻一下（最后那张 GN 到夜深才做） */
+  var left=0; for(k=0;k<3;k++) if(t<PIN[k]-.4) left++;
+  if(t>=.9&&left>0){
+    var sy=428+ziY(t);
+    for(k=0;k<left;k++) rrect(205-19+k*1.2,sy-14-k*1.6,38,28,1.5,'#FFFFFF',1,'#CFC4B4',.7);
+    if(inR(t,2.8,5.0)){
+      var cf=cardFace(t,3.6,1.2), top=3-left;
+      vocCard(t,205-19+(left-1)*1.2+19,sy-(left-1)*1.6,VOC[top],cf[0],cf[1],1);
+    }
+  }
+  /* 第一张卡：飞进狐狸尾巴、又被猫叼回板子 */
+  if(inR(t,F_LEAP+.45,F_LEAP+.7)){
+    var tip=tailTip(FOX.rows,fp.x,fp.y), q=stepP(t,F_LEAP+.45,.25,4);
+    vocCard(t,lerp(CARDS[0][0],tip[0],q),lerp(CARDS[0][1],tip[1]+2,q),VOC[0],0,1,lerp(1,.3,q));
+  }
+  if(inR(t,C_LEAP,C_LEAP+.45)){
+    var tp2=tailTip(FOX.rows,P.fox,PY), q2=stepP(t,C_LEAP,.45,6), m=[cp.x+37.5,cp.y+23];
+    var hx=lerp(tp2[0],m[0],q2), hy=lerp(tp2[1]+2,m[1],q2);
+    vocCard(t,hx,hy,VOC[0],0,1,lerp(.3,.9,q2));
+  }
+  /* 名副其实：大名那张卡和工牌闪一下 */
+  if(t>=21.6&&t<23.8){ twinkle(t,21.8,1.6,NAMEC[0]+46,NAMEC[1]-12,GOLD,2.4); twinkle(t,22.0,1.5,NAMEC[0]-48,NAMEC[1]+8,GOLD,2); }
+  if(t>=24.2&&t<26.2){ twinkle(t,24.3,1.6,P.fox+21,PY+22,GOLD,1.6); twinkle(t,24.5,1.5,P.cat+39,PY+22,GOLD,1.6); }
+  /* 小黑看懂了：冒一个 z */
+  bubble(t,33.6,1.8,'z',P.fx[2]+12,PFY-18,{c:'#5A5A66',size:9,rise:10});
+  bubble(t,34.4,1.6,'z',P.fx[2]+18,PFY-26,{c:'#5A5A66',size:7,rise:8});
+  if(t>=39.4) endCard(t);
+}
+function endCard(t){
+  flat();
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=clamp((t-39.4)/.8); ctx.fillStyle=PAPER; ctx.fillRect(0,0,cv.width,cv.height); ctx.globalAlpha=1;
+  var c=clamp((t-39.9)/.8);
+  text('名副其实',180,182,'500 30px '+SERIF,ACC,c);
+  text('完',180,224,'16px '+SERIF,'#8C7F75',c);
+  text('stash，先收起来；',180,268,'12.5px '+SANS,'#7A6E66',c);
+  text('fetch，取回来。',180,290,'12.5px '+SANS,'#7A6E66',c);
+  text("宝's Shop · cc 做的 · 2026.10",180,332,'12px '+SANS,'#B4A89E',c);
+  if(c>0){
+    var A0=A; A=c;
+    rrect(26,372,308,56,12,'#E8DCC6');
+    momo(FOX,40,388,2,{eyes:'asleep',rows:FOX_DROOP});
+    momo(CAT,92,388,2,{eyes:'asleep'});
+    face(152,408,6.5,FACE[2],-8,1.25); face(168,406,6.5,FACE[1],-8,1.25); face(184,409,6.5,FACE[0],-8,1.25);
+    var m=CK; CK=.2; clawdAt(236,414,{eyes:'shut'}); CK=m;
+    vocCard(t,300,400,VOC[3],1,1,.9);
+    A=A0;
+  }
+}
+
+var DRAW={intro:sIntro, slang:sSlang, names:sNames, tails:sTails, fin:sFin};
+function sceneAt(t){
+  for(var i=0;i<SCENES.length;i++) if(t<SCENES[i].start+SCENES[i].dur) return SCENES[i];
+  return SCENES[SCENES.length-1];
+}
+var FADEC={paper:'245,240,230', white:'255,255,255', night:'11,16,41'};
+function render(t,poster){
+  t=Math.max(0,Math.min(TOTAL-1e-4,t));
+  var sc=sceneAt(t), lt=t-sc.start, idx=SCENES.indexOf(sc), prev=SCENES[idx-1], next=SCENES[idx+1];
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#D7DFD3'; ctx.fillRect(0,0,cv.width,cv.height);   // 先刷一遍底，上一格的残影不会从缝里漏出来
+  A=1; flat(); SCR=0; NOW=t; PCAM=poster?[172,404,1.15]:null;
+  DRAW[sc.id](lt);
+  A=1; flat(); SCR=0; PCAM=null;
+  if(sc.card&&!poster){
+    var ca=Math.min(clamp((lt-.2)/.4),clamp((2.8-lt)/.4));
+    if(ca>0){
+      ctx.setTransform(S,0,0,S,0,0);
+      ctx.font='13px '+SANS; var w=ctx.measureText(sc.sub).width;
+      ctx.font='600 22px '+SERIF; w=Math.max(w,ctx.measureText(sc.card).width);
+      ctx.setTransform(1,0,0,1,0,0);
+      var bw=Math.ceil(w)+22;
+      R(12,sc.cy-20,bw,64,PAPER,ca*.92);
+      text(sc.card,22,sc.cy,'600 22px '+SERIF,ACC,ca,'left');
+      text(sc.sub,22,sc.cy+28,'13px '+SANS,'#8C7F75',ca,'left');
+    }
+  }
+  if(!poster) sc.caps.forEach(function(c){
+    if(lt>=c.t0&&lt<c.t1) caption(c.text,Math.min(clamp((lt-c.t0)/.2),clamp((c.t1-lt)/.2)));
+  });
+  /* 场与场之间：白天淡成纸色；傍晚到夜里是一下夜色 */
+  var fIn=!prev?clamp(lt/.5):clamp(lt/.35);
+  var fOut=!next?1:clamp((sc.dur-lt)/.35);
+  var col=fIn<fOut?FADEC[sc.fin]:FADEC[sc.fout], f=Math.min(fIn,fOut);
+  if(!prev) col=FADEC.paper;
+  if(f<1){
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle='rgba('+col+','+(1-f)+')'; ctx.fillRect(0,0,cv.width,cv.height);
+  }
+}
+
+/* ---------- 声音：一份音符表，网页和视频共用 ---------- */
+function sceneStart(id){ for(var i=0;i<SCENES.length;i++) if(SCENES[i].id===id) return SCENES[i].start; return 0; }
+function buildEvents(){
+  var ev=[];
+  function mf(m){return 440*Math.pow(2,(m-69)/12);}
+  function add(t,m,d,v,w,s){ ev.push({t:+t.toFixed(4), f:mf(m), d:d, v:v, w:w||'bell', s:s||1}); }
+  /* 一支 C 大调小曲：四拍子，一拍 0.4 秒，八小节一段，A、B 两段轮着来 */
+  var MA=[[72,1],[76,1],[79,1],[76,1],  [77,1],[81,1],[79,2],
+          [76,1],[79,1],[84,1],[79,1],  [81,1],[79,1],[76,2],
+          [74,1],[77,1],[81,1],[77,1],  [79,1],[77,1],[76,1],[74,1],
+          [72,1],[76,1],[74,1],[67,1],  [72,4]];
+  var MB=[[81,1],[79,1],[76,1],[79,1],  [81,1],[84,1],[81,2],
+          [79,1],[76,1],[74,1],[76,1],  [79,2],[76,2],
+          [77,1],[76,1],[74,1],[77,1],  [76,1],[74,1],[72,1],[76,1],
+          [74,1],[72,1],[69,1],[74,1],  [72,4]];
+  var CA=['C','F','C','Am','Dm','G','G','C'], CB=['Am','F','C','C','Dm','C','G','C'];
+  var CH={C:[48,55,60],F:[41,48,53],Am:[45,52,57],Dm:[50,57,62],G:[43,50,55]};
+  var B=.4, M0=.4, END=sceneStart('fin')+39.0;
+  var N0=sceneStart('names'), T0=sceneStart('tails'), F0=sceneStart('fin');
+  function wave(t){ return t>=N0&&t<T0?'blip':(t>=T0&&t<F0?'pluck':'bell'); }
+  function vol(t){
+    var v=t<END-.8?1:clamp((END+.8-t)/1.6);
+    if(t>=F0) v*=.75;
+    return v;
+  }
+  for(var L=0;;L++){
+    var base=M0+L*32*B; if(base>END+1) break;
+    var mel=L%2?MB:MA, chs=L%2?CB:CA, b=0;
+    mel.forEach(function(n){
+      var t=base+b*B, w=wave(t);
+      if(t<END+.8){
+        if(w==='blip') add(t,n[0],Math.min(.5,.18+n[1]*.12),.026*vol(t),'blip',1);
+        else add(t,n[0],w==='pluck'?Math.min(1.3,.5+n[1]*.3):Math.min(1.6,.6+n[1]*.35),(w==='pluck'?.036:.05)*vol(t),w);
+      }
+      b+=n[1];
+    });
+    chs.forEach(function(name,i){
+      var t=base+i*4*B, c=CH[name], w=wave(t);
+      if(t<END+.8){
+        add(t,c[0],1.4,.04*vol(t),w==='pluck'?'pluck':'bell');
+        add(t+B,c[1],.5,.012*vol(t),'blip',1); add(t+2*B,c[2],.5,.011*vol(t),'blip',1); add(t+3*B,c[1],.5,.01*vol(t),'blip',1);
+        if(t>=F0) add(t,c[0]-12,2.6,.024*vol(t),'pad');
+      }
+    });
+  }
+  function S_(id,list){ var s0=sceneStart(id); list.forEach(function(x){ add(s0+x[0],x[1],x[2],x[3],x[4],x[5]); }); }
+  function hopS(t,m){ return [t,m||79,.1,.03,'blip',1.5]; }
+  function landS(t){ return [t,62,.08,.035,'blip',.7]; }
+  function popS(t,m){ return [t,m||74,.09,.045,'blip',1.35]; }
+  function chord(t,notes,d,v,w){ return notes.map(function(m,i){ return [t+i*.06,m,d,v,w]; }); }
+  function whoosh(t,v){ return [t,78,.3,v||.04,'swish',2.4]; }
+  function twS(t){ return [[t,96,.4,.02],[t+.12,100,.4,.015]]; }
+  function laughS(t,n,m){ var a=[]; for(var i=0;i<n;i++) a.push([t+i*.13,(m||81)+(i%2?4:0),.08,.024,'blip',1.15]); return a; }
+  /* 冒字母：一个字母一下「哔」，像发电报 */
+  function letS(t,n,m){ var a=[]; for(var i=0;i<n;i++) a.push([t+i*.15,(m||86)+(i%2?3:0),.06,.03,'blip',1.2]); return a; }
+  /* 问号：两个音往上挑 */
+  function qS(t){ return [[t,79,.08,.03,'blip',1.3],[t+.1,86,.12,.03,'blip',1.4]]; }
+  /* 收进尾巴：咻一下，白尖点两下 */
+  function stashS(t){ return [whoosh(t,.03),popS(t+.3,72),[t+.33,91,.05,.02,'blip',1],[t+.69,91,.05,.02,'blip',1]]; }
+  function clickS(t){ return [[t,97,.04,.045,'crunch'],[t,88,.05,.025,'blip',1.1]]; }
+  function pinS(t){ return [[t,98,.05,.04,'crunch'],[t,84,.06,.02,'blip',1.2]]; }
+  /* 乱码：一串碎音 */
+  function glitchS(t){ var a=[], r=rng(3); for(var i=0;i<14;i++) a.push([t+i*.2+r()*.08,70+Math.floor(r()*24),.05,.022,'blip',.6+r()*1.2]); return a.concat([[t,90,.3,.04,'crunch']]); }
+
+  S_('intro',chord(.4,[60,64,67,72],1.6,.04)
+    .concat([whoosh(10.0,.03)]).concat(letS(10.1,1,84))
+    .concat(laughS(11.7,3,81))
+    .concat([popS(13.9,79),popS(14.35,81),popS(14.8,84)]).concat(letS(13.95,2,86)).concat(letS(14.4,2,88)).concat(letS(14.85,2,91))
+    .concat([[19.0,74,.08,.02,'blip',1],[19.4,72,.08,.02,'blip',1]])
+    .concat([[20.4,48,1.6,.03,'pad']])
+    .concat(qS(23.3)).concat(qS(23.6)));
+
+  S_('slang',[0,1,2].map(function(i){ return hopS(.5+i*.2,76+i*2); }).concat([hopS(1.1,72)])
+    .concat([whoosh(3.0,.03)]).concat(letS(3.1,4,84)).concat(chord(4.8,[72,76,79],.6,.025))
+    .concat([hopS(6.8,81)]).concat(letS(6.9,3,86))
+    .concat(letS(10.7,3,88)).concat(laughS(10.9,6,81))
+    .concat([[14.3,60,.4,.03,'pad']]).concat(glitchS(16.7))
+    .concat([[21.0,88,1.2,.02,'swish',.5]]).concat([[21.2,93,.2,.015],[21.8,91,.2,.015],[22.4,89,.2,.015]])
+    .concat([[23.0,96,.04,.015,'blip',1],[23.14,94,.04,.015,'blip',1],[23.94,96,.04,.015,'blip',1],[24.08,94,.04,.015,'blip',1],[24.88,96,.04,.015,'blip',1]])
+    .concat([whoosh(25.4,.04),[25.9,98,.08,.06,'crunch'],landS(25.9),[25.92,70,.12,.04,'blip',1.5]])
+    .concat([[27.0,79,.2,.025,'blip',.8]])
+    .concat([hopS(29.0,77),landS(29.45)]).concat(letS(29.7,3,79))
+    .concat([[33.1,84,.5,.02,'swish',.6],[33.35,86,.5,.02,'swish',.6],[33.6,88,.5,.02,'swish',.6]])
+    .concat([0,1,2,3,4,5,6,7].map(function(i){ return [35.6+i*.28,82+i,.12,.02,'swish',.6]; }))
+    .concat([popS(36.05,72),[35.9,91,.05,.02,'blip',1],[36.26,91,.05,.02,'blip',1],[37.64,91,.05,.02,'blip',1],[38.0,91,.05,.02,'blip',1]])
+    .concat(chord(40.6,[72,76,79,84],1.4,.03)).concat(twS(40.8)));
+
+  S_('names',[[.05,88,.4,.03,'swish',.4]]
+    .concat(clickS(2.9)).concat(clickS(3.7)).concat(clickS(4.5)).concat(clickS(5.3))
+    .concat([[5.5,84,.07,.03,'beep'],[5.62,84,.07,.03,'beep']])
+    .concat([hopS(7.4,81),landS(7.8)]).concat(qS(7.5))
+    .concat([[10.25,96,.25,.03,'swish',.6],[10.75,96,.25,.03,'swish',.6]]).concat(chord(11.3,[79,84,88],.8,.03)).concat(twS(11.3))
+    .concat(laughS(12.7,4,83))
+    .concat([whoosh(15.0,.045),landS(16.05)]).concat(stashS(15.5))
+    .concat([[17.6,60,.6,.025,'pad']]).concat(clickS(19.0)).concat([[19.2,84,.07,.03,'beep'],[19.32,84,.07,.03,'beep']])
+    .concat([hopS(21.4,83),landS(21.8)]).concat([[22.1,96,.25,.03,'swish',.6],[22.5,96,.25,.03,'swish',.6]]).concat(chord(23.0,[79,84,88],.7,.03))
+    .concat([[23.7,96,.04,.015,'blip',1],[23.84,94,.04,.015,'blip',1]])
+    .concat([whoosh(24.3,.045),popS(24.7,76),landS(25.15),whoosh(25.3,.03),popS(25.7,79)])
+    .concat([[26.6,72,.5,.02,'blip',.7]]).concat([hopS(28.9,84),[29.0,91,.12,.03,'blip',1.2]])
+    .concat(chord(31.0,[72,76,79],.7,.03)).concat(chord(33.0,[74,77,81],.7,.03))
+    .concat([[35.2,55,1.4,.025,'pad']]).concat(chord(37.4,[72,76,79,84],1.6,.04)).concat(twS(37.5))
+    .concat([whoosh(39.8,.03)]).concat(letS(39.9,4,84)).concat(qS(41.7)).concat(qS(41.9))
+    .concat([0,1,2,3,4,5,6,7].map(function(i){ return hopS(43.6+i*.36,79+(i%3)*2); })).concat(laughS(44.0,8,83)));
+
+  S_('tails',[[.05,88,.4,.03,'swish',.4]]
+    .concat([[3.0,67,.6,.025,'pluck'],[3.3,72,.6,.025,'pluck']])
+    .concat([4.4,4.84,5.28,5.72].map(function(t){ return [t,84,.15,.02,'swish',.7]; }))
+    .concat([[6.5,79,.3,.03,'blip',1.6],[6.62,86,.25,.025,'blip',1.2]])
+    .concat([[8.5,91,.05,.02,'blip',1],[8.86,91,.05,.02,'blip',1]])
+    .concat([[10.5,96,.04,.015,'blip',1],[11.3,96,.04,.015,'blip',1],[12.1,96,.04,.015,'blip',1]])
+    .concat(qS(12.7)).concat(qS(12.9)).concat(qS(13.1)).concat(qS(13.3))
+    .concat([whoosh(15.2,.03)]).concat(letS(15.3,3,84))
+    .concat([[17.35,91,.05,.02,'blip',1],[17.85,91,.05,.02,'blip',1]]).concat(letS(17.4,1,86)).concat(letS(17.9,1,88))
+    .concat([18.3,18.52,18.74,18.96,19.18,19.4].map(function(t){ return [t,86,.08,.015,'swish',.7]; })).concat(letS(18.6,3,89))
+    .concat([19.8,20.0,20.2,20.4,20.6,20.8,21.0,21.2,21.4,21.6].map(function(t,i){ return [t,74+(i%2)*5,.06,.02,'blip',1]; }))
+    .concat(letS(22.4,3,79)).concat([[24.2,60,1.4,.025,'pad']]).concat(laughS(26.9,10,81)));
+
+  S_('fin',[[.05,88,.4,.03,'swish',.4]]
+    .concat([hopS(.9,81),popS(1.0,76)]).concat([[3.6,90,.25,.02,'swish',.6],[4.8,90,.25,.02,'swish',.6]])
+    .concat([hopS(4.82,79),whoosh(5.0,.025)]).concat(pinS(5.4)).concat([[6.2,90,.25,.02,'swish',.6]])
+    .concat([hopS(7.02,81),whoosh(7.2,.025),hopS(7.65,84)]).concat(pinS(7.6))
+    .concat([hopS(9.22,83),whoosh(9.4,.025),hopS(9.85,86)]).concat(pinS(9.8))
+    .concat(chord(12.0,[72,76,79],1.2,.025)).concat(twS(14.8))
+    .concat([whoosh(F_LEAP_S,.04),landS(F_LEAP_S+.95)]).concat(stashS(F_LEAP_S+.45))
+    .concat([whoosh(C_LEAP_S,.04),popS(C_LEAP_S+.45,79)]).concat(pinS(C_LEAP_S+.45)).concat([landS(C_LEAP_S+.95)])
+    .concat(chord(21.6,[72,76,79,84,88],2.0,.035)).concat(twS(21.8)).concat(chord(24.2,[67,72,76],1.4,.03)).concat(twS(24.3))
+    .concat([whoosh(26.6,.025)]).concat(letS(26.7,2,79)).concat(chord(28.8,[60,64,67,72],2.0,.03))
+    .concat([[30.6,55,2.2,.03,'pad'],[30.7,62,2,.02,'pad']])
+    .concat([[33.6,74,.5,.015],[34.4,72,.5,.012]])
+    .concat([hopS(35.02,76),whoosh(35.2,.02)]).concat(pinS(35.6)).concat(chord(37.2,[48,55,60,64],2.6,.03))
+    .concat(chord(39.9,[60,64,67,72,76],2.6,.035)));
+  ev.sort(function(a,b){return a.t-b.t;});
+  return ev;
+}
+var F_LEAP_S=17.3, C_LEAP_S=19.5;
+var EVENTS=buildEvents();
+
+/* 一个音怎么发：网页里实时放，导视频时交给离线的那台一样放 */
+function crunchBuf(ac){
+  if(ac.__crunch) return ac.__crunch;
+  var sr=ac.sampleRate, len=Math.floor(sr*.2), buf=ac.createBuffer(1,len,sr), d=buf.getChannelData(0), r=rng(7);
+  for(var i=0;i<len;i++){
+    var u=i/sr, env=Math.exp(-u*60)+.7*(u>=.05?Math.exp(-(u-.05)*70):0)+.5*(u>=.1?Math.exp(-(u-.1)*80):0);
+    d[i]=(r()*2-1)*env;
+  }
+  ac.__crunch=buf; return buf;
+}
+function noiseBuf(ac){
+  if(ac.__noise) return ac.__noise;
+  var sr=ac.sampleRate, len=Math.floor(sr*1.6), buf=ac.createBuffer(1,len,sr), d=buf.getChannelData(0), r=rng(11);
+  for(var i=0;i<len;i++) d[i]=r()*2-1;
+  ac.__noise=buf; return buf;
+}
+function synth(ac,dest,e,when){
+  var g=ac.createGain(); g.connect(dest);
+  if(e.w==='crunch'){
+    var src=ac.createBufferSource(), bp=ac.createBiquadFilter();
+    src.buffer=crunchBuf(ac); bp.type='bandpass'; bp.frequency.value=e.f; bp.Q.value=1.1;
+    g.gain.value=e.v; src.connect(bp); bp.connect(g); src.start(when); src.stop(when+e.d+.02);
+    return;
+  }
+  if(e.w==='swish'){
+    var ns=ac.createBufferSource(), nf=ac.createBiquadFilter();
+    ns.buffer=noiseBuf(ac); nf.type='bandpass'; nf.Q.value=.9;
+    nf.frequency.setValueAtTime(e.f,when); nf.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d);
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+e.d*.3);
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    ns.connect(nf); nf.connect(g); ns.start(when); ns.stop(when+e.d+.02);
+    return;
+  }
+  if(e.w==='pluck'){
+    /* 拨弦：锯齿波过一道越收越窄的低通，「铮」一下就往下走 */
+    var po=ac.createOscillator(), lp=ac.createBiquadFilter();
+    po.type='sawtooth'; po.frequency.value=e.f;
+    lp.type='lowpass'; lp.Q.value=.7;
+    lp.frequency.setValueAtTime(Math.min(12000,e.f*7),when); lp.frequency.exponentialRampToValueAtTime(e.f*1.3,when+e.d*.7);
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.004);
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    po.connect(lp); lp.connect(g); po.start(when); po.stop(when+e.d+.05);
+    return;
+  }
+  if(e.w==='pad'||e.w==='beep'){
+    var up=e.w==='pad'?e.d*.4:.02;
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+up);
+    if(e.w==='beep') g.gain.setValueAtTime(e.v,when+e.d-.05);
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    (e.w==='pad'?[[1,1],[2,.3]]:[[1,1]]).forEach(function(h){
+      var o=ac.createOscillator(), hg=ac.createGain();
+      o.type=e.w==='beep'?'square':'sine'; o.frequency.value=e.f*h[0]; hg.gain.value=e.w==='beep'?h[1]*.35:h[1];
+      o.connect(hg); hg.connect(g); o.start(when); o.stop(when+e.d+.05);
+    });
+    return;
+  }
+  g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.004);
+  g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+  if(e.w==='bell'){
+    [[1,1],[2,.25],[3,.06]].forEach(function(h){
+      var o=ac.createOscillator(), hg=ac.createGain();
+      o.type='sine'; o.frequency.value=e.f*h[0]; hg.gain.value=h[1];
+      o.connect(hg); hg.connect(g); o.start(when); o.stop(when+e.d+.05);
+    });
+  } else {
+    var o=ac.createOscillator(); o.type='triangle';
+    o.frequency.setValueAtTime(e.f,when);
+    if(e.s!==1) o.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d);
+    o.connect(g); o.start(when); o.stop(when+e.d+.05);
+  }
+}
+
+var AC=null, master=null, pumpId=null, audioT0=0, nextIdx=0;
+function pump(){
+  if(!master) return;
+  var filmNow=filmT0+(AC.currentTime-audioT0), horizon=filmNow+.35;
+  while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<horizon){
+    var e=EVENTS[nextIdx++];
+    if(e.t>=filmT0-.01) synth(AC,master,e,Math.max(AC.currentTime,audioT0+(e.t-filmT0)));
+  }
+}
+function audioStart(t){
+  if(!soundOn) return;
+  try{
+    if(!AC){ var C=window.AudioContext||window.webkitAudioContext; if(!C) return; AC=new C(); }
+    if(AC.state==='suspended') AC.resume();
+    audioStop();
+    master=AC.createGain(); master.gain.value=3.2; master.connect(AC.destination);
+    audioT0=AC.currentTime+.06;
+    nextIdx=0; while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<t) nextIdx++;
+    pump(); pumpId=setInterval(pump,80);
+  }catch(err){ master=null; }
+}
+function audioStop(){
+  if(pumpId){clearInterval(pumpId);pumpId=null;}
+  if(master){
+    var m=master; master=null;
+    try{ m.gain.setTargetAtTime(0,AC.currentTime,.03); setTimeout(function(){try{m.disconnect();}catch(e){}},400); }catch(e){}
+  }
+}
+/* ---------- 播放器 ---------- */
+var player=document.getElementById('player'), screen=document.getElementById('screen'),
+    big=document.getElementById('big'), pp=document.getElementById('pp'), snd=document.getElementById('snd'),
+    seek=document.getElementById('seek'), timeEl=document.getElementById('time'), chips=document.getElementById('chips');
+var playing=false, cur=0, filmT0=0, perfT0=0, raf=0, soundOn=true, started=false, POSTER=sceneStart('names')+38.4;
+seek.max=Math.round(TOTAL*10);
+function fmt(s){ s=Math.floor(s); return Math.floor(s/60)+':'+('0'+s%60).slice(-2); }
+SCENES.forEach(function(sc){
+  var b=document.createElement('button'); b.type='button';
+  b.textContent=sc.chipText||sc.card;
+  b.addEventListener('click',function(){ go(sc.start); });
+  sc.chip=b; chips.appendChild(b);
+  sc.caps.forEach(function(c){ c.el.addEventListener('click',function(){ go(sc.start+c.t0); }); });
+});
+function clock(){
+  if(master&&AC) return filmT0+Math.max(0,AC.currentTime-audioT0);
+  return filmT0+(performance.now()-perfT0)/1000;
+}
+var lastOn=null, lastChip=null;
+function ui(){
+  timeEl.textContent=fmt(cur)+' / '+fmt(TOTAL);
+  seek.value=Math.round(cur*10);
+  pp.textContent=playing?'暂停':'播放';
+  var sc=sceneAt(cur), lt=cur-sc.start, on=null;
+  if(started) sc.caps.forEach(function(c){ if(lt>=c.t0&&lt<c.t1) on=c.el; });
+  if(on!==lastOn){ if(lastOn) lastOn.classList.remove('on'); if(on) on.classList.add('on'); lastOn=on; }
+  var chip=started?sc.chip:null;
+  if(chip!==lastChip){ if(lastChip) lastChip.classList.remove('on'); if(chip) chip.classList.add('on'); lastChip=chip; }
+  player.classList.toggle('playing',playing);
+  if(!playing){
+    var end=cur>=TOTAL-.05;
+    big.textContent=end?'↺ 再看一遍':'▶';
+    big.classList.toggle('again',end);
+    big.setAttribute('aria-label',end?'再看一遍':'播放');
+  }
+}
+function tick(){
+  if(!playing) return;
+  cur=clock();
+  if(cur>=TOTAL){ cur=TOTAL; render(cur); pause(); return; }
+  render(cur); ui();
+  raf=requestAnimationFrame(tick);
+}
+function play(){
+  if(cur>=TOTAL-.05) cur=0;
+  started=true; playing=true;
+  filmT0=cur; perfT0=performance.now();
+  audioStart(cur);
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(tick);
+  ui();
+}
+function pause(){
+  if(playing) cur=Math.min(TOTAL,clock());
+  playing=false; audioStop(); cancelAnimationFrame(raf);
+  ui();
+}
+function go(t){
+  started=true;
+  cur=Math.max(0,Math.min(TOTAL,t));
+  if(playing){ audioStop(); filmT0=cur; perfT0=performance.now(); audioStart(cur); }
+  render(cur); ui();
+}
+screen.addEventListener('click',function(){ playing?pause():play(); });
+pp.addEventListener('click',function(){ playing?pause():play(); });
+snd.addEventListener('click',function(){
+  soundOn=!soundOn;
+  snd.textContent=soundOn?'声音 开':'声音 关'; snd.setAttribute('aria-pressed',soundOn?'true':'false');
+  if(playing){ cur=clock(); filmT0=cur; perfT0=performance.now(); if(soundOn) audioStart(cur); else audioStop(); }
+});
+seek.addEventListener('input',function(){ go(seek.value/10); });
+document.addEventListener('visibilitychange',function(){ if(document.hidden&&playing) pause(); });
+
+function fit(){
+  var w=screen.clientWidth||360, dpr=Math.min(3,window.devicePixelRatio||1);
+  setup(w*dpr);
+  if(started) render(cur); else render(POSTER,true);
+}
+window.addEventListener('resize',fit);
+fit(); ui();
+
+/* 导视频用的口子：给定宽度和第几秒，画出那一格；声音用同一个 synth 离线再放一遍 */
+window.FILM={W:W,H:H,TOTAL:TOTAL,events:EVENTS,canvas:cv,synth:synth,
+  setup:function(pxW){ setup(pxW); }, render:function(t){ render(t); }};
+})();
+</script>
+</body>
+</html>
