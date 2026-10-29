@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>一滴岛</title>
+<meta name="description" content="头顶的黑岛掉下一滴，落地又长成一座新的。">
+<meta name="theme-color" content="#F3EDE4">
+<style>
+:root {
+  --color-bg: #f3ede4;
+  --color-ink: #16130f;
+  --color-muted: #8a7b6e;
+  --color-line: #e4d9cc;
+  --font-display: "Iowan Old Style", Palatino, "Songti SC", "WenQuanYi Zen Hei", serif;
+  --font-sans: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "WenQuanYi Zen Hei", "Noto Sans SC", sans-serif;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-line);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.page {
+  width: 100%;
+  max-width: 440px;
+  height: 100dvh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#goo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.critter-slot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.critter-bob {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.critter-canvas {
+  position: absolute;
+  display: block;
+}
+
+.critter-canvas.pixel {
+  image-rendering: pixelated;
+}
+
+.dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 24px calc(22px + env(safe-area-inset-bottom));
+}
+
+.name-line {
+  min-height: 1.45em;
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+.name-line b {
+  font-weight: 600;
+}
+
+.name-note {
+  margin-left: 8px;
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.dock h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
+
+.dock p.lede {
+  margin: 0;
+  max-width: 28em;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.drip-btn {
+  height: 44px;
+  margin-top: 4px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.drip-btn:active {
+  transform: translateY(1px);
+}
+
+.drip-btn:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drip-btn:active {
+    transform: none;
+  }
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="stage" id="stage">
+    <canvas id="goo" aria-hidden="true"></canvas>
+    <div class="critter-slot" id="slot">
+      <div class="critter-bob" id="bob">
+        <canvas id="critter" class="critter-canvas" aria-hidden="true"></canvas>
+      </div>
+    </div>
+  </div>
+  <footer class="dock">
+    <p class="name-line" id="nameLine"></p>
+    <h1>一滴岛</h1>
+    <p class="lede">头顶的黑岛掉下一滴，落地又长成一座新的。</p>
+    <button type="button" class="drip-btn" id="dripBtn">再滴一颗</button>
+  </footer>
+</main>
+<script>
+"use strict";
+
+var T = {
+  bulge0: 0.28,
+  bulge1: 0.92,
+  stretch1: 2.02,
+  pinch1: 2.28,
+  fall1: 3.22,
+  squash1: 3.5,
+  grow1: 4.22,
+  hold1: 5.72,
+  shrink1: 6.28,
+  rise1: 7.08,
+  merge1: 7.58,
+  loop: 7.9
+};
+
+var PLATFORM = { 0: 88, 1: 92, 2: 60, 3: 60, 4: 60, 5: 112 };
+
+function clamp01(x) {
+  return Math.max(0, Math.min(1, x));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function smoother(t) {
+  var x = clamp01(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
+}
+
+function seg(u, a, b) {
+  return smoother((u - a) / (b - a));
+}
+
+function lin(u, a, b) {
+  return clamp01((u - a) / (b - a));
+}
+
+function easeInCubic(t) {
+  var x = clamp01(t);
+  return x * x * x;
+}
+
+function fallCurve(t) {
+  var x = clamp01(t);
+  return x * (0.34 + 0.66 * x);
+}
+
+function settle(t) {
+  var x = clamp01(t);
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  var damp = Math.exp(-4.2 * x);
+  var y = 1 - damp * Math.cos(x * 6.2);
+  var fix = smoother(clamp01((x - 0.72) / 0.28));
+  return lerp(y, 1, fix);
+}
+
+function kFor(gap, neck) {
+  if (gap <= 0) return 52;
+  return gap * 2 + neck * 2;
+}
+
+function platformHalf(index, width) {
+  var raw = PLATFORM[index] != null ? PLATFORM[index] : 80;
+  return Math.min(raw, Math.max(48, (width - 36) / 2));
+}
+
+function sample(time, width, height, index) {
+  var u = ((time % T.loop) + T.loop) % T.loop;
+  var x = width / 2;
+  var baseHw = Math.min(66, Math.max(54, width * 0.17));
+  var baseHh = 18;
+  var motherY = Math.max(76, Math.min(108, height * 0.13));
+  var targetHw = platformHalf(index, width);
+  var targetHh = 17;
+  var dropR = 13;
+
+  var landY = height * 0.7;
+  var minLand = motherY + baseHh + 132;
+  var maxLand = height - 28;
+  if (landY < minLand) landY = minLand;
+  if (landY > maxLand) landY = maxLand;
+
+  var yInside = motherY + baseHh * 0.42;
+  var yHung = motherY + baseHh + 44;
+  var yPinched = yHung + 18;
+
+  var child = null;
+  var k = 0;
+  var phase = "rest";
+  var presence = 0;
+
+  if (u < T.bulge0) {
+    phase = "rest";
+  } else if (u < T.bulge1) {
+    phase = "bulge";
+    var p = seg(u, T.bulge0, T.bulge1);
+    var r = lerp(1.2, 15, p);
+    child = { x: x, y: yInside, hw: r, hh: r };
+    k = 52;
+    presence = p;
+  } else if (u < T.stretch1) {
+    phase = "stretch";
+    p = seg(u, T.bulge1, T.stretch1);
+    var y = lerp(yInside, yHung, p);
+    r = lerp(15, dropR, p);
+    child = { x: x, y: y, hw: r, hh: r };
+    var gap = y - motherY - baseHh - r;
+    var neck = lerp(14, 4.5, easeInCubic(lin(u, T.bulge1, T.stretch1)));
+    k = kFor(gap, neck);
+    presence = 1;
+  } else if (u < T.pinch1) {
+    phase = "pinch";
+    p = easeInCubic(lin(u, T.stretch1, T.pinch1));
+    y = lerp(yHung, yPinched, p);
+    r = dropR;
+    child = { x: x, y: y, hw: r, hh: r };
+    gap = y - motherY - baseHh - r;
+    neck = lerp(4.5, 0, p);
+    k = p > 0.97 ? 0 : kFor(gap, neck);
+    presence = 1;
+  } else if (u < T.fall1) {
+    phase = "fall";
+    p = fallCurve(lin(u, T.pinch1, T.fall1));
+    y = lerp(yPinched, landY, p);
+    var tall = lerp(1.18, 1, p);
+    var wide = lerp(0.9, 1, p);
+    child = { x: x, y: y, hw: dropR * wide, hh: dropR * tall };
+    presence = 1;
+  } else if (u < T.squash1) {
+    phase = "squash";
+    p = lin(u, T.fall1, T.squash1);
+    var s = Math.sin(p * Math.PI);
+    child = {
+      x: x,
+      y: landY + 5 * s,
+      hw: dropR * (1 + 0.62 * s),
+      hh: dropR * (1 - 0.4 * s)
+    };
+    presence = 1;
+  } else if (u < T.grow1) {
+    phase = "grow";
+    p = settle(lin(u, T.squash1, T.grow1));
+    child = {
+      x: x,
+      y: landY,
+      hw: lerp(dropR, targetHw, p),
+      hh: lerp(dropR, targetHh, p)
+    };
+    presence = 1;
+  } else if (u < T.hold1) {
+    phase = "hold";
+    child = { x: x, y: landY, hw: targetHw, hh: targetHh };
+    presence = 1;
+  } else if (u < T.shrink1) {
+    phase = "shrink";
+    p = seg(u, T.hold1, T.shrink1);
+    child = {
+      x: x,
+      y: landY,
+      hw: lerp(targetHw, dropR, p),
+      hh: lerp(targetHh, dropR, p)
+    };
+    presence = 1;
+  } else if (u < T.rise1) {
+    phase = "rise";
+    p = lin(u, T.shrink1, T.rise1);
+    var eased = p * p;
+    child = {
+      x: x,
+      y: lerp(landY, motherY + baseHh + 30, eased),
+      hw: dropR,
+      hh: dropR * lerp(1, 1.2, eased)
+    };
+    presence = 1;
+  } else if (u < T.merge1) {
+    phase = "merge";
+    p = seg(u, T.rise1, T.merge1);
+    r = lerp(dropR, 0.4, p);
+    y = lerp(motherY + baseHh + 30, motherY + 2, p);
+    child = { x: x, y: y, hw: r, hh: r };
+    gap = y - motherY - baseHh - r;
+    neck = lerp(1.5, 16, p);
+    k = r < 1 ? 0 : kFor(gap, neck);
+    presence = 1 - p;
+  } else {
+    phase = "rest";
+  }
+
+  if (child && (child.hw < 0.8 || child.hh < 0.8)) child = null;
+
+  var show = u >= T.grow1 - 0.06 && u < T.hold1;
+  var mother = {
+    x: x,
+    y: motherY,
+    hw: baseHw - 5.5 * presence,
+    hh: baseHh
+  };
+
+  return { mother: mother, child: child, k: k, show: show, phase: phase };
+}
+
+var CAST = [
+  { id: "stash", name: "StashYu", note: "火红狐狸" },
+  { id: "fetch", name: "FetchMo", note: "暹罗" },
+  { id: "pink", name: "小粉脸蛋儿", note: "" },
+  { id: "violet", name: "小紫脸蛋儿", note: "" },
+  { id: "black", name: "小黑脸蛋儿", note: "" },
+  { id: "clawd", name: "Clawd", note: "" }
+];
+
+var SY = { M: "#E2552B", C: "#FFF3E3", D: "#3B2520", E: "#3B2520", L: "#3B2520", B: "#F59A8C" };
+var FM = { M: "#F3E7D6", X: "#4E382E", E: "#79C0F0", L: "#4E382E", B: "#F2B8B0" };
+var FACE = { pink: "#FF309B", violet: "#9159FE", black: "#000000" };
+
+function rows(width, lines) {
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].length !== width) {
+      throw new Error("grid width " + lines[i].length + " !== " + width);
+    }
+  }
+  return lines;
+}
+
+var SY_BASE = rows(20, [
+  ".D..........D.......",
+  ".DM........MD.......",
+  ".MCM......MCM...CC..",
+  ".MMMMMMMMMMMM..CCCC.",
+  ".MMEEMMMMEEMM..MMMM.",
+  ".MMEEMMMMEEMM..MMMMM",
+  "CCCCCCDDCCCCCC.MMMMM",
+  "..CCCCCCCCCC..MMMMM.",
+  "....MMCCMM...MMMMM..",
+  "....MMCCMM..MMMMM...",
+  "....MMMMMM.MMMMM....",
+  "....DDMMDDMMMM......",
+  "...................."
+]);
+
+var SY_IN = rows(20, [
+  ".D..........D.......",
+  ".DM........MD.......",
+  ".MCM......MCM..CC...",
+  ".MMMMMMMMMMMM.CCCC..",
+  ".MMEEMMMMEEMM.MMMM..",
+  ".MMEEMMMMEEMM.MMMMM.",
+  "CCCCCCDDCCCCCC.MMMMM",
+  "..CCCCCCCCCC..MMMMM.",
+  "....MMCCMM...MMMMM..",
+  "....MMCCMM..MMMMM...",
+  "....MMMMMM.MMMMM....",
+  "....DDMMDDMMMM......",
+  "...................."
+]);
+
+var SY_OUT = rows(21, [
+  ".D..........D........",
+  ".DM........MD........",
+  ".MCM......MCM....CC..",
+  ".MMMMMMMMMMMM...CCCC.",
+  ".MMEEMMMMEEMM...MMMM.",
+  ".MMEEMMMMEEMM...MMMMM",
+  "CCCCCCDDCCCCCC.MMMMM.",
+  "..CCCCCCCCCC..MMMMM..",
+  "....MMCCMM...MMMMM...",
+  "....MMCCMM..MMMMM....",
+  "....MMMMMM.MMMMM.....",
+  "....DDMMDDMMMM.......",
+  "....................."
+]);
+
+var FM_UP = rows(20, [
+  "....................",
+  "........X........X..",
+  ".....X.XXX......XXX.",
+  "....X...MMMMMMMMMM..",
+  "....X..MMMMMMMMMMMM.",
+  "....X..MEEMMMMMMEEM.",
+  "....X..MEEMXXXXMEEM.",
+  ".....X.MMMMMXXMMMMM.",
+  "......X.MMMMMMMMMM..",
+  ".......XMMMMMMMMMM..",
+  "........XMMMMMMMM...",
+  ".........XXM..MXX...",
+  "...................."
+]);
+
+var SY_TAILS = [SY_BASE, SY_IN, SY_BASE, SY_OUT];
+
+function applyEyes(src, origins, mode) {
+  var next = src.map(function (row) { return row.split(""); });
+  if (mode === "plain") {
+    return next.map(function (cells) { return cells.join(""); });
+  }
+  var marks = mode === "blink"
+    ? [[0, 1], [1, 1]]
+    : [[-1, 1], [0, 0], [1, 0], [2, 1]];
+  for (var i = 0; i < origins.length; i++) {
+    var ox = origins[i][0];
+    var oy = origins[i][1];
+    var dy, dx;
+    for (dy = 0; dy < 2; dy++) {
+      for (dx = 0; dx < 2; dx++) {
+        var cx = ox + dx;
+        var cy = oy + dy;
+        var row = next[cy];
+        if (row && cx >= 0 && cx < row.length) row[cx] = "M";
+      }
+    }
+    for (var m = 0; m < marks.length; m++) {
+      cx = ox + marks[m][0];
+      cy = oy + marks[m][1];
+      row = next[cy];
+      if (row && cx >= 0 && cx < row.length) row[cx] = "L";
+    }
+  }
+  return next.map(function (cells) { return cells.join(""); });
+}
+
+function blush(src, cells) {
+  var next = src.map(function (row) { return row.split(""); });
+  for (var i = 0; i < cells.length; i++) {
+    var x = cells[i][0];
+    var y = cells[i][1];
+    var row = next[y];
+    if (row && x >= 0 && x < row.length) row[x] = "B";
+  }
+  return next.map(function (line) { return line.join(""); });
+}
+
+function cellSize(bucket) {
+  if (bucket === "s") return 4;
+  if (bucket === "m") return 5;
+  return 6;
+}
+
+function faceRadius(bucket) {
+  if (bucket === "s") return 34;
+  if (bucket === "m") return 42;
+  return 48;
+}
+
+function clawdScale(bucket) {
+  if (bucket === "s") return 0.72;
+  if (bucket === "m") return 0.88;
+  return 1;
+}
+
+function paintPixels(canvas, grid, colors, n, anchorCol, anchorRow) {
+  var w = grid[0] ? grid[0].length : 0;
+  var h = grid.length;
+  canvas.width = w * n;
+  canvas.height = h * n;
+  canvas.style.width = (w * n) + "px";
+  canvas.style.height = (h * n) + "px";
+  canvas.classList.add("pixel");
+  var ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (var y = 0; y < h; y++) {
+    var row = grid[y] || "";
+    for (var x = 0; x < w; x++) {
+      var ch = row.charAt(x) || ".";
+      if (ch === ".") continue;
+      var color = colors[ch];
+      if (!color) continue;
+      ctx.fillStyle = color;
+      ctx.fillRect(x * n, y * n, n, n);
+    }
+  }
+  canvas.style.left = (-anchorCol * n) + "px";
+  canvas.style.top = (-anchorRow * n) + "px";
+}
+
+function paintFace(canvas, color, radius, blink) {
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var size = radius * 2;
+  canvas.width = Math.round(size * dpr);
+  canvas.height = Math.round(size * dpr);
+  canvas.style.width = size + "px";
+  canvas.style.height = size + "px";
+  canvas.classList.remove("pixel");
+  var ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(radius, radius, radius, 0, Math.PI * 2);
+  ctx.fill();
+  if (!blink) {
+    ctx.globalCompositeOperation = "destination-out";
+    var rot = (-26.2 * Math.PI) / 180;
+    var eyes = [
+      [0.194, -0.416, 0.194],
+      [0.626, -0.497, 0.129]
+    ];
+    for (var i = 0; i < eyes.length; i++) {
+      var len = 0.418 * radius;
+      var wid = eyes[i][2] * radius;
+      ctx.save();
+      ctx.translate(radius + eyes[i][0] * radius, radius + eyes[i][1] * radius);
+      ctx.rotate(rot);
+      ctx.beginPath();
+      ctx.roundRect(-wid / 2, -len / 2, wid, len, wid / 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+  canvas.style.left = (-radius) + "px";
+  canvas.style.top = (-size) + "px";
+}
+
+function paintClawd(canvas, scale) {
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var cssW = 196 * scale;
+  var cssH = 119 * scale;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width = cssW + "px";
+  canvas.style.height = cssH + "px";
+  canvas.classList.remove("pixel");
+  var ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  ctx.translate(-20, -50);
+  ctx.fillStyle = "#d47f59";
+  ctx.fillRect(44, 50, 147, 98);
+  ctx.fillRect(20, 99, 24, 21);
+  ctx.fillRect(191, 99, 25, 21);
+  var feet = [44, 68, 152, 176];
+  for (var i = 0; i < feet.length; i++) ctx.fillRect(feet[i], 148, 15, 21);
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(70, 78, 8, 21);
+  ctx.fillRect(158, 78, 8, 21);
+  var anchorX = (117.5 - 20) * scale;
+  var anchorY = (169 - 50) * scale;
+  canvas.style.left = (-anchorX) + "px";
+  canvas.style.top = (-anchorY) + "px";
+}
+
+function stashRows(tail, blink) {
+  var frame = SY_TAILS[tail] || SY_BASE;
+  var eyed = applyEyes(frame, [[3, 4], [9, 4]], blink ? "blink" : "happy");
+  return blush(eyed, [[2, 6], [11, 6]]);
+}
+
+function fetchRows(blink) {
+  var eyed = applyEyes(FM_UP, [[8, 5], [16, 5]], blink ? "blink" : "happy");
+  return blush(eyed, [[8, 7], [17, 7]]);
+}
+
+function drawCreature(canvas, kind, bucket, frame) {
+  if (kind === "stash") {
+    var blink = frame >= 10;
+    var tail = frame % 10;
+    paintPixels(canvas, stashRows(tail, blink), SY, cellSize(bucket), 6.5, 12);
+    return;
+  }
+  if (kind === "fetch") {
+    paintPixels(canvas, fetchRows(frame === 1), FM, cellSize(bucket), 11, 12);
+    return;
+  }
+  if (kind === "pink" || kind === "violet" || kind === "black") {
+    paintFace(canvas, FACE[kind], faceRadius(bucket), frame === 1);
+    return;
+  }
+  paintClawd(canvas, clawdScale(bucket));
+}
+
+function frameOf(kind, now, reduce) {
+  if (reduce) return 0;
+  if (kind === "stash") {
+    var tail = Math.floor(now / 220) % 4;
+    var blink = now % 3400 < 140;
+    return tail + (blink ? 10 : 0);
+  }
+  if (kind === "fetch") return now % 3600 < 140 ? 1 : 0;
+  if (kind === "pink" || kind === "violet" || kind === "black") {
+    return now % 3200 < 150 ? 1 : 0;
+  }
+  return 0;
+}
+
+function bobOf(kind, bucket, now, reduce) {
+  if (reduce) return 0;
+  var step = Math.floor(now / 280) % 4;
+  if (step !== 2) return 0;
+  if (kind === "stash" || kind === "fetch") return -cellSize(bucket);
+  if (kind === "clawd") return -4;
+  return -3;
+}
+
+function bucketFor(width, height) {
+  if (width < 380 || height < 560) return "s";
+  if (height < 780) return "m";
+  return "l";
+}
+
+var VERT = "attribute vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }";
+
+var FRAG = [
+  "#extension GL_OES_standard_derivatives : enable",
+  "precision highp float;",
+  "uniform vec2 u_res;",
+  "uniform vec4 u_mother;",
+  "uniform vec4 u_child;",
+  "uniform float u_k;",
+  "uniform float u_has;",
+  "float sdPill(vec2 p, vec4 b) {",
+  "  vec2 halfExt = max(b.zw, vec2(0.0001));",
+  "  float r = min(halfExt.x, halfExt.y);",
+  "  vec2 q = abs(p - b.xy) - max(halfExt - vec2(r), 0.0);",
+  "  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;",
+  "}",
+  "float smin(float a, float b, float k) {",
+  "  if (k <= 0.001) return min(a, b);",
+  "  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);",
+  "  return mix(b, a, h) - k * h * (1.0 - h);",
+  "}",
+  "void main() {",
+  "  vec2 p = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y);",
+  "  float dMother = sdPill(p, u_mother);",
+  "  float d = dMother;",
+  "  if (u_has > 0.5) {",
+  "    float blended = smin(dMother, sdPill(p, u_child), u_k);",
+  "    float y0 = u_mother.y - u_mother.w * 0.1;",
+  "    float y1 = u_mother.y + u_mother.w * 0.65;",
+  "    d = mix(dMother, blended, smoothstep(y0, y1, p.y));",
+  "  }",
+  "  float w = max(fwidth(d), 0.75);",
+  "  float alpha = smoothstep(w, -w, d);",
+  "  vec3 ink = vec3(0.08627451, 0.0745098, 0.05882353);",
+  "  gl_FragColor = vec4(ink * alpha, alpha);",
+  "}"
+].join("\n");
+
+function boot() {
+  var stage = document.getElementById("stage");
+  var canvas = document.getElementById("goo");
+  var slot = document.getElementById("slot");
+  var bob = document.getElementById("bob");
+  var critter = document.getElementById("critter");
+  var nameLine = document.getElementById("nameLine");
+  var dripBtn = document.getElementById("dripBtn");
+  if (!stage || !canvas || !slot || !bob || !critter || !nameLine || !dripBtn) return;
+
+  var reduce = false;
+  var media = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function applyReduce() {
+    reduce = media.matches;
+    dripBtn.textContent = reduce ? "换一只" : "再滴一颗";
+  }
+  applyReduce();
+  media.addEventListener("change", applyReduce);
+
+  var gl = canvas.getContext("webgl", {
+    alpha: true,
+    antialias: false,
+    premultipliedAlpha: true
+  });
+  if (gl) gl.getExtension("OES_standard_derivatives");
+  var ctx2d = gl ? null : canvas.getContext("2d");
+  var program = null;
+  var locs = null;
+
+  function compile(type, src) {
+    var shader = gl.createShader(type);
+    if (!shader) return null;
+    gl.shaderSource(shader, src);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      gl.deleteShader(shader);
+      return null;
+    }
+    return shader;
+  }
+
+  if (gl) {
+    var vs = compile(gl.VERTEX_SHADER, VERT);
+    var fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    if (vs && fs) {
+      program = gl.createProgram();
+      if (program) {
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          program = null;
+        } else {
+          var buffer = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+          var attr = gl.getAttribLocation(program, "a");
+          gl.enableVertexAttribArray(attr);
+          gl.vertexAttribPointer(attr, 2, gl.FLOAT, false, 0, 0);
+          gl.useProgram(program);
+          locs = {
+            res: gl.getUniformLocation(program, "u_res"),
+            mother: gl.getUniformLocation(program, "u_mother"),
+            child: gl.getUniformLocation(program, "u_child"),
+            k: gl.getUniformLocation(program, "u_k"),
+            has: gl.getUniformLocation(program, "u_has")
+          };
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        }
+      }
+    }
+    if (!program) {
+      gl = null;
+      ctx2d = canvas.getContext("2d");
+    }
+  }
+
+  var clock = { time: 0.05, index: 0, queued: false };
+  var seen = { show: null, index: -1 };
+  var painted = { frame: -1, kind: "", bucket: "" };
+  var view = { cssW: 1, cssH: 1, dpr: 1 };
+  var bucket = "m";
+
+  function measure() {
+    var rect = stage.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(1, Math.round(rect.width * dpr));
+    var h = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    view.cssW = Math.max(1, rect.width);
+    view.cssH = Math.max(1, rect.height);
+    view.dpr = dpr;
+    bucket = bucketFor(rect.width, rect.height);
+  }
+
+  measure();
+  if (typeof ResizeObserver === "function") {
+    var observer = new ResizeObserver(measure);
+    observer.observe(stage);
+  } else {
+    window.addEventListener("resize", measure);
+  }
+
+  function requestDrop() {
+    if (reduce) {
+      clock.index = (clock.index + 1) % CAST.length;
+      return;
+    }
+    var u = ((clock.time % T.loop) + T.loop) % T.loop;
+    if (u < T.bulge0) {
+      clock.time = T.bulge0;
+      return;
+    }
+    if (u >= T.grow1 - 0.06 && u < T.hold1) {
+      clock.time = T.hold1;
+      return;
+    }
+    clock.queued = true;
+  }
+
+  stage.addEventListener("pointerdown", requestDrop);
+  dripBtn.addEventListener("click", requestDrop);
+  window.addEventListener("keydown", function (event) {
+    if (event.key !== " " && event.key !== "Enter") return;
+    var target = event.target;
+    if (target && target.tagName === "BUTTON") return;
+    event.preventDefault();
+    requestDrop();
+  });
+
+  function paintName(show, index) {
+    if (show === seen.show && index === seen.index) return;
+    seen.show = show;
+    seen.index = index;
+    var person = CAST[index];
+    nameLine.replaceChildren();
+    if (show && person) {
+      var b = document.createElement("b");
+      b.textContent = person.name;
+      nameLine.appendChild(b);
+      if (person.note) {
+        var span = document.createElement("span");
+        span.className = "name-note";
+        span.textContent = person.note;
+        nameLine.appendChild(span);
+      }
+    } else {
+      var blank = document.createElement("span");
+      blank.className = "name-note";
+      blank.textContent = " ";
+      nameLine.appendChild(blank);
+    }
+  }
+
+  function paintCritter(now) {
+    var kind = CAST[clock.index] ? CAST[clock.index].id : "stash";
+    var id = frameOf(kind, now, reduce);
+    if (id !== painted.frame || kind !== painted.kind || bucket !== painted.bucket) {
+      painted.frame = id;
+      painted.kind = kind;
+      painted.bucket = bucket;
+      drawCreature(critter, kind, bucket, id);
+    }
+    bob.style.transform = "translateY(" + bobOf(kind, bucket, now, reduce) + "px)";
+  }
+
+  function fillPill(blob) {
+    if (!blob || !ctx2d) return;
+    ctx2d.beginPath();
+    var radius = Math.min(blob.hw, blob.hh);
+    if (ctx2d.roundRect) {
+      ctx2d.roundRect(blob.x - blob.hw, blob.y - blob.hh, blob.hw * 2, blob.hh * 2, radius);
+    } else {
+      ctx2d.rect(blob.x - blob.hw, blob.y - blob.hh, blob.hw * 2, blob.hh * 2);
+    }
+    ctx2d.fill();
+  }
+
+  var last = performance.now();
+  function draw(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (!reduce) {
+      clock.time += dt;
+      if (clock.time >= T.loop) {
+        clock.time -= T.loop;
+        clock.index = (clock.index + 1) % CAST.length;
+        if (clock.queued) {
+          clock.time = T.bulge0;
+          clock.queued = false;
+        }
+      }
+    }
+
+    var pose = sample(
+      reduce ? (T.grow1 + T.hold1) / 2 : clock.time,
+      view.cssW,
+      view.cssH,
+      clock.index
+    );
+    stage.dataset.phase = pose.phase;
+    var dpr = view.dpr;
+
+    if (gl && program && locs) {
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+      gl.uniform2f(locs.res, canvas.width, canvas.height);
+      var m = pose.mother;
+      gl.uniform4f(locs.mother, m.x * dpr, m.y * dpr, m.hw * dpr, m.hh * dpr);
+      if (pose.child) {
+        var c = pose.child;
+        gl.uniform4f(locs.child, c.x * dpr, c.y * dpr, c.hw * dpr, c.hh * dpr);
+        gl.uniform1f(locs.k, pose.k * dpr);
+        gl.uniform1f(locs.has, 1);
+      } else {
+        gl.uniform4f(locs.child, 0, 0, 0, 0);
+        gl.uniform1f(locs.k, 0);
+        gl.uniform1f(locs.has, 0);
+      }
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    } else if (ctx2d) {
+      ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx2d.clearRect(0, 0, view.cssW, view.cssH);
+      ctx2d.fillStyle = "#16130f";
+      fillPill(pose.mother);
+      fillPill(pose.child);
+    }
+
+    if (pose.show && pose.child) {
+      var top = Math.round(pose.child.y - pose.child.hh - 4);
+      slot.style.visibility = "visible";
+      slot.style.transform = "translate3d(" + Math.round(pose.child.x) + "px, " + top + "px, 0)";
+    } else {
+      slot.style.visibility = "hidden";
+    }
+
+    paintName(pose.show, clock.index);
+    paintCritter(now);
+    requestAnimationFrame(draw);
+  }
+
+  paintName(false, 0);
+  requestAnimationFrame(draw);
+}
+
+if (typeof document !== "undefined") boot();
+</script>
+</body>
+</html>
