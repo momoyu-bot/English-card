@@ -1,0 +1,2378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>守株待兔 · 小萌物短片</title>
+<meta name="description" content="六只看古风绘本穿越进宋国田野，摔失忆了。树桩边有人在等兔，店里那只字符兔子叫什么来着？">
+<meta name="theme-color" content="#F4EFE4">
+<!--
+  小萌物短片《守株待兔》。整部片子是一张 360×640 的 9:16 竖屏 canvas，render(t) 给定第几秒就画出那一格。
+  字幕不硬编码在绘制脚本里：底下「字幕本」那几行就是数据源，data-t 是它在这一场里出现和消失的秒数。
+  data-k="sign" 是 Clawd 举的小木牌；data-k="say" 是角色头顶的竹简纸气泡；data-k="end" 是结尾句；其余是旁白。
+  点字幕本的哪一句，就跳到哪一句（播放时不自动滚屏）。只交网页，不导 MP4；底下保留 window.FILM 导视频口子。
+
+  故事与设定：
+    六只最近迷上了古风小故事，夜里在宝's Shop 翻开《守株待兔》，被书页水墨漩涡卷进宋国田野，落地摔成了失忆小团子。
+    老树桩旁蹲着一位戴斗笠的眼熟守株人（字符猫 /\_/\ 清醒宝），正硬撑着不肯睡，念叨着「兔、兔、兔」。
+    一个「兔」字敲醒半截记忆：以前店里好像也有一只字符兔子 (\_/)，一只耳朵立着、一只耷拉着，叫什么名字来着？
+    为了帮守株人早点收工睡觉，六只亲自变形演兔子：小粉鼓出长兔耳撞树桩 Duang 弹飞，FetchMo 和 StashYu 演双簧兔顺走落叶，
+    最后六只叠成「左耳立、右耳垂」的大叠叠兔——月亮升起时，真正的字符兔子（困困宝）闭着眼路过，啪嗒贴在树桩上睡着。
+    全员记忆回笼！困困宝给清醒宝盖上灰粉小毯子，六只帮田里浇好青苗，排队钻回书页，回到宝's Shop 安睡。
+
+  造型核对：
+    Clawd  → claude/小科普/Clawd造型宪法（Code版）.html（#d47f59，踩角四腿，无嘴，举木牌；落地失忆时翻跟头）
+    小脸蛋 → claude/小科普/小脸蛋造型宪法（实测版） (1).html（#FF309B / #9159FE / #000000，挖空反斜杠双缝 rotate(-26.2°)，
+             右缝窄三分之一；落地压成 Q 弹扁团子、小粉鼓出软兔耳撞树桩变形，眼缝方向不变）
+    momoyu → claude/小科普/momoyu造型宪法.html（StashYu #E2552B / FetchMo #F3E7D6，20×13 像素格与尾巴 DLC；
+             双簧兔与叠叠兔时配合剧情舒展变形）
+    字符猫兔 → 照《字符大漫游》《今日份的困》：猫耳朵 /\_/\ 是清醒宝（暖琥珀 #f4b25f），兔耳朵 (\_/) 是困困宝（柔薰衣草 #b0a2e6）。
+  古风五声音阶原创小曲由 WebAudio 实时合成。
+-->
+<style>
+  :root{
+    --paper:#F4EFE4; --paper-2:#FAF6EE; --card:#FFFCF6;
+    --ink:#2B2620; --ink-2:#6B6257; --ink-3:#9F9588;
+    --line:#E2D9C8; --acc:#B24A3B; --jade:#4A7256;
+    --mono:"Menlo","SF Mono","Consolas","JetBrains Mono","DejaVu Sans Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.7;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:480px;margin:0 auto;
+    padding:calc(24px + env(safe-area-inset-top)) 16px calc(38px + env(safe-area-inset-bottom));
+  }
+
+  header{text-align:center;margin-bottom:16px}
+  .tag{font-size:12px;letter-spacing:.18em;color:var(--ink-3)}
+  h1{
+    margin:5px 0 6px;font-weight:600;font-size:30px;line-height:1.3;letter-spacing:.12em;text-indent:.12em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--ink);
+  }
+  .lede{margin:0;color:var(--ink-2);font-size:14px;line-height:1.65}
+
+  .player{display:none}
+  .js .player{display:block}
+  .player{width:100%;max-width:min(100%, calc((100vh - 130px) * 9 / 16));margin:0 auto 24px}
+  @supports (height:100svh){
+    .player{max-width:min(100%, calc((100svh - 130px) * 9 / 16))}
+  }
+  .screen{
+    position:relative;border-radius:14px;overflow:hidden;background:#DCE5D8;
+    box-shadow:0 0 0 1px var(--line), 0 12px 28px -18px rgba(55,42,24,.42);
+    aspect-ratio:9/16;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  .screen canvas{display:block;width:100%;height:100%}
+  .big{
+    position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);
+    width:64px;height:64px;border-radius:50%;border:0;padding:0;cursor:pointer;
+    background:rgba(43,38,32,.84);color:#FAF6EE;font:inherit;font-size:22px;line-height:64px;text-align:center;
+    box-shadow:0 0 0 1.2px rgba(255,252,246,.48), 0 8px 20px rgba(32,24,16,.25);
+  }
+  .big.again{width:auto;padding:0 20px;border-radius:99px;height:44px;line-height:44px;font-size:14.5px;letter-spacing:.08em}
+  .playing .big{display:none}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin:10px 2px 2px;font-size:12.5px;color:var(--ink-2)}
+  .ctrl button{
+    font:inherit;font-size:12.5px;color:var(--ink);background:var(--card);cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:4px 13px;
+  }
+  .ctrl button:active{background:#EAE2D3}
+  .ctrl .time{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .ctrl .sp{flex:1}
+  input[type=range]{width:100%;margin:6px 0 4px;accent-color:var(--acc);height:26px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chips button{
+    font:inherit;font-size:12.5px;color:var(--ink-2);background:transparent;cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:3px 11px;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  }
+  .chips button.on{color:var(--acc);border-color:#D5A39A;background:var(--card)}
+
+  /* 字幕本：也是片子里的字幕本身，点哪句跳哪句 */
+  .script{margin:8px 0 0;padding:20px 18px 8px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--line)}
+  .script h2{margin:0 0 12px;font-size:13px;font-weight:500;letter-spacing:.16em;color:var(--ink-3);text-align:center}
+  .sc{margin:0 0 16px}
+  .sc h3{
+    margin:0 0 4px;font-size:13px;font-weight:400;color:var(--ink-2);
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .sc h3 .no{
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--acc);font-size:14px;font-weight:600;
+  }
+  .sc p{margin:0;padding:3px 0 3px 10px;border-left:2px solid transparent;color:var(--ink);font-size:14.5px}
+  .sc p[data-who]::before{content:attr(data-who) "：";color:var(--ink-2)}
+  .js .sc p{cursor:pointer}
+  .sc p.on{border-left-color:var(--acc);color:var(--acc)}
+  .sc p .kao{font-family:var(--mono);font-size:13px;color:var(--ink-3);margin-right:5px}
+  footer{margin:24px 0 0;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.9}
+</style>
+</head>
+<body>
+<script>document.documentElement.className='js';</script>
+<div class="wrap">
+  <header>
+    <div class="tag">小萌物 · 古风短片</div>
+    <h1>守株待兔</h1>
+    <p class="lede">六只翻开古风绘本，一头栽进宋国田野摔失忆了。<br>树桩边蹲着个眼熟的人，嘴里直念叨兔、兔、兔——<br>等等，以前店里那只字符兔子，叫什么来着？</p>
+  </header>
+
+  <div class="player" id="player">
+    <div class="screen" id="screen">
+      <canvas id="film" width="360" height="640" role="img" aria-label="守株待兔：六只小萌物看古风绘本穿越进宋国田野摔失忆了，在树桩旁遇见扮成守株人的字符猫清醒宝，为了帮她收工亲自变形演兔子，直到真正的字符兔子困困宝闭眼路过贴在树桩上睡着，全员找回记忆一起回店里睡觉的小短片"></canvas>
+      <button class="big" id="big" type="button" aria-label="播放">▶</button>
+    </div>
+    <div class="ctrl">
+      <button type="button" id="pp">播放</button>
+      <span class="time" id="time">0:00 / 0:00</span>
+      <span class="sp"></span>
+      <button type="button" id="snd" aria-pressed="true">声音 开</button>
+    </div>
+    <input type="range" id="seek" min="0" max="1550" step="1" value="0" aria-label="进度">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section class="script" id="script">
+    <h2>字 幕 本</h2>
+
+    <div class="sc" data-scene="intro" data-dur="24" data-chip="序 · 入画">
+      <h3><span class="no">序</span>翻书入画</h3>
+      <p data-t="0.8-3.0">最近，六只迷上了古风小故事。</p>
+      <p data-t="3.4-5.8">今晚摊开的，是《守株待兔》。</p>
+      <p data-t="6.2-8.8">FetchMo 伸爪，去拨画里的树桩。</p>
+      <p data-t="9.2-11.6">书页忽然泛起一圈水墨涟漪——</p>
+      <p data-t="12.0-14.3">哗啦一下，把六只全卷了进去！</p>
+      <p data-t="15.2-17.6">再睁眼，天很蓝，田埂很绿。</p>
+      <p data-t="18.0-20.4">三颗摔成扁团子，弹了两下。</p>
+      <p data-t="20.8-23.3">坏了——把记忆也摔丢了。</p>
+    </div>
+
+    <div class="sc" data-scene="meet" data-dur="34" data-card="第一场" data-sub="兔、兔、兔？" data-chip="一 · 寻兔">
+      <h3><span class="no">一</span>兔、兔、兔？</h3>
+      <p data-t="1.0-3.2">六只面面相觑，谁也不认得谁。</p>
+      <p data-t="3.6-5.8">StashYu 抱着大红尾巴发呆。</p>
+      <p data-t="6.2-8.6" data-k="sign" data-key="who" data-who="Clawd">我是谁？</p>
+      <p data-t="9.2-11.6">田野老树桩边，蹲着个戴斗笠的人。</p>
+      <p data-t="12.0-14.4">斗笠下一对猫耳朵，莫名眼熟。</p>
+      <p data-t="14.8-17.5" data-k="say" data-key="wait" data-who="守株人"><span class="kao">/\_/\</span>嘘——别出声，我在等兔！</p>
+      <p data-t="17.9-20.1">兔……兔……兔？</p>
+      <p data-t="20.5-23.1">这个字，在六只脑海里叮地响了一声。</p>
+      <p data-t="23.5-26.2">以前店里，好像也有一只字符兔子！</p>
+      <p data-t="26.6-28.6">名字叫什么来着？</p>
+      <p data-t="28.9-30.9" data-k="sign" data-key="g1" data-who="Clawd">跳跳兔？</p>
+      <p data-t="31.2-33.3" data-k="sign" data-key="g2" data-who="Clawd">胡萝卜？</p>
+    </div>
+
+    <div class="sc" data-scene="morph" data-dur="38" data-card="第二场" data-sub="自己变兔" data-chip="二 · 变兔">
+      <h3><span class="no">二</span>自己变兔</h3>
+      <p data-t="0.8-3.2">日头偏西，树桩边连根兔毛也没有。</p>
+      <p data-t="3.6-6.2" data-k="say" data-key="notired" data-who="守株人"><span class="kao">(๑•́ㅂ•̀๑)</span>我不困！肯定还会撞上来！</p>
+      <p data-t="6.6-9.0">六只看她硬撑着打晃，心软了。</p>
+      <p data-t="9.3-11.3" data-k="sign" data-key="plan" data-who="Clawd">我们变兔！</p>
+      <p data-t="11.6-13.9">假装撞一下树桩，她就能收工睡觉啦。</p>
+      <p data-t="14.3-16.7">小粉憋足劲，啵地鼓出两只长兔耳——</p>
+      <p data-t="17.1-19.4">Duang！太Q弹，撞完直接弹飞了回来。</p>
+      <p data-t="19.8-21.8">守株人揉揉眼，以为飞过一颗桃。</p>
+      <p data-t="22.2-24.8">FetchMo 团成白兔，StashYu 竖尾巴当耳朵。</p>
+      <p data-t="25.2-27.9">白尾巴尖没忍住，顺走了树桩上的落叶。</p>
+      <p data-t="28.4-31.0">六只索性叠在一起，拼成一只大兔子！</p>
+      <p data-t="31.4-34.0">左耳立着，右耳软软地耷拉下来……</p>
+      <p data-t="34.4-37.2">等等！这副耳朵，怎么这么眼熟！</p>
+    </div>
+
+    <div class="sc" data-scene="recall" data-dur="34" data-card="第三场" data-sub="啪嗒，想起来了" data-chip="三 · 困困宝">
+      <h3><span class="no">三</span>啪嗒，想起来了</h3>
+      <p data-t="0.8-3.2">月亮升上树梢，田埂飘来一串呼噜。</p>
+      <p data-t="3.6-6.1">一只真正的字符兔子，闭着眼路过。</p>
+      <p data-t="6.5-8.9">一只耳朵立着，一只耳朵耷拉着。</p>
+      <p data-t="9.3-11.8">她没跑也没撞，只是啪嗒贴上树桩——</p>
+      <p data-t="12.2-14.6">把老树桩当成枕头，接着睡了。</p>
+      <p data-t="15.0-17.2">六只浑身一震，全想起来了！</p>
+      <p data-t="17.6-19.9" data-k="sign" data-key="kkb" data-who="Clawd">困困宝！</p>
+      <p data-t="20.3-22.9">店里那只送困的字符兔子，叫困困宝！</p>
+      <p data-t="23.3-25.8">那守树桩硬撑的……不就是清醒宝嘛！</p>
+      <p data-t="26.2-29.0" data-k="say" data-key="catch" data-who="困困宝"><span class="kao">(\_/)</span>抓到一只……熬夜守株的……zzZ</p>
+      <p data-t="29.4-31.4">灰粉小毯子一盖，守株人秒睡。</p>
+      <p data-t="31.7-33.5">原来兔子不是撞晕的，是困的。</p>
+    </div>
+
+    <div class="sc" data-scene="home" data-dur="25" data-card="终场" data-sub="回店里睡" data-chip="终 · 归店">
+      <h3><span class="no">终</span>回店里睡</h3>
+      <p data-t="0.8-3.2">走之前，Clawd 提水浇好了蔫青苗。</p>
+      <p data-t="3.6-6.1">FetchMo 叼回锄头，三颗把草地拍平。</p>
+      <p data-t="6.5-9.0">StashYu 点点尾巴尖，落叶还妥帖收着。</p>
+      <p data-t="9.4-12.1">月光翻开书页门，八只排着队回家。</p>
+      <p data-t="13.2-15.8">宝's Shop 的书桌上，绘本轻轻合拢。</p>
+      <p data-t="16.2-18.8">书缝露出一片叶，猫和兔都睡熟了。</p>
+      <p data-t="19.1-21.0" data-k="end">树桩不用守，困了就回店里睡。</p>
+    </div>
+  </section>
+
+  <footer>点字幕本里的任意一句，直接跳到那一格 · 宝's Shop</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+var W=360, H=640, TAU=Math.PI*2;
+var SANS='-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
+var SERIF='"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif';
+var KAI='"Kaiti SC","STKaiti","KaiTi","Songti SC","STSong",serif';
+var MONO='"Menlo","SF Mono","Consolas","JetBrains Mono","DejaVu Sans Mono",monospace';
+
+var cv=document.getElementById('film'), ctx=cv.getContext('2d'), S=1;
+
+/* ---------- 从底下字幕本读取场次与每一句的时间 ---------- */
+var SCENES=[], TOTAL=0;
+Array.prototype.forEach.call(document.querySelectorAll('#script .sc'),function(el){
+  var dur=parseFloat(el.getAttribute('data-dur'))||20;
+  var sc={
+    id:el.getAttribute('data-scene'),
+    dur:dur, start:TOTAL,
+    card:el.getAttribute('data-card')||'',
+    sub:el.getAttribute('data-sub')||'',
+    chipText:el.getAttribute('data-chip')||'',
+    caps:[], byKey:{}
+  };
+  Array.prototype.forEach.call(el.querySelectorAll('p[data-t]'),function(p){
+    var ts=p.getAttribute('data-t').split('-');
+    var clone=p.cloneNode(true);
+    var kaoEl=clone.querySelector('.kao');
+    if(kaoEl) kaoEl.parentNode.removeChild(kaoEl);
+    var rawText=(clone.textContent||'').trim();
+    var c={
+      t0:parseFloat(ts[0]), t1:parseFloat(ts[1]),
+      k:p.getAttribute('data-k')||'',
+      key:p.getAttribute('data-key')||'',
+      who:p.getAttribute('data-who')||'',
+      text:rawText, el:p
+    };
+    sc.caps.push(c);
+    if(c.key) sc.byKey[c.key]=c;
+  });
+  SCENES.push(sc);
+  TOTAL+=dur;
+});
+
+/* ---------- 画笔与相机镜头（保持黄金视线区，不让观众眼睛上下跑） ---------- */
+function setup(pxW){
+  pxW=Math.max(180,Math.round(pxW));
+  cv.width=pxW; cv.height=Math.round(pxW*H/W); S=cv.width/W;
+}
+var CAM={x:180,y:320,z:1}, PCAM=null, A=1, PH=0, CUR_SC=null;
+function cam(x,y,z){ CAM.x=x; CAM.y=y; CAM.z=z; }
+function flat(){ cam(180,320,1); }
+/* 让世界地面 gndY 在放大 z 倍后依然稳稳落在屏幕 scrY（默认 498，紧贴字幕条上方） */
+function lowK(fx,gndY,z,scrY){
+  var sy=scrY===undefined?498:scrY;
+  return [fx, gndY-(sy-320)/z, z];
+}
+function X(x){ return ((x-CAM.x)*CAM.z+180)*S; }
+function Y(y){ return ((y-CAM.y)*CAM.z+320)*S; }
+function worldT(){ var z=CAM.z*S; ctx.setTransform(z,0,0,z,(180-CAM.x*CAM.z)*S,(320-CAM.y*CAM.z)*S); }
+
+function clamp(v){ return v<0?0:v>1?1:v; }
+function lerp(a,b,p){ return a+(b-a)*p; }
+function smooth(p){ p=clamp(p); return p*p*(3-2*p); }
+function inR(t,a,b){ return t>=a&&t<b; }
+function hexRGB(c){ c=c.replace('#',''); return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)]; }
+function mixc(a,b,p){
+  var u=hexRGB(a), v=hexRGB(b); p=clamp(p);
+  return 'rgb('+Math.round(lerp(u[0],v[0],p))+','+Math.round(lerp(u[1],v[1],p))+','+Math.round(lerp(u[2],v[2],p))+')';
+}
+/* PH: 0 清朗白天 -> 1 暖金日暮 -> 2 柔和月夜 */
+function dc(a,b,c){ return PH<=1?mixc(a,b,PH):mixc(b,c,PH-1); }
+function rng(seed){
+  return function(){
+    seed|=0; seed=seed+0x6D2B79F5|0;
+    var t0=Math.imul(seed^seed>>>15,1|seed);
+    t0=t0+Math.imul(t0^t0>>>7,61|t0)^t0;
+    return ((t0^t0>>>14)>>>0)/4294967296;
+  };
+}
+
+/* 像素对齐矩形：画像素格角色不漏半格白缝 */
+function R(x,y,w,h,c,a){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c;
+  var x0=Math.round(X(x)), y0=Math.round(Y(y)), x1=Math.round(X(x+w)), y1=Math.round(Y(y+h));
+  if(x1>x0&&y1>y0) ctx.fillRect(x0,y0,x1-x0,y1-y0);
+  ctx.globalAlpha=1;
+}
+function F(x,y,w,h,c,a){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  worldT(); ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c; ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function roundPathOn(c,x,y,w,h,r){
+  r=Math.max(0,Math.min(r,w/2,h/2));
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+function rrect(x,y,w,h,r,fill,a,stroke,lw,dash){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  worldT(); ctx.globalAlpha=al>1?1:al;
+  ctx.beginPath(); roundPathOn(ctx,x,y,w,h,r);
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); }
+  if(stroke){
+    ctx.strokeStyle=stroke; ctx.lineWidth=lw||1;
+    if(dash) ctx.setLineDash(dash);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function dot(x,y,r,c,a){
+  var al=(a===undefined?1:a)*A; if(al<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function elli(x,y,rx,ry,c,a,rot){
+  var al=(a===undefined?1:a)*A; if(al<=0||rx<=0||ry<=0) return;
+  worldT(); ctx.save(); ctx.translate(x,y); if(rot) ctx.rotate(rot);
+  ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.ellipse(0,0,rx,ry,0,0,TAU); ctx.fill();
+  ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function line(pts,c,lw,a,dash){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  worldT(); ctx.globalAlpha=al>1?1:al; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  ctx.lineJoin='round'; ctx.lineCap='round'; if(dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]);
+  for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.stroke(); ctx.lineCap='butt'; ctx.setLineDash([]);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function poly(pts,c,a,stroke,lw){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  worldT(); ctx.globalAlpha=al>1?1:al;
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]);
+  for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.closePath();
+  if(c){ ctx.fillStyle=c; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.stroke(); }
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function vgrad(x,y,w,h,stops,a){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  worldT(); var g=ctx.createLinearGradient(0,y,0,y+h);
+  stops.forEach(function(st){ g.addColorStop(st[0],st[1]); });
+  ctx.globalAlpha=al>1?1:al; ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function glow(x,y,r,rgb,a){
+  var al=(a===undefined?1:a)*A; if(al<=0||r<=0) return; al=Math.min(1,al);
+  worldT(); var g=ctx.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,'rgba('+rgb+','+al+')');
+  g.addColorStop(.45,'rgba('+rgb+','+(al*.4)+')');
+  g.addColorStop(1,'rgba('+rgb+',0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+  ctx.setTransform(1,0,0,1,0,0);
+}
+function ringS(x,y,r,c,lw,a,dash){
+  var al=(a===undefined?1:a)*A; if(al<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=al>1?1:al; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  if(dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* ---------- 镜头关键帧与步进动画（15fps 步进防像素半格发糊） ---------- */
+function ck(t,keys){
+  if(t<=keys[0][0]) return keys[0].slice(1);
+  for(var i=1;i<keys.length;i++){
+    if(t<keys[i][0]){
+      var a0=keys[i-1], b0=keys[i], p=smooth((t-a0[0])/(b0[0]-a0[0]));
+      return [lerp(a0[1],b0[1],p), lerp(a0[2],b0[2],p), a0[3]*Math.pow(b0[3]/a0[3],p)];
+    }
+  }
+  return keys[keys.length-1].slice(1);
+}
+function camK(t,keys){
+  if(PCAM){ cam(PCAM[0],PCAM[1],PCAM[2]); return; }
+  var k=ck(t,keys); cam(k[0],k[1],k[2]);
+}
+function kAt(t,fx,gndY,z,scrY){ var v=lowK(fx,gndY,z,scrY); return [t,v[0],v[1],v[2]]; }
+
+function path(t,x,y,segs){
+  for(var i=0;i<segs.length;i++){
+    var sg=segs[i];
+    if(t<sg[0]) break;
+    if(t<sg[0]+sg[1]){
+      var p=Math.min(1,Math.floor((t-sg[0])*15)/15/sg[1]);
+      return {x:lerp(x,sg[2],p), y:lerp(y,sg[3],p)-sg[4]*4*p*(1-p), air:true, p:p};
+    }
+    x=sg[2]; y=sg[3];
+  }
+  return {x:x,y:y,air:false,p:1};
+}
+function walkSegs(t0,t1,x0,x1,y,n,h){
+  var segs=[], d=(t1-t0)/n;
+  for(var i=0;i<n;i++) segs.push([t0+i*d, d*.86, lerp(x0,x1,(i+1)/n), y, h===undefined?3.5:h]);
+  return segs;
+}
+function jump(t,t0,d,h){
+  if(!inR(t,t0,t0+d)) return 0;
+  var p=Math.min(1,Math.floor((t-t0)*15)/15/d);
+  return -h*4*p*(1-p);
+}
+function stepP(t,t0,d,n){ return Math.floor(clamp((t-t0)/d)*(n||10))/(n||10); }
+function cyc(t,t0,list){
+  var tot=0, i; for(i=0;i<list.length;i++) tot+=list[i][1];
+  var u=((t-t0)%tot+tot)%tot;
+  for(i=0;i<list.length;i++){ if(u<list[i][1]) return list[i][0]; u-=list[i][1]; }
+  return list[0][0];
+}
+function blinkOn(t,per,off){ return ((t+off)%per)<.14; }
+function fade(t,t0,t1,f){ f=f||.22; return Math.min(clamp((t-t0)/f),clamp((t1-t)/f)); }
+
+/* ---------- 文字与字幕（16px 黑体，清晰聚拢） ---------- */
+var SEG=(typeof Intl!=='undefined'&&Intl.Segmenter)?new Intl.Segmenter('zh',{granularity:'grapheme'}):null;
+function chars(s){
+  if(SEG) return Array.from(SEG.segment(s),function(x){ return x.segment; });
+  return Array.from(s||'');
+}
+function wt(s,x,y,o){
+  o=o||{}; var al=(o.a===undefined?1:o.a)*A; if(al<=0||!s) return;
+  var size=o.size*CAM.z*S, ch=chars(s);
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.font=(o.wt||400)+' '+size+'px '+(o.fam||SANS);
+  ctx.fillStyle=o.c||'#2B2620'; ctx.globalAlpha=al>1?1:al;
+  ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+  var ls=(o.ls||0)*size, px0=X(x), py0=Y(y), ws=[], tot=0, i;
+  for(i=0;i<ch.length;i++){ var w0=ctx.measureText(ch[i]).width; ws.push(w0); tot+=w0+ls; }
+  if(o.al==='center') px0-=(tot-ls)/2; else if(o.al==='right') px0-=(tot-ls);
+  for(i=0;i<ch.length;i++){ ctx.fillText(ch[i],px0,py0); px0+=ws[i]+ls; }
+  ctx.globalAlpha=1;
+}
+function scrText(s,x,y,font,c,a,align){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.globalAlpha=clamp(al); ctx.font=font; ctx.fillStyle=c;
+  ctx.textAlign=align||'center'; ctx.textBaseline='middle';
+  ctx.fillText(s,x,y);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+var PUNCT='，。、！？；：…—」』）';
+function wrapLines(s,maxW){
+  if(ctx.measureText(s).width<=maxW) return [s];
+  var best=-1, mid=s.length/2;
+  for(var i=1;i<s.length-1;i++){
+    if('，。？！…—：；'.indexOf(s[i])>=0 && PUNCT.indexOf(s[i+1])<0){
+      if(best<0||Math.abs(i+1-mid)<Math.abs(best-mid)) best=i+1;
+    }
+  }
+  if(best>0){
+    var l0=s.slice(0,best), r0=s.slice(best);
+    if(ctx.measureText(l0).width<=maxW&&ctx.measureText(r0).width<=maxW) return [l0,r0];
+  }
+  var out=[], cur='';
+  chars(s).forEach(function(k){
+    var nx=cur+k;
+    if(cur&&ctx.measureText(nx).width>maxW&&PUNCT.indexOf(k)<0){ out.push(cur); cur=k; } else cur=nx;
+  });
+  if(cur) out.push(cur);
+  return out;
+}
+/* 底部旁白字幕：16px 黑体，宣纸圆角底衬，紧挨角色脚底下方 y=580 */
+function caption(s,a){
+  if(a<=0||!s) return;
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.font='500 16px '+SANS; ctx.textAlign='center'; ctx.textBaseline='middle';
+  var lines=wrapLines(s,304), lh=24, y0=580-(lines.length-1)*lh/2;
+  ctx.globalAlpha=clamp(a);
+  var w0=0; lines.forEach(function(ln){ w0=Math.max(w0,ctx.measureText(ln).width); });
+  var bx=180-w0/2-15, by=y0-lh/2-6, bw=w0+30, bh=lines.length*lh+12;
+  ctx.fillStyle='rgba(252,248,239,.95)';
+  ctx.strokeStyle='rgba(176,158,132,.55)'; ctx.lineWidth=1;
+  ctx.beginPath(); roundPathOn(ctx,bx,by,bw,bh,10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#26211B';
+  lines.forEach(function(ln,i){ ctx.fillText(ln,180,y0+i*lh+.5); });
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* 查询当前场里 data-k="sign" 或 data-k="say" 的激活文本 */
+function keyItem(key){ return CUR_SC&&CUR_SC.byKey[key]; }
+function signOn(t,key){
+  var c=keyItem(key);
+  return (c&&t>=c.t0&&t<c.t1)?c.text:'';
+}
+/* 角色头顶竹简宣纸对话气泡（紧贴角色头顶，不飞到画面顶端） */
+function sayBubble(t,key,wx,wy,o){
+  var c=keyItem(key); if(!c||t<c.t0||t>=c.t1) return;
+  o=o||{};
+  var al=Math.min(clamp((t-c.t0)/.16),clamp((c.t1-t)/.22));
+  var n=Math.floor((t-c.t0)*22)+1;
+  var full=c.text, shown=chars(full).slice(0,n).join('');
+  var fsz=o.size||11.5, z=CAM.z*S;
+  ctx.setTransform(1,0,0,1,0,0); ctx.font='600 '+(fsz*z)+'px '+SANS;
+  var tw0=ctx.measureText(full).width/z;
+  var bw=Math.max(46,tw0+18), bh=fsz+12;
+  var bx=clamp((wx-bw/2 - (CAM.x-170/CAM.z))/Math.max(1,(340/CAM.z-bw)));
+  var x0=wx-bw/2;
+  /* 防止气泡超出左右画框边缘 */
+  var leftLim=CAM.x-168/CAM.z, rightLim=CAM.x+168/CAM.z;
+  if(x0<leftLim) x0=leftLim;
+  if(x0+bw>rightLim) x0=rightLim-bw;
+  var y0=wy-bh-7, bg=o.bg||'#FFFDF7', bd=o.bd||'#C9B596', tc=o.tc||'#2E261E';
+  rrect(x0,y0,bw,bh,6,bg,al,bd,1.1);
+  var tx=Math.max(x0+10,Math.min(x0+bw-10,wx));
+  poly([tx-4,y0+bh-.4, tx+4,y0+bh-.4, wx,wy-1],bg,al);
+  line([tx-4,y0+bh, wx,wy-1, tx+4,y0+bh],bd,1,al);
+  wt(shown,x0+9,y0+bh/2+fsz*.35,{size:fsz,wt:600,c:tc,a:al});
+}
+
+/* ---------- 六只造型宪法 + 剧情自由变形 ---------- */
+
+/* 1. Clawd：Code 版宪法（#d47f59，壳 147×98，四条踩角腿，无嘴，黑竖眼） */
+var CL_C='#d47f59', CL_INK='#120d1d', CK=.28;
+var CL_EYES={
+  bar:[[70,78,8,21],[158,78,8,21]],
+  smile:[[62,88,8,8],[70,80,8,11],[78,88,8,8],[150,88,8,8],[158,80,8,11],[166,88,8,8]],
+  shut:[[62,86,24,8],[150,86,24,8]],
+  left:[[62,78,8,21],[150,78,8,21]],
+  right:[[78,78,8,21],[166,78,8,21]],
+  wide:[[67,74,12,25],[155,74,12,25]]
+};
+function clawdAt(cx,foot,o){
+  o=o||{}; var k=o.k||CK, la=o.la||0, ra=o.ra||0, step=o.step||0;
+  var l0=step>0?-5:0, l1=step<0?-5:0;
+  if(o.rot){
+    /* 摔倒翻跟头等整体旋转时绕中心画 */
+    var ox=-118*k, oy=-110*k;
+    worldT(); ctx.save(); ctx.translate(cx,foot-59*k); ctx.rotate(o.rot*Math.PI/180);
+    ctx.globalAlpha=A>1?1:A; ctx.fillStyle=CL_C;
+    ctx.fillRect(ox+44*k,oy+50*k,147*k,98*k);
+    ctx.fillRect(ox+20*k,oy+(99+la)*k,24*k,21*k);
+    ctx.fillRect(ox+191*k,oy+(99+ra)*k,25*k,21*k);
+    ctx.fillRect(ox+44*k,oy+(148+l0)*k,15*k,21*k);
+    ctx.fillRect(ox+68*k,oy+(148+l1)*k,15*k,21*k);
+    ctx.fillRect(ox+152*k,oy+(148+l0)*k,15*k,21*k);
+    ctx.fillRect(ox+176*k,oy+(148+l1)*k,15*k,21*k);
+    ctx.fillStyle=CL_INK;
+    (CL_EYES[o.eyes||'bar']).forEach(function(e){ ctx.fillRect(ox+e[0]*k,oy+e[1]*k,e[2]*k,e[3]*k); });
+    ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+    return;
+  }
+  var x0=cx-118*k, y0=foot-169*k;
+  function r(a,b,w,h,c){ R(x0+a*k,y0+b*k,w*k,h*k,c); }
+  r(44,50,147,98,CL_C);
+  r(20,99+la,24,21,CL_C); r(191,99+ra,25,21,CL_C);
+  r(44,148+l0,15,21,CL_C); r(68,148+l1,15,21,CL_C);
+  r(152,148+l0,15,21,CL_C); r(176,148+l1,15,21,CL_C);
+  (CL_EYES[o.eyes||'bar']).forEach(function(e){ r(e[0],e[1],e[2],e[3],CL_INK); });
+}
+function clawLX(cx,k){ k=k||CK; return cx-118*k+32*k; }
+function clawTopY(foot,arm,k){ k=k||CK; return foot-169*k+(99+(arm||0))*k; }
+
+/* Clawd 举的小木牌：楷体深墨字，大而清楚 */
+function placard(x,y,s,a,size){
+  if(!s) return;
+  var al=a===undefined?1:a, fsz=size||11;
+  var z=CAM.z*S;
+  ctx.setTransform(1,0,0,1,0,0); ctx.font='700 '+(fsz*z)+'px '+KAI;
+  var w0=Math.max(36,ctx.measureText(s).width/z+16), h0=fsz+10;
+  line([x,y+2,x,y-8],'#7D5C3E',2,al);
+  rrect(x-w0/2,y-8-h0,w0,h0,3.5,'#F7EBD2',al,'#846242',1.2);
+  wt(s,x,y-8-h0/2+fsz*.35,{size:fsz,wt:700,c:'#3E2D1E',al:'center',fam:KAI,a:al});
+}
+
+/* 2. 小脸蛋：实测版宪法（#FF309B / #9159FE / #000000，挖空反斜杠双缝 rotate(-26.2°)，右缝窄 1/3）
+      支持 sx/sy Q弹压扁变形，支持 bunny:0~1 鼓出粉兔长耳与小圆球尾 */
+var FACE=['#FF309B','#9159FE','#000000'], FR=13.5;
+function slitPath(cx,cy,w,h,deg){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(deg*Math.PI/180);
+  roundPathOn(ctx,-w/2,-h/2,w,h,Math.min(w,h)/2);
+  ctx.restore();
+}
+function face(cx,cy,r,col,o){
+  if(A<=0) return;
+  o=o||{};
+  var bl=o.bl||0, h=.418*Math.max(0,1-.8*bl);
+  var sx=o.sx||1, sy=o.sy||1, bun=o.bunny||0, earBend=o.earBend||0;
+  /* 暗处给小黑（及三颗）加一圈极柔和的月白边，防止小黑沉进夜色 */
+  if(o.ring){
+    worldT(); ctx.save(); ctx.translate(cx,cy); ctx.rotate((o.rot||0)*Math.PI/180); ctx.scale(sx,sy);
+    ctx.globalAlpha=A*.75; ctx.strokeStyle=o.ring; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,0,r+.9,0,TAU); ctx.stroke();
+    ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+  }
+  if(bun>0){
+    /* 小粉果冻兔：身后一小团同色圆尾巴 + 头顶两只Q弹胶囊兔耳 */
+    worldT(); ctx.save(); ctx.translate(cx,cy); ctx.rotate((o.rot||0)*Math.PI/180); ctx.scale(sx,sy);
+    ctx.globalAlpha=A>1?1:A; ctx.fillStyle=col;
+    var eh=r*1.15*bun, ew=r*.36*Math.min(1,bun*1.3);
+    /* 小圆尾 */
+    ctx.beginPath(); ctx.arc(-r*.92,r*.32,r*.28*bun,0,TAU); ctx.fill();
+    /* 左兔耳 */
+    ctx.save(); ctx.translate(-r*.34,-r*.78); ctx.rotate((-10+earBend)*Math.PI/180);
+    ctx.beginPath(); roundPathOn(ctx,-ew/2,-eh,ew,eh+r*.25,ew/2); ctx.fill(); ctx.restore();
+    /* 右兔耳 */
+    ctx.save(); ctx.translate(r*.24,-r*.82); ctx.rotate((8+earBend*1.3)*Math.PI/180);
+    ctx.beginPath(); roundPathOn(ctx,-ew/2,-eh*.96,ew,eh*.96+r*.25,ew/2); ctx.fill(); ctx.restore();
+    ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+  }
+  worldT(); ctx.save(); ctx.translate(cx,cy); ctx.rotate((o.rot||0)*Math.PI/180); ctx.scale(sx,sy);
+  ctx.globalAlpha=A>1?1:A;
+  ctx.beginPath(); ctx.arc(0,0,r,0,TAU);
+  /* 反斜杠 \ ：顶端偏左，底端偏右，必须带负号 -26.2°；右缝 0.129 比左缝 0.194 窄三分之一 */
+  if(h>.004){
+    slitPath(.194*r,-.416*r,.194*r,h*r,-26.2);
+    slitPath(.626*r,-.497*r,.129*r,h*r,-26.2);
+  }
+  ctx.fillStyle=col; ctx.fill('evenodd');
+  ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function faceFoot(cx,foot,i,o){
+  o=o||{}; var r=o.r||FR, sy=o.sy||1;
+  if(PH>1.25&&!o.ring) o.ring=i===2?'rgba(238,232,216,.75)':'rgba(238,232,216,.35)';
+  face(cx,foot-r*sy,r,FACE[i],o);
+}
+
+/* 3. StashYu 和 FetchMo：momoyu 宪法 20×13 像素画逐格照抄 + 尾巴 DLC */
+var MC=3;
+var FOX={
+  rows:[
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM...CC..",
+    ".MMMMMMMMMMMM..CCCC.",
+    ".MMEEMMMMEEMM..MMMM.",
+    ".MMEEMMMMEEMM..MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "...................."
+  ],
+  pal:{M:'#E2552B',C:'#FFF3E3',D:'#3B2520'}, line:'#3B2520', eye:'#3B2520',
+  eyes:[[3,4],[9,4]], blush:[[2,6],[11,6]], blushC:'#F59A8C'
+};
+var CAT={
+  rows:[
+    "....................",
+    "........X........X..",
+    ".......XXX......XXX.",
+    "........MMMMMMMMMM..",
+    ".......MMMMMMMMMMMM.",
+    ".......MEEMMMMMMEEM.",
+    ".....X.MEEMXXXXMEEM.",
+    "....X..MMMMMXXMMMMM.",
+    "....X...MMMMMMMMMM..",
+    "....X...MMMMMMMMMM..",
+    ".....X...MMMMMMMM...",
+    "......XXXXXM..MXX...",
+    "...................."
+  ],
+  pal:{M:'#F3E7D6',X:'#4E382E'}, line:'#4E382E', eye:'#79C0F0',
+  eyes:[[8,5],[16,5]], blush:[[8,7],[17,7]], blushC:'#F2B8B0'
+};
+var FOX_TAP=[
+  ".D..........D.......",".DM........MD.......",".MCM......MCM.CC....",".MMMMMMMMMMMM.CCCC..",
+  ".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.",
+  "....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."
+];
+var FOX_IN=[
+  ".D..........D.......",".DM........MD.......",".MCM......MCM..CC...",".MMMMMMMMMMMM.CCCC..",
+  ".MMEEMMMMEEMM.MMMM..",".MMEEMMMMEEMM.MMMMM.","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.",
+  "....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."
+];
+var FOX_OUT=[
+  ".D..........D........",".DM........MD........",".MCM......MCM....CC..",".MMMMMMMMMMMM...CCCC.",
+  ".MMEEMMMMEEMM...MMMM.",".MMEEMMMMEEMM...MMMMM","CCCCCCDDCCCCCC.MMMMM.","..CCCCCCCCCC..MMMMM..",
+  "....MMCCMM...MMMMM...","....MMCCMM..MMMMM....","....MMMMMM.MMMMM.....","....DDMMDDMMMM.......","....................."
+];
+var FOX_DROOP=[
+  ".D..........D........",".DM........MD........",".MCM......MCM........",".MMMMMMMMMMMM........",
+  ".MMEEMMMMEEMM........",".MMEEMMMMEEMM........","CCCCCCDDCCCCCC.......","..CCCCCCCCCC.........",
+  "....MMCCMM...MM......","....MMCCMM..MMMMM....","....MMMMMM.MMMMMMMCC.","....DDMMDDMMMMMMMCCCC","....................."
+];
+var CAT_STR=[
+  "....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",
+  ".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.",
+  "....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."
+];
+var CAT_OUT=[
+  "....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",
+  ".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","...X...MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.",
+  "....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."
+];
+var CAT_UP=[
+  "....................","........X........X..",".....X.XXX......XXX.","....X...MMMMMMMMMM..",
+  "....X..MMMMMMMMMMMM.","....X..MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.",".....X.MMMMMXXMMMMM.",
+  "......X.MMMMMMMMMM..",".......XMMMMMMMMMM..","........XMMMMMMMM...",".........XXM..MXX...","...................."
+];
+var FOX_WAG=[[FOX.rows,.2],[FOX_IN,.2],[FOX.rows,.2],[FOX_OUT,.2]];
+var FOX_STASH=[[FOX_TAP,.18],[FOX.rows,.18],[FOX_TAP,.18],[FOX.rows,1.1]];
+var CAT_TWITCH=[[CAT.rows,.75],[CAT_STR,.14],[CAT_OUT,.14],[CAT_STR,.14]];
+
+var N4=[[0,0],[1,0],[0,1],[1,1]];
+function eyeCells(e,i){
+  switch(e){
+    case 'blink':  return {c:[[0,1],[1,1]], k:'L'};
+    case 'happy':  return {c:[[-1,1],[0,0],[1,0],[2,1]], k:'L'};
+    case 'asleep': return {c:[[-1,0],[0,1],[1,1],[2,0]], k:'L'};
+    case 'wink':   return i?{c:[[-1,1],[0,0],[1,0],[2,1]], k:'L'}:{c:N4, k:'E'};
+    case 'squeeze':return {c:i?[[1,-1],[0,0],[1,1]]:[[0,-1],[1,0],[0,1]], k:'L'};
+    case 'blank':  return {c:i?[[0,1]]:[[1,1]], k:'E'};
+    case 'glanceL':return {c:N4.map(function(p){return [p[0]-1,p[1]];}), k:'E'};
+    case 'glanceR':return {c:N4.map(function(p){return [p[0]+1,p[1]];}), k:'E'};
+    default:       return {c:N4, k:'E'};
+  }
+}
+function momo(ch,x,y,cell,o){
+  o=o||{}; cell=cell||MC;
+  var rows=o.rows||ch.rows, g={}, r, c, k;
+  function put(r2,c2,v){ (g[r2]||(g[r2]={}))[c2]=v; }
+  for(r=0;r<rows.length;r++) for(c=0;c<rows[r].length;c++){ k=rows[r][c]; if(k!=='.') put(r,c,k); }
+  ch.eyes.forEach(function(p,i){
+    N4.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],'M'); });
+    var ec=eyeCells(o.eyes||'normal',i);
+    ec.c.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],ec.k); });
+  });
+  if(o.blush) ch.blush.forEach(function(p){ put(p[1],p[0],'B'); });
+  function col(v){
+    if(!v) return null;
+    return v==='E'?ch.eye : v==='L'?ch.line : v==='B'?ch.blushC : ch.pal[v];
+  }
+  var ol=o.outline!==undefined?o.outline:(PH>1.25?'#FFF6EA':null);
+  var flip=o.flip||false, wCols=rows[0].length;
+  function mapCol(ci){ return flip?(wCols-1-ci):ci; }
+  /* 若有旋转或拉伸变形（如叠叠兔当大耳朵、钻漩涡） */
+  if(o.rot||o.sx||o.sy){
+    var cx0=x+10*cell, cy0=y+6*cell;
+    worldT(); ctx.save(); ctx.translate(cx0,cy0);
+    if(o.rot) ctx.rotate(o.rot*Math.PI/180);
+    ctx.scale(o.sx||1,o.sy||1); ctx.globalAlpha=A>1?1:A;
+    if(ol){
+      ctx.fillStyle=ol;
+      for(r=-2;r<=13;r++) for(c=-4;c<=24;c++) if(col((g[r]||{})[c])){
+        var mc0=mapCol(c);
+        ctx.fillRect((mc0-10-1)*cell,(r-6)*cell,cell*3,cell);
+        ctx.fillRect((mc0-10)*cell,(r-6-1)*cell,cell,cell*3);
+      }
+    }
+    for(r=-2;r<=13;r++) for(c=-4;c<=24;c++){
+      var cc0=col((g[r]||{})[c]);
+      if(cc0){ ctx.fillStyle=cc0; ctx.fillRect((mapCol(c)-10)*cell,(r-6)*cell,cell+.38,cell+.38); }
+    }
+    ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+    return;
+  }
+  if(ol){
+    var og={};
+    for(r=-2;r<=13;r++) for(c=-4;c<=24;c++) if(col((g[r]||{})[c])){
+      [[-1,0],[1,0],[0,-1],[0,1]].forEach(function(d){
+        var nr=r+d[0], nc=c+d[1];
+        if(!col((g[nr]||{})[nc])) (og[nr]||(og[nr]={}))[mapCol(nc)]=1;
+      });
+    }
+    for(r=-3;r<=14;r++){
+      var orow=og[r]; if(!orow) continue;
+      for(c=-6;c<=26;c++) if(orow[c]) R(x+c*cell,y+r*cell,cell,cell,ol);
+    }
+  }
+  for(r=-2;r<=13;r++){
+    var row=g[r]; if(!row) continue;
+    if(!flip){
+      c=-6;
+      while(c<=26){
+        var cc=col(row[c]); if(!cc){c++;continue;}
+        var c2=c; while(c2+1<=26&&col(row[c2+1])===cc) c2++;
+        R(x+c*cell,y+r*cell,(c2-c+1)*cell,cell,cc);
+        c=c2+1;
+      }
+    } else {
+      for(c=-6;c<=26;c++){
+        var ccf=col(row[c]);
+        if(ccf) R(x+mapCol(c)*cell,y+r*cell,cell,cell,ccf);
+      }
+    }
+  }
+}
+function momoFoot(ch,cx,foot,o){
+  o=o||{}; var cell=o.cell||MC;
+  var offX=ch===FOX?10*cell:12*cell;
+  momo(ch,cx-offX,foot-12*cell,cell,o);
+}
+
+/* ---------- 两位字符老熟人：守株人（字符猫清醒宝）与字符兔子（困困宝） ---------- */
+
+/* 守株人：戴古风竹编斗笠的字符猫 /\_/\ 清醒宝（暖琥珀宣纸卡片小身子） */
+function charFarmer(cx,foot,o){
+  o=o||{}; var al=(o.a===undefined?1:o.a); if(al<=0) return;
+  var nod=o.nod||0, sl=o.asleep||false;
+  var faceStr=sl?'(๑˘ㅂ˘๑)':(o.shock?'( ⊙ㅂ⊙ )':(o.tired?'(๑•́ㅂ•̀๑)':'(๑•̀ㅂ•́)و'));
+  /* 琥珀暖光小纸卡衬底，让字符在田野里清晰如印在宣纸签上 */
+  glow(cx,foot-22,28,'244,178,95',.22*al);
+  rrect(cx-23,foot-44+nod,46,44,8,'#FFF8EA',al*.94,'#D6A55C',1.1);
+  /* 粗布小衣领示意 */
+  poly([cx-14,foot, cx,foot-9+nod, cx+14,foot],'#C79A63',al*.45);
+  /* 三行字符：猫耳、脸、手 */
+  wt('/\\_/\\',cx,foot-30+nod,{size:10.5,fam:MONO,wt:700,c:'#6B441B',al:'center',a:al});
+  wt(faceStr,cx,foot-17+nod,{size:9.8,fam:MONO,wt:700,c:'#4A2F12',al:'center',a:al});
+  wt(sl?'  zzZ':' / > ',cx,foot-5+nod,{size:9.5,fam:MONO,wt:600,c:'#7D5527',al:'center',a:al});
+  /* 竹编斗笠草帽叠在头顶 */
+  var hy=foot-43+nod;
+  poly([cx-24,hy+3, cx,hy-10, cx+24,hy+3],'#D9B777',al,'#8C6B37',1.1);
+  line([cx-12,hy-3, cx+12,hy-3],'#A88448',.9,al);
+  /* 困困宝盖上来的灰粉色小星毯 */
+  if(o.blanket>0){
+    var ba=al*clamp(o.blanket);
+    rrect(cx-24,foot-18,48,19,6,'#D9BCCB',ba,'#B491A4',1);
+    wt('✦  ✧  ✦',cx,foot-6,{size:7.5,c:'#FFF7FB',al:'center',a:ba});
+  }
+}
+
+/* 画「左耳立 (\_ 、右耳软软耷拉下来」的字符兔耳，跨系统不依赖罕见符号字体 */
+function drawLopEars(cx,yBase,sz,col,al){
+  wt('(\\_',cx-sz*.42,yBase,{size:sz,fam:MONO,wt:700,c:col,al:'center',a:al});
+  /* 右边软软向右下垂落的字符风耷拉兔耳 */
+  var x0=cx+sz*.28, y0=yBase-sz*.16, k=sz/11;
+  worldT(); ctx.save();
+  ctx.globalAlpha=clamp(al)*A; ctx.strokeStyle=col;
+  ctx.lineWidth=1.45*k; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(x0,y0-2.5*k);
+  ctx.quadraticCurveTo(x0+5.5*k,y0-6.5*k, x0+11.5*k,y0-1.2*k);
+  ctx.quadraticCurveTo(x0+14*k,y0+2.5*k, x0+9.5*k,y0+3.5*k);
+  ctx.quadraticCurveTo(x0+5.5*k,y0+2.8*k, x0+3.2*k,y0+.5*k);
+  ctx.stroke();
+  ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* 字符兔子：困困宝 (\_/)（柔薰衣草色微光，左耳立着、右耳耷拉着，软软科） */
+function charBunny(cx,foot,o){
+  o=o||{}; var al=(o.a===undefined?1:o.a); if(al<=0) return;
+  var lean=o.lean||0; /* 贴在树桩上时微微前倾 */
+  glow(cx,foot-22,30,'176,162,230',.32*al);
+  worldT(); ctx.save(); ctx.translate(cx,foot); ctx.rotate(lean*Math.PI/180);
+  ctx.globalAlpha=clamp(al)*A;
+  /* 柔薰衣草宣纸签底 */
+  ctx.fillStyle='#F6F2FC'; ctx.strokeStyle='#B0A2E6'; ctx.lineWidth=1.2;
+  ctx.beginPath(); roundPathOn(ctx,-23,-45,46,45,9); ctx.fill(); ctx.stroke();
+  /* 胳膊底下的灰粉色小毯子卷 */
+  if(!o.noRoll){
+    ctx.fillStyle='#D9BCCB';
+    ctx.beginPath(); roundPathOn(ctx,9,-15,12,8,3.5); ctx.fill();
+  }
+  /* 软软科小工牌 */
+  ctx.fillStyle='#EFE7FA'; ctx.fillRect(-7,-11,14,7);
+  ctx.fillStyle='#B0A2E6'; ctx.fillRect(-7,-11,14,1.6);
+  ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+
+  /* 左耳立 (\_ ，右耳软软耷拉，一眼认出「一立一耷拉」的字符兔！ */
+  var dx=lean*.45;
+  drawLopEars(cx+dx,foot-31,10.8,'#5C4D8C',al);
+  var bFace=o.awake?'( ˘ω˘ )':'(´-ω-`)';
+  wt(bFace,cx+dx*.75,foot-18,{size:10,fam:MONO,wt:700,c:'#43366B',al:'center',a:al});
+  wt('值软',cx+dx*.3,foot-5.5,{size:5.2,wt:700,c:'#6B5B9E',al:'center',a:al});
+}
+
+/* ---------- 小符号、记忆泡泡与场景道具 ---------- */
+
+function qMark(x,y,al,c){
+  if(al<=0) return;
+  wt('?',x,y,{size:12,wt:700,c:c||'#B24A3B',al:'center',a:al});
+}
+function sparkle(x,y,r,c,al){
+  if(al<=0||r<=0) return;
+  poly([x,y-r, x+r*.28,y-r*.28, x+r,y, x+r*.28,y+r*.28, x,y+r, x-r*.28,y+r*.28, x-r,y, x-r*.28,y-r*.28],c,al);
+}
+function zzzFloat(t,x,y,al,c){
+  if(al<=0) return;
+  var col=c||'#8B7EC4';
+  for(var i=0;i<3;i++){
+    var u=((t*.55+i*.33)%1);
+    var zx=x+i*5+Math.sin(t*2+i)*2.5, zy=y-u*22;
+    var za=al*Math.sin(u*Math.PI);
+    wt(i===2?'Z':'z',zx,zy,{size:7.5+i*1.8,fam:MONO,wt:700,c:col,al:'center',a:za});
+  }
+}
+function dustPuff(x,y,p,col){
+  if(p<=0||p>=1) return;
+  var al=(1-p)*.65, c=col||'#E8DFCE';
+  for(var i=-1;i<=1;i+=2){
+    dot(x+i*(6+p*18),y-2-p*5,(1-p)*4.5+1,c,al);
+    dot(x+i*(3+p*11),y-1-p*8,(1-p)*3.2+.8,c,al*.8);
+  }
+}
+function boingLines(x,y,p){
+  if(p<=0||p>=1) return;
+  var al=1-p, r0=10+p*18;
+  ringS(x,y,r0,'#E2552B',1.6,al*.8,[4,4]);
+  sparkle(x-8-p*8,y-10-p*8,4.5*(1-p*.5),'#FFB84D',al);
+  sparkle(x+6+p*8,y-14-p*6,3.8*(1-p*.5),'#FF309B',al);
+  wt('Duang!',x-6,y-18-p*10,{size:11,wt:700,c:'#C93B2B',al:'center',a:al});
+}
+
+/* 记忆云朵泡泡：浮现左耳立、右耳耷拉的字符兔剪影 (\_ )︵ 与 ??? */
+function memBubble(t,cx,cy,al){
+  if(al<=0) return;
+  var bob=Math.sin(t*2.4)*2;
+  var y0=cy+bob;
+  /* 指向六只的三个小云泡 */
+  dot(cx-24,y0+38,3.2,'#FFFDF9',al*.9);
+  dot(cx-16,y0+30,4.6,'#FFFDF9',al*.93);
+  /* 云朵主体 */
+  glow(cx,y0,46,'176,162,230',.28*al);
+  rrect(cx-54,y0-26,108,52,22,'#FFFDF9',al*.96,'#C7BCE6',1.3);
+  dot(cx-30,y0-24,14,'#FFFDF9',al*.96);
+  dot(cx+4,y0-27,17,'#FFFDF9',al*.96);
+  dot(cx+30,y0-22,13,'#FFFDF9',al*.96);
+  /* 云朵内半透明字符兔：左耳立，右耳耷拉 */
+  var pulse=.72+.28*Math.sin(t*4);
+  drawLopEars(cx,y0-8,12.2,'#6B5B9E',al*pulse);
+  wt('( ? ω ? )',cx,y0+7,{size:10.5,fam:MONO,wt:700,c:'#7D6CB3',al:'center',a:al*pulse});
+  wt('店里那只字符兔子…叫什么？',cx,y0+20,{size:7.2,wt:600,c:'#8A7FA8',al:'center',a:al*.9});
+}
+
+var DESK_Y=496, GND=496;
+
+/* 宝's Shop 夜晚暖灯书桌场景 */
+function shopDesk(t,o){
+  o=o||{};
+  /* 暖棕夜读背景墙 */
+  vgrad(-80,-60,520,560,[[0,'#241D18'],[.55,'#352A22'],[1,'#49392D']],1);
+  /* 远景小夜窗与星光 */
+  rrect(36,150,74,94,5,'#1D2436',.85,'#5C4938',2.2);
+  F(72,150,2,94,'#5C4938',.85); F(36,196,74,2,'#5C4938',.85);
+  dot(54,172,1.3,'#FFF6D6',.7+.3*Math.sin(t*2));
+  dot(92,168,1.1,'#FFF6D6',.6+.3*Math.sin(t*2.7+1));
+  dot(88,216,1.6,'#FFE6A3',.75);
+  /* 墙上小木匾「宝's Shop」 */
+  rrect(134,178,92,28,4,'#5E4531',.92,'#8C6B4F',1.1);
+  wt("宝's Shop",180,196,{size:10.5,fam:SERIF,wt:600,c:'#F5E6CC',al:'center',a:.9});
+  /* 右侧暖光小台灯 */
+  glow(292,380,210,'255,204,132',.36);
+  line([318,DESK_Y, 326,412, 298,382],'#7A5C43',3.2,1);
+  poly([276,390, 314,390, 304,368, 286,368],'#F2C879',1,'#9E7440',1.1);
+  elli(318,DESK_Y,16,4,'#6A4E38',1);
+
+  /* 厚实暖木书桌桌面（y = DESK_Y 496 往下） */
+  vgrad(-80,DESK_Y,520,240,[[0,'#8C6543'],[.12,'#7A5638'],[1,'#4D3521']],1);
+  F(-80,DESK_Y,520,3,'#A67B54',.85);
+  /* 桌面柔和灯影 */
+  elli(186,DESK_Y+8,148,14,'#B88B5E',.28);
+
+  /* 书桌中央的古风线装绘本《守株待兔》 */
+  var bx=180, by=DESK_Y+2, op=o.open===undefined?1:o.open;
+  if(op>.05){
+    var wBook=58*op;
+    /* 靛蓝书皮底垫 */
+    rrect(bx-wBook-4,by-20,wBook*2+8,22,3,'#354B5E',1,'#223240',1);
+    /* 左右摊开的宣纸书页 */
+    poly([bx,by-18, bx-wBook,by-22, bx-wBook+3,by-3, bx,by-1],'#FAF3E3',1,'#D6C7AC',.9);
+    poly([bx,by-18, bx+wBook,by-22, bx+wBook-3,by-3, bx,by-1],'#FFF9EC',1,'#D6C7AC',.9);
+    line([bx,by-18, bx,by-1],'#C4B293',1.1,1);
+    if(op>.6){
+      /* 左页古风竖排墨线与小红印 */
+      line([bx-16,by-17, bx-16,by-6],'#7D7162',.9,.7);
+      line([bx-26,by-17, bx-26,by-7],'#7D7162',.9,.7);
+      line([bx-36,by-17, bx-36,by-9],'#7D7162',.9,.7);
+      R(bx-45,by-11,4,4,'#C44737',.85);
+      /* 右页迷你树桩小插画 */
+      poly([bx+20,by-6, bx+23,by-14, bx+35,by-14, bx+38,by-6],'#8C623E',.9);
+      elli(bx+29,by-14,6,2.2,'#D9B98B',.95);
+      dot(bx+15,by-7,2.2,'#6E995B',.85);
+    }
+  } else {
+    /* 合拢的线装古籍封皮 */
+    rrect(bx-46,by-16,92,16,2.5,'#354B5E',1,'#21313F',1.1);
+    F(bx-44,by-5,88,3.5,'#FAF3E3',.95);
+    /* 线装订线纹 */
+    line([bx-40,by-16, bx-40,by-5],'#D8CFC0',.9,.85);
+    line([bx-24,by-16, bx-24,by-5],'#D8CFC0',.9,.85);
+    line([bx-8,by-16, bx-8,by-5],'#D8CFC0',.9,.85);
+    /* 书名白宣题签 */
+    rrect(bx+4,by-14,34,7,1,'#FAF3E3',.96,'#C7B89E',.6);
+    wt('守株待兔',bx+21,by-8.3,{size:5.2,fam:SERIF,wt:700,c:'#2B2620',al:'center'});
+    /* 终场彩蛋：书缝里露出的那半片金黄落叶 */
+    if(o.leaf){
+      elli(bx+48,by-6,7,3.2,'#E8A838',1,-.25);
+      line([bx+42,by-5.5, bx+54,by-7],'#B5791E',.8,1);
+    }
+  }
+
+  /* 终场彩蛋：桌边熟睡的猫兔字符便签卡 */
+  if(o.noteCard){
+    var nx=252, ny=by-4;
+    rrect(nx-24,ny-28,48,27,4,'#FFF9EE',.96,'#D8C39E',.9);
+    wt('/\\_/\\  (\\_/)',nx,ny-18,{size:5.3,fam:MONO,wt:700,c:'#6B5340',al:'center'});
+    wt('(˘ㅂ˘)(´-ω-`)',nx,ny-10,{size:5.1,fam:MONO,wt:700,c:'#5C4D8C',al:'center'});
+    rrect(nx-19,ny-8,38,6,2.5,'#D9BCCB',.92);
+    zzzFloat(t,nx+10,ny-28,.8,'#C8BBE8');
+  }
+
+  /* 书页升起的水墨金色漩涡 */
+  if(o.vortex>0){
+    var vp=o.vortex, vx=bx, vy=by-26-vp*14;
+    glow(vx,vy,30+vp*68,'198,224,210',.45*vp);
+    glow(vx,vy,18+vp*40,'255,222,148',.5*vp);
+    for(var i=0;i<4;i++){
+      var rr=(10+i*11)*vp, ang=t*4.5+i*1.4;
+      ringS(vx+Math.cos(ang)*2,vy+Math.sin(ang)*1.2,rr,i%2?'#4A7256':'#D9A443',1.6,vp*(.85-i*.15),[8+i*3,6]);
+    }
+  }
+}
+
+/* 老树桩（支持被小粉撞击时 shake 震动变形，以及顶面落叶 stumpLeaf） */
+function drawStump(sx,sy,o){
+  o=o||{}; var sh=o.shake||0;
+  /* 草地柔和投影 */
+  elli(sx+2,sy+2,29,6,'rgba(42,58,36,.22)',1);
+  worldT(); ctx.save(); ctx.translate(sx,sy);
+  if(sh) ctx.transform(1,0,sh*.18,1,sh*2.2,0);
+  ctx.globalAlpha=A>1?1:A;
+  /* 树桩主体与扎地树根 */
+  ctx.fillStyle=dc('#7D5838','#6E4A2E','#4D3624');
+  ctx.beginPath();
+  ctx.moveTo(-26,1); ctx.lineTo(-20,-10); ctx.lineTo(-18,-35);
+  ctx.lineTo(18,-35); ctx.lineTo(21,-11); ctx.lineTo(28,1);
+  ctx.lineTo(12,3); ctx.lineTo(4,-1); ctx.lineTo(-9,3); ctx.closePath();
+  ctx.fill();
+  /* 树皮深色竖纹 */
+  ctx.strokeStyle=dc('#593C23','#4D311C','#332215'); ctx.lineWidth=1.5;
+  [-11,-3,6,13].forEach(function(px,idx){
+    ctx.beginPath(); ctx.moveTo(px,-32); ctx.lineTo(px+(idx%2?2:-2),-3); ctx.stroke();
+  });
+  /* 树桩顶面年轮椭圆 */
+  ctx.fillStyle=dc('#E2C496','#D9B17E','#9E8566');
+  ctx.strokeStyle=dc('#6B492C','#5E3D22','#3F2B1A'); ctx.lineWidth=1.3;
+  ctx.beginPath(); ctx.ellipse(0,-35,18.5,6.2,0,0,TAU); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle=dc('#BA9666','#AD8455','#786248'); ctx.lineWidth=.9;
+  ctx.beginPath(); ctx.ellipse(0,-35,11.5,3.7,0,0,TAU); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0,-35,5.2,1.7,0,0,TAU); ctx.stroke();
+  /* 树桩侧面的一株小嫩芽 */
+  ctx.strokeStyle=dc('#5B8C4A','#507A40','#3E6136'); ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.moveTo(-19,-18); ctx.quadraticCurveTo(-26,-23,-25,-28); ctx.stroke();
+  ctx.fillStyle=dc('#78B362','#689C52','#4E7842');
+  ctx.beginPath(); ctx.ellipse(-27,-29,4,2.1,-.5,0,TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-22,-27,3.5,1.8,.6,0,TAU); ctx.fill();
+  ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+
+  /* 树桩顶上的金黄小落叶（被 StashYu 尾巴顺走前） */
+  if(o.stumpLeaf){
+    var lx=sx+7+sh*2, ly=sy-37;
+    elli(lx,ly,6.5,3,'#E8A634',1,.2);
+    line([lx-5,ly-.8, lx+6,ly+1],'#AD7218',.8,1);
+  }
+}
+
+/* 宋国青绿古风田野背景（随 PH 0白天 -> 1日暮 -> 2月夜 变换） */
+function songField(t,o){
+  o=o||{};
+  /* 宣纸古画质感天空渐变 */
+  vgrad(-80,-80,520,580,[
+    [0, dc('#C8DEC9','#D98E6C','#1B2438')],
+    [.48, dc('#E7EFE2','#F0BC86','#293652')],
+    [1, dc('#F6F3E6','#FCE0AC','#3B4B6B')]
+  ],1);
+
+  /* 日轮西沉 / 弯月繁星升起 */
+  if(PH<1.35){
+    var sunA=clamp(1.25-PH), sunY=lerp(156,315,clamp(PH));
+    var sunX=lerp(276,96,clamp(PH));
+    glow(sunX,sunY,56,'255,212,132',.38*sunA);
+    dot(sunX,sunY,17,dc('#FFF2C6','#FF9D5C','#FF884D'),.9*sunA);
+  }
+  if(PH>1.05){
+    var mA=clamp((PH-1.05)/.55);
+    /* 星点 */
+    var rStar=rng(77);
+    for(var i=0;i<18;i++){
+      var sx0=20+rStar()*320, sy0=45+rStar()*210;
+      var tw=.45+.55*Math.sin(t*2.2+i*1.7);
+      dot(sx0,sy0,.9+(i%3)*.4,'#FFF8DF',mA*tw*.85);
+    }
+    /* 弯弯新月 */
+    var mx=278, my=152;
+    glow(mx,my,48,'230,224,255',.32*mA);
+    dot(mx,my,15,'#FFF7D6',mA);
+    dot(mx-6,my-4,13.5,dc('#E7EFE2','#303E5C','#24304A'),mA);
+  }
+
+  /* 远景两重青黛山水 */
+  poly([
+    -80,430, -30,368, 45,392, 128,342, 205,382, 286,336, 368,374, 440,355, 440,450
+  ],dc('#B8CEBE','#C7977E','#2B3A52'),.75);
+  poly([
+    -80,456, 10,404, 96,424, 178,388, 254,416, 342,392, 440,418, 440,475
+  ],dc('#9ABAA3','#AD856E','#243347'),.85);
+  /* 山间薄雾带 */
+  var fogRGB=PH<=1?[Math.round(lerp(246,250,PH)),Math.round(lerp(243,218,PH)),Math.round(lerp(230,176,PH))]
+                  :[Math.round(lerp(250,58,PH-1)),Math.round(lerp(218,74,PH-1)),Math.round(lerp(176,104,PH-1))];
+  var fogStr=fogRGB.join(','), fogA=PH<=1?lerp(.52,.38,PH):lerp(.38,.34,PH-1);
+  vgrad(-80,418,520,54,[[0,'rgba('+fogStr+',0)'],[.5,'rgba('+fogStr+','+fogA+')'],[1,'rgba('+fogStr+',0)']],1);
+
+  /* 画框左上角斜探而出的古画折枝垂柳（柔弧随风轻摆，不悬空、不挡下方演员） */
+  var sw=Math.sin(t*1.3)*5;
+  line([-16,38, 22,12, 74,-8, 128,-18],dc('#6A553D','#5E4730','#262A38'),2.8,.75);
+  var strands=[[14,16,92],[38,3,114],[66,-6,88],[96,-12,72]];
+  worldT(); ctx.save();
+  strands.forEach(function(st,wi){
+    var x0=st[0], y0=st[1], len=st[2], bend=sw*(.7+wi*.18);
+    ctx.globalAlpha=.68*A;
+    ctx.strokeStyle=dc('#6B8E63','#7D6B4A','#2E424D'); ctx.lineWidth=1.05;
+    ctx.beginPath(); ctx.moveTo(x0,y0);
+    ctx.quadraticCurveTo(x0-6+bend*.4,y0+len*.52, x0+4+bend,y0+len);
+    ctx.stroke();
+    ctx.fillStyle=dc('#7FA672','#8F7A52','#3B545E');
+    for(var lf=1;lf<=5;lf++){
+      var u=lf/5.3, inv=1-u;
+      var lx0=inv*inv*x0 + 2*inv*u*(x0-6+bend*.4) + u*u*(x0+4+bend);
+      var ly0=inv*inv*y0 + 2*inv*u*(y0+len*.52) + u*u*(y0+len);
+      var side=(lf%2?1:-1);
+      ctx.save(); ctx.translate(lx0+side*3.2,ly0); ctx.rotate(side*.48);
+      ctx.beginPath(); ctx.ellipse(0,0,4.6,1.45,0,0,TAU); ctx.fill();
+      ctx.restore();
+    }
+  });
+  ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+
+  /* 中景与近景青绿田埂草地（地面锚定在 y = GND = 496） */
+  poly([-80,GND-26, 70,GND-34, 220,GND-24, 440,GND-32, 440,GND+20, -80,GND+20],dc('#9EC28C','#B09662','#314A47'),1);
+  vgrad(-80,GND-6,520,210,[
+    [0, dc('#82AD72','#967E4E','#283F3E')],
+    [.28, dc('#6E995F','#7F6941','#203334')],
+    [1, dc('#4E7344','#59482D','#152224')]
+  ],1);
+  /* 田埂浅色小土径 */
+  elli(190,GND+4,230,11,dc('#D9CCA8','#C9A87C','#475456'),.52);
+
+  /* 近景小草簇与小野花 */
+  var grassX=[24,68,118,164,252,306,338];
+  grassX.forEach(function(gx,gi){
+    var gw=Math.sin(t*2+gi)*1.6, gy=GND+2+(gi%3)*4;
+    var gc=dc('#5A854C','#6E5B37','#1D3030');
+    line([gx,gy, gx-3+gw,gy-7],gc,1.2,.8);
+    line([gx,gy, gx+2+gw,gy-8],gc,1.2,.8);
+    if(gi%2===0) dot(gx+2+gw,gy-9,1.8,dc('#FFF5C0','#FFE0A3','#A8C4D9'),.85);
+  });
+
+  /* 田垄边的一小畦青苗（终场 Clawd 浇水前蔫巴，浇水后翠绿挺拔） */
+  if(o.showCrops){
+    var wp=clamp(o.watered||0), cx0=52, cy0=GND+1;
+    elli(cx0,cy0+1,24,4.5,dc('#8C7250','#7A5F42','#2E3638'),.8);
+    for(var ci=-1;ci<=1;ci++){
+      var sx1=cx0+ci*11;
+      var droop=lerp(7,0,wp), hCrop=lerp(10,16,wp);
+      var cc=mixc(PH>1?'#6E7548':'#9E9B56', PH>1?'#5BB37D':'#54A84A', wp);
+      line([sx1,cy0, sx1+droop*.5,cy0-hCrop*.6, sx1+droop,cy0-hCrop],cc,1.6,1);
+      elli(sx1+droop-3,cy0-hCrop+1,4,1.8,cc,1,-.4+droop*.08);
+      elli(sx1+droop+3,cy0-hCrop+2,4,1.8,cc,1,.5+droop*.08);
+    }
+  }
+
+  /* 草地上的迷你小锄头（终场 FetchMo 叼起收好前） */
+  if(o.showHoe && !o.hoeTaken){
+    var hx=154, hy=GND+3;
+    line([hx-12,hy-2, hx+10,hy-8],'#8C6743',2,1);
+    poly([hx+8,hy-9, hx+14,hy-7, hx+11,hy-1],'#7A8288',1);
+  }
+
+  /* 老树桩 */
+  if(o.stumpX!==undefined){
+    drawStump(o.stumpX, GND, o);
+  }
+
+  /* 月夜萤火虫 */
+  if(PH>1.3){
+    var fa=clamp(PH-1.3);
+    for(var fi=0;fi<5;fi++){
+      var fx0=45+fi*68+Math.sin(t*1.3+fi*2)*16;
+      var fy0=GND-24-(fi%3)*26+Math.cos(t*1.7+fi)*8;
+      var fp=.4+.6*Math.sin(t*3.5+fi*1.9);
+      glow(fx0,fy0,9,'245,232,140',.38*fa*fp);
+      dot(fx0,fy0,1.5,'#FFF9C4',fa*fp);
+    }
+  }
+}
+
+/* 月光书页门（终场八只排队跳回店里） */
+function bookPortal(t,cx,foot,openP){
+  if(openP<=0) return;
+  var p=smooth(openP), w0=26*p, h0=58*p, cy=foot-30;
+  glow(cx,cy,56*p,'255,214,142',.52*p);
+  rrect(cx-w0-3,cy-h0/2-2,(w0+3)*2,h0+4,4,'#354B5E',p,'#D9B777',1.2);
+  poly([cx,cy-h0/2, cx-w0,cy-h0/2-3, cx-w0,cy+h0/2-3, cx,cy+h0/2],'#FFF6E0',p);
+  poly([cx,cy-h0/2, cx+w0,cy-h0/2-3, cx+w0,cy+h0/2-3, cx,cy+h0/2],'#FFFDF2',p);
+  glow(cx,cy,26*p,'255,235,180',.75*p);
+  sparkle(cx-w0-5,cy-14+Math.sin(t*3)*3,4*p,'#FFE299',p);
+  sparkle(cx+w0+6,cy+8-Math.sin(t*2.6)*3,3.5*p,'#C7BCE6',p);
+}
+
+/* ======================== 五 场 分 镜 ======================== */
+
+/* 序 · 翻书入画（24s）：0~14.5s 宝's Shop 书桌看绘本被水墨漩涡卷入；14.5~24s 摔进宋国青草地失忆 */
+function sIntro(t){
+  if(t<14.5){
+    PH=0;
+    camK(t,[
+      kAt(0,180,DESK_Y,1.04),
+      kAt(5.5,180,DESK_Y,1.15),
+      kAt(9.5,180,DESK_Y,1.12),
+      [14.3,180,DESK_Y-36,1.42]
+    ]);
+    var vp=t<9?0:clamp((t-9)/3.0);
+    shopDesk(t,{open:1, vortex:vp});
+
+    /* FetchMo 在 6.0~8.8s 凑近书页伸爪拨树桩 */
+    var catP=path(t,262,DESK_Y,[[6.0,.55,238,DESK_Y,6],[6.7,.45,226,DESK_Y,4],[9.1,.5,256,DESK_Y,6]]);
+    var suck=t<11.8?0:smooth((t-11.8)/2.4);
+    var vx=180, vy=DESK_Y-36;
+
+    /* 吸入漩涡辅助：suck=0 在原位，suck->1 旋转缩小飞进漩涡中心 */
+    function suckDraw(x0,y0,angOff,drawFn){
+      var ang=suck*(4.2+angOff), sc=1-suck*.88;
+      var sx=lerp(x0,vx,suck)+Math.cos(ang)*18*suck*(1-suck);
+      var sy=lerp(y0,vy,suck)+Math.sin(ang)*10*suck*(1-suck);
+      var prevA=A; A=prevA*(1-suck*.65);
+      drawFn(sx,sy,sc,suck*340);
+      A=prevA;
+    }
+
+    /* 后排三颗趴在书页上方围观，偏左错开 FetchMo 拨树桩的位置 */
+    var startled=inR(t,9.0,12.0)?jump(t,9.1,.45,7):0;
+    [[146,1],[168,0],[190,2]].forEach(function(item,idx){
+      suckDraw(item[0],DESK_Y-20+startled,idx*.8,function(px,py,sc,rot){
+        faceFoot(px,py,item[1],{
+          r:12.5*sc, rot:rot,
+          bl:blinkOn(t,3.4,idx*.7)?1:0,
+          ring:item[1]===2?'rgba(245,232,210,.7)':null
+        });
+      });
+    });
+
+    /* 左边 StashYu（flip:true 面朝中间的绘本）与 Clawd */
+    suckDraw(58,DESK_Y+2+startled,1.2,function(px,py,sc,rot){
+      momoFoot(FOX,px,py,{
+        flip:true, cell:MC*sc, rot:rot,
+        rows:t<9?cyc(t,0,FOX_WAG):FOX_OUT,
+        eyes:t>9?'squeeze':(blinkOn(t,3.8,.4)?'blink':'happy'),
+        blush:t<9, outline:'#FFF4E4'
+      });
+    });
+    suckDraw(112,DESK_Y+3+startled,2.1,function(px,py,sc,rot){
+      var armUp=t>9?-18:0;
+      clawdAt(px,py,{
+        k:CK*sc, rot:rot, la:armUp, ra:armUp,
+        eyes:t>9?'wide':(blinkOn(t,4.1,1.1)?'shut':'right')
+      });
+    });
+
+    /* 右边 FetchMo（flip:true 面朝中间的绘本，6.2~8.8s 拨弄画里的树桩） */
+    var pawTap=inR(t,7.1,8.8);
+    suckDraw(catP.x,catP.y+startled,2.9,function(px,py,sc,rot){
+      momoFoot(CAT,px,py,{
+        flip:true, cell:MC*sc, rot:rot,
+        rows:pawTap?CAT_UP:cyc(t,0,CAT_TWITCH),
+        eyes:t>9?'squeeze':(pawTap?'happy':(blinkOn(t,3.5,.9)?'blink':'normal')),
+        blush:pawTap, outline:'#FFF4E4'
+      });
+    });
+    if(pawTap){
+      var rp=((t-7.1)*1.8)%1;
+      ringS(198,DESK_Y-10,4+rp*14,'#4A7256',1.2,1-rp);
+    }
+
+    /* 13.8~14.5s 水墨宣纸白光漫过全屏转场 */
+    if(t>13.7){
+      ctx.setTransform(S,0,0,S,0,0);
+      ctx.fillStyle='rgba(246,243,230,'+clamp((t-13.7)/.75)+')';
+      ctx.fillRect(0,0,W,H);
+      ctx.setTransform(1,0,0,1,0,0);
+    }
+    return;
+  }
+
+  /* 14.5~24.0s：跌入古代宋国田野！Q弹摔扁团子 + 四脚朝天 + 冒问号失忆 */
+  PH=0;
+  camK(t,[kAt(14.5,168,GND,1.03), kAt(23.5,168,GND,1.08)]);
+  songField(t,{showCrops:true, watered:0});
+
+  /* StashYu（x=56）与 FetchMo（x=282）从空中扑通摔进草地 */
+  var foxDrop=t<15.8?lerp(-140,0,smooth((t-14.6)/1.2)):0;
+  if(inR(t,15.8,16.5)) dustPuff(56,GND,(t-15.8)/.7);
+  momoFoot(FOX,56,GND+foxDrop,{
+    flip:true, rows:t<20?FOX_DROOP:FOX.rows,
+    eyes:t<17?'squeeze':'blank'
+  });
+
+  var catDrop=t<16.0?lerp(-150,0,smooth((t-14.8)/1.2)):0;
+  if(inR(t,16.0,16.7)) dustPuff(282,GND,(t-16.0)/.7);
+  momoFoot(CAT,282,GND+catDrop,{
+    flip:true, rows:CAT.rows,
+    eyes:t<17.2?'squeeze':'blank'
+  });
+
+  /* Clawd（x=110）：翻跟头掉下 -> 四脚朝天（rot=180）蹬小腿 -> 19.4s 鲤鱼打挺翻正 */
+  var clY=GND, clRot=0, clStep=0;
+  if(t<15.7){
+    var cp=clamp((t-14.6)/1.1);
+    clY=GND-135*(1-cp*cp); clRot=cp*540;
+  } else if(t<19.3){
+    clRot=180; clStep=Math.sin(t*14)>0?1:-1;
+  } else if(t<20.0){
+    var fp=smooth((t-19.3)/.7);
+    clY=GND-22*4*fp*(1-fp); clRot=180+fp*180;
+  }
+  if(inR(t,15.7,16.4)) dustPuff(110,GND,(t-15.7)/.7);
+  clawdAt(110,clY,{rot:clRot, step:clStep, eyes:t<20?'wide':'bar'});
+
+  /* 三颗小脸蛋（x=158, 194, 230）：掉下摔成 Q 弹扁麻薯团子，弹两下！ */
+  [158,194,230].forEach(function(fx,i){
+    var d0=15.1+i*.16, fy=GND, sx=1, sy=1;
+    if(t<d0){ fy=GND-160; }
+    else if(t<d0+.85){
+      var p0=(t-d0)/.85; fy=GND-150*(1-p0*p0);
+    } else {
+      /* 着地与 17.8~20.4s 的两下 Q 弹回跳 */
+      if(inR(t,d0+.85,d0+1.45)){
+        var sq=Math.sin(clamp((t-(d0+.85))/.6)*Math.PI);
+        sx=1+.38*sq; sy=1-.34*sq;
+      } else if(inR(t,17.8+i*.12,20.3+i*.12)){
+        var bt=(t-(17.8+i*.12))/2.5; /* 两个弹跳周期 */
+        var ph2=(bt*2)%1;
+        if(ph2<.32){
+          var sq2=Math.sin((ph2/.32)*Math.PI);
+          sx=1+.36*sq2; sy=1-.33*sq2;
+        } else {
+          var airP=(ph2-.32)/.68;
+          fy=GND-18*4*airP*(1-airP);
+          sx=.9; sy=1.12;
+        }
+      }
+    }
+    if(inR(t,d0+.85,d0+1.45)) dustPuff(fx,GND,(t-(d0+.85))/.6);
+    faceFoot(fx,fy,i,{sx:sx, sy:sy, bl:inR(t,15.8,16.6)?.8:(blinkOn(t,3.6,i)?.9:0)});
+  });
+
+  /* 20.6~24.0s 全员头顶冒出失忆小问号与旋转小金星 */
+  if(t>20.5){
+    var qa=fade(t,20.5,23.9,.35);
+    [56,110,158,194,230,282].forEach(function(qx,qi){
+      var bob=Math.sin(t*3.5+qi)*2.5;
+      qMark(qx,GND-(qi===1?56:44)+bob,qa,qi%2?'#B24A3B':'#6B5B9E');
+    });
+  }
+
+  if(t<15.2){
+    ctx.setTransform(S,0,0,S,0,0);
+    ctx.fillStyle='rgba(246,243,230,'+clamp(1-(t-14.5)/.7)+')';
+    ctx.fillRect(0,0,W,H);
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+}
+
+/* 第一场 · 兔、兔、兔？（34s）：失忆互看 -> 遇见戴斗笠字符猫守株人 -> 记忆云朵浮现字符兔 -> 举牌猜名字 */
+function sMeet(t){
+  PH=.08;
+  var STX=238, FMX=292;
+  camK(t,[
+    kAt(0,114,GND,1.18),
+    kAt(8.6,114,GND,1.18),
+    kAt(11.2,184,GND,1.02),
+    kAt(14.5,208,GND,1.06),
+    kAt(17.6,208,GND,1.06),
+    kAt(19.4,174,GND,1.0),
+    kAt(34.0,174,GND,1.0)
+  ]);
+  songField(t,{stumpX:STX, stumpLeaf:true, showCrops:true, watered:0, showHoe:true});
+
+  /* 老树桩右边的字符猫守株人（清醒宝） */
+  var shushNod=inR(t,14.8,17.5)?Math.sin(t*8)*1.2:0;
+  charFarmer(FMX,GND,{nod:shushNod});
+  sayBubble(t,'wait',FMX,GND-54);
+
+  /* 左侧六只：9~11.5s 好奇往右蹦近看树桩与守株人，错落排开绝不重叠 */
+  var shift=t<9.2?0:smooth((t-9.2)/2.0)*10;
+  var dingJump=jump(t,18.0,.45,9)+jump(t,20.5,.42,7);
+
+  /* StashYu：3.5~6.0s 抱着卷回来的大红尾巴发呆；31.2s 听到猜“胡萝卜？”垂尾巴 */
+  var fxX=36+shift;
+  var fxRows=inR(t,3.4,6.2)?FOX_IN:(t>31.2?FOX_DROOP:(inR(t,20.5,26.5)?cyc(t,0,FOX_WAG):FOX.rows));
+  var fxShake=(inR(t,29.5,30.8)||inR(t,31.8,33.2))?Math.sin(t*18)*2.5:0;
+  momoFoot(FOX,fxX+fxShake,GND+dingJump,{
+    flip:t>9.0, rows:fxRows,
+    eyes:inR(t,3.4,6.2)?'blank':(blinkOn(t,3.7,.2)?'blink':'normal')
+  });
+  if(inR(t,3.5,6.0)) qMark(fxX,GND-44+Math.sin(t*4)*2,fade(t,3.5,6.0,.25));
+
+  /* FetchMo */
+  momoFoot(CAT,68+shift+fxShake,GND+3+dingJump,{
+    flip:t<9.0, rows:inR(t,20.5,24.0)?CAT_UP:cyc(t,0,CAT_TWITCH),
+    eyes:t>31.2?'blank':(blinkOn(t,3.4,1.2)?'blink':'normal')
+  });
+
+  /* Clawd：举牌「我是谁？」、「跳跳兔？」、「胡萝卜？」 */
+  var clX=108+shift;
+  var sWho=signOn(t,'who'), sG1=signOn(t,'g1'), sG2=signOn(t,'g2');
+  var curSign=sWho||sG1||sG2;
+  var clEyes=t<3.2?(Math.floor(t*1.6)%2?'left':'right'):(inR(t,20.4,24.0)?'wide':(blinkOn(t,4.0,.8)?'shut':'bar'));
+  clawdAt(clX,GND+dingJump,{la:curSign?-15:0, eyes:clEyes});
+  if(curSign){
+    placard(clawLX(clX),clawTopY(GND+dingJump,-15),curSign,1,11.5);
+  }
+
+  /* 三颗小脸蛋 */
+  [144,167,190].forEach(function(bx0,i){
+    var bx=bx0+shift+fxShake*.8;
+    var lookRoll=t<3.2?Math.sin(t*3+i)*2.5:0;
+    faceFoot(bx+lookRoll,GND+dingJump,i,{bl:blinkOn(t,3.3,i*.9)?1:0});
+  });
+
+  /* 17.9~20.2s 头顶蹦出「兔…兔…兔？」 */
+  if(inR(t,17.9,20.3)){
+    var ta=fade(t,17.9,20.3,.25);
+    wt('兔？',74,GND-46,{size:10,wt:700,c:'#B24A3B',al:'center',a:ta});
+    wt('兔？',154,GND-38,{size:10,wt:700,c:'#6B5B9E',al:'center',a:ta});
+    wt('兔！',196,GND-42,{size:10.5,wt:700,c:'#B24A3B',al:'center',a:ta});
+  }
+
+  /* 20.5~28.7s “叮”的一声星芒 + 记忆云朵浮现字符兔剪影 (\_ )︵ */
+  if(inR(t,20.5,22.2)){
+    var sa=1-(t-20.5)/1.7;
+    sparkle(114,GND-58,6,'#FFB84D',sa);
+    sparkle(178,GND-46,5,'#B0A2E6',sa);
+  }
+  if(inR(t,20.8,28.8)){
+    memBubble(t,138,GND-104,fade(t,20.8,28.8,.4));
+  }
+}
+
+/* 第二场 · 自己变兔（38s）：小粉鼓长兔耳撞树桩 Duang 弹飞 -> 猫狐双簧兔顺走落叶 -> 六只合体大叠叠兔！ */
+function sMorph(t){
+  PH=lerp(.42,1.12,clamp(t/38));
+  var STX=224, FMX=280;
+  camK(t,[
+    kAt(0,224,GND,1.12),
+    kAt(6.4,224,GND,1.12),
+    kAt(8.2,134,GND,1.14),
+    kAt(13.6,134,GND,1.14),
+    kAt(14.6,184,GND,1.04),
+    kAt(21.8,184,GND,1.04),
+    kAt(22.6,208,GND,1.15),
+    kAt(27.9,208,GND,1.15),
+    kAt(29.0,188,GND,1.0,504),
+    kAt(38.0,188,GND,1.0,504)
+  ]);
+
+  /* 老树桩：17.35~17.85s 被小粉果冻兔撞得震颤；25.8s 落叶被 StashYu 尾巴顺走 */
+  var stShake=inR(t,17.35,17.95)?Math.sin((t-17.35)*45)*(1-(t-17.35)/.6)*1.4:0;
+  var hasLeaf=t<25.8;
+  songField(t,{stumpX:STX, shake:stShake, stumpLeaf:hasLeaf, showCrops:true, watered:0, showHoe:true});
+
+  /* 守株人：打瞌睡硬撑 -> 被飞桃子惊呆 -> 看到大叠叠兔揉眼 */
+  var fmNod=(t<6.5||inR(t,22,28))?Math.sin(t*4.5)*2.8:0;
+  var fmShock=inR(t,17.5,21.8)||inR(t,30.8,37.8);
+  charFarmer(FMX,GND,{tired:t<17.5, shock:fmShock, nod:fmNod});
+  sayBubble(t,'notired',FMX,GND-54);
+  if(inR(t,19.8,21.8)){
+    /* 以为飞过去一颗水蜜桃 */
+    var pa=fade(t,19.8,21.8,.25);
+    rrect(FMX-16,GND-76,32,20,7,'#FFFDF7',pa,'#E2B49A',1);
+    dot(FMX,GND-65,5.2,'#FF789E',pa);
+    wt('?',FMX+9,GND-62,{size:9,wt:700,c:'#B24A3B',al:'center',a:pa});
+  }
+
+  /* ---- 阶段 A & B（0 ~ 22.0s）：密谋变兔 + 小粉变形果冻长耳兔撞桩弹飞 ---- */
+  if(t<22.0){
+    var cheer=inR(t,9.3,13.8)?jump(t,9.5,.42,6)+jump(t,11.8,.42,5):0;
+    /* 后方助威团：StashYu(48)、FetchMo(78)、Clawd(106)、小紫(138->88)、小黑(162->110) */
+    momoFoot(FOX,46,GND+cheer,{
+      flip:true, rows:inR(t,9.3,14)?cyc(t,0,FOX_WAG):FOX.rows,
+      eyes:inR(t,17.3,19.5)?'squeeze':'happy', blush:true
+    });
+    momoFoot(CAT,74,GND+3+cheer,{
+      flip:false, rows:inR(t,17.3,19.5)?CAT_UP:cyc(t,0,CAT_TWITCH),
+      eyes:inR(t,17.3,19.5)?'blank':'normal'
+    });
+    var sPlan=signOn(t,'plan');
+    clawdAt(104,GND+cheer,{la:sPlan?-16:0, eyes:sPlan?'smile':(inR(t,17.3,19.2)?'wide':'right')});
+    if(sPlan) placard(clawLX(104),clawTopY(GND+cheer,-16),sPlan,1,11.5);
+
+    /* 小紫与小黑在 18.8s 接住倒弹飞回的小粉，一起Q弹晃一下 */
+    var catchSq=inR(t,19.0,19.8)?Math.sin(((t-19.0)/.8)*Math.PI)*.25:0;
+    faceFoot(134,GND+cheer,1,{sx:1+catchSq, sy:1-catchSq, bl:catchSq>.1?.8:0});
+    faceFoot(156,GND+cheer,2,{sx:1+catchSq, sy:1-catchSq, bl:catchSq>.1?.8:0});
+
+    /* 主角一：小粉变形果冻长耳兔！ */
+    var px=180, py=GND, psx=1, psy=1, prot=0, pbun=0, pbend=0;
+    if(t<14.2){
+      px=178; py=GND+cheer;
+    } else if(t<16.8){
+      /* 憋足劲蓄力压扁，“啵”地鼓出两只长兔耳 */
+      px=142+smooth((t-14.2)/.5)*0;
+      px=lerp(178,144,smooth((t-14.2)/.6));
+      var growP=clamp((t-14.8)/1.1);
+      /* 带一点过冲弹性的兔耳生长 */
+      pbun=growP<1?(growP<.7?growP/.7*1.18:lerp(1.18,1,(growP-.7)/.3)):1;
+      var crouch=inR(t,14.5,15.3)?Math.sin(((t-14.5)/.8)*Math.PI):0;
+      psx=1+.24*crouch; psy=1-.22*crouch;
+      if(inR(t,15.0,16.2)) sparkle(px,GND-44,5,'#FF78B8',1-(t-15.0)/1.2);
+    } else if(t<17.35){
+      /* 嗖地冲向老树桩！ */
+      var dashP=smooth((t-16.8)/.55);
+      px=lerp(144,STX-22,dashP);
+      py=GND-10*4*dashP*(1-dashP);
+      psx=1.22; psy=.84; pbun=1; pbend=-18;
+      dustPuff(144,GND,dashP);
+    } else if(t<17.78){
+      /* Duang！贴在树桩左侧竖向压成一张 Q 弹果冻粉饼！ */
+      var hitP=Math.sin(((t-17.35)/.43)*Math.PI);
+      px=STX-19+hitP*3; py=GND-4;
+      psx=1-.44*hitP; psy=1+.38*hitP; pbun=1; pbend=32*hitP;
+      boingLines(STX-14,GND-22,(t-17.35)/.6);
+    } else if(t<19.15){
+      /* 超高弹性倒飞抛物线弹回小紫小黑怀里！ */
+      var flyP=(t-17.78)/1.37;
+      px=lerp(STX-19,145,flyP);
+      py=GND-68*4*flyP*(1-flyP);
+      prot=-flyP*360; pbun=1;
+      psx=1+.15*Math.sin(flyP*14); psy=1-.15*Math.sin(flyP*14);
+      if(t<18.1) boingLines(STX-14,GND-22,(t-17.35)/.75);
+    } else {
+      /* 落在小紫小黑中间 Q 弹收起兔耳 */
+      px=145; py=GND-6*(1-clamp((t-19.15)/.4));
+      pbun=clamp(1-(t-19.6)/.8);
+      psx=1+catchSq; psy=1-catchSq;
+    }
+    faceFoot(px,py,0,{sx:psx, sy:psy, rot:prot, bunny:pbun, earBend:pbend});
+    return;
+  }
+
+  /* ---- 阶段 C（22.0 ~ 28.2s）：FetchMo 团成白兔 + StashYu 在身后竖红尾巴当耳朵顺走落叶 ---- */
+  if(t<28.2){
+    /* 左边四只围观偷笑 */
+    clawdAt(78,GND,{eyes:'smile'});
+    faceFoot(110,GND,0,{});
+    faceFoot(128,GND,1,{});
+    faceFoot(146,GND,2,{});
+
+    /* StashYu 蹲在 x=174（flip:false 时火红白尖大尾巴在右侧 x=188..202，刚好竖在 FetchMo 头顶当大兔耳！） */
+    var stealP=inR(t,25.2,26.6);
+    momoFoot(FOX,172,GND-6,{
+      flip:false,
+      rows:stealP?(Math.floor(t*10)%2?FOX_TAP:FOX_OUT):FOX.rows,
+      eyes:stealP?'wink':'glanceR', blush:true
+    });
+    /* FetchMo 在前 x=192 缩成圆乎乎奶油白兔团（sx=1.14, sy=0.86） */
+    momoFoot(CAT,192,GND+2,{
+      flip:false, sx:1.14, sy:.86,
+      eyes:'happy', blush:true
+    });
+    /* 树桩上的金黄落叶在 25.6~26.5s 被白尾巴尖嗖地吸过来收好！ */
+    if(inR(t,25.6,26.6)){
+      var lp=smooth((t-25.6)/1.0);
+      var lx=lerp(STX+7,192,lp), ly=lerp(GND-37,GND-28,lp)-10*4*lp*(1-lp);
+      elli(lx,ly,6*(1-lp*.3),2.8*(1-lp*.3),'#E8A634',1,lp*3);
+      sparkle(192,GND-30,4*lp,'#FFE082',1-lp*.5);
+    }
+    return;
+  }
+
+  /* ---- 阶段 D（28.2 ~ 38.0s）：六只合体「巨型叠叠兔」！（左耳立、右耳垂，唤醒记忆前奏） ---- */
+  var TX=142, stackP=smooth((t-28.3)/2.0);
+  var arc=4*stackP*(1-stackP);
+  var sway=stackP>=1?Math.sin(t*2.4)*1.5:0;
+
+  /* 1. 底座：Clawd 双钳上托扎马步 */
+  var cX=lerp(78,TX,stackP);
+  clawdAt(cX,GND,{la:-16*stackP, ra:-16*stackP, eyes:t>34.2?'wide':'smile'});
+
+  /* 2. 圆肚皮：小黑（左）与小紫（右）叠在 Clawd 头顶 */
+  var b1X=lerp(146,TX-13+sway*.4,stackP), b1Y=lerp(GND,GND-39,stackP)-18*arc;
+  var b2X=lerp(128,TX+13+sway*.4,stackP), b2Y=lerp(GND,GND-39,stackP)-22*arc;
+  faceFoot(b1X,b1Y,2,{sx:lerp(1,1.1,stackP), sy:lerp(1,.92,stackP)});
+  faceFoot(b2X,b2Y,1,{sx:lerp(1,1.1,stackP), sy:lerp(1,.92,stackP)});
+
+  /* 3. 兔脑袋：小粉叠在中间 */
+  var pkX=lerp(110,TX+sway*.7,stackP), pkY=lerp(GND,GND-61,stackP)-28*arc;
+  faceFoot(pkX,pkY,0,{r:lerp(FR,15,stackP)});
+
+  /* 4. 左边笔直立起的兔耳朵：FetchMo 竖直拉长变形！ */
+  var ctX=lerp(192,TX-13+sway,stackP), ctY=lerp(GND,GND-86,stackP)-32*arc;
+  momoFoot(CAT,ctX,ctY,{
+    flip:false, rows:CAT_UP,
+    sx:lerp(1,.72,stackP), sy:lerp(1,1.3,stackP), rot:lerp(0,-8,stackP),
+    eyes:t>34.2?'blank':'happy', blush:true
+  });
+
+  /* 5. 右边软软耷拉下来的兔耳朵：StashYu 斜垂变形！ */
+  var fx2X=lerp(172,TX+20+sway,stackP), fx2Y=lerp(GND-6,GND-78,stackP)-34*arc;
+  momoFoot(FOX,fx2X,fx2Y,{
+    flip:false, rows:FOX_DROOP,
+    sx:lerp(1,1.18,stackP), sy:lerp(1,.78,stackP), rot:lerp(0,30,stackP),
+    eyes:t>34.2?'blank':'happy', blush:true
+  });
+
+  /* 拼好后浮现柔薰衣草色「一立一垂」字符兔耳虚线光晕，34.4s 全员惊觉眼熟！ */
+  if(t>31.2){
+    var ha=fade(t,31.2,37.9,.5);
+    glow(TX,GND-68,62,'176,162,230',.25*ha);
+    /* 左立耳虚线轮廓 & 右垂耳虚线轮廓 */
+    line([TX-22,GND-86, TX-24,GND-126, TX-10,GND-126, TX-7,GND-88],'#9B8AD4',1.5,ha*.85,[3,3]);
+    line([TX+8,GND-88, TX+22,GND-112, TX+44,GND-96, TX+36,GND-82],'#9B8AD4',1.5,ha*.85,[3,3]);
+  }
+  if(t>34.3){
+    var ea=fade(t,34.3,37.8,.3);
+    sparkle(TX-34,GND-108,5.5,'#FFB84D',ea);
+    sparkle(TX+44,GND-106,5.5,'#B0A2E6',ea);
+    wt('!?',TX,GND-128,{size:12,wt:700,c:'#B24A3B',al:'center',a:ea});
+  }
+}
+
+/* 第三场 · 啪嗒，想起来了（34s）：月夜真正的困困宝闭眼贴树桩睡着 -> 全员找回记忆 -> 给清醒宝盖灰粉小星毯 */
+function sRecall(t){
+  PH=lerp(1.38,1.88,clamp(t/12));
+  var STX=198, BUN_DEST=236, FMX=294;
+  camK(t,[
+    kAt(0,220,GND,1.02),
+    kAt(8.8,226,GND,1.08),
+    kAt(10.5,222,GND,1.14),
+    kAt(14.5,222,GND,1.14),
+    kAt(15.6,174,GND,1.0),
+    kAt(22.8,174,GND,1.0),
+    kAt(24.2,218,GND,1.06),
+    kAt(34.0,218,GND,1.06)
+  ]);
+  songField(t,{stumpX:STX, stumpLeaf:false, showCrops:true, watered:0, showHoe:true});
+
+  /* 右侧守株人（清醒宝）：29.2s 盖上灰粉小星毯后秒睡 */
+  var blkP=t<29.0?0:smooth((t-29.0)/1.4);
+  var fmSleep=t>=29.6;
+  charFarmer(FMX,GND,{
+    tired:t<23, shock:inR(t,9.5,15.5),
+    asleep:fmSleep, blanket:blkP,
+    nod:(!fmSleep&&t<29)?Math.sin(t*3.6)*2:0
+  });
+  if(fmSleep) zzzFloat(t,FMX+14,GND-48,.85,'#F4C98E');
+
+  /* 真正的字符兔子困困宝：从右田埂闭眼飘着呼噜走来，9.8s 啪嗒软绵绵贴在老树桩上当枕头睡！ */
+  var bunWalk=path(t,352,GND,walkSegs(1.6,9.4,352,BUN_DEST,GND,11,2.0));
+  var bunLean=t<9.4?0:lerp(0,-11,smooth((t-9.4)/.8));
+  var bunAwake=inR(t,26.0,29.3);
+  charBunny(bunWalk.x,bunWalk.y,{
+    lean:bunLean, awake:bunAwake, noRoll:t>=29.0
+  });
+  if(!bunAwake && t>1.6) zzzFloat(t,bunWalk.x+8,bunWalk.y-48,.9,'#C5B8F0');
+  if(inR(t,9.5,11.2)){
+    wt('啪嗒~',STX+18,GND-54-(t-9.5)*6,{size:9.5,wt:600,c:'#DCD2FA',al:'center',a:1-(t-9.5)/1.7});
+  }
+  sayBubble(t,'catch',BUN_DEST,GND-52,{bg:'#F8F4FF',bd:'#B0A2E6',tc:'#362B59'});
+
+  /* 28.8~29.8s 灰粉小星毯从困困宝飘向清醒宝的小弧线 */
+  if(inR(t,28.6,29.5)){
+    var fp2=smooth((t-28.6)/.9);
+    var bx2=lerp(BUN_DEST+10,FMX,fp2), by2=lerp(GND-16,GND-16,fp2)-16*4*fp2*(1-fp2);
+    rrect(bx2-14,by2-6,28,12,4,'#D9BCCB',.9,'#B491A4',.9);
+  }
+
+  /* 左侧六只：15.0s 记忆封印解开欢呼雀跃，Clawd 双钳高举「困困宝！」 */
+  var eureka=inR(t,15.0,17.2);
+  var joy=jump(t,15.1,.48,13)+jump(t,17.7,.45,10)+jump(t,20.5,.42,8);
+  if(inR(t,15.0,16.8)){
+    var rp2=(t-15.0)/1.8;
+    ringS(108,GND-24,12+rp2*85,'#DCD2FA',2,1-rp2);
+  }
+
+  momoFoot(FOX,40,GND+joy,{
+    flip:true, rows:t>15.0?cyc(t,0,FOX_WAG):FOX.rows,
+    eyes:t>15.0?'happy':(blinkOn(t,3.6,.3)?'blink':'normal'),
+    blush:t>15.0
+  });
+  momoFoot(CAT,70,GND+3+joy,{
+    flip:false, rows:t>15.0?CAT_UP:cyc(t,0,CAT_TWITCH),
+    eyes:t>15.0?'happy':(blinkOn(t,3.4,.9)?'blink':'normal'),
+    blush:t>15.0
+  });
+
+  var sKkb=signOn(t,'kkb');
+  clawdAt(106,GND+joy,{
+    la:(sKkb||eureka)?-17:0, ra:eureka?-17:0,
+    eyes:t>15.0?'smile':(inR(t,9.4,15.0)?'wide':'right')
+  });
+  if(sKkb){
+    placard(clawLX(106),clawTopY(GND+joy,-17),sKkb,1,12.5);
+  }
+
+  [140,160,178].forEach(function(fx3,i){
+    var subJoy=t>15.0?jump(t,15.2+i*.14,.44,11)+jump(t,18.2+i*.15,.4,8):0;
+    faceFoot(fx3,GND+subJoy,i,{bl:blinkOn(t,3.3,i*.8)?1:0});
+  });
+
+  if(inR(t,15.1,19.8)){
+    var sa2=fade(t,15.1,19.8,.35);
+    sparkle(56,GND-48,5,'#FFE082',sa2);
+    sparkle(108,GND-62,6,'#DCD2FA',sa2);
+    sparkle(162,GND-44,5,'#FF94C8',sa2);
+  }
+}
+
+/* 终场 · 回店里睡（25s）：0~12.8s 浇青苗、叼锄头、拍草地、点尾巴收落叶、八只排队进书页门；12.8~25s 书桌合书安睡 + 片尾卡 */
+function sHome(t){
+  if(t<12.8){
+    PH=1.85;
+    var STX=214, PORT_X=326;
+    camK(t,[
+      kAt(0,178,GND,1.0),
+      kAt(6.0,180,GND,1.0),
+      kAt(9.2,196,GND,1.0),
+      kAt(12.6,220,GND,1.04)
+    ]);
+    var waterP=smooth((t-1.2)/1.8);
+    var hoeGone=t>=4.4;
+    songField(t,{stumpX:STX, stumpLeaf:false, showCrops:true, watered:waterP, showHoe:true, hoeTaken:hoeGone});
+
+    /* 9.0s 月光书页门在右侧展开 */
+    var portOpen=t<8.8?0:clamp((t-8.8)/1.2);
+    bookPortal(t,PORT_X,GND,portOpen);
+
+    /* 辅助：9.4~12.4s 八只按顺序蹦跳钻进 PORT_X 书页门 */
+    function hopHome(baseX,goT,drawActor){
+      if(t<goT){ drawActor(baseX,GND,1); return; }
+      var hp=clamp((t-goT)/1.15);
+      if(hp>=1) return;
+      var hx=lerp(baseX,PORT_X,hp), hy=GND-18*Math.abs(Math.sin(hp*Math.PI*2));
+      var prevA=A; A=prevA*(1-smooth((hp-.72)/.28));
+      drawActor(hx,hy,1-hp*.35);
+      A=prevA;
+    }
+
+    /* 1. Clawd 在 x=82 提小木水桶浇活青苗（0.8~3.2s） */
+    hopHome(82,10.5,function(x,y,sc){
+      var pouring=inR(t,1.0,3.1);
+      clawdAt(x,y,{k:CK*sc, la:pouring?-12:0, eyes:'smile'});
+      if(pouring){
+        /* 迷你小木水桶与水珠 */
+        rrect(x-24,y-26,11,10,2,'#A6784E',1,'#5E4026',.9);
+        for(var wi=0;wi<3;wi++){
+          var wu=((t*3.2+wi*.33)%1);
+          dot(x-26-wu*10,y-20+wu*18,1.6,'#9ED8FF',1-wu*.5);
+        }
+      }
+    });
+
+    /* 2. 三颗小脸蛋在 x=112..148 蹦跳滚过把草地拍平（3.6~6.1s） */
+    [112,130,148].forEach(function(bx0,i){
+      hopHome(bx0,10.0+i*.18,function(x,y,sc){
+        var pat=inR(t,3.6,6.1)?jump(t,3.8+i*.25,.42,8)+jump(t,4.8+i*.25,.42,7):0;
+        faceFoot(x,y+pat,i,{r:FR*sc, bl:blinkOn(t,3.5,i)?1:0});
+      });
+    });
+
+    /* 3. FetchMo 在 x=174 叼起小锄头（3.8~5.8s） */
+    hopHome(174,9.8,function(x,y,sc){
+      var pickJump=jump(t,4.1,.45,7);
+      momoFoot(CAT,x,y+pickJump,{
+        flip:false, cell:MC*sc, rows:CAT_UP, eyes:'happy', blush:true
+      });
+      if(inR(t,4.4,6.2)){
+        line([x+10,y-18+pickJump, x+24,y-22+pickJump],'#8C6743',1.8,1);
+        poly([x+22,y-23+pickJump, x+27,y-21+pickJump, x+25,y-16+pickJump],'#9AA2A8',1);
+      }
+    });
+
+    /* 4. StashYu 在最左侧面朝右（flip:true）点尾巴妥帖收好落叶，让出 x=52 青苗 */
+    hopHome(28,10.8,function(x,y,sc){
+      var stashing=inR(t,6.4,8.9);
+      momoFoot(FOX,x,y,{
+        flip:true, cell:MC*sc,
+        rows:stashing?cyc(t,6.4,FOX_STASH):FOX.rows,
+        eyes:stashing?'wink':'happy', blush:true
+      });
+      if(stashing){
+        var la=fade(t,6.5,8.6,.3);
+        elli(x-18,y-26,5.5,2.5,'#E8A634',la,.3);
+        sparkle(x-22,y-32,4,'#FFE082',la);
+      }
+    });
+
+    /* 5. 困困宝与清醒宝最先进书页门（9.3s & 9.55s） */
+    hopHome(256,9.3,function(x,y){
+      charBunny(x,y,{awake:true, noRoll:true});
+    });
+    hopHome(304,9.55,function(x,y){
+      charFarmer(x,y,{asleep:false, tired:true, blanket:.9});
+    });
+
+    if(t>12.0){
+      ctx.setTransform(S,0,0,S,0,0);
+      ctx.fillStyle='rgba(250,244,232,'+clamp((t-12.0)/.75)+')';
+      ctx.fillRect(0,0,W,H);
+      ctx.setTransform(1,0,0,1,0,0);
+    }
+    return;
+  }
+
+  /* 12.8~25.0s：回到宝's Shop 暖灯书桌，绘本合拢夹着半片金黄落叶，猫兔与六只香甜熟睡 */
+  PH=0;
+  camK(t,[
+    kAt(12.8,182,DESK_Y,1.03),
+    kAt(21.0,182,DESK_Y,1.08)
+  ]);
+  var openBook=1-smooth((t-13.1)/1.7);
+  shopDesk(t,{open:openBook, leaf:openBook<.25, noteCard:true});
+
+  /* 六只围着合拢的古风绘本闭眼安睡，轻微呼吸起伏 */
+  var br=1+.02*Math.sin(t*2.2);
+  momoFoot(FOX,56,DESK_Y+3,{flip:true, rows:FOX_IN, eyes:'asleep', blush:true, sy:br, outline:'#FFF4E4'});
+  clawdAt(110,DESK_Y+3,{eyes:'shut'});
+  faceFoot(152,DESK_Y+5,0,{r:12.2, bl:.94, sx:1.05, sy:.95*br});
+  faceFoot(176,DESK_Y+6,1,{r:12.2, bl:.94, sx:1.05, sy:.95*br});
+  faceFoot(200,DESK_Y+5,2,{r:12.2, bl:.94, sx:1.05, sy:.95*br, ring:'rgba(245,232,210,.7)'});
+  momoFoot(CAT,308,DESK_Y+4,{flip:true, rows:CAT.rows, eyes:'asleep', blush:true, sy:br, outline:'#FFF4E4'});
+
+  zzzFloat(t,110,DESK_Y-44,.75,'#F5D8A8');
+  zzzFloat(t+.9,176,DESK_Y-22,.7,'#F5D8A8');
+
+  if(t<13.5){
+    ctx.setTransform(S,0,0,S,0,0);
+    ctx.fillStyle='rgba(250,244,232,'+clamp(1-(t-12.8)/.7)+')';
+    ctx.fillRect(0,0,W,H);
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+
+  /* 19.1~21.0s 结尾温情句 */
+  var endC=CUR_SC.caps.filter(function(c){return c.k==='end';})[0];
+  if(endC&&inR(t,endC.t0,endC.t1)){
+    caption(endC.text,fade(t,endC.t0,endC.t1,.35));
+  }
+
+  /* 21.2~25.0s 宣纸古风片尾卡 */
+  if(t>=21.2) endCard(clamp((t-21.2)/1.1));
+}
+
+function endCard(a){
+  if(a<=0) return;
+  var prev=A; A=a; flat();
+  F(0,0,W,H,'#F4EFE4',1);
+  /* 古风朱砂小印章（避开上方 38% 处的重播按钮，上下舒展对称） */
+  rrect(167,310,26,26,3,'#B24A3B',.92);
+  wt('宝',180,328,{size:14,fam:SERIF,wt:700,c:'#FAF6EE',al:'center'});
+  scrText('守 株 待 兔',180,372,'600 24px '+SERIF,'#2B2620',1);
+  scrText("宝's Shop · 小萌物古风短片",180,404,'400 12px '+SANS,'#8C8275',1);
+
+  /* 六只 + 困困宝清醒宝排排站谢幕 */
+  momoFoot(FOX,64,484,{flip:true, cell:2.2, eyes:'happy', blush:true});
+  clawdAt(110,484,{k:.21, eyes:'smile'});
+  faceFoot(144,484,0,{r:9.5});
+  faceFoot(166,484,1,{r:9.5});
+  faceFoot(188,484,2,{r:9.5});
+  momoFoot(CAT,226,484,{flip:true, cell:2.2, eyes:'happy', blush:true});
+  drawLopEars(274,471,9.5,'#6B5B9E',1);
+  wt('(˘ω˘)',274,482,{size:8.8,fam:MONO,wt:700,c:'#6B5B9E',al:'center'});
+  wt('/\\_/\\',312,471,{size:9.5,fam:MONO,wt:700,c:'#8C5A2B',al:'center'});
+  wt('(˘ㅂ˘)',312,482,{size:8.8,fam:MONO,wt:700,c:'#8C5A2B',al:'center'});
+  A=prev;
+}
+
+/* ---------- 场名签、主渲染 render(t) 与封面帧 ---------- */
+
+var DRAW={intro:sIntro, meet:sMeet, morph:sMorph, recall:sRecall, home:sHome};
+
+function sceneAt(t){
+  t=Math.max(0,Math.min(TOTAL-.001,t));
+  for(var i=0;i<SCENES.length;i++){
+    var sc=SCENES[i];
+    if(t<sc.start+sc.dur || i===SCENES.length-1){
+      return {sc:sc, idx:i, lt:Math.min(sc.dur-.001, Math.max(0,t-sc.start))};
+    }
+  }
+  return {sc:SCENES[0], idx:0, lt:0};
+}
+
+/* 左上角小巧古风场名宣纸签（每场开头浮现 3 秒后淡出，不抢下方视线） */
+function cardStamp(card,sub,a){
+  if(a<=0||!card) return;
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.globalAlpha=clamp(a);
+  ctx.font='600 13px '+SERIF;
+  var label=sub?(card+' · '+sub):card;
+  var tw=ctx.measureText(label).width;
+  var bx=16, by=18, bw=tw+26, bh=28;
+  ctx.fillStyle='rgba(252,248,239,.92)';
+  ctx.strokeStyle='rgba(178,74,59,.45)'; ctx.lineWidth=1;
+  ctx.beginPath(); roundPathOn(ctx,bx,by,bw,bh,6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#B24A3B'; ctx.fillRect(bx+7,by+7,2.5,bh-14);
+  ctx.fillStyle='#2B2620'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(label,bx+15,by+bh/2+.5);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* 封面帧：第二场 32.8s 晚霞下六只合体大叠叠兔 + 老树桩 + 戴斗笠字符猫守株人全员同框 */
+var POSTER={t:24+34+32.8, cam:lowK(188,GND,1.0,504)};
+
+function render(t,poster){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#F4EFE4'; ctx.fillRect(0,0,cv.width,cv.height);
+  A=1; PH=0; PCAM=poster?poster.cam:null;
+  var cur=sceneAt(t), sc=cur.sc, lt=cur.lt;
+  CUR_SC=sc;
+  var fn=DRAW[sc.id];
+  if(fn) fn(lt);
+
+  if(!poster){
+    if(sc.card && lt<3.4){
+      cardStamp(sc.card, sc.sub, fade(lt,.15,3.3,.4));
+    }
+    for(var i=0;i<sc.caps.length;i++){
+      var c=sc.caps[i];
+      if(!c.k && inR(lt,c.t0,c.t1)){
+        caption(c.text, fade(lt,c.t0,c.t1,.22));
+        break;
+      }
+    }
+    /* 场间柔和宣纸过场，不突兀硬切 */
+    var edgeFade=0;
+    if(cur.idx>0 && lt<.32) edgeFade=1-lt/.32;
+    else if(cur.idx<SCENES.length-1 && lt>sc.dur-.32) edgeFade=(lt-(sc.dur-.32))/.32;
+    if(edgeFade>0){
+      ctx.setTransform(S,0,0,S,0,0);
+      ctx.fillStyle='rgba(244,239,228,'+(edgeFade*.55)+')';
+      ctx.fillRect(0,0,W,H);
+      ctx.setTransform(1,0,0,1,0,0);
+    }
+  }
+  PCAM=null;
+}
+
+/* ---------- WebAudio 古风五声音阶原创小曲与动作音效 ---------- */
+
+function m2f(m){ return 440*Math.pow(2,(m-69)/12); }
+
+function buildEvents(){
+  var ev=[];
+  function add(t,kind,midi,dur,vel,midi2){
+    if(t>=0 && t<TOTAL) ev.push({t:t, kind:kind, f:m2f(midi), d:dur, v:vel, f2:midi2?m2f(midi2):0});
+  }
+  /* D 宫五声音阶：D4(62) E4(64) F#4(66) A4(69) B4(71) D5(74) E5(76) F#5(78) A5(81) */
+  var PENTA_DAY=[62,64,66,69,71,74,76,78,81];
+  /* 温柔夜曲五声：B3(59) D4(62) E4(64) F#4(66) A4(69) B4(71) D5(74) E5(76) */
+  var PENTA_NIGHT=[59,62,64,66,69,71,74,76];
+
+  /* 序场（0~24s）：夜读古琴泛音 -> 11.8s 漩涡上升琶音 -> 15.6s 落地Q弹拨弦 */
+  var introMel=[4,5,6,5, 4,3,2,3, 4,5,7,6, 5,4,3,4];
+  for(var i=0;i<16;i++){
+    var t0=.4+i*.7;
+    if(t0<11.6) add(t0,'qin',PENTA_DAY[introMel[i%introMel.length]],.65,.15);
+    if(i%4===0 && t0<11.2) add(t0,'pad',PENTA_DAY[0]-12,2.4,.07);
+  }
+  /* 9.2~14.2s 水墨漩涡奇幻上行琶音 */
+  for(var s=0;s<14;s++){
+    add(9.4+s*.32,'bell',PENTA_DAY[s%PENTA_DAY.length]+(s>7?12:0),.45,.13);
+  }
+  /* 15.5~20.2s 摔落草地与三颗扁团子两下弹跳音 */
+  [15.6,16.0,16.3, 18.0,19.1].forEach(function(bt,bi){
+    add(bt,'boing',55+bi*2,.32,.18,67+bi*2);
+  });
+  [20.8,21.5,22.3].forEach(function(qt,qi){
+    add(qt,'qin',PENTA_DAY[3+qi],.5,.13);
+  });
+
+  /* 第一场（24~58s）：明朗好奇的宋国田野小调 + 20.5s(全局44.5s)“兔”字叮咚风铃 */
+  var s1=24, mel1=[2,4,5,4, 3,2,0,2, 4,5,6,5, 4,3,4,2];
+  for(var j=0;j<44;j++){
+    var tj=s1+.5+j*.74;
+    if(tj<s1+33.4){
+      add(tj,'qin',PENTA_DAY[mel1[j%mel1.length]],.6,.14);
+      if(j%2===1) add(tj+.36,'wood',76,.08,.06);
+      if(j%8===0) add(tj,'pad',50,3.2,.06);
+    }
+  }
+  /* “兔”字敲醒半截记忆的清脆风铃 */
+  add(s1+20.5,'bell',81,.9,.22);
+  add(s1+20.72,'bell',86,1.1,.2);
+
+  /* 第二场（58~96s）：欢快俏皮的变兔进行曲 + 撞树桩 Duang 音效 + 叠叠兔搭积木上行音 */
+  var s2=58, mel2=[0,2,4,5, 6,5,4,2, 3,4,5,7, 6,5,4,5];
+  for(var k=0;k<56;k++){
+    var tk=s2+.4+k*.65;
+    if(tk<s2+37.4){
+      add(tk,'qin',PENTA_DAY[mel2[k%mel2.length]],.52,.15);
+      if(k%2===0) add(tk,'wood',74+(k%4)*2,.07,.07);
+      if(k%8===0) add(tk,'pad',50+(k%16===0?0:5),2.8,.065);
+    }
+  }
+  /* 14.9s 小粉鼓出长兔耳 + 17.35s 撞树桩大Q弹 Duang！ */
+  add(s2+14.9,'boing',62,.28,.18,74);
+  add(s2+17.36,'boing',50,.55,.28,69);
+  add(s2+17.52,'boing',66,.45,.2,54);
+  /* 25.7s StashYu 尾巴顺走落叶俏皮双音 */
+  add(s2+25.7,'bell',78,.3,.16);
+  add(s2+25.92,'bell',81,.35,.16);
+  /* 28.4~30.4s 六只叠叠兔一层层往上叠的五声阶梯音 */
+  [0,2,3,4,5,7].forEach(function(deg,di){
+    add(s2+28.4+di*.3,'bell',PENTA_DAY[deg]+12,.45,.16);
+  });
+
+  /* 第三场（96~130s）：月夜困困宝摇篮曲 + 15.0s 记忆回笼明亮和弦 */
+  var s3=96, mel3=[3,4,5,4, 3,2,1,2, 4,5,6,5, 4,3,2,1];
+  for(var m=0;m<38;m++){
+    var tm=s3+.6+m*.86;
+    if(tm<s3+33.5){
+      add(tm,m%3===0?'bell':'qin',PENTA_NIGHT[mel3[m%mel3.length]],.85,.13);
+      if(m%6===0) add(tm,'pad',47,3.8,.07);
+    }
+  }
+  /* 9.6s 困困宝啪嗒贴上树桩 */
+  add(s3+9.6,'qin',66,.9,.16);
+  /* 15.0s 全员想起来了“困困宝！”欢快明亮琶音 */
+  [62,66,69,74,78,81].forEach(function(nt,ni){
+    add(s3+15.05+ni*.11,'bell',nt,.85,.19);
+  });
+  /* 29.2s 盖上灰粉小毯子 */
+  add(s3+29.2,'bell',74,1.2,.14);
+
+  /* 终场（130~155s）：温暖归店摇篮曲，渐慢收束在安稳的 D 大调五声主音上 */
+  var s4=130, mel4=[5,4,3,2, 4,3,2,0, 3,4,5,4, 2,1,0,0];
+  for(var n=0;n<22;n++){
+    var tn=s4+.6+n*1.02;
+    if(tn<s4+23.2){
+      var vel=.13*(1-Math.max(0,(n-15)/8)*.45);
+      add(tn,n>12?'bell':'qin',PENTA_DAY[mel4[n%mel4.length]],1.1,vel);
+      if(n%5===0) add(tn,'pad',50,4.2,.065);
+    }
+  }
+  /* 21.4s 片尾温润收官泛音 */
+  add(s4+21.4,'bell',74,2.4,.14);
+  add(s4+21.55,'qin',62,2.6,.14);
+
+  ev.sort(function(a,b){ return a.t-b.t; });
+  return ev;
+}
+var EVENTS=buildEvents();
+
+function synth(){
+  var AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC) return null;
+  var ac=new AC(), master=ac.createGain();
+  master.gain.value=3.0;
+  master.connect(ac.destination);
+  var live=[];
+  function track(node){
+    live.push(node);
+    node.onended=function(){ var ix=live.indexOf(node); if(ix>=0) live.splice(ix,1); };
+  }
+  function fire(e,when){
+    var g=ac.createGain(); g.connect(master);
+    if(e.kind==='qin'){
+      var o1=ac.createOscillator(), o2=ac.createOscillator();
+      o1.type='triangle'; o1.frequency.setValueAtTime(e.f,when);
+      o2.type='sine'; o2.frequency.setValueAtTime(e.f*2,when);
+      var g2=ac.createGain(); g2.gain.value=.22;
+      g.gain.setValueAtTime(.0001,when);
+      g.gain.linearRampToValueAtTime(e.v,when+.014);
+      g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+      o1.connect(g); o2.connect(g2); g2.connect(g);
+      o1.start(when); o2.start(when);
+      o1.stop(when+e.d+.03); o2.stop(when+e.d+.03);
+      track(o1);
+    } else if(e.kind==='bell'){
+      var ob=ac.createOscillator();
+      ob.type='sine'; ob.frequency.setValueAtTime(e.f,when);
+      g.gain.setValueAtTime(.0001,when);
+      g.gain.linearRampToValueAtTime(e.v,when+.01);
+      g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+      ob.connect(g); ob.start(when); ob.stop(when+e.d+.03);
+      track(ob);
+    } else if(e.kind==='wood'){
+      var ow=ac.createOscillator();
+      ow.type='sine';
+      ow.frequency.setValueAtTime(e.f,when);
+      ow.frequency.exponentialRampToValueAtTime(e.f*.55,when+e.d);
+      g.gain.setValueAtTime(.0001,when);
+      g.gain.linearRampToValueAtTime(e.v,when+.005);
+      g.gain.exponentialRampToValueAtTime(.0001,when+e.d+.01);
+      ow.connect(g); ow.start(when); ow.stop(when+e.d+.02);
+      track(ow);
+    } else if(e.kind==='pad'){
+      var op=ac.createOscillator();
+      op.type='sine'; op.frequency.setValueAtTime(e.f,when);
+      g.gain.setValueAtTime(.0001,when);
+      g.gain.linearRampToValueAtTime(e.v,when+.35);
+      g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+      op.connect(g); op.start(when); op.stop(when+e.d+.05);
+      track(op);
+    } else if(e.kind==='boing'){
+      var oq=ac.createOscillator();
+      oq.type='triangle';
+      oq.frequency.setValueAtTime(e.f,when);
+      oq.frequency.exponentialRampToValueAtTime(e.f2||e.f*1.8,when+e.d*.45);
+      oq.frequency.exponentialRampToValueAtTime(e.f*1.15,when+e.d);
+      g.gain.setValueAtTime(.0001,when);
+      g.gain.linearRampToValueAtTime(e.v,when+.015);
+      g.gain.exponentialRampToValueAtTime(.0001,when+e.d+.02);
+      oq.connect(g); oq.start(when); oq.stop(when+e.d+.04);
+      track(oq);
+    }
+  }
+  return {
+    ac:ac, master:master, fire:fire,
+    stopAll:function(){
+      live.slice().forEach(function(n){ try{n.stop();}catch(err){} });
+      live.length=0;
+    }
+  };
+}
+
+/* ---------- 播放器与字幕本联动（播放中绝不自动滚屏拽走画面） ---------- */
+
+var playerEl=document.getElementById('player');
+var screenEl=document.getElementById('screen');
+var bigBtn=document.getElementById('big');
+var ppBtn=document.getElementById('pp');
+var sndBtn=document.getElementById('snd');
+var timeEl=document.getElementById('time');
+var seekEl=document.getElementById('seek');
+var chipsEl=document.getElementById('chips');
+
+seekEl.max=String(Math.round(TOTAL*10));
+
+var chipBtns=[];
+SCENES.forEach(function(sc){
+  var b=document.createElement('button');
+  b.type='button';
+  b.textContent=sc.chipText||sc.card||sc.id;
+  b.addEventListener('click',function(){ jumpTo(sc.start+.01,true); });
+  chipsEl.appendChild(b);
+  chipBtns.push(b);
+});
+
+/* 点字幕本里的任意一句，直接跳到那一格 */
+SCENES.forEach(function(sc){
+  sc.caps.forEach(function(c){
+    c.el.addEventListener('click',function(){
+      jumpTo(sc.start+c.t0+.02, true);
+    });
+  });
+});
+
+function fmt(sec){
+  sec=Math.max(0,Math.floor(sec));
+  var m=Math.floor(sec/60), s=sec%60;
+  return m+':'+(s<10?'0':'')+s;
+}
+
+var curT=0, playing=false, ended=false, muted=false;
+var rafId=0, lastTs=0, audio=null, nextEv=0;
+
+function ensureAudio(){
+  if(muted) return;
+  if(!audio) audio=synth();
+  if(audio && audio.ac.state==='suspended'){
+    try{ audio.ac.resume(); }catch(err){}
+  }
+}
+function syncEvIdx(t){
+  nextEv=0;
+  while(nextEv<EVENTS.length && EVENTS[nextEv].t<t-.02) nextEv++;
+}
+function pumpAudio(t){
+  if(!audio || muted || !playing) return;
+  var look=.18, now=audio.ac.currentTime;
+  while(nextEv<EVENTS.length && EVENTS[nextEv].t<=t+look){
+    var e=EVENTS[nextEv++];
+    var dt=Math.max(0,e.t-t);
+    audio.fire(e,now+dt);
+  }
+}
+
+var lastOnEl=null, lastChipIdx=-1;
+function ui(atPoster){
+  timeEl.textContent=fmt(atPoster?0:curT)+' / '+fmt(TOTAL);
+  if(!seeking) seekEl.value=String(Math.round((atPoster?0:curT)*10));
+  var cur=sceneAt(atPoster?0:curT);
+  if(cur.idx!==lastChipIdx){
+    if(lastChipIdx>=0 && chipBtns[lastChipIdx]) chipBtns[lastChipIdx].classList.remove('on');
+    if(chipBtns[cur.idx]) chipBtns[cur.idx].classList.add('on');
+    lastChipIdx=cur.idx;
+  }
+  /* 只切换字幕本当前句 .on 颜色高亮，绝对不调用 scrollIntoView */
+  var activeEl=null;
+  if(!atPoster){
+    for(var i=0;i<cur.sc.caps.length;i++){
+      var c=cur.sc.caps[i];
+      if(inR(cur.lt,c.t0,c.t1)){ activeEl=c.el; break; }
+    }
+  }
+  if(activeEl!==lastOnEl){
+    if(lastOnEl) lastOnEl.classList.remove('on');
+    if(activeEl) activeEl.classList.add('on');
+    lastOnEl=activeEl;
+  }
+}
+
+function setPlayState(on){
+  playing=on;
+  if(on){
+    playerEl.classList.add('playing');
+    ppBtn.textContent='暂停';
+  } else {
+    playerEl.classList.remove('playing');
+    ppBtn.textContent='播放';
+    if(ended){
+      bigBtn.textContent='↻ 再看一遍';
+      bigBtn.classList.add('again');
+      bigBtn.setAttribute('aria-label','再看一遍');
+    } else {
+      bigBtn.textContent='▶';
+      bigBtn.classList.remove('again');
+      bigBtn.setAttribute('aria-label','播放');
+    }
+  }
+}
+
+function tick(ts){
+  if(!playing) return;
+  if(!lastTs) lastTs=ts;
+  var dt=Math.min(.1,(ts-lastTs)/1000);
+  lastTs=ts;
+  curT+=dt;
+  if(curT>=TOTAL){
+    curT=TOTAL-.001;
+    ended=true;
+    if(audio) audio.stopAll();
+    setPlayState(false);
+    render(curT);
+    ui(false);
+    return;
+  }
+  pumpAudio(curT);
+  render(curT);
+  ui(false);
+  rafId=requestAnimationFrame(tick);
+}
+
+function play(){
+  if(ended){ curT=0; ended=false; }
+  ensureAudio();
+  syncEvIdx(curT);
+  setPlayState(true);
+  lastTs=0;
+  pumpAudio(curT);
+  render(curT);
+  ui(false);
+  cancelAnimationFrame(rafId);
+  rafId=requestAnimationFrame(tick);
+}
+
+function pause(){
+  setPlayState(false);
+  cancelAnimationFrame(rafId);
+  if(audio) audio.stopAll();
+}
+
+function toggle(){
+  if(playing) pause(); else play();
+}
+
+function jumpTo(t,autoPlay){
+  curT=Math.max(0,Math.min(TOTAL-.01,t));
+  ended=false;
+  if(audio) audio.stopAll();
+  syncEvIdx(curT);
+  if(autoPlay){
+    if(!playing) play();
+    else { lastTs=0; pumpAudio(curT); render(curT); ui(false); }
+  } else {
+    render(curT);
+    ui(false);
+    setPlayState(false);
+  }
+}
+
+screenEl.addEventListener('click',function(ev){
+  if(ev.target===bigBtn) return;
+  toggle();
+});
+bigBtn.addEventListener('click',function(ev){
+  ev.stopPropagation();
+  toggle();
+});
+ppBtn.addEventListener('click',toggle);
+
+var seeking=false;
+seekEl.addEventListener('input',function(){
+  seeking=true;
+  var t=parseFloat(seekEl.value)/10;
+  curT=Math.max(0,Math.min(TOTAL-.01,t));
+  ended=false;
+  if(audio) audio.stopAll();
+  syncEvIdx(curT);
+  render(curT);
+  ui(false);
+});
+seekEl.addEventListener('change',function(){
+  seeking=false;
+  syncEvIdx(curT);
+  if(playing){ lastTs=0; pumpAudio(curT); }
+});
+
+sndBtn.addEventListener('click',function(){
+  muted=!muted;
+  sndBtn.textContent=muted?'声音 关':'声音 开';
+  sndBtn.setAttribute('aria-pressed',muted?'false':'true');
+  if(muted){
+    if(audio) audio.stopAll();
+  } else if(playing){
+    ensureAudio();
+    syncEvIdx(curT);
+  }
+});
+
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden && playing) pause();
+});
+
+document.addEventListener('keydown',function(ev){
+  var tag=(ev.target&&ev.target.tagName)||'';
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+  if(ev.code==='Space'){ ev.preventDefault(); toggle(); }
+  else if(ev.code==='ArrowLeft'){ ev.preventDefault(); jumpTo(curT-3,playing); }
+  else if(ev.code==='ArrowRight'){ ev.preventDefault(); jumpTo(curT+3,playing); }
+});
+
+var showingPoster=true;
+function resize(){
+  var rect=screenEl.getBoundingClientRect();
+  var dpr=Math.min(3,window.devicePixelRatio||1);
+  var w=Math.round((rect.width||360)*dpr);
+  setup(w);
+  if(showingPoster && !playing && curT===0){
+    render(POSTER.t,POSTER);
+    ui(true);
+  } else {
+    render(curT);
+    ui(false);
+  }
+}
+window.addEventListener('resize',resize);
+/* 一旦开始播放或拖动，就退出静态海报态 */
+var origPlay=play, origJump=jumpTo;
+play=function(){ showingPoster=false; origPlay(); };
+jumpTo=function(t,ap){ showingPoster=false; origJump(t,ap); };
+seekEl.addEventListener('input',function(){ showingPoster=false; });
+
+resize();
+
+/* 导视频口子（只交网页，不导 MP4；点名要导时可直接驱动） */
+window.FILM={
+  W:W, H:H, TOTAL:TOTAL, events:EVENTS,
+  canvas:cv, synth:synth, setup:setup, render:render
+};
+})();
+</script>
+</body>
+</html>
