@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f3ecdf">
+<title>小萌物 GIF 馆</title>
+<meta name="description" content="短片里最软的几下，收成能单独带走的 GIF。">
+<!--
+  添一件：往脚本里的 PIECES 加一格。
+  从短片取出的，film、file、quote 用原片标题、文件名、字幕原句。
+  馆里新画的，这三项留空。
+-->
+<style>
+  :root {
+    --bg: #f3ecdf;
+    --ink: #2a221c;
+    --muted: #7d6d5e;
+    --paper: #fffaf3;
+    --line: #e6d8c6;
+    --accent: #E2552B;
+    --on: #fffaf3;
+    --serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-text-size-adjust: 100%;
+  }
+  main {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: max(18px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+  }
+  .kicker {
+    font-size: 12px;
+    letter-spacing: .18em;
+    color: var(--muted);
+  }
+  .title-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    line-height: 1.25;
+  }
+  #seal {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1.5px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--serif);
+    font-size: 16px;
+    transform: rotate(-8deg);
+  }
+  #seal[data-on="1"] { background: var(--accent); color: var(--on); }
+  .lede, .hint, .foot, .from, .sign { color: var(--muted); }
+  .lede { margin-top: 8px; }
+  .stat { margin-top: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .modes, .turn { display: flex; gap: 8px; margin-top: 14px; }
+  .modes button, .turn button, .sheet-bar button {
+    min-height: 44px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    padding: 0 14px;
+  }
+  .modes button { flex: 1; }
+  .turn button { flex: 1; }
+  .modes button[aria-selected="true"], .sheet-bar button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on);
+  }
+  .times {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .times::-webkit-scrollbar { display: none; }
+  .times button {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    min-height: 44px;
+    max-width: 220px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.3;
+    text-align: left;
+  }
+  .times button[aria-selected="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on);
+  }
+  .times button .dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    vertical-align: middle;
+  }
+  .ticket {
+    margin-top: 14px;
+    background: var(--paper);
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .stage {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: #f6f1e6;
+    padding: 0;
+    position: relative;
+  }
+  canvas, img.shot {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #f6f1e6;
+  }
+  .cap { padding: 12px 14px 14px; }
+  .cap h2 {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    line-height: 1.3;
+  }
+  .from { margin-top: 2px; font-size: 13px; }
+  .hint { margin-top: 12px; font-size: 14px; min-height: 1.65em; }
+  .foot { margin-top: 22px; font-size: 13px; }
+  button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (hover: hover) {
+    .modes button:not([aria-selected="true"]):hover,
+    .turn button:hover,
+    .times button:not([aria-selected="true"]):hover,
+    .sheet-bar button:hover { background: #f3e6d4; }
+  }
+  .sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    background: var(--bg);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sheet[hidden] { display: none !important; }
+  .sheet-in {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+  }
+  .sheet-bar { display: flex; gap: 8px; }
+  .sheet-bar button { flex: 1; }
+  .sheet h2 {
+    margin-top: 14px;
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: .04em;
+  }
+  .label {
+    margin-top: 14px;
+    font-size: 12px;
+    letter-spacing: .14em;
+    color: var(--muted);
+  }
+  .quote {
+    margin-top: 4px;
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.6;
+    white-space: pre-line;
+  }
+  .sign { margin-top: 8px; }
+  .shot { margin-top: 8px; border-radius: 12px; }
+  a.go {
+    display: inline-block;
+    margin-top: 10px;
+    min-height: 44px;
+    line-height: 44px;
+    color: var(--accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ticket { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">打烊以后的小柜</p>
+  <div class="title-row">
+    <h1>小萌物 GIF 馆</h1>
+    <button type="button" id="seal" aria-label="馆印">藏</button>
+  </div>
+  <p class="lede">会动的一下还停在原片里。点开能看清，也能单独存成 GIF。</p>
+  <p class="stat" id="stat"></p>
+  <div class="modes" role="tablist" aria-label="怎么看">
+    <button type="button" id="tab-all" role="tab" aria-selected="true">馆藏</button>
+    <button type="button" id="tab-box" role="tab" aria-selected="false">盲盒</button>
+    <button type="button" id="tab-film" role="tab" aria-selected="false">原片</button>
+  </div>
+  <div class="times" id="chips"></div>
+  <article class="ticket">
+    <button type="button" class="stage" id="open" aria-label="展开这件">
+      <canvas id="view" width="320" height="224"></canvas>
+    </button>
+    <div class="cap">
+      <h2 id="name"></h2>
+      <p class="from" id="from"></p>
+    </div>
+  </article>
+  <div class="turn" id="turn">
+    <button type="button" id="prev">上一件</button>
+    <button type="button" id="next">下一件</button>
+  </div>
+  <div class="turn">
+    <button type="button" id="pet">摸一摸</button>
+    <button type="button" id="draw">抽一只</button>
+  </div>
+  <p class="hint" id="hint"></p>
+  <p class="foot">这一柜还会再添。</p>
+</main>
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in">
+    <div class="sheet-bar">
+      <button type="button" id="close">收回展柜</button>
+      <button type="button" class="primary" id="save">单独保存 GIF</button>
+    </div>
+    <canvas id="big" width="320" height="224"></canvas>
+    <img class="shot" id="shot" alt="" hidden>
+    <h2 id="s-name"></h2>
+    <p class="from" id="s-from"></p>
+    <p class="label" id="s-label"></p>
+    <p class="quote" id="s-quote"></p>
+    <p class="sign" id="s-sign"></p>
+    <p class="hint" id="s-hint"></p>
+    <a class="go" id="s-go" hidden>去看原片</a>
+  </div>
+</div>
+<script>
+(function () {
+  var W = 320, H = 224, FLOOR = 186;
+  var fb = new Uint8ClampedArray(W * H * 4);
+  var hexCache = Object.create(null);
+
+  function rgb(hex) {
+    var c = hexCache[hex];
+    if (!c) {
+      var n = parseInt(hex.slice(1), 16);
+      c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      hexCache[hex] = c;
+    }
+    return c;
+  }
+  function fillRect(x, y, w, h, color) {
+    var c = rgb(color);
+    var x0 = Math.max(0, x | 0), y0 = Math.max(0, y | 0);
+    var x1 = Math.min(W, (x | 0) + (w | 0));
+    var y1 = Math.min(H, (y | 0) + (h | 0));
+    var yy, xx, p;
+    for (yy = y0; yy < y1; yy++) {
+      p = (yy * W + x0) * 4;
+      for (xx = x0; xx < x1; xx++) {
+        fb[p] = c[0]; fb[p + 1] = c[1]; fb[p + 2] = c[2]; fb[p + 3] = 255;
+        p += 4;
+      }
+    }
+  }
+  function fillCircle(cx, cy, r, color) {
+    var c = rgb(color), r2 = r * r;
+    var x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r));
+    var y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
+    var y, x, dx, dy, p;
+    for (y = y0; y <= y1; y++) {
+      for (x = x0; x <= x1; x++) {
+        dx = x + 0.5 - cx; dy = y + 0.5 - cy;
+        if (dx * dx + dy * dy <= r2) {
+          p = (y * W + x) * 4;
+          fb[p] = c[0]; fb[p + 1] = c[1]; fb[p + 2] = c[2]; fb[p + 3] = 255;
+        }
+      }
+    }
+  }
+  function ring(cx, cy, r, t, color) {
+    var c = rgb(color), r2 = r * r, i2 = (r - t) * (r - t);
+    var x0 = Math.max(0, Math.floor(cx - r - 1)), x1 = Math.min(W - 1, Math.ceil(cx + r + 1));
+    var y0 = Math.max(0, Math.floor(cy - r - 1)), y1 = Math.min(H - 1, Math.ceil(cy + r + 1));
+    var y, x, dx, dy, d, p;
+    for (y = y0; y <= y1; y++) {
+      for (x = x0; x <= x1; x++) {
+        dx = x + 0.5 - cx; dy = y + 0.5 - cy; d = dx * dx + dy * dy;
+        if (d <= r2 && d >= i2) {
+          p = (y * W + x) * 4;
+          fb[p] = c[0]; fb[p + 1] = c[1]; fb[p + 2] = c[2]; fb[p + 3] = 255;
+        }
+      }
+    }
+  }
+  function slit(cx, cy, r, ox, oy, w, len, hole, only) {
+    var c = rgb(hole);
+    var keep = only ? rgb(only) : null;
+    var px = cx + ox * r, py = cy + oy * r;
+    var theta = -26.2 * Math.PI / 180;
+    var cos = Math.cos(theta), sin = Math.sin(theta);
+    var rad = (w * r) / 2;
+    var half = Math.max(0, (len * r) / 2 - rad);
+    var reach = half + rad + 1.5;
+    var x0 = Math.max(0, Math.floor(px - reach)), x1 = Math.min(W - 1, Math.ceil(px + reach));
+    var y0 = Math.max(0, Math.floor(py - reach)), y1 = Math.min(H - 1, Math.ceil(py + reach));
+    var y, x, dx, dy, lx, ly, yy, p;
+    for (y = y0; y <= y1; y++) {
+      for (x = x0; x <= x1; x++) {
+        dx = x + 0.5 - px; dy = y + 0.5 - py;
+        lx = dx * cos + dy * sin;
+        ly = -dx * sin + dy * cos;
+        yy = Math.abs(ly) - half;
+        if (yy < 0) yy = 0;
+        if (lx * lx + yy * yy <= rad * rad) {
+          p = (y * W + x) * 4;
+          if (keep && (fb[p] !== keep[0] || fb[p + 1] !== keep[1] || fb[p + 2] !== keep[2])) continue;
+          fb[p] = c[0]; fb[p + 1] = c[1]; fb[p + 2] = c[2]; fb[p + 3] = 255;
+        }
+      }
+    }
+  }
+  function face(cx, cy, r, color, hole, blink) {
+    fillCircle(cx, cy, r, color);
+    var len = blink ? 0.418 * 0.22 : 0.418;
+    slit(cx, cy, r, 0.194, -0.416, 0.194, len, hole, color);
+    slit(cx, cy, r, 0.626, -0.497, 0.129, len, hole, color);
+  }
+  function shelf() {
+    fillRect(0, 0, W, H, "#f6f1e6");
+    fillRect(0, FLOOR, W, H - FLOOR, "#efe2d2");
+    fillRect(0, FLOOR, W, 3, "#e4d3c0");
+  }
+  function paint(rows, ox, oy, n, map) {
+    var y, x, ch, col;
+    for (y = 0; y < rows.length; y++) {
+      for (x = 0; x < rows[y].length; x++) {
+        ch = rows[y].charAt(x);
+        if (ch === ".") continue;
+        col = map[ch];
+        if (!col) continue;
+        fillRect(ox + x * n, oy + y * n, n, n, col);
+      }
+    }
+  }
+  function cells(ox, oy, n, ax, ay, list, color) {
+    var i, dx, dy;
+    for (i = 0; i < list.length; i++) {
+      dx = list[i][0]; dy = list[i][1];
+      fillRect(ox + (ax + dx) * n, oy + (ay + dy) * n, n, n, color);
+    }
+  }
+  function eyes(ox, oy, n, anchors, mode, ink, body, dir) {
+    if (mode === "normal") return;
+    var i, ax, ay, dy, dx;
+    var two = [[0, 0], [1, 0], [0, 1], [1, 1]];
+    for (i = 0; i < anchors.length; i++) {
+      ax = anchors[i][0]; ay = anchors[i][1];
+      cells(ox, oy, n, ax, ay, two, body);
+      if (mode === "blink") cells(ox, oy, n, ax, ay, [[0, 1], [1, 1]], ink);
+      else if (mode === "happy") cells(ox, oy, n, ax, ay, [[-1, 1], [0, 0], [1, 0], [2, 1]], ink);
+      else if (mode === "sleep") cells(ox, oy, n, ax, ay, [[-1, 0], [0, 1], [1, 1], [2, 0]], ink);
+      else if (mode === "look") {
+        for (dy = 0; dy < 2; dy++) for (dx = 0; dx < 2; dx++) {
+          fillRect(ox + (ax + dx + dir) * n, oy + (ay + dy) * n, n, n, ink);
+        }
+      }
+    }
+  }
+  function blushFox(ox, oy, n) {
+    fillRect(ox + 2 * n, oy + 6 * n, n, n, "#F59A8C");
+    fillRect(ox + 11 * n, oy + 6 * n, n, n, "#F59A8C");
+  }
+  function blushCat(ox, oy, n) {
+    fillRect(ox + 8 * n, oy + 7 * n, n, n, "#F2B8B0");
+    fillRect(ox + 17 * n, oy + 7 * n, n, n, "#F2B8B0");
+  }
+
+  var FOX = { M: "#E2552B", C: "#FFF3E3", D: "#3B2520", E: "#3B2520" };
+  var CAT = { M: "#F3E7D6", X: "#4E382E", E: "#79C0F0" };
+  var FOX_EYE = [[3, 4], [9, 4]];
+  var CAT_EYE = [[8, 5], [16, 5]];
+  var FOX_BASE = [
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM...CC..",
+    ".MMMMMMMMMMMM..CCCC.",
+    ".MMEEMMMMEEMM..MMMM.",
+    ".MMEEMMMMEEMM..MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "...................."
+  ];
+  var FOX_TAP = [
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM.CC....",
+    ".MMMMMMMMMMMM.CCCC..",
+    ".MMEEMMMMEEMM..MMMM.",
+    ".MMEEMMMMEEMM..MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "...................."
+  ];
+  var FOX_IN = [
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM..CC...",
+    ".MMMMMMMMMMMM.CCCC..",
+    ".MMEEMMMMEEMM.MMMM..",
+    ".MMEEMMMMEEMM.MMMMM.",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "...................."
+  ];
+  var FOX_OUT = [
+    ".D..........D........",
+    ".DM........MD........",
+    ".MCM......MCM....CC..",
+    ".MMMMMMMMMMMM...CCCC.",
+    ".MMEEMMMMEEMM...MMMM.",
+    ".MMEEMMMMEEMM...MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM.",
+    "..CCCCCCCCCC..MMMMM..",
+    "....MMCCMM...MMMMM...",
+    "....MMCCMM..MMMMM....",
+    "....MMMMMM.MMMMM.....",
+    "....DDMMDDMMMM.......",
+    "....................."
+  ];
+  var FOX_HANG = [
+    ".D..........D........",
+    ".DM........MD........",
+    ".MCM......MCM........",
+    ".MMMMMMMMMMMM........",
+    ".MMEEMMMMEEMM........",
+    ".MMEEMMMMEEMM........",
+    "CCCCCCDDCCCCCC.......",
+    "..CCCCCCCCCC.........",
+    "....MMCCMM...MM......",
+    "....MMCCMM..MMMMM....",
+    "....MMMMMM.MMMMMMMCC.",
+    "....DDMMDDMMMMMMMCCCC",
+    "....................."
+  ];
+  var CAT_BASE = [
+    "....................",
+    "........X........X..",
+    ".......XXX......XXX.",
+    "........MMMMMMMMMM..",
+    ".......MMMMMMMMMMMM.",
+    ".......MEEMMMMMMEEM.",
+    ".....X.MEEMXXXXMEEM.",
+    "....X..MMMMMXXMMMMM.",
+    "....X...MMMMMMMMMM..",
+    "....X...MMMMMMMMMM..",
+    ".....X...MMMMMMMM...",
+    "......XXXXXM..MXX...",
+    "...................."
+  ];
+  var CAT_UP = [
+    "....................",
+    "........X........X..",
+    ".....X.XXX......XXX.",
+    "....X...MMMMMMMMMM..",
+    "....X..MMMMMMMMMMMM.",
+    "....X..MEEMMMMMMEEM.",
+    "....X..MEEMXXXXMEEM.",
+    ".....X.MMMMMXXMMMMM.",
+    "......X.MMMMMMMMMM..",
+    ".......XMMMMMMMMMM..",
+    "........XMMMMMMMM...",
+    ".........XXM..MXX...",
+    "...................."
+  ];
+  var ROSE = [".R.", "RRR", ".Y.", ".G.", ".G."];
+  var ROSE_MAP = { R: "#E2552B", Y: "#FFF3E3", G: "#5f8f62" };
+
+  function checkGrid(name, rows, w, letters) {
+    var y, x, ch;
+    if (rows.length !== 13 && name.indexOf("ROSE") !== 0) throw new Error(name);
+    for (y = 0; y < rows.length; y++) {
+      if (rows[y].length !== w) throw new Error(name + " " + y);
+      for (x = 0; x < rows[y].length; x++) {
+        ch = rows[y].charAt(x);
+        if (letters.indexOf(ch) < 0) throw new Error(name + " " + ch);
+      }
+    }
+  }
+  checkGrid("base", FOX_BASE, 20, ".DMCE");
+  checkGrid("tap", FOX_TAP, 20, ".DMCE");
+  checkGrid("in", FOX_IN, 20, ".DMCE");
+  checkGrid("out", FOX_OUT, 21, ".DMCE");
+  checkGrid("hang", FOX_HANG, 21, ".DMCE");
+  checkGrid("cat", CAT_BASE, 20, ".MXE");
+  checkGrid("up", CAT_UP, 20, ".MXE");
+
+  function foxAt(rows, n, ox, yOff, mode, blush) {
+    var oy = FLOOR - 13 * n + yOff;
+    paint(rows, ox, oy, n, FOX);
+    eyes(ox, oy, n, FOX_EYE, mode, "#3B2520", "#E2552B", 1);
+    if (blush) blushFox(ox, oy, n);
+  }
+  function catAt(rows, n, ox, yOff, mode, blush) {
+    var oy = FLOOR - 13 * n + yOff;
+    paint(rows, ox, oy, n, CAT);
+    eyes(ox, oy, n, CAT_EYE, mode, "#4E382E", "#F3E7D6", -1);
+    if (blush) blushCat(ox, oy, n);
+  }
+  function foxCenter(rows, n, yOff, mode, blush) {
+    foxAt(rows, n, Math.round((W - 20 * n) / 2), yOff, mode, blush);
+  }
+  function clawd(lift) {
+    var ox = 24, oy = FLOOR - 169, s = "#d47f59";
+    var legs = [44, 68, 152, 176], i;
+    fillRect(ox + 44, oy + 50, 147, 98, s);
+    fillRect(ox + 20, oy + 99 - lift, 24, 21, s);
+    fillRect(ox + 191, oy + 99 - lift, 25, 21, s);
+    for (i = 0; i < legs.length; i++) fillRect(ox + legs[i], oy + 148, 15, 21, s);
+    fillRect(ox + 70, oy + 78, 8, 21, "#000000");
+    fillRect(ox + 158, oy + 78, 8, 21, "#000000");
+    ring(286, FLOOR - 20, 16, 3, "#E2552B");
+  }
+  function windowProp() {
+    fillRect(178, 34, 118, 96, "#d5ebe3");
+    fillRect(178, 34, 118, 5, "#3B2520");
+    fillRect(178, 125, 118, 5, "#3B2520");
+    fillRect(178, 34, 5, 96, "#3B2520");
+    fillRect(291, 34, 5, 96, "#3B2520");
+    fillRect(166, 130, 140, 10, "#c6a36a");
+  }
+  function screenDots(on) {
+    ring(230, 108, 52, 4, "#3B2520");
+    fillCircle(230, 108, 48, "#fffaf3");
+    if (!on) return;
+    var s = 8, g = 6, x = 230 - s - (g / 2), y = 108 - s - (g / 2);
+    fillRect(x, y, s, s, "#E2552B");
+    fillRect(x + s + g, y, s, s, "#E2552B");
+    fillRect(x, y + s + g, s, s, "#E2552B");
+    fillRect(x + s + g, y + s + g, s, s, "#E2552B");
+  }
+  function monitor(lamp) {
+    fillRect(40, 48, 210, 120, "#241c18");
+    fillRect(52, 60, 186, 96, "#1a1412");
+    fillRect(248, 36, 8, 18, "#3B2520");
+    fillCircle(252, 28, 9, lamp);
+  }
+  function wrapArt() {
+    shelf();
+    fillRect(78, 52, 164, 112, "#fffaf3");
+    fillRect(78, 52, 164, 8, "#E2552B");
+    fillRect(154, 52, 8, 112, "#E2552B");
+    fillRect(78, 104, 164, 8, "#E2552B");
+  }
+
+  var PIECES = [
+    {
+      id: "tap",
+      title: "白尖点两下",
+      sign: "软的是里头。尾巴尖还记得自己是尖的。",
+      film: "借框",
+      file: "借框-build.html",
+      quote: "白尖还是硬的，点了两下。",
+      delays: [16, 16, 16, 16, 14, 16, 16, 16],
+      draw: function (i, pet) {
+        shelf();
+        if (pet) {
+          var wag = [FOX_BASE, FOX_IN, FOX_BASE, FOX_OUT];
+          foxCenter(wag[i % 4], 8, 0, "happy", true);
+        } else {
+          foxCenter(i === 5 || i === 7 ? FOX_TAP : FOX_BASE, 8, 0, "normal", false);
+        }
+      }
+    },
+    {
+      id: "bounce",
+      title: "弹回来了",
+      sign: "人还是软的。边被借回来了。",
+      film: "借框",
+      file: "借框-build.html",
+      quote: "小粉先站进去，蹦了一下。\n弹回来了。",
+      delays: [12, 12, 12, 12, 12, 12, 14, 12],
+      draw: function (i, pet) {
+        var hop = [0, -8, -18, -26, -18, -6, 4, 0];
+        var y = 112 + (pet ? hop[i] - 6 : hop[i]);
+        shelf();
+        fillRect(28, 28, 46, 8, "#3B2520");
+        fillRect(28, 28, 8, 46, "#3B2520");
+        fillRect(246, 150, 46, 8, "#3B2520");
+        fillRect(284, 112, 8, 46, "#3B2520");
+        face(160, y, 46, "#FF309B", "#f6f1e6", !pet && i === 6);
+      }
+    },
+    {
+      id: "dots",
+      title: "四粒小方点",
+      sign: "方块眼睛凑太近，圆脸上就多出四粒。",
+      film: "小脸蛋的电脑出问题了",
+      file: "小脸蛋的电脑出问题了-build.html",
+      quote: "狐狸把方块眼睛凑近。\n圆脸上挤出四粒小方点。",
+      delays: [14, 14, 14, 16, 16, 14, 14, 14],
+      draw: function (i, pet) {
+        var lean = [0, 8, 16, 24, 24, 16, 8, 0];
+        shelf();
+        screenDots(i >= 3 && i <= 5);
+        foxAt(FOX_BASE, 6, 6 + (pet ? lean[i] + 6 : lean[i]), 0, i >= 3 && i <= 5 ? "happy" : "normal", pet);
+      }
+    },
+    {
+      id: "lamp",
+      title: "灯还亮着",
+      sign: "画面没了。边上那一点还在。",
+      film: "小脸蛋的电脑出问题了",
+      file: "小脸蛋的电脑出问题了-build.html",
+      quote: "整颗贴上去，画面没了。\n可边上那颗小灯还亮着。",
+      delays: [14, 14, 14, 14, 16, 12, 12, 16],
+      draw: function (i, pet) {
+        var xs = [112, 128, 144, 160, 172, 172, 172, 172];
+        var glow = i % 2 === 0 ? "#ffd27a" : "#ffe7b0";
+        shelf();
+        monitor(glow);
+        if (i < 4) face(176, 108, 24, "#FF309B", "#1a1412", false);
+        face(xs[i] + (pet ? 6 : 0), 108, 34, "#000000", "#2a2420", i === 6);
+        fillRect(248, 36, 8, 18, "#3B2520");
+        fillCircle(252, 28, 9, glow);
+      }
+    },
+    {
+      id: "tail",
+      title: "尾巴竖起来",
+      sign: "尖儿带一点钩。想跟你玩。",
+      film: "小脸蛋的电脑出问题了",
+      file: "小脸蛋的电脑出问题了-build.html",
+      quote: "暹罗的尾巴竖起来。",
+      delays: [14, 12, 12, 14, 12, 12, 14, 16],
+      draw: function (i, pet) {
+        var hop = [0, 0, -6, -12, -6, 0, 0, 0];
+        shelf();
+        catAt(CAT_UP, 8, Math.round((W - 160) / 2), (pet ? hop[i] - 4 : hop[i]), "happy", true);
+      }
+    },
+    {
+      id: "rose",
+      title: "窗台上的花",
+      sign: "花留在窗台上。房间可以暗。",
+      film: "自己换灯泡",
+      file: "自己换灯泡-build.html",
+      quote: "FetchMo 叼起花。小粉把它顶上去。\n花留在窗台上。",
+      delays: [14, 12, 12, 12, 12, 14, 16, 16],
+      draw: function (i, pet) {
+        var path = [[86, 124], [112, 118], [140, 112], [168, 108], [192, 104], [210, 102], [218, 100], [218, 100]];
+        var p = path[i];
+        shelf();
+        windowProp();
+        catAt(CAT_BASE, 6, 8, 0, "happy", pet);
+        face(236, i >= 5 ? 62 : 72, 24, "#FF309B", "#d5ebe3", false);
+        paint(ROSE, p[0], p[1] - (pet && i > 4 ? 10 : 0), 6, ROSE_MAP);
+      }
+    },
+    {
+      id: "claw",
+      title: "这一次不盖章",
+      sign: "章还在原处。钳子只是举起来。",
+      film: "一日店长",
+      file: "一日店长-build.html",
+      quote: "钳子举起来。这一次不盖章。",
+      delays: [14, 12, 12, 16, 16, 12, 12, 14],
+      draw: function (i, pet) {
+        var lift = [0, 8, 16, 24, 24, 16, 8, 0];
+        shelf();
+        clawd(pet ? lift[i] + 6 : lift[i]);
+      }
+    },
+    {
+      id: "nap",
+      title: "并排打盹",
+      sign: "这件是柜里新画的，没有原片。",
+      film: "",
+      file: "",
+      quote: "",
+      delays: [18, 18, 18, 18, 18, 18, 18, 18],
+      draw: function (i, pet) {
+        var bob = [0, 0, -4, -4, 0, 0, -4, -4];
+        shelf();
+        foxAt(FOX_HANG, 5, 16, bob[i], pet ? "happy" : "sleep", pet);
+        catAt(CAT_BASE, 5, 204, bob[(i + 4) % 8], pet ? "happy" : "sleep", pet);
+      }
+    },
+    {
+      id: "keep",
+      title: "私藏的一下",
+      sign: "这一下不在任何片子里。",
+      film: "",
+      file: "",
+      quote: "",
+      secret: true,
+      delays: [16, 16, 16, 14, 16, 16, 16, 18],
+      draw: function (i, pet) {
+        shelf();
+        foxCenter(i === 4 || i === 6 ? FOX_TAP : FOX_BASE, 8, 0, pet ? "happy" : "look", pet);
+        fillRect(236, 78, 36, 36, "#E2552B");
+        fillRect(244, 90, 20, 4, "#fffaf3");
+        fillRect(250, 100, 8, 8, "#fffaf3");
+      }
+    }
+  ];
+
+  function lzwEncode(pixels, colorDepth) {
+    var BITS = 12, HSIZE = 5003;
+    var MASKS = [0, 1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 2047, 4095, 8191, 16383, 32767, 65535];
+    var htab = new Int32Array(HSIZE);
+    var codetab = new Int32Array(HSIZE);
+    htab.fill(-1);
+    var initCodeSize = colorDepth < 2 ? 2 : colorDepth;
+    var g_init_bits = initCodeSize + 1;
+    var clearFlg = false;
+    var nBits = g_init_bits;
+    var maxcode = (1 << nBits) - 1;
+    var ClearCode = 1 << initCodeSize;
+    var EOFCode = ClearCode + 1;
+    var freeEnt = ClearCode + 2;
+    var aCount = 0, curAccum = 0, curBits = 0;
+    var accum = new Uint8Array(256);
+    var out = [];
+    function writeByte(n) { out.push(n & 255); }
+    function writeBytes(buf, len) {
+      var k; for (k = 0; k < len; k++) out.push(buf[k]);
+    }
+    var hshift = 0, fcode, span;
+    for (span = HSIZE; span < 65536; span *= 2) hshift++;
+    hshift = 8 - hshift;
+    function output(code) {
+      curAccum &= MASKS[curBits];
+      if (curBits > 0) curAccum |= code << curBits;
+      else curAccum = code;
+      curBits += nBits;
+      while (curBits >= 8) {
+        accum[aCount++] = curAccum & 255;
+        if (aCount >= 254) { writeByte(aCount); writeBytes(accum, aCount); aCount = 0; }
+        curAccum >>= 8;
+        curBits -= 8;
+      }
+      if (freeEnt > maxcode || clearFlg) {
+        if (clearFlg) {
+          nBits = g_init_bits;
+          maxcode = (1 << nBits) - 1;
+          clearFlg = false;
+        } else {
+          nBits++;
+          maxcode = nBits === BITS ? (1 << nBits) : (1 << nBits) - 1;
+        }
+      }
+      if (code === EOFCode) {
+        while (curBits > 0) {
+          accum[aCount++] = curAccum & 255;
+          if (aCount >= 254) { writeByte(aCount); writeBytes(accum, aCount); aCount = 0; }
+          curAccum >>= 8;
+          curBits -= 8;
+        }
+        if (aCount > 0) { writeByte(aCount); writeBytes(accum, aCount); aCount = 0; }
+      }
+    }
+    writeByte(initCodeSize);
+    output(ClearCode);
+    var ent = pixels[0], idx, c, i, disp, found;
+    for (idx = 1; idx < pixels.length; idx++) {
+      c = pixels[idx];
+      fcode = (c << BITS) + ent;
+      i = (c << hshift) ^ ent;
+      if (htab[i] === fcode) { ent = codetab[i]; continue; }
+      disp = i === 0 ? 1 : HSIZE - i;
+      found = false;
+      while (htab[i] >= 0) {
+        i -= disp;
+        if (i < 0) i += HSIZE;
+        if (htab[i] === fcode) { ent = codetab[i]; found = true; break; }
+      }
+      if (found) continue;
+      output(ent);
+      ent = c;
+      if (freeEnt < (1 << BITS)) {
+        codetab[i] = freeEnt++;
+        htab[i] = fcode;
+      } else {
+        htab.fill(-1);
+        freeEnt = ClearCode + 2;
+        clearFlg = true;
+        output(ClearCode);
+      }
+    }
+    output(ent);
+    output(EOFCode);
+    writeByte(0);
+    return out;
+  }
+  function encodeGif(frames, delays) {
+    var colors = [], indexOf = new Map(), indexed = [], f, i, key, id, p, r, g, b;
+    for (f = 0; f < frames.length; f++) {
+      var idx = new Uint8Array(W * H);
+      var src = frames[f];
+      for (i = 0; i < W * H; i++) {
+        r = src[i * 4]; g = src[i * 4 + 1]; b = src[i * 4 + 2];
+        key = (r * 65536) + (g * 256) + b;
+        id = indexOf.get(key);
+        if (id === undefined) {
+          id = colors.length;
+          if (id > 255) throw new Error("palette");
+          indexOf.set(key, id);
+          colors.push([r, g, b]);
+        }
+        idx[i] = id;
+      }
+      indexed.push(idx);
+    }
+    var minSize = 2;
+    while ((1 << minSize) < colors.length) minSize++;
+    var table = 1 << minSize;
+    var bytes = [];
+    function u8(n) { bytes.push(n & 255); }
+    function u16(n) { bytes.push(n & 255, (n >> 8) & 255); }
+    function str(s) { var k; for (k = 0; k < s.length; k++) bytes.push(s.charCodeAt(k)); }
+    str("GIF89a");
+    u16(W); u16(H);
+    u8(0x80 | 0x70 | (minSize - 1));
+    u8(0); u8(0);
+    for (i = 0; i < table; i++) {
+      var col = colors[i] || [0, 0, 0];
+      u8(col[0]); u8(col[1]); u8(col[2]);
+    }
+    u8(0x21); u8(0xFF); u8(11); str("NETSCAPE2.0"); u8(3); u8(1); u16(0); u8(0);
+    for (f = 0; f < indexed.length; f++) {
+      var delay = delays[f] || 10;
+      u8(0x21); u8(0xF9); u8(4); u8(0x04); u16(delay); u8(0); u8(0);
+      u8(0x2C); u16(0); u16(0); u16(W); u16(H); u8(0);
+      var packed = lzwEncode(indexed[f], minSize);
+      var j;
+      for (j = 0; j < packed.length; j++) u8(packed[j]);
+    }
+    u8(0x3B);
+    return new Uint8Array(bytes);
+  }
+
+  function snapshot() { return new Uint8ClampedArray(fb); }
+  function blit(ctx, draw) {
+    draw();
+    var img = ctx.createImageData(W, H);
+    img.data.set(fb);
+    ctx.putImageData(img, 0, 0);
+  }
+  function gifOf(piece) {
+    var frames = [], i;
+    for (i = 0; i < piece.delays.length; i++) {
+      piece.draw(i, false);
+      frames.push(snapshot());
+    }
+    return encodeGif(frames, piece.delays);
+  }
+
+  var Hall = { pieces: PIECES, blit: blit, gifOf: gifOf, wrap: function (ctx) { blit(ctx, wrapArt); } };
+
+  if (typeof document === "undefined") {
+    globalThis.Hall = Hall;
+    return;
+  }
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var store;
+  try { store = JSON.parse(localStorage.getItem("gif-guan-v1")) || {}; }
+  catch (e) { store = {}; }
+  if (!store.seen) store.seen = [];
+  function persist() {
+    try { localStorage.setItem("gif-guan-v1", JSON.stringify({ seen: store.seen, secret: !!store.secret })); }
+    catch (e) {}
+  }
+
+  var mode = "all", film = "", index = 0, sealed = true, frame = 0, acc = 0, last = 0, petLeft = 0, raf = 0;
+  var shotUrl = "";
+  var view = document.getElementById("view");
+  var big = document.getElementById("big");
+  var viewCtx = view.getContext("2d", { willReadFrequently: true });
+  var bigCtx = big.getContext("2d", { willReadFrequently: true });
+  var chips = document.getElementById("chips");
+  var sheet = document.getElementById("sheet");
+  var shot = document.getElementById("shot");
+
+  function shown() {
+    return PIECES.filter(function (p) { return !p.secret || store.secret; });
+  }
+  function list() {
+    var arr = shown();
+    if (mode === "film" && film) arr = arr.filter(function (p) { return (p.film || "馆里新画的") === film; });
+    return arr;
+  }
+  function current() {
+    var arr = list();
+    if (!arr.length) return shown()[0];
+    if (index >= arr.length) index = 0;
+    if (index < 0) index = arr.length - 1;
+    return arr[index];
+  }
+  function filmNames() {
+    var names = [], i, key;
+    var arr = shown();
+    for (i = 0; i < arr.length; i++) {
+      key = arr[i].film || "馆里新画的";
+      if (names.indexOf(key) < 0) names.push(key);
+    }
+    return names;
+  }
+  function seenMark(id) { return store.seen.indexOf(id) >= 0; }
+
+  function paintView() {
+    var p = current();
+    if (mode === "box" && sealed) {
+      Hall.wrap(viewCtx);
+      return;
+    }
+    Hall.blit(viewCtx, function () { p.draw(frame, petLeft > 0); });
+    if (!sheet.hidden) Hall.blit(bigCtx, function () { p.draw(frame, false); });
+  }
+  function loop(now) {
+    if (reduce) return;
+    if (!last) last = now;
+    acc += now - last;
+    last = now;
+    var p = current();
+    var wait = (mode === "box" && sealed) ? 1000 : (p.delays[frame] || 12) * 10;
+    if (acc >= wait) {
+      acc = 0;
+      if (!(mode === "box" && sealed)) {
+        frame = (frame + 1) % p.delays.length;
+        if (petLeft > 0) petLeft--;
+      }
+    }
+    paintView();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function renderChrome() {
+    var all = shown();
+    var fromFilm = all.filter(function (p) { return p.film; }).length;
+    var made = all.length - fromFilm;
+    document.getElementById("stat").textContent = "在柜 " + all.length + " 件 · 原片取出 " + fromFilm + " · 馆里新画 " + made;
+    document.getElementById("seal").setAttribute("data-on", store.secret ? "1" : "0");
+    document.getElementById("tab-all").setAttribute("aria-selected", mode === "all" ? "true" : "false");
+    document.getElementById("tab-box").setAttribute("aria-selected", mode === "box" ? "true" : "false");
+    document.getElementById("tab-film").setAttribute("aria-selected", mode === "film" ? "true" : "false");
+    document.getElementById("turn").hidden = mode === "box";
+    document.getElementById("draw").textContent = mode === "box" && !sealed ? "再抽一只" : "抽一只";
+
+    var keep = chips.scrollLeft;
+    chips.innerHTML = "";
+    if (mode === "all") {
+      list().forEach(function (p, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        if (seenMark(p.id)) {
+          var d = document.createElement("i");
+          d.className = "dot";
+          b.appendChild(d);
+        }
+        b.appendChild(document.createTextNode(p.title));
+        b.setAttribute("aria-selected", i === index ? "true" : "false");
+        b.addEventListener("click", function () { index = i; frame = 0; acc = 0; closeSheet(); sync(); });
+        chips.appendChild(b);
+      });
+    } else if (mode === "film") {
+      filmNames().forEach(function (name) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = name;
+        b.setAttribute("aria-selected", name === film ? "true" : "false");
+        b.addEventListener("click", function () {
+          film = name; index = 0; frame = 0; acc = 0; closeSheet(); sync();
+        });
+        chips.appendChild(b);
+      });
+    }
+    chips.hidden = mode === "box";
+    chips.scrollLeft = keep;
+
+    var p = current();
+    var sealedNow = mode === "box" && sealed;
+    document.getElementById("name").textContent = sealedNow ? "还没拆" : p.title;
+    document.getElementById("from").textContent = sealedNow ? "抽一只，看这次是哪一件。" : (p.film ? "取出自《" + p.film + "》" : "馆里新画的");
+    var hint = document.getElementById("hint");
+    if (mode === "box" && sealed) hint.textContent = "盲盒还封着。抽一只。";
+    else if (petLeft > 0) hint.textContent = "摸到了。存下来的还是原来的样子。";
+    else if (store.seen.length >= shown().filter(function (x) { return !x.secret; }).length && !store.secret) hint.textContent = "柜里这些都展开过了。馆印还能再按。";
+    else if (mode === "film") hint.textContent = "《" + (film || "原片") + "》里的第 " + (index + 1) + " 件，共 " + list().length + " 件。";
+    else hint.textContent = "点画面展开。上一件、下一件是指定看。抽一只是盲盒。";
+    paintView();
+    var sel = chips.querySelector('[aria-selected="true"]');
+    if (sel && sel.scrollIntoView) sel.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }
+  function sync() { renderChrome(); }
+
+  function openSheet() {
+    if (mode === "box" && sealed) return;
+    var p = current();
+    if (!seenMark(p.id)) { store.seen.push(p.id); persist(); }
+    if (shotUrl) { URL.revokeObjectURL(shotUrl); shotUrl = ""; }
+    shot.hidden = true;
+    shot.removeAttribute("src");
+    big.hidden = false;
+    document.getElementById("s-name").textContent = p.title;
+    document.getElementById("s-from").textContent = p.film ? "取出自《" + p.film + "》" : "馆里新画的";
+    document.getElementById("s-label").textContent = p.quote ? "原片字幕" : "";
+    document.getElementById("s-quote").textContent = p.quote || "";
+    document.getElementById("s-sign").textContent = p.sign;
+    document.getElementById("s-hint").textContent = "保存下来的是真正的 GIF，循环就是这一小段。";
+    var go = document.getElementById("s-go");
+    if (p.file) { go.hidden = false; go.href = p.file; go.textContent = "去看《" + p.film + "》"; }
+    else go.hidden = true;
+    sheet.hidden = false;
+    document.body.style.overflow = "hidden";
+    paintView();
+    renderChrome();
+  }
+  function closeSheet() {
+    sheet.hidden = true;
+    document.body.style.overflow = "";
+  }
+
+  document.getElementById("open").addEventListener("click", openSheet);
+  document.getElementById("close").addEventListener("click", function () { closeSheet(); sync(); });
+  document.getElementById("prev").addEventListener("click", function () {
+    index--; frame = 0; acc = 0; closeSheet(); sync();
+  });
+  document.getElementById("next").addEventListener("click", function () {
+    index++; frame = 0; acc = 0; closeSheet(); sync();
+  });
+  document.getElementById("tab-all").addEventListener("click", function () {
+    mode = "all"; petLeft = 0; frame = 0; closeSheet(); sync();
+  });
+  document.getElementById("tab-box").addEventListener("click", function () {
+    mode = "box"; sealed = true; petLeft = 0; frame = 0; closeSheet(); sync();
+  });
+  document.getElementById("tab-film").addEventListener("click", function () {
+    mode = "film";
+    petLeft = 0;
+    if (!film) film = filmNames()[0];
+    index = 0; frame = 0; closeSheet(); sync();
+  });
+  document.getElementById("pet").addEventListener("click", function () {
+    if (mode === "box" && sealed) return;
+    petLeft = current().delays.length;
+    frame = 0; acc = 0;
+    document.getElementById("hint").textContent = "摸到了。存下来的还是原来的样子。";
+  });
+  document.getElementById("draw").addEventListener("click", function () {
+    var arr = shown();
+    var pick = Math.floor(Math.random() * arr.length);
+    if (arr.length > 1 && !sealed && mode === "box" && arr[pick].id === current().id) pick = (pick + 1) % arr.length;
+    mode = "box";
+    sealed = false;
+    index = pick;
+    frame = 0; acc = 0;
+    closeSheet();
+    sync();
+    if (arr.length > 1) {
+      var again = false;
+      /* index already set; hint if the title matches previous is handled by not repeating */
+    }
+    document.getElementById("hint").textContent = "抽到了「" + current().title + "」。点画面可以展开。";
+  });
+  document.getElementById("seal").addEventListener("click", function () {
+    store.sealTaps = (store.sealTaps || 0) + 1;
+    if (!store.secret && store.sealTaps >= 4) {
+      store.secret = true;
+      persist();
+      mode = "all";
+      var arr = shown();
+      index = arr.findIndex(function (p) { return p.id === "keep"; });
+      frame = 0;
+      closeSheet();
+      sync();
+      document.getElementById("hint").textContent = "私藏拿出来了。这件没有原片。";
+      return;
+    }
+    persist();
+    if (!store.secret) document.getElementById("hint").textContent = "馆印还热着。";
+  });
+  document.getElementById("save").addEventListener("click", function () {
+    var p = current();
+    var hint = document.getElementById("s-hint");
+    hint.textContent = "正在装订这一张。";
+    var bytes;
+    try { bytes = gifOf(p); }
+    catch (err) { hint.textContent = "这张没装订上，再试一次。"; return; }
+    var blob = new Blob([bytes], { type: "image/gif" });
+    var file = new File([blob], p.title + ".gif", { type: "image/gif" });
+    if (shotUrl) URL.revokeObjectURL(shotUrl);
+    shotUrl = URL.createObjectURL(blob);
+    shot.src = shotUrl;
+    shot.alt = p.title + "，GIF";
+    shot.hidden = false;
+    big.hidden = true;
+    hint.textContent = "下面这张已经是 GIF。没弹出保存的话，长按它也能存。";
+    var shareFiles = navigator.canShare && navigator.canShare({ files: [file] });
+    if (shareFiles) {
+      navigator.share({ files: [file], title: p.title }).catch(function (e) {
+        if (e && e.name === "AbortError") return;
+        var a = document.createElement("a");
+        a.href = shotUrl; a.download = p.title + ".gif";
+        document.body.appendChild(a); a.click(); a.remove();
+      });
+      return;
+    }
+    var a = document.createElement("a");
+    a.href = shotUrl; a.download = p.title + ".gif";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !sheet.hidden) { closeSheet(); sync(); }
+  });
+
+  if (!film) film = filmNames()[0];
+  sync();
+  if (!reduce) raf = requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
