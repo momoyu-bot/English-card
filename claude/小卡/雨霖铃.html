@@ -1,0 +1,1938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>雨霖铃 · 小萌物短片</title>
+<meta name="description" content="长亭送 FetchMo，六只都没有嘴，檐角的铃也丢了舌头。那一夜下着雨，岸上一直有铃声。">
+<meta name="theme-color" content="#EDEAE4">
+<!--
+  跟《魔法药水》《龙套日记》是同一套做法：整部片子是一张 canvas，render(t) 给定第几秒就画出那一格。
+  字幕不写在脚本里：底下「字幕本」那几行就是字幕，data-t 是它在这一场里出现和消失的秒数。
+  data-k="end" 是最后一句；不写 data-k 的是旁白。六只都没有嘴，话筒一直在旁白手里。
+  data-poem 是这一场开头竖着出现的那几行词，按原词的顺序，一场一段，八场连起来就是整首。
+  带 data-from="店里的" 的，是从店里别的页原样搬来的话，一字不差：
+    「小黑想说：在。」「白尖点两下：收好了。」→ claude/小卡/嘟嘟机响了.html
+  只交网页，不导 MP4；底下「导视频用的口子」没拆。
+
+  宝 2026-11-05 点的：「想看小萌物短片之雨霖铃，剧情需要的话，创意、内容、改编、站位、大小不做任何限制，底模可变形，自由发挥」
+
+  词：柳永《雨霖铃》（寒蝉凄切）。柳永生年不详，约 1053 年去世；北宋的词，早过了版权期。
+    文字照《全宋词》，取自开源数据集 chinese-poetry：
+    https://github.com/chinese-poetry/chinese-poetry/blob/master/%E5%AE%8B%E8%AF%8D/ci.song.0.json
+    （同一个仓库的作者表里，柳永写的是「？－约 1053」）。2026-11-05 逐字核过，页面上的原词和每场竖排的词一字没改。
+    另一份数据集 Werneror/Poetry（宋_2.csv）里，这首是「方留恋处」「暮霭沉沉」「待与何人说」，是常见的异文，这里没用。
+    维基文库、古诗文网那天从开发环境连不上，没能对照。
+  片头的传说（唐玄宗入蜀，雨里听见栈道上的铃声与山相应，谱成《雨霖铃》曲）是转述大意，没有引原文。
+
+  故事是这一部编的：长亭檐角的铃丢了舌头，FetchMo 坐船去叼回来；五只摘下铃，沿着河岸跟了一夜。
+  六只照店里的造型宪法画：
+    Clawd  → claude/小科普/Clawd造型宪法（Code版）.html（踩角站姿；钳子只整块上下挪，敲铃就是把钳子举上去）
+    小脸蛋 → claude/小科普/小脸蛋造型宪法（实测版） (1).html（sRGB 色、反斜杠缝、缝是挖空的）
+    StashYu / FetchMo → claude/小科普/momoyu造型宪法.html（逐格照抄，3 倍；尾巴照「尾巴 DLC」整张换；夜里加一圈贴纸白边）
+  铃、铃舌头、小伞、灯、眼睛里那一格亮光、身上往下滴的水，都是叠在外面的：拿掉以后，剩下的跟格子图一格不差。
+  曲子是 cc 写的：前面是羽调的五声，天亮以后换成宫调。
+-->
+<style>
+  :root{
+    --paper:#EDEAE4; --paper-2:#F8F6F2; --ink:#2A2C33; --ink-2:#5E6270; --ink-3:#9A9CA6;
+    --line:#DCD7CF; --accent:#3E5A7A; --seal:#B13E2C;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.7;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:calc(30px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))}
+
+  header{text-align:center;margin-bottom:20px}
+  .tag{font-size:12px;letter-spacing:.18em;color:var(--ink-3)}
+  h1{
+    margin:6px 0 8px;font-weight:500;font-size:32px;line-height:1.3;letter-spacing:.2em;text-indent:.2em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--ink);
+  }
+  .lede{margin:0;color:var(--ink-2);font-size:14.5px}
+
+  /* 播放器：不跑 JS 就不出现，只剩下面的字幕本 */
+  .player{display:none}
+  .js .player{display:block}
+  .player{width:100%;max-width:min(100%, calc((100vh - 120px) * 9 / 16));margin:0 auto 26px}
+  @supports (height:100svh){
+    .player{max-width:min(100%, calc((100svh - 120px) * 9 / 16))}
+  }
+  .screen{
+    position:relative;border-radius:14px;overflow:hidden;background:#141826;
+    box-shadow:0 0 0 1px var(--line), 0 10px 30px -18px rgba(30,40,60,.5);
+    aspect-ratio:9/16;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  .screen canvas{display:block;width:100%;height:100%}
+  .big{
+    position:absolute;left:50%;top:84%;transform:translate(-50%,-50%);
+    width:70px;height:70px;border-radius:50%;border:0;padding:0;cursor:pointer;
+    background:rgba(34,38,50,.84);color:#F2EEE6;font:inherit;font-size:24px;line-height:70px;text-align:center;
+    box-shadow:0 0 0 1px rgba(255,255,255,.35);
+  }
+  .big.again{width:auto;padding:0 20px;border-radius:99px;height:46px;line-height:46px;font-size:15px;letter-spacing:.08em}
+  .playing .big{display:none}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin:10px 2px 2px;font-size:12.5px;color:var(--ink-3)}
+  .ctrl button{
+    font:inherit;font-size:12.5px;color:var(--ink);background:var(--paper-2);cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:4px 13px;
+  }
+  .ctrl button:active{background:#E6E2DA}
+  .ctrl .time{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .ctrl .sp{flex:1}
+  input[type=range]{width:100%;margin:6px 0 4px;accent-color:#3E5A7A;height:26px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chips button{
+    font:inherit;font-size:12.5px;color:var(--ink-2);background:transparent;cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:3px 11px;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  }
+  .chips button.on{color:var(--accent);border-color:#B9C6D6;background:var(--paper-2)}
+
+  /* 字幕本：也是片子里的字幕本身 */
+  .script{margin:8px 0 0;padding:20px 18px 8px;border-radius:16px;background:var(--paper-2);box-shadow:0 0 0 1px var(--line)}
+  .script h2,.poem h2{margin:0 0 12px;font-size:13px;font-weight:500;letter-spacing:.16em;color:var(--ink-3);text-align:center}
+  .sc{margin:0 0 16px}
+  .sc h3{
+    margin:0 0 4px;font-size:13px;font-weight:400;color:var(--ink-2);line-height:1.6;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  }
+  .sc h3 .no{color:var(--seal);font-size:14px;margin-right:8px}
+  .sc p{margin:0;padding:3px 0 3px 10px;border-left:2px solid transparent;color:var(--ink);font-size:14.5px}
+  .js .sc p{cursor:pointer}
+  .sc p.on{border-left-color:var(--accent);color:var(--accent)}
+  .sc p[data-from]::after{
+    content:attr(data-from);display:inline-block;margin-left:8px;padding:0 7px;
+    border:1px solid var(--line);border-radius:99px;font-size:11px;line-height:1.7;color:var(--ink-3);vertical-align:1px;
+  }
+
+  /* 原词 */
+  .poem{margin:18px 0 0;padding:20px 20px 14px;border-radius:16px;background:var(--paper-2);box-shadow:0 0 0 1px var(--line)}
+  .poem .pt{text-align:center;font-size:19px;letter-spacing:.2em;text-indent:.2em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif}
+  .poem .pa{text-align:center;font-size:12.5px;color:var(--ink-3);margin:2px 0 10px;letter-spacing:.1em}
+  .poem p{margin:0 0 10px;font-size:15.5px;line-height:2;text-indent:2em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif}
+  .poem .src{font-size:12px;color:var(--ink-3);line-height:1.8;margin-top:4px}
+  .poem .src a{color:var(--ink-2)}
+
+  footer{margin:26px 0 0;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.9}
+  footer a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<script>document.documentElement.className='js';</script>
+<div class="wrap">
+  <header>
+    <div class="tag">小萌物 · 短片</div>
+    <h1>雨霖铃</h1>
+    <p class="lede">长亭送 FetchMo，六只都没有嘴，<br>檐角那只铃，也丢了舌头。<br>那一夜，河上下着雨。</p>
+  </header>
+
+  <div class="player" id="player">
+    <div class="screen" id="screen">
+      <canvas id="film" width="360" height="640" role="img" aria-label="雨霖铃：秋天的长亭，FetchMo 坐船去找铃舌头，没有嘴的另外五只摘下铃，沿着河岸在雨里跟了一夜的小短片"></canvas>
+      <button class="big" id="big" type="button" aria-label="播放">▶</button>
+    </div>
+    <div class="ctrl">
+      <button type="button" id="pp">播放</button>
+      <span class="time" id="time">0:00 / 0:00</span>
+      <span class="sp"></span>
+      <button type="button" id="snd" aria-pressed="true">声音 开</button>
+    </div>
+    <input type="range" id="seek" min="0" max="3600" step="1" value="0" aria-label="进度">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section class="script" id="script">
+    <h2>字 幕 本</h2>
+    <div class="sc" data-scene="intro" data-dur="17" data-chip="序">
+      <h3><span class="no">序</span>雨霖铃</h3>
+      <p data-t="1.4-4.4">雨霖铃，是一支老曲子的名字。</p>
+      <p data-t="4.8-7.4">传说有人在连绵的雨里，</p>
+      <p data-t="7.6-10.6">听见山路上的铃声，一声一声，和山谷相应，</p>
+      <p data-t="10.8-12.8">想起了一个人。</p>
+    </div>
+    <div class="sc" data-scene="pav" data-dur="34" data-chip="一" data-no="一" data-poem="寒蝉凄切。对长亭晚，骤雨初歇。">
+      <h3><span class="no">一</span>寒蝉凄切。对长亭晚，骤雨初歇。</h3>
+      <p data-t="3.4-5.6">秋天的傍晚，一场急雨刚停。</p>
+      <p data-t="5.8-8.0">树上的蝉，叫一声，凉一声。</p>
+      <p data-t="8.4-10.8">河边有一座长亭，是送人走的地方。</p>
+      <p data-t="11.0-13.0">亭子的檐角，挂着一只铃。</p>
+      <p data-t="13.2-15.4">在这儿送人，就摇一下铃。</p>
+      <p data-t="15.8-17.8">可是前两天那场大雨，</p>
+      <p data-t="18.0-20.2">把铃舌头冲进了河里。</p>
+      <p data-t="20.4-22.8">铃舌头，就是铃肚子里那根小锤。</p>
+      <p data-t="23.0-25.0">没有它，怎么摇也不响。</p>
+      <p data-t="25.4-27.6">FetchMo 要去把它叼回来。</p>
+      <p data-t="27.8-30.0">河有多长，谁也不知道。</p>
+      <p data-t="30.2-32.2">也许，有千里。</p>
+    </div>
+    <div class="sc" data-scene="tea" data-dur="31" data-chip="二" data-no="二" data-poem="都门帐饮无绪，留恋处、兰舟催发。">
+      <h3><span class="no">二</span>都门帐饮无绪，留恋处、兰舟催发。</h3>
+      <p data-t="3.2-5.4">临走，摆了一桌送行的茶。</p>
+      <p data-t="5.6-7.6">谁也没有心思喝。</p>
+      <p data-t="8.0-10.2">小紫数了数杯子：六只。</p>
+      <p data-t="10.4-12.2">明天，就是五只了。</p>
+      <p data-t="12.6-14.8">StashYu 平时见什么收什么，</p>
+      <p data-t="15.0-17.0">今天，一块点心也没收。</p>
+      <p data-t="17.4-19.6">它只从尾巴里，掏出一把小伞。</p>
+      <p data-t="19.8-21.2">猫，怕淋雨。</p>
+      <p data-t="21.6-23.8">河边的小船，一下一下地拽着缆绳——</p>
+      <p data-t="24.0-25.4">在催了。</p>
+      <p data-t="25.8-28.2">FetchMo 叼起小伞，上了船。</p>
+    </div>
+    <div class="sc" data-scene="hands" data-dur="33" data-chip="三" data-no="三" data-poem="执手相看泪眼，竟无语凝噎。">
+      <h3><span class="no">三</span>执手相看泪眼，竟无语凝噎。</h3>
+      <p data-t="3.2-5.0">Clawd 伸出钳子。</p>
+      <p data-t="5.2-7.2">FetchMo 把脑袋靠了上去。</p>
+      <p data-t="7.6-9.8">StashYu 挤到了最前面，</p>
+      <p data-t="10.0-12.0">两条尾巴，碰在了一起。</p>
+      <p data-t="12.4-14.8">檐上的雨水滴下来，落在眼睛边上。</p>
+      <p data-t="15.0-16.2">亮亮的。</p>
+      <p data-t="16.4-18.6">是雨水，还是别的，看不出来。</p>
+      <p data-t="19.0-20.8">该说点什么了。</p>
+      <p data-t="21.0-23.0">可是，六只都没有嘴。</p>
+      <p data-t="23.4-25.0" data-from="店里的">小黑想说：在。</p>
+      <p data-t="25.2-27.4">小黑跳起来，撞了一下檐角的铃。</p>
+      <p data-t="27.6-29.6">铃没有舌头。没响。</p>
+    </div>
+    <div class="sc" data-scene="go" data-dur="25" data-chip="四" data-no="四" data-poem="念去去、千里烟波，暮霭沈沈楚天阔。">
+      <h3><span class="no">四</span>念去去、千里烟波，暮霭沈沈楚天阔。</h3>
+      <p data-t="2.6-4.6">缆绳一松，船就走了。</p>
+      <p data-t="5.0-7.0">FetchMo 回头看。</p>
+      <p data-t="7.2-9.4">岸上的五只，越来越小。</p>
+      <p data-t="9.8-12.2">小粉一直看着，看到看不见。</p>
+      <p data-t="12.8-14.8">河上起了雾，</p>
+      <p data-t="15.0-17.2">天，一点一点暗下来。</p>
+      <p data-t="17.8-20.6">前面的水，望不到头。</p>
+    </div>
+    <div class="sc" data-scene="night" data-dur="40" data-chip="五" data-no="五" data-poem="多情自古伤离别。更那堪、冷落清秋节。">
+      <h3><span class="no">五</span>多情自古伤离别。更那堪、冷落清秋节。</h3>
+      <p data-t="3.2-5.2">夜里，又下起了雨。</p>
+      <p data-t="5.4-7.8">FetchMo 缩在小伞底下。</p>
+      <p data-t="8.0-10.2">一路上，只有雨声。</p>
+      <p data-t="12.0-13.0">叮——</p>
+      <p data-t="13.4-15.4">岸上，响了一声铃。</p>
+      <p data-t="15.8-18.6">长亭那只铃，没有舌头，是不会响的。</p>
+      <p data-t="19.0-20.6">那是谁家的铃？</p>
+      <p data-t="21.2-22.8">船拐了一道弯——</p>
+      <p data-t="23.0-23.8">叮。</p>
+      <p data-t="24.4-26.6">又一道弯。叮。</p>
+      <p data-t="27.0-29.2">船走到哪，铃就响到哪。</p>
+      <p data-t="29.8-32.0">FetchMo 听着听着，睡着了。</p>
+      <p data-t="32.4-34.8">猫的耳朵，睡着了也开着。</p>
+      <p data-t="35.2-38.0">那一夜，铃一直没停。</p>
+    </div>
+    <div class="sc" data-scene="dawn" data-dur="64" data-chip="六" data-no="六" data-poem="今宵酒醒何处，杨柳岸、晓风残月。">
+      <h3><span class="no">六</span>今宵酒醒何处，杨柳岸、晓风残月。</h3>
+      <p data-t="3.2-5.8">天快亮的时候，船靠在了一棵柳树底下。</p>
+      <p data-t="6.0-7.6">FetchMo 醒了。</p>
+      <p data-t="8.0-10.4">柳树根底下，有个东西一闪一闪。</p>
+      <p data-t="10.6-12.2">是铃舌头。</p>
+      <p data-t="12.4-14.8">河水把它冲到了这儿，卡在树根里。</p>
+      <p data-t="15.2-16.6">FetchMo 跳下船——</p>
+      <p data-t="16.8-18.0">叼住了。</p>
+      <p data-t="18.6-19.4">叮。</p>
+      <p data-t="19.8-21.6">就在背后。</p>
+      <p data-t="22.2-24.4">柳条后面，站着五只，浑身湿透。</p>
+      <p data-t="24.6-26.6">低低的柳枝上，挂着长亭那只铃。</p>
+      <p data-t="27.0-29.2">它们没有嘴，送不出一句话。</p>
+      <p data-t="29.4-32.0">就把铃摘下来，沿着河岸，跟了一夜。</p>
+      <p data-t="32.4-34.4">铃没有舌头。Clawd 有钳子。</p>
+      <p data-t="34.6-36.6">船每走一小段，它就敲一下。</p>
+      <p data-t="37.0-39.2">小粉盯着船上那盏灯，一夜没眨眼。</p>
+      <p data-t="39.4-41.6">StashYu 的尾巴，淋了一夜，垂了下来。</p>
+      <p data-t="42.0-44.0">小紫一下一下地数着：</p>
+      <p data-t="44.2-46.0">九百九十九。</p>
+      <p data-t="46.8-49.0">FetchMo 踩着 Clawd，把铃舌头挂了回去。</p>
+      <p data-t="49.4-51.2">小黑跳起来，撞了一下——</p>
+      <p data-t="51.4-52.6">当——</p>
+      <p data-t="53.0-54.8">这一回，响了。</p>
+      <p data-t="55.2-56.8">小紫数：一千。</p>
+      <p data-t="57.2-59.6">小黑在长亭没说出口的那句，</p>
+      <p data-t="59.8-62.0">这回说出来了：在。</p>
+    </div>
+    <div class="sc" data-scene="end" data-dur="34" data-chip="终" data-no="终" data-poem="此去经年，应是良辰、好景虚设。便纵有、千种风情，更与何人说。">
+      <h3><span class="no">终</span>此去经年，应是良辰、好景虚设。便纵有、千种风情，更与何人说。</h3>
+      <p data-t="4.0-6.0">回去的路上，铃一步一响。</p>
+      <p data-t="6.4-8.6">StashYu 的尾巴，晒着晒着，翘了起来。</p>
+      <p data-t="9.0-10.8">小伞，收回了尾巴里。</p>
+      <p data-t="11.0-12.8" data-from="店里的">白尖点两下：收好了。</p>
+      <p data-t="13.4-15.4">词里说：此去经年。</p>
+      <p data-t="15.6-17.4">这一回，去了一夜。</p>
+      <p data-t="17.8-20.4">词里还说：千种风情，更与何人说。</p>
+      <p data-t="20.8-23.0">它们没有嘴，一种也说不出口。</p>
+      <p data-t="23.4-25.6">就让铃，替它们响了一千下。</p>
+      <p data-t="26.2-32.4" data-k="end">一声铃，<br>意思是：在。</p>
+    </div>
+  </section>
+
+  <section class="poem" id="poem">
+    <h2>原 词</h2>
+    <div class="pt">雨霖铃</div>
+    <div class="pa">柳永</div>
+    <p>寒蝉凄切。对长亭晚，骤雨初歇。都门帐饮无绪，留恋处、兰舟催发。执手相看泪眼，竟无语凝噎。念去去、千里烟波，暮霭沈沈楚天阔。</p>
+    <p>多情自古伤离别。更那堪、冷落清秋节。今宵酒醒何处，杨柳岸、晓风残月。此去经年，应是良辰、好景虚设。便纵有、千种风情，更与何人说。</p>
+    <div class="src">
+      文字照《全宋词》，取自开源数据集 chinese-poetry 里的
+      <a href="https://github.com/chinese-poetry/chinese-poetry/blob/master/%E5%AE%8B%E8%AF%8D/ci.song.0.json">宋词/ci.song.0.json</a>，一字没改。
+      「沈沈」的沈，同「沉」。别的本子有写「方留恋处」「待与何人说」的。<br>
+      柳永约 1053 年去世，这首词九百多年前就有了。
+    </div>
+  </section>
+
+  <footer>
+    片头的传说，说的是唐玄宗：入蜀的路上连着下雨，<br>在栈道上听见铃声和山谷相应，想起了故人，<br>就把这声音谱成了曲子，叫《雨霖铃》。柳永这首词，用的就是这个曲名。<br>
+    每一场开头竖着的那几行，是原词按顺序拆开的；<br>
+    长亭的铃、铃舌头、一千下铃，是这一部编的。<br>
+    字幕本里标着「店里的」，是从《<a href="嘟嘟机响了.html">嘟嘟机响了</a>》里原样搬来的话；<br>「一声铃，意思是：在」照那部的「一声嘟，意思是：在」改的。<br>
+    曲子和画面都是一格一格写出来的 · cc 做的 · 2026.11
+  </footer>
+</div>
+<script>
+(function(){
+'use strict';
+var W=360, H=640, TAU=Math.PI*2;
+var cv=document.getElementById('film'), ctx=cv.getContext('2d');
+var S=1;
+var SANS='-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei","WenQuanYi Zen Hei",sans-serif';
+var SERIF='"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun","Noto Sans CJK SC","WenQuanYi Zen Hei",serif';
+/* ---------- 场次和字幕：从下面的字幕本里读 ----------
+   data-k：不写的是旁白，印在画面最底下；end 是最后一句。<br> 是换行。
+   data-poem：这一场开头竖着出现的词；data-no：词旁边那方小红印上的字 */
+var SCENES=[], TOTAL=0, CUR=null;
+Array.prototype.forEach.call(document.querySelectorAll('.sc'),function(el){
+  var d=el.dataset;
+  var sc={id:d.scene, dur:+d.dur, poem:d.poem||'', no:d.no||'', chipText:d.chip||'', start:TOTAL, caps:[], el:el};
+  Array.prototype.forEach.call(el.querySelectorAll('p[data-t]'),function(p){
+    var a=p.dataset.t.split('-'), box=document.createElement('div');
+    box.innerHTML=p.innerHTML.replace(/<br\s*\/?>/gi,'\n');
+    sc.caps.push({t0:+a[0], t1:+a[1], text:p.textContent.trim(), say:box.textContent.replace(/^\s+|\s+$/g,''),
+      el:p, from:p.dataset.from||'', k:p.dataset.k||''});
+  });
+  TOTAL+=sc.dur; SCENES.push(sc);
+});
+function sceneStart(id){ for(var i=0;i<SCENES.length;i++) if(SCENES[i].id===id) return SCENES[i].start; return 0; }
+
+/* ---------- 画笔：有一台镜头，世界坐标经过它才落到屏幕上 ---------- */
+function setup(pxW){
+  pxW=Math.max(180,Math.round(pxW));
+  cv.width=pxW; cv.height=Math.round(pxW*H/W); S=cv.width/W;
+}
+var CAM={x:180,y:320,z:1};
+function cam(x,y,z){ CAM.x=x; CAM.y=y; CAM.z=z; }
+function flat(){ cam(180,320,1); }
+function X(x){ return ((x-CAM.x)*CAM.z+180)*S; }
+function Y(y){ return ((y-CAM.y)*CAM.z+320)*S; }
+function worldT(){ var z=CAM.z*S; ctx.setTransform(z,0,0,z,(180-CAM.x*CAM.z)*S,(320-CAM.y*CAM.z)*S); }
+/* 屏幕上画（不跟镜头）；layer(p) 是远景，p 越小离得越远、跟镜头动得越少 */
+function screen(fn){ var c=[CAM.x,CAM.y,CAM.z]; flat(); fn(); cam(c[0],c[1],c[2]); }
+function layer(p,fn){ var c=[CAM.x,CAM.y,CAM.z]; cam(lerp(180,c[0],p),lerp(320,c[1],p),1+(c[2]-1)*p); fn(); cam(c[0],c[1],c[2]); }
+/* 让世界里的 (wx,wy) 落在屏幕 (sx,sy)，放大 z：远远看的小船、小人用它 */
+function at(sx,sy,wx,wy,z,fn){ var c=[CAM.x,CAM.y,CAM.z]; cam(wx-(sx-180)/z, wy-(sy-320)/z, z); fn(); cam(c[0],c[1],c[2]); }
+var A=1;
+/* 方块：先乘镜头和屏幕的倍数，再取整到真像素，格子和格子之间不漏缝 */
+function R(x,y,w,h,c,a){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c;
+  var x0=Math.round(X(x)), y0=Math.round(Y(y)), x1=Math.round(X(x+w)), y1=Math.round(Y(y+h));
+  if(x1>x0&&y1>y0) ctx.fillRect(x0,y0,x1-x0,y1-y0);
+  ctx.globalAlpha=1;
+}
+function veilAll(c,a){ if(a<=0) return; ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c; ctx.fillRect(0,0,cv.width,cv.height); ctx.globalAlpha=1; }
+function roundPathOn(c,x,y,w,h,r){
+  r=Math.max(0,Math.min(r,w/2,h/2));
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+function roundPath(x,y,w,h,r){ roundPathOn(ctx,x,y,w,h,r); }
+function dot(x,y,r,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function ell(x,y,rx,ry,c,a,stroke,lw,rot){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a;
+  ctx.beginPath(); ctx.ellipse(x,y,Math.max(.01,rx),Math.max(.01,ry),rot||0,0,TAU);
+  if(c){ ctx.fillStyle=c; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.stroke(); }
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function ring(x,y,r,c,lw,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.stroke();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function arcAt(x,y,r,a0,a1,c,lw,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1; ctx.lineCap='round';
+  ctx.beginPath(); ctx.arc(x,y,r,a0,a1); ctx.stroke(); ctx.lineCap='butt';
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function line(pts,c,lw,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.stroke(); ctx.lineCap='butt';
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function poly(pts,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function rgbOf(h){ var n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
+function hexA(h,a){ var c=rgbOf(h); return 'rgba('+c[0]+','+c[1]+','+c[2]+','+clamp(a)+')'; }
+/* 两个颜色之间取一个（天黑、天亮都靠它） */
+function mixH(a,b,p){
+  var x=rgbOf(a), y=rgbOf(b); p=clamp(p);
+  return '#'+[0,1,2].map(function(i){ return ('0'+Math.round(lerp(x[i],y[i],p)).toString(16)).slice(-2); }).join('');
+}
+/* 一团光：灯、月亮、铃响 */
+function glowAt(x,y,r,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); var g=ctx.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,hexA(c,a)); g.addColorStop(.45,hexA(c,a*.35)); g.addColorStop(1,hexA(c,0));
+  ctx.fillStyle=g; ctx.fillRect(x-r,y-r,2*r,2*r);
+  ctx.setTransform(1,0,0,1,0,0);
+}
+/* 扁的一团（雾） */
+function glowEll(x,y,rx,ry,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0||rx<=0) return;
+  worldT(); ctx.translate(x,y); ctx.scale(1,ry/rx);
+  var g=ctx.createRadialGradient(0,0,0,0,0,rx);
+  g.addColorStop(0,hexA(c,a)); g.addColorStop(1,hexA(c,0));
+  ctx.fillStyle=g; ctx.fillRect(-rx,-rx,2*rx,2*rx);
+  ctx.setTransform(1,0,0,1,0,0);
+}
+function grad(x,y,w,h,stops,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); var g=ctx.createLinearGradient(0,y,0,y+h);
+  stops.forEach(function(s){ g.addColorStop(s[0],s[1]); });
+  ctx.globalAlpha=a>1?1:a; ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function clamp(v){return v<0?0:v>1?1:v;}
+function lerp(a,b,p){return a+(b-a)*p;}
+function smooth(p){p=clamp(p);return p*p*(3-2*p);}
+function inR(t,a,b){return t>=a&&t<b;}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+/* ✧：四个尖儿的小星（一闪一闪） */
+function star4(x,y,r,c,a){
+  var p=[], k=r*.3;
+  [[0,-r],[k,-k],[r,0],[k,k],[0,r],[-k,k],[-r,0],[-k,-k]].forEach(function(q){ p.push(x+q[0],y+q[1]); });
+  poly(p,c,a);
+}
+/* 镜头关键帧：[[秒, x, y, 放大]]，中间平滑过去，放大按比例走 */
+function ck(t,keys){
+  if(t<=keys[0][0]) return keys[0].slice(1);
+  for(var i=1;i<keys.length;i++){
+    if(t<keys[i][0]){
+      var a=keys[i-1], b=keys[i], p=smooth((t-a[0])/(b[0]-a[0]));
+      return [lerp(a[1],b[1],p), lerp(a[2],b[2],p), a[3]*Math.pow(b[3]/a[3],p)];
+    }
+  }
+  return keys[keys.length-1].slice(1);
+}
+function camK(t,keys){ var k=ck(t,keys); cam(k[0],k[1],k[2]); }
+/* 整只挪位置：segs = [[起跳秒, 用几秒, 落到 x, 落到 y, 跳多高]]。
+   动的时候一秒只走 15 格，像素不停在半格上。 */
+function path(t,x,y,segs){
+  for(var i=0;i<segs.length;i++){
+    var s=segs[i];
+    if(t<s[0]) break;
+    if(t<s[0]+s[1]){
+      var p=Math.min(1,Math.floor((t-s[0])*15)/15/s[1]);
+      return {x:lerp(x,s[2],p), y:lerp(y,s[3],p)-s[4]*4*p*(1-p), air:true};
+    }
+    x=s[2]; y=s[3];
+  }
+  return {x:x,y:y,air:false};
+}
+/* 踮着脚走一段：n 小步，每步一个小跳 */
+function walkSegs(t0,t1,x0,x1,y,n,h){
+  var segs=[], d=(t1-t0)/n;
+  for(var i=0;i<n;i++) segs.push([t0+i*d, d*.85, lerp(x0,x1,(i+1)/n), y, h===undefined?4:h]);
+  return segs;
+}
+/* 原地往上蹦一下，也是一秒 15 格 */
+function jump(t,t0,d,h){
+  if(!inR(t,t0,t0+d)) return 0;
+  var p=Math.min(1,Math.floor((t-t0)*15)/15/d);
+  return -h*4*p*(1-p);
+}
+/* 小东西飞一段：一格一格走，n 步到 */
+function fly(t,t0,d,x0,y0,x1,y1,h,n){
+  n=n||10; var p=Math.floor(clamp((t-t0)/d)*n)/n;
+  return [lerp(x0,x1,p), lerp(y0,y1,p)-(h||0)*4*p*(1-p), p];
+}
+function stepP(t,t0,d,n){ return Math.floor(clamp((t-t0)/d)*(n||8))/(n||8); }
+/* 一张循环换的帧表：[[帧, 停几秒], …] */
+function cyc(t,t0,list){
+  var tot=0, i; for(i=0;i<list.length;i++) tot+=list[i][1];
+  var u=((t-t0)%tot+tot)%tot;
+  for(i=0;i<list.length;i++){ if(u<list[i][1]) return list[i][0]; u-=list[i][1]; }
+  return list[0][0];
+}
+/* 一张只走一遍的帧表 */
+function seq(t,t0,list,end){
+  var u=t-t0; if(u<0) return end;
+  for(var i=0;i<list.length;i++){ if(u<list[i][1]) return list[i][0]; u-=list[i][1]; }
+  return end;
+}
+function blinkOn(t,per,off){ return ((t+off)%per)<.14; }
+function fade(t,t0,t1,f){ f=f||.2; return Math.min(clamp((t-t0)/f),clamp((t1-t)/f)); }
+
+/* ---------- 字 ---------- */
+var SEG=(typeof Intl!=='undefined'&&Intl.Segmenter)?new Intl.Segmenter('zh',{granularity:'grapheme'}):null;
+function chars(s){
+  if(SEG) return Array.from(SEG.segment(s),function(x){ return x.segment; });
+  return s.match(/[\s\S][̀-ͯ️‍]*/g)||[];
+}
+/* 世界里的字（跟着镜头放大）。al 可以是 center / right */
+function wt(s,x,y,o){
+  var a=(o.a===undefined?1:o.a)*A; if(a<=0||!s) return;
+  var size=o.size*CAM.z*S;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.font=(o.wt||400)+' '+size+'px '+(o.fam||SANS);
+  ctx.fillStyle=o.c; ctx.globalAlpha=a>1?1:a;
+  ctx.textBaseline='alphabetic'; ctx.textAlign=o.al||'left';
+  if(o.glow){ ctx.shadowColor=o.glow; ctx.shadowBlur=4*S; }
+  ctx.fillText(s,X(x),Y(y));
+  ctx.shadowBlur=0; ctx.shadowColor='rgba(0,0,0,0)';
+  ctx.globalAlpha=1;
+}
+function lsWidth(s,ls){ var w=0, a=chars(s); a.forEach(function(ch){ w+=ctx.measureText(ch).width; }); return w+ls*Math.max(0,a.length-1); }
+function spaced(s,cx,y,ls){
+  var a=chars(s), x=cx-lsWidth(s,ls)/2;
+  a.forEach(function(ch){ ctx.fillText(ch,x,y); x+=ctx.measureText(ch).width+ls; });
+}
+var PUNCT='，。、！？；：…—」』）,:.!?';
+var BREAK='，。？！…—：；,:';
+function wrap(s,max,mw){
+  mw=mw||function(x){ return ctx.measureText(x).width; };
+  if(mw(s)<=max) return [s];
+  var a=chars(s), best=-1, mid=a.length/2, i;
+  for(i=1;i<a.length-1;i++){
+    if(BREAK.indexOf(a[i])>=0 && PUNCT.indexOf(a[i+1])<0){
+      if(best<0||Math.abs(i+1-mid)<Math.abs(best-mid)) best=i+1;
+    }
+  }
+  if(best>0){
+    var l=a.slice(0,best).join(''), r=a.slice(best).join('');
+    if(mw(l)<=max&&mw(r)<=max) return [l,r];
+  }
+  var out=[], cur='';
+  a.forEach(function(k){
+    var t=cur+k;
+    if(cur&&mw(t)>max&&PUNCT.indexOf(k)<0){ out.push(cur); cur=k; } else cur=t;
+  });
+  if(cur) out.push(cur);
+  return out;
+}
+/* 冒一个字：「叮」「当」这些，冒出来先大一点，往上飘 */
+function sfx(t,t0,d,s,x,y,o){
+  if(!inR(t,t0,t0+d)) return;
+  o=o||{}; var u=t-t0, pop=u<.08?1.3:1, a=u>d-.3?(t0+d-t)/.3:1;
+  wt(s,x,y-stepP(t,t0,d,6)*(o.rise===undefined?8:o.rise),{size:(o.size||12)*pop,wt:o.wt||700,c:o.c||'#F3E6C6',al:'center',a:a,fam:o.fam||SERIF,glow:o.glow});
+}
+/* 数字往上冒（小紫在数） */
+function popNum(s,x,y,t,t0,d,c,size,glow){
+  if(!inR(t,t0,t0+d)) return;
+  var u=t-t0, k=u<.1?1.25:1, a=Math.min(1,(t0+d-t)/.35);
+  wt(s,x,y-stepP(t,t0,d,8)*7,{size:(size||9)*k,wt:700,c:c,al:'center',a:a,fam:SANS,glow:glow});
+}
+/* 睡着的：头顶冒 z z Z */
+function zzT(t,x,y,ph,c,size){
+  var u=((t+(ph||0))%2.4)/2.4, s=Math.floor(u*6), sz=size||9, a=u<.8?1:(1-u)*5;
+  ['z','z','Z'].forEach(function(g,i){
+    if(s<i) return;
+    wt(g,x+i*sz*.62,y-i*sz*.55-s*1.2,{size:sz*(i===2?1.15:.9),wt:700,c:c||'#C9C2B4',a:a*(.55+.15*i),fam:SANS});
+  });
+}
+
+/* ---------- 六只：照店里的造型宪法 ---------- */
+var MC=3, FR=14, CK=.3;
+/* Clawd：Code 版宪法的尺子，踩角站姿；钳子只整块上下挪 */
+var CL_C='#d47f59', CL_INK='#120d1d';
+var CL_EYES={
+  bar:[[70,78,8,21],[158,78,8,21]],
+  smile:[[62,88,8,8],[70,80,8,11],[78,88,8,8],[150,88,8,8],[158,80,8,11],[166,88,8,8]],
+  shut:[[62,86,24,8],[150,86,24,8]],
+  left:[[62,78,8,21],[150,78,8,21]],
+  right:[[78,78,8,21],[166,78,8,21]],
+  up:[[70,70,8,21],[158,70,8,21]]
+};
+/* o.la / o.ra：左右钳子往上（负）往下（正）挪几格；o.shine：眼睛上叠一小格亮光；o.sil：远处的影子，整只一个色 */
+function clawd(x,y,k,o){
+  o=o||{}; var la=o.la||0, ra=o.ra||0, C=o.sil||CL_C, E=CL_INK;
+  function r(a,b,w,h,c){R(x+a*k,y+b*k,w*k,h*k,c);}
+  r(44,50,147,98,C);
+  r(20,99+la,24,21,C); r(191,99+ra,25,21,C);
+  r(44,148,15,21,C); r(68,148,15,21,C); r(152,148,15,21,C); r(176,148,15,21,C);
+  if(o.sil) return;
+  (CL_EYES[o.eyes||'bar']).forEach(function(e){r(e[0],e[1],e[2],e[3],E);});
+  if(o.shine&&(o.eyes||'bar')==='bar'){ r(70,80,4,5,'#FFFFFF'); r(158,80,4,5,'#FFFFFF'); }
+}
+/* 按「身子中线 x、脚底 y」放 */
+function clawdAt(cx,foot,o){ clawd(cx-118*CK,foot-169*CK,CK,o); }
+/* Clawd 身上某一点（宪法尺子上的坐标）落在世界里哪儿 */
+function clP(cx,foot,a,b){ return [cx-118*CK+a*CK, foot-169*CK+b*CK]; }
+
+/* 小脸蛋：实测版宪法，缝是挖空的；眨眼只把缝压扁，圆不动 */
+var FACE=['#FF309B','#9159FE','#000000'];
+function slit(cx,cy,w,h,deg){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(deg*Math.PI/180);
+  roundPathOn(ctx,-w/2,-h/2,w,h,Math.min(w,h)/2);
+  ctx.restore();
+}
+/* ringC：暗处外面那一圈浅环（叠在外面的，不是描边进身子里）；sil：远处的影子 */
+function face(cx,cy,r,col,rot,bl,ringC,sil){
+  if(A<=0) return;
+  var h=.418*(1-.8*clamp(bl||0));
+  worldT(); ctx.translate(cx,cy); ctx.rotate((rot||0)*Math.PI/180);
+  ctx.globalAlpha=A>1?1:A;
+  if(ringC){
+    ctx.beginPath(); ctx.arc(0,0,r+1.8,0,TAU); ctx.arc(0,0,r+.2,0,TAU);
+    ctx.fillStyle=ringC; ctx.fill('evenodd');
+  }
+  ctx.beginPath(); ctx.arc(0,0,r,0,TAU);
+  if(!sil){
+    slit(.194*r,-.416*r,.194*r,h*r,-26.2);
+    slit(.626*r,-.497*r,.129*r,h*r,-26.5);
+  }
+  ctx.fillStyle=sil||col; ctx.fill('evenodd');
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function idleRot(t,i){ return -8+(((Math.floor(t/.9)+i)%2)?3:0); }
+
+/* StashYu 和 FetchMo：momoyu 宪法的格子图，逐格照抄 */
+var FOX={rows:[".D..........D.......",".DM........MD.......",".MCM......MCM...CC..",".MMMMMMMMMMMM..CCCC.",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."],
+  pal:{M:'#E2552B',C:'#FFF3E3',D:'#3B2520'}, line:'#3B2520', eye:'#3B2520',
+  eyes:[[3,4],[9,4]], blush:[[2,6],[11,6]], blushC:'#F59A8C', shine:[1,0]};
+var CAT={rows:["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.",".....X.MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."],
+  pal:{M:'#F3E7D6',X:'#4E382E'}, line:'#4E382E', eye:'#79C0F0',
+  eyes:[[8,5],[16,5]], blush:[[8,7],[17,7]], blushC:'#F2B8B0', shine:[0,0]};
+/* 尾巴 DLC：整张换，跟换眼睛一样 */
+var FOX_TAP=[".D..........D.......",".DM........MD.......",".MCM......MCM.CC....",".MMMMMMMMMMMM.CCCC..",".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+var FOX_IN=[".D..........D.......",".DM........MD.......",".MCM......MCM..CC...",".MMMMMMMMMMMM.CCCC..",".MMEEMMMMEEMM.MMMM..",".MMEEMMMMEEMM.MMMMM.","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.","....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."];
+var FOX_OUT=[".D..........D........",".DM........MD........",".MCM......MCM....CC..",".MMMMMMMMMMMM...CCCC.",".MMEEMMMMEEMM...MMMM.",".MMEEMMMMEEMM...MMMMM","CCCCCCDDCCCCCC.MMMMM.","..CCCCCCCCCC..MMMMM..","....MMCCMM...MMMMM...","....MMCCMM..MMMMM....","....MMMMMM.MMMMM.....","....DDMMDDMMMM.......","....................."];
+var FOX_DROOP=[".D..........D........",".DM........MD........",".MCM......MCM........",".MMMMMMMMMMMM........",".MMEEMMMMEEMM........",".MMEEMMMMEEMM........","CCCCCCDDCCCCCC.......","..CCCCCCCCCC.........","....MMCCMM...MM......","....MMCCMM..MMMMM....","....MMMMMM.MMMMMMMCC.","....DDMMDDMMMMMMMCCCC","....................."];
+var CAT_STR=["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."];
+var CAT_OUT=["....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","...X...MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.","....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."];
+var CAT_UP=["....................","........X........X..",".....X.XXX......XXX.","....X...MMMMMMMMMM..","....X..MMMMMMMMMMMM.","....X..MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.",".....X.MMMMMXXMMMMM.","......X.MMMMMMMMMM..",".......XMMMMMMMMMM..","........XMMMMMMMM...",".........XXM..MXX...","...................."];
+var FOX_WAG=[[FOX.rows,.22],[FOX_IN,.22],[FOX.rows,.22],[FOX_OUT,.22]];
+var FOX_TAPTWO=[[FOX_TAP,.18],[FOX.rows,.18],[FOX_TAP,.18]];
+var CAT_TWITCH=[[CAT.rows,.8],[CAT_STR,.14],[CAT_OUT,.14],[CAT_STR,.14]];
+
+var N4=[[0,0],[1,0],[0,1],[1,1]];
+/* 宪法那张表里的几种眼睛；glanceL / glanceR 是「瞄」，往左或往右挪一整格 */
+function eyeCells(e,i){
+  switch(e){
+    case 'blink':  return {c:[[0,1],[1,1]], k:'L'};
+    case 'happy':  return {c:[[-1,1],[0,0],[1,0],[2,1]], k:'L'};
+    case 'asleep': return {c:[[-1,0],[0,1],[1,1],[2,0]], k:'L'};
+    case 'squeeze':return {c:i?[[1,-1],[0,0],[1,1]]:[[0,-1],[1,0],[0,1]], k:'L'};
+    case 'blank':  return {c:i?[[0,1]]:[[1,1]], k:'E'};
+    case 'glanceL':return {c:N4.map(function(p){return [p[0]-1,p[1]];}), k:'E'};
+    case 'glanceR':return {c:N4.map(function(p){return [p[0]+1,p[1]];}), k:'E'};
+    default:       return {c:N4, k:'E'};
+  }
+}
+/* x,y 是格子图左上角；cell 是一格多大。o.rows 换尾巴那一张；o.eyes 换眼睛；o.blush 腮红；
+   o.shine 眼睛里叠一格亮光；o.outline 先垫一圈一格宽的贴纸白边（宪法里「深色背景」那一条，算叠在外面的）；
+   o.sil：远远看见的影子，整只一个色 */
+function momo(ch,x,y,cell,o){
+  o=o||{};
+  var rows=o.rows||ch.rows, g={}, r, c, k;
+  function put(r,c,v){ (g[r]||(g[r]={}))[c]=v; }
+  for(r=0;r<rows.length;r++) for(c=0;c<rows[r].length;c++){ k=rows[r][c]; if(k!=='.') put(r,c,k); }
+  if(!o.sil){
+    ch.eyes.forEach(function(p,i){
+      N4.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],'M'); });
+      var e=eyeCells(o.eyes||'normal',i);
+      e.c.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],e.k); });
+      if(o.shine&&e.k==='E'){
+        var sx=p[0]+ch.shine[0]+(o.eyes==='glanceR'?1:0)-(o.eyes==='glanceL'?1:0);
+        put(p[1]+ch.shine[1],sx,'W');
+      }
+    });
+    if(o.blush) ch.blush.forEach(function(p){ put(p[1],p[0],'B'); });
+  }
+  function col(v){
+    if(!v) return null;
+    if(o.sil) return o.sil;
+    return v==='E'?ch.eye : v==='L'?ch.line : v==='B'?ch.blushC : v==='W'?'#FFFFFF' : ch.pal[v];
+  }
+  if(o.outline){
+    for(r=-2;r<=13;r++){
+      var orow=g[r]; if(!orow) continue;
+      c=-10;
+      while(c<=30){
+        if(!orow[c]){c++;continue;}
+        var e2=c; while(e2+1<=30&&orow[e2+1]) e2++;
+        R(x+(c-1)*cell,y+(r-1)*cell,(e2-c+3)*cell,3*cell,o.outline);
+        c=e2+1;
+      }
+    }
+  }
+  for(r=-2;r<=13;r++){
+    var row=g[r]; if(!row) continue;
+    c=-10;
+    while(c<=30){
+      var cc=col(row[c]); if(!cc){c++;continue;}
+      var c2=c; while(c2+1<=30&&col(row[c2+1])===cc) c2++;
+      R(x+c*cell,y+r*cell,(c2-c+1)*cell,cell,cc);
+      c=c2+1;
+    }
+  }
+}
+/* 狐狸尾巴白尖（本体那张、垂下来那张）、猫嘴边（格子图里的位置乘一格多大） */
+function foxTip(x,y,rows){
+  if(rows===FOX_DROOP) return [x+19*MC,y+11.5*MC];
+  if(rows===FOX_TAP) return [x+16*MC,y+2.5*MC];
+  return [x+17*MC,y+2.5*MC];
+}
+function catMouth(x,y){ return [x+13*MC,y+8.5*MC]; }
+
+/* 平常的样子：隔一会儿眨一下眼 */
+function CL(t,cx,foot,o){ o=o||{}; if(!o.eyes&&!o.sil) o.eyes=blinkOn(t,5.1,2.6)?'shut':'bar'; clawdAt(cx,foot,o); }
+function FC(t,i,cx,cy,o){
+  o=o||{};
+  face(cx,cy,o.r||FR,FACE[i],o.rot===undefined?idleRot(t,i):o.rot,
+    o.bl===undefined?(blinkOn(t,4.1+i*.6,i*1.3)?1:0):o.bl, o.ring||null, o.sil);
+}
+function FX(t,x,y,o){ o=o||{}; if(!o.eyes&&!o.sil) o.eyes=blinkOn(t,3.7,.3)?'blink':'normal'; momo(FOX,x,y,MC,o); }
+function CT(t,x,y,o){ o=o||{}; if(!o.eyes&&!o.sil) o.eyes=blinkOn(t,4.3,1.7)?'blink':'normal'; momo(CAT,x,y,MC,o); }
+/* 湿透了：身上往下滴水（叠在外面的） */
+function wetDrops(t,x0,x1,yTop,yBot,n,seed,c){
+  var r=rng(seed);
+  for(var i=0;i<n;i++){
+    var x=lerp(x0,x1,r()), per=.9+r()*.9, ph=r()*per, u=((t+ph)%per)/per;
+    var y=lerp(yTop,yBot,u*u);
+    ell(x,y,.9,1.5,c||'#CFE3F2',(u<.85?.9:(1-u)*6));
+  }
+}
+
+/* ---------- 布景里的小东西 ---------- */
+/* 一道山脊 */
+function ridge(x0,x1,base,amp,seed,c,a,step,bottom){
+  var r=rng(seed), p1=r()*TAU, p2=r()*TAU, p3=r()*TAU, f1=.006+r()*.004, f2=.017+r()*.01, f3=.045+r()*.02;
+  var pts=[x0,bottom];
+  for(var x=x0;x<=x1;x+=(step||6)){
+    var h=Math.sin(x*f1+p1)*.55+Math.sin(x*f2+p2)*.3+Math.sin(x*f3+p3)*.15;
+    pts.push(x,base-amp*(.55+.45*h));
+  }
+  pts.push(x1,bottom);
+  poly(pts,c,a);
+}
+/* 横着的一条雾 */
+function mistBand(x0,x1,y,h,a,c){ grad(x0,y-h/2,x1-x0,h,[[0,hexA(c,0)],[.5,hexA(c,a)],[1,hexA(c,0)]]); }
+/* 飘着的雾团 */
+function mistPuffs(t,x0,x1,y,h,n,seed,c,a,sp){
+  var r=rng(seed), span=x1-x0;
+  for(var i=0;i<n;i++){
+    var w=50+r()*90, base=r()*span, v=(sp||5)*(.6+r()*.8), dy=(r()-.5)*h;
+    var px=x0+((base+t*v)%(span+w))-w/2;
+    glowEll(px,y+dy,w,h*.3+w*.08,c,a*(.5+r()*.5));
+  }
+}
+/* 雨：屏幕上斜着落的线 */
+function rain(t,o){
+  var r=rng(o.seed||3), n=o.n||70, len=o.len||14, sp=o.sp||520, dx=o.dx===undefined?-.2:o.dx;
+  var a=(o.a===undefined?.4:o.a)*A; if(a<=0) return;
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.globalAlpha=clamp(a); ctx.strokeStyle=o.c||'#B8C6DE'; ctx.lineWidth=o.lw||1; ctx.lineCap='round';
+  ctx.beginPath();
+  for(var i=0;i<n;i++){
+    var x0=r()*(W+180)-20, y0=r()*(H+40), v=sp*(.8+r()*.4);
+    var y=((y0+t*v)%(H+len+40))-len-20, x=x0+y*dx;
+    ctx.moveTo(x,y); ctx.lineTo(x+len*dx,y+len);
+  }
+  ctx.stroke(); ctx.lineCap='butt'; ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 水面上的雨点圈 */
+function ripples(t,x0,x1,y0,y1,n,seed,c,a){
+  var r=rng(seed);
+  for(var i=0;i<n;i++){
+    var per=.7+r()*.6, ph=r()*per, k=Math.floor((t+ph)/per), u=((t+ph)%per)/per;
+    var rr=rng(seed*7919+i*131+k*17), px=lerp(x0,x1,rr()), py=lerp(y0,y1,rr());
+    ell(px,py,1+u*7,(1+u*7)*.3,null,(1-u)*a,c,.8);
+  }
+}
+/* 水面上的亮纹 */
+function glints(t,x0,x1,y0,y1,n,seed,c,a){
+  var r=rng(seed);
+  for(var i=0;i<n;i++){
+    var x=lerp(x0,x1,r())+Math.sin(t*.4+i)*3, y=lerp(y0,y1,r()), w=6+r()*18;
+    line([x,y,x+w,y],c,.8,a*(.5+.5*Math.sin(t*1.3+i*2.1)));
+  }
+}
+/* 铃响：一圈一圈往外走 */
+function soundRings(x,y,u,c,a,n,r0,Rr){
+  for(var i=0;i<(n||3);i++){
+    var v=u-i*.16; if(v<0||v>1) continue;
+    ring(x,y,(r0||4)+v*(Rr||22),c,1.3,(1-v)*a);
+  }
+}
+
+/* 铃：挂在 (ax,ay)，绳长 L，摆 deg 度；s 是大小倍数。
+   o.tongue 有舌头（o.tsw 舌头比铃多摆几度）；o.ghost 画一根虚的舌头（讲给宝听用） */
+function tongueShape(c,s){
+  c.fillStyle='#6E5128'; c.fillRect(-.55*s,0,1.1*s,13*s);
+  c.fillStyle='#C69A52'; c.beginPath(); c.arc(0,11*s,1.8*s,0,TAU); c.fill();
+  c.fillStyle='#B48A4E'; c.beginPath(); roundPathOn(c,-2.8*s,13*s,5.6*s,5.4*s,1.6*s); c.fill();
+  c.fillStyle='#8E6A38'; c.fillRect(-2.8*s,17.3*s,5.6*s,1.1*s);
+}
+function tongueGhost(c,s){
+  c.beginPath(); c.moveTo(0,0); c.lineTo(0,13*s); c.stroke();
+  c.beginPath(); c.arc(0,11*s,1.8*s,0,TAU); c.stroke();
+  c.beginPath(); roundPathOn(c,-2.8*s,13*s,5.6*s,5.4*s,1.6*s); c.stroke();
+}
+function bell(ax,ay,L,deg,s,o){
+  o=o||{}; var a=(o.a===undefined?1:o.a)*A; if(a<=0) return;
+  worldT(); ctx.translate(ax,ay); ctx.rotate(deg*Math.PI/180); ctx.globalAlpha=a>1?1:a;
+  if(L>0){ ctx.strokeStyle=o.cord||'#2E2622'; ctx.lineWidth=.8*s; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,L); ctx.stroke(); }
+  var by=L+1.6*s;
+  ctx.strokeStyle='#7C5B2E'; ctx.lineWidth=1.1*s; ctx.beginPath(); ctx.arc(0,by-1.4*s,1.5*s,0,TAU); ctx.stroke();
+  if(o.tongue||o.ghost){
+    ctx.save(); ctx.translate(0,by+3*s); ctx.rotate((o.tsw||0)*Math.PI/180);
+    if(o.ghost){ ctx.setLineDash([1.6*s,1.3*s]); ctx.strokeStyle='rgba(255,250,232,'+clamp(o.ghost)+')'; ctx.lineWidth=.8*s; tongueGhost(ctx,s); ctx.setLineDash([]); }
+    else tongueShape(ctx,s);
+    ctx.restore();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-2.6*s,by);
+  ctx.quadraticCurveTo(-6.2*s,by+1*s,-6*s,by+9*s);
+  ctx.quadraticCurveTo(-6*s,by+12*s,-7.6*s,by+14*s);
+  ctx.lineTo(7.6*s,by+14*s);
+  ctx.quadraticCurveTo(6*s,by+12*s,6*s,by+9*s);
+  ctx.quadraticCurveTo(6.2*s,by+1*s,2.6*s,by);
+  ctx.closePath();
+  ctx.fillStyle=o.c||'#B48A4E'; ctx.fill();
+  ctx.save(); ctx.clip(); ctx.fillStyle='rgba(90,60,25,.38)'; ctx.fillRect(2.2*s,by-1,7*s,16*s); ctx.restore();
+  ctx.fillStyle='#7C5B2E'; ctx.fillRect(-7.6*s,by+12.7*s,15.2*s,1.3*s);
+  ctx.strokeStyle='rgba(255,238,196,.6)'; ctx.lineWidth=.9*s;
+  ctx.beginPath(); ctx.moveTo(-3.4*s,by+2.4*s); ctx.quadraticCurveTo(-4.6*s,by+6*s,-4.4*s,by+10*s); ctx.stroke();
+  if(o.wet){ ctx.fillStyle='rgba(220,236,250,.9)'; ctx.beginPath(); ctx.arc(-1*s,by+15.6*s,.8*s,0,TAU); ctx.fill(); }
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 掉出来的铃舌头（卡在树根里、叼在嘴里） */
+function looseTongue(x,y,deg,s,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.translate(x,y); ctx.rotate(deg*Math.PI/180); ctx.globalAlpha=a>1?1:a;
+  ctx.strokeStyle='#7C5B2E'; ctx.lineWidth=1*s; ctx.beginPath(); ctx.arc(0,-1.3*s,1.3*s,0,TAU); ctx.stroke();
+  tongueShape(ctx,s);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 小船（兰舟）：x 是船尾那头，y 是水线。船帮里头那条线在乘客后面，船身在乘客前面 */
+var BL=104;
+function boatBack(x,y,dk){ line([x+4,y-15,x+30,y-12,x+BL-26,y-12,x+BL-3,y-18],mixH('#5A4230','#1E1A1E',dk||0),2.2); }
+function boatFront(x,y,o){
+  o=o||{}; var dk=o.dark||0;
+  poly([x,y-16,x+9,y-12,x+BL*.5,y-10,x+BL-10,y-12,x+BL,y-20,x+BL-12,y-2,x+BL*.5,y+3,x+12,y-1],mixH('#7A5A3E','#2C2426',dk));
+  line([x+10,y-6,x+BL*.5,y-4,x+BL-12,y-7],mixH('#664A32','#231C1F',dk),1);
+  line([x,y-16,x+9,y-12,x+BL*.5,y-10,x+BL-10,y-12,x+BL,y-20],mixH('#A07A54','#4A3A34',dk),1.6);
+  if(o.lantern!==false){
+    var px=x+BL-14;
+    line([px,y-12,px,y-50],'#4E3A2A',1.6); line([px,y-50,px+9,y-50],'#4E3A2A',1.4);
+    lanternAt(px+9,y-44,1,o.lit===undefined?0:o.lit);
+  }
+}
+function boatShadow(x,y,a){ ell(x+BL*.5,y+4,BL*.48,3.2,'#1A2030',a===undefined?.22:a); }
+function lanternAt(x,y,s,lit){
+  line([x,y-6*s,x,y-3.4*s],'#3A2C22',.8);
+  if(lit>0) glowAt(x,y+2*s,28*s,'#FFC46A',.6*lit);
+  ell(x,y+2*s,4.4*s,5.4*s,lit>0?mixH('#B07A44','#F7B95E',lit):'#B07A44');
+  R(x-3*s,y-3.6*s,6*s,1.6*s,'#5A3A28'); R(x-3*s,y+6.6*s,6*s,1.6*s,'#5A3A28');
+  line([x,y+8.2*s,x,y+12*s],'#B03A2A',.9);
+}
+/* 油纸伞：打开的（顶在 (cx,top)，伞柄到 hy）；合着的 */
+function umbrellaOpen(cx,top,s,o){
+  o=o||{}; var a=(o.a===undefined?1:o.a)*A; if(a<=0) return;
+  var Rr=27*s, h=11*s, c=o.c||'#B4533A';
+  worldT(); ctx.globalAlpha=a>1?1:a;
+  ctx.beginPath(); ctx.moveTo(cx-Rr,top+h);
+  ctx.quadraticCurveTo(cx-Rr*.62,top-1*s,cx,top-2*s);
+  ctx.quadraticCurveTo(cx+Rr*.62,top-1*s,cx+Rr,top+h);
+  for(var i=6;i>0;i--){ var xa=cx-Rr+(i/6)*2*Rr, xb=cx-Rr+((i-1)/6)*2*Rr; ctx.quadraticCurveTo((xa+xb)/2,top+h-3*s,xb,top+h); }
+  ctx.closePath(); ctx.fillStyle=c; ctx.fill();
+  ctx.strokeStyle=o.rib||'rgba(70,30,20,.5)'; ctx.lineWidth=.8*s;
+  for(var j=0;j<=6;j++){ ctx.beginPath(); ctx.moveTo(cx,top-2*s); ctx.lineTo(cx-Rr+(j/6)*2*Rr,top+h); ctx.stroke(); }
+  ctx.fillStyle='#3E2C22'; ctx.fillRect(cx-.8*s,top-5*s,1.6*s,3.4*s);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function umbrellaHandle(cx,top,hy,s){ line([cx,top,cx,hy],'#4A3828',1.4*(s||1)); }
+function umbrellaClosed(x,y,deg,s,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.translate(x,y); ctx.rotate(deg*Math.PI/180); ctx.globalAlpha=a>1?1:a;
+  ctx.fillStyle='#4A3828'; ctx.fillRect(-8*s,-.6*s,8*s,1.2*s);
+  ctx.beginPath(); ctx.moveTo(0,-2.6*s); ctx.lineTo(20*s,-1*s); ctx.lineTo(24*s,0); ctx.lineTo(20*s,1*s); ctx.lineTo(0,2.6*s); ctx.closePath();
+  ctx.fillStyle='#B4533A'; ctx.fill();
+  ctx.fillStyle='rgba(70,30,20,.45)'; ctx.fillRect(4*s,-.4*s,15*s,.8*s);
+  ctx.fillStyle='#3E2C22'; ctx.fillRect(24*s,-.5*s,3*s,1*s);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 柳树：根在 (x,gy)。o.part：柳条被风吹开（0 到 1），pc 是从哪儿分开 */
+function willow(t,x,gy,o){
+  o=o||{}; var part=o.part||0, pc=o.pc===undefined?x:o.pc;
+  var tr=o.trunk||'#4A3E36', l1=o.leaf||'#6F8A5E', l2=o.leaf2||'#58704C';
+  poly([x-10,gy,x-7,gy-50,x-13,gy-100,x-7,gy-150,x+3,gy-172,x+9,gy-150,x+6,gy-100,x+13,gy-50,x+11,gy],tr);
+  line([x-6,gy-128,x-62,gy-188],tr,3.2); line([x+5,gy-150,x+74,gy-198],tr,3.2); line([x,gy-160,x+8,gy-232],tr,3);
+  if(o.branch) line([x+8,gy-66,(x+o.branch[0])/2,o.branch[1]+5,o.branch[0],o.branch[1]],tr,2.6);
+  [[x-52,gy-200,62,26],[x+44,gy-210,68,28],[x,gy-238,60,26],[x-86,gy-178,40,18],[x+96,gy-186,46,20]].forEach(function(b){ ell(b[0],b[1],b[2],b[3],l2,.92); });
+  if(!o.noStrands) willowStrands(t,x,gy,o);
+}
+function willowStrands(t,x,gy,o){
+  o=o||{}; var part=o.part||0, pc=o.pc===undefined?x:o.pc, l1=o.leaf||'#6F8A5E', l2=o.leaf2||'#58704C';
+  var r=rng(o.seed||9), n=o.n||40, ax0=x+(o.x0===undefined?-118:o.x0), ax1=x+(o.x1===undefined?118:o.x1);
+  for(var k=0;k<n;k++){
+    var ax=lerp(ax0,ax1,r()), ay=gy-206+r()*28+Math.abs(ax-x)*.12, ph=r()*TAU, side=ax<pc?-1:1;
+    var L=o.low?(gy-6-ay)-r()*22:118+r()*96;
+    var reach=1-Math.min(1,Math.abs(ax-pc)/150), pts=[];
+    L*=1-part*.62*(.45+reach*.55);
+    for(var s=0;s<=1.0001;s+=.125){
+      var off=Math.sin(t*1.4+ph+s*2.4)*5*s*(o.sway===undefined?1:o.sway)+side*part*(.3+reach*.7)*s*s*44;
+      pts.push(ax+off,ay+L*s);
+    }
+    line(pts,(k%3)?l1:l2,1.3,.95);
+    for(var j=2;j<pts.length-1;j+=2) ell(pts[j],pts[j+1],1.2,2.6,(k%2)?l1:l2,.9,null,0,.3);
+  }
+}
+/* 残月：亮的那边朝左下 */
+function crescent(x,y,r,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  glowAt(x,y,r*3,'#FFF3DA',.22*a);
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.translate(x,y); ctx.rotate(-.5);
+  ctx.beginPath(); ctx.arc(0,0,r,-Math.PI/2,Math.PI/2,true); ctx.ellipse(0,0,r*.42,r,0,Math.PI/2,Math.PI*1.5,false); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 一滴水（落在眼睛边上的那种） */
+function tearDrop(x,y,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a;
+  ctx.beginPath(); ctx.moveTo(x,y-2.6); ctx.quadraticCurveTo(x+1.7,y-.2,x+1.5,y+.8); ctx.arc(x,y+.8,1.5,0,Math.PI); ctx.quadraticCurveTo(x-1.7,y-.2,x,y-2.6);
+  ctx.fillStyle='#BFE2FF'; ctx.fill(); ctx.fillStyle='#FFFFFF'; ctx.fillRect(x-.8,y-.4,.7,.9);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+/* 蝉 */
+function cicadaAt(x,y,chirp){
+  ell(x,y,3.4,1.8,'#3A2C22'); ell(x-1,y-1.3,3.8,1.3,'rgba(220,230,240,.6)');
+  for(var i=0;i<3;i++) arcAt(x+5,y-1,3+i*3,-.9,.5,'#F1EADB',1,chirp*(1-i*.25));
+}
+
+/* ===================== 布景一：河边长亭（傍晚） ===================== */
+var F=470;                        // 长亭、栈桥的地面
+var PX0=20, PX1=236;              // 长亭两根柱子
+var PIER1=338;                    // 栈桥的尽头
+var BELLX=PX1+40, BELLAY=F-149, BELL_L=72;   // 铃挂在右边檐角，铃底在 F-62
+var BOATX=330, WL=490;            // 小船停在栈桥头；WL 是水线
+function duskBG(t,dk){
+  screen(function(){
+    grad(0,0,W,H,[[0,mixH('#56637D','#141A2C',dk)],[.40,mixH('#9A9BA8','#262D46',dk)],[.60,mixH('#D7C5B1','#353A54',dk)],[1,mixH('#C2B6A8','#262B3E',dk)]]);
+    glowAt(300,300,170,'#F4D3AA',.35*(1-dk));
+  });
+  layer(.25,function(){ ridge(-500,1100,352,80,31,mixH('#8E94A7','#2A3049',dk),1,8,800); });
+  layer(.45,function(){
+    ridge(-500,1100,364,48,37,mixH('#7A839A','#232A40',dk),1,6,800);
+    mistBand(-500,1100,360,28,.55*(1-dk*.5),mixH('#E8E2DA','#5A6080',dk));
+  });
+  R(-700,360,2400,6,mixH('#5F6779','#1A2033',dk));
+  grad(-700,366,2600,320,[[0,mixH('#A9B1BC','#2C3550',dk)],[.25,mixH('#8C98A8','#222B44',dk)],[1,mixH('#57637A','#141A2B',dk)]]);
+  glints(t,-300,1100,372,600,46,12,mixH('#D6DCE4','#5A6488',dk),.45);
+  mistPuffs(t,-400,1200,372,20,9,5,mixH('#EEE8E0','#4A5070',dk),.32,4);
+}
+function treeL(dk){
+  var c=mixH('#4B3E35','#18151A',dk);
+  poly([-64,F+12,-32,F-60,-36,F-150,-22,F-232,-8,F-238,-16,F-150,-10,F-60,-6,F+12],c);
+  line([-16,F-200,30,F-232,76,F-238],c,4); line([30,F-232,46,F-262],c,2.4);
+  var r=rng(41);
+  for(var i=0;i<24;i++){ var lx=-46+r()*130, ly=F-298+r()*86; ell(lx,ly,3+r()*2,1.6+r()*1,(i%3)?mixH('#B98A4A','#3A3024',dk):mixH('#9C6E3A','#2E2620',dk),.85,null,0,r()*3); }
+}
+function reedsAt(t,x0,y,n,seed,c){
+  var r=rng(seed);
+  for(var i=0;i<n;i++){ var x=x0+r()*34-8, h=16+r()*24, sw=Math.sin(t*1.2+i)*1.6; line([x,y+6,x+sw,y-h],c,1.1); }
+}
+function pavilion(dk){
+  var x0=PX0, x1=PX1, c=function(a,b){ return mixH(a,b,dk); };
+  R(x0-10,F,x1-x0+20,12,c('#857F79','#2A2A30')); R(x0-10,F,x1-x0+20,2,c('#A8A199','#3A3A42')); R(x0-10,F+10,x1-x0+20,2,c('#655F5A','#1E1E24'));
+  for(var x=x0+14;x<x1;x+=32) R(x,F+3,1,7,c('#6F6964','#232328'));
+  [x0+4,x1-12].forEach(function(cx){
+    R(cx,F-122,8,122,c('#8C3B2F','#3A2026')); R(cx,F-122,2,122,c('#A64D3D','#4A2830')); R(cx+6,F-122,2,122,c('#6A2A22','#2A161B'));
+    R(cx-2,F-5,12,5,c('#77716B','#2A2A30'));
+  });
+  R(x0+12,F-22,x1-x0-24,2,c('#5E3A2E','#2A1E22'));
+  R(x0-6,F-130,x1-x0+12,9,c('#5A3B30','#241A1E')); R(x0-6,F-130,x1-x0+12,2,c('#75503F','#30242A'));
+  for(var x2=x0+14;x2<x1-8;x2+=9) R(x2,F-121,1.2,8,c('#6A4636','#2A1E22'));
+  R(x0+12,F-114,x1-x0-24,1.4,c('#6A4636','#2A1E22'));
+  var eL=x0-46, eR=x1+46, ey=F-132, tip=F-154, rx0=x0+34, rx1=x1-34, ry=F-182;
+  worldT(); ctx.globalAlpha=A;
+  ctx.beginPath();
+  ctx.moveTo(eL,tip); ctx.quadraticCurveTo(x0-16,ey+3,x0+12,ey); ctx.lineTo(x1-12,ey);
+  ctx.quadraticCurveTo(x1+16,ey+3,eR,tip); ctx.quadraticCurveTo(x1+10,F-152,rx1,ry);
+  ctx.lineTo(rx0,ry); ctx.quadraticCurveTo(x0-10,F-152,eL,tip); ctx.closePath();
+  ctx.fillStyle=c('#3C4250','#14171F'); ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.strokeStyle=c('#4C5363','#1C2029'); ctx.lineWidth=1.4;
+  for(var x3=eL;x3<eR;x3+=7){ ctx.beginPath(); ctx.moveTo(x3,ry-2); ctx.lineTo(x3+(x3-(x0+x1)/2)*.08,ey+4); ctx.stroke(); }
+  ctx.restore();
+  ctx.strokeStyle=c('#6A7182','#262B36'); ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(eL,tip); ctx.quadraticCurveTo(x0-16,ey+3,x0+12,ey); ctx.lineTo(x1-12,ey); ctx.quadraticCurveTo(x1+16,ey+3,eR,tip); ctx.stroke();
+  ctx.fillStyle=c('#2E333F','#101318'); ctx.fillRect(rx0-6,ry-6,rx1-rx0+12,7);
+  ctx.beginPath(); ctx.moveTo(rx0-6,ry+1); ctx.quadraticCurveTo(rx0-16,ry-2,rx0-14,ry-14); ctx.lineTo(rx0-8,ry-6); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(rx1+6,ry+1); ctx.quadraticCurveTo(rx1+16,ry-2,rx1+14,ry-14); ctx.lineTo(rx1+8,ry-6); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function pierAt(dk){
+  var c=function(a,b){ return mixH(a,b,dk); };
+  [PX1+18,PX1+58,PIER1-8].forEach(function(px){ R(px,F+5,5,44,c('#5E4834','#1E181A')); });
+  R(PX1+8,F,PIER1-PX1-8,5,c('#7A5E44','#2A2024')); R(PX1+8,F,PIER1-PX1-8,1.5,c('#9A7A5A','#3A2E30'));
+  for(var x=PX1+20;x<PIER1;x+=14) R(x,F,1,5,c('#654C36','#21191C'));
+}
+/* 河岸、树、芦苇、长亭、栈桥（船和六只另画）。长亭立在一道石头砌的岸上，岸底下就是水 */
+function bankSet(t,dk){
+  var wl=mixH('#6E6A66','#1E1E24',dk), wd=mixH('#5A5652','#18181D',dk), mo=mixH('#5F6E4E','#1A2018',dk);
+  R(-700,F+12,PX1+14+700,52,wl);
+  for(var row=0;row<5;row++){
+    var yy=F+12+row*10.4; R(-700,yy,PX1+14+700,1,wd);
+    for(var bx=-700+(row%2)*13;bx<PX1+14;bx+=26) R(bx,yy,1,10.4,wd);
+  }
+  R(-700,F+62,PX1+14+700,3,mixH('#3E3C3A','#121216',dk));
+  var r=rng(55); for(var i=0;i<14;i++){ var sx=-160+r()*390, sy=F+16+r()*44; ell(sx,sy,3+r()*5,1.4+r()*1.4,mo,.7); }
+  ripples(t,-200,PX1+10,F+72,F+150,8,61,mixH('#C9D0DA','#4A5478',dk),.5);
+  glints(t,-200,PX1,F+70,F+160,10,63,mixH('#D6DCE4','#5A6488',dk),.4);
+  treeL(dk);
+  reedsAt(t,PX1+12,F+16,14,77,mixH('#5C6A4E','#1A2018',dk));
+  pavilion(dk);
+  pierAt(dk);
+  ell(PX0+44,F+1,14,1.4,'#C4C8D0',.3*(1-dk)); ell(PX1-36,F+1,10,1.1,'#C4C8D0',.26*(1-dk));
+}
+/* 檐上滴下来的水：[x, 周期, 相位, 从哪儿, 落到哪儿] */
+var DRIPS=[[PX0-30,1.7,.2,F-140,F+40],[PX0+18,2.1,.9,F-131,F],[PX0+86,1.9,1.4,F-131,F],[PX1-62,2.3,.5,F-131,F],[PX1-6,1.6,1.1,F-131,F],[PX1+26,2.0,.3,F-138,F],[PX1+44,1.8,1.6,F-150,F]];
+function drips(t,list,a){
+  list.forEach(function(d){
+    var per=d[1], u=((t+d[2])%per)/per, x=d[0], fall=.32;
+    if(u<1-fall){ var g=u/(1-fall); ell(x,d[3]+1.2*g,1+.5*g,1.3+1.1*g,'#DCE6F0',.75*(a===undefined?1:a)); }
+    else {
+      var p=(u-(1-fall))/fall, y=lerp(d[3],d[4],p*p);
+      ell(x,y,1,2.4,'#DCE6F0',.85*(a===undefined?1:a));
+      if(p>.9){ dot(x-2,d[4]-1,.7,'#DCE6F0',.7); dot(x+2,d[4]-1.4,.7,'#DCE6F0',.7); }
+    }
+  });
+}
+function bellSwing(t,hits){
+  var sw=Math.sin(t*1.6)*2.2;
+  (hits||[]).forEach(function(h){ if(t>=h[0]&&t<h[0]+5) sw+=(h[1]||14)*Math.exp(-(t-h[0])*1.4)*Math.sin((t-h[0])*7.5); });
+  return sw;
+}
+
+/* ===================== 场景 ===================== */
+/* 序：传说。雨里的山路，一只铃，一声一声，山谷跟着应 */
+var LEG_RINGS=[2.0,5.6,9.0,12.2];
+function sIntro(t){
+  flat();
+  screen(function(){ grad(0,0,W,H,[[0,'#0E1322'],[.55,'#1B2337'],[1,'#121726']]); });
+  camK(t,[[0,180,320,1],[17,184,318,1.08]]);
+  layer(.25,function(){ ridge(-200,600,300,96,11,'#1E283D',1,8,800); mistBand(-200,600,318,60,.28,'#8C9AB8'); });
+  layer(.55,function(){ ridge(-200,600,392,120,23,'#161D2F',1,6,800); mistBand(-200,600,410,50,.2,'#7C8AA8'); });
+  poly([196,700,214,560,206,470,226,396,220,330,238,250,290,190,420,170,420,700],'#10151F');
+  /* 栈道：插在崖壁上的木梁，上面铺板 */
+  for(var bx=118;bx<230;bx+=16) R(bx,404,3,18,'#2B2723');
+  R(110,400,124,5,'#38332E'); R(110,400,124,1.4,'#4A443D');
+  [114,146,178].forEach(function(px){ R(px,374,3,26,'#38332E'); });
+  R(110,372,90,2.6,'#38332E');
+  /* 一根高一点的柱子，伸出一截横木，铃挂在底下 */
+  R(196,330,4,70,'#38332E'); R(160,330,40,3,'#38332E'); poly([156,329,204,329,198,322,162,322],'#2E2A26');
+  var hits=LEG_RINGS.map(function(r){ return [r,10]; });
+  bell(170,333,6,bellSwing(t,hits)*.7,1.7,{tongue:true,tsw:bellSwing(t-.08,hits)*.5});
+  LEG_RINGS.forEach(function(r){
+    var u=(t-r)/1.5; if(u>=0&&u<=1) soundRings(170,356,u,'#EADFC2',.75,3,6,44);
+    var u2=(t-r-.5)/1.8; if(u2>=0&&u2<=1) soundRings(60,300,u2,'#C9C2B2',.4,2,8,70);
+    var u3=(t-r-1.0)/1.8; if(u3>=0&&u3<=1) soundRings(300,250,u3,'#C9C2B2',.25,2,8,60);
+  });
+  rain(t,{n:90,a:.33,len:16,sp:560,dx:-.18,c:'#9DAACB',seed:5});
+  var ta=fade(t,12.8,18,.9);
+  if(ta>0) vtitle(ta);
+}
+function vtitle(a){
+  ctx.setTransform(S,0,0,S,0,0); ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.globalAlpha=clamp(a*A); ctx.font='500 46px '+SERIF; ctx.fillStyle='#EFE7D6';
+  ctx.shadowColor='rgba(240,225,190,.45)'; ctx.shadowBlur=16*S;
+  ['雨','霖','铃'].forEach(function(ch,i){ ctx.fillText(ch,96,214+i*54); });
+  ctx.shadowBlur=0; ctx.shadowColor='rgba(0,0,0,0)';
+  ctx.fillStyle='#B13E2C'; ctx.fillRect(87,368,18,46);
+  ctx.fillStyle='#F6EEE2'; ctx.font='600 11px '+SERIF;
+  ['小','萌','物'].forEach(function(ch,i){ ctx.fillText(ch,96,377+i*14); });
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* 一：傍晚的长亭，铃丢了舌头 */
+var CHIRPS=[3.6,6.0,7.2,13.6,22.0];
+function sPav(t){
+  camK(t,[[0,206,392,.82],[3.0,206,392,.84],[5.4,70,322,1.6],[8.0,70,322,1.6],[9.2,150,416,1.22],[10.8,150,416,1.22],[12.4,BELLX,392,3.0],[17.6,BELLX,392,3.0],[19.2,BELLX,398,4.2],[24.8,BELLX,398,4.2],[26.0,244,424,1.3],[28.0,256,424,1.3],[29.8,560,398,.86],[34,610,396,.82]]);
+  duskBG(t,0);
+  bankSet(t,0);
+  var ch=0; CHIRPS.forEach(function(c){ if(inR(t,c,c+1.4)) ch=Math.max(ch,(Math.floor((t-c)*8)%2)?.4:1); });
+  cicadaAt(58,F-240,ch);
+  boatBack(BOATX,WL,0); boatShadow(BOATX,WL); boatFront(BOATX,WL+((Math.floor(t/1.1)%2)?1:0),{lit:0});
+  CL(t,70,F);
+  FC(t,0,114,F-14); FC(t,1,142,F-14); FC(t,2,170,F-14);
+  FX(t,186,434);
+  var fm=path(t,248,434,walkSegs(25.6,27.0,248,282,434,4,3));
+  var up=t>=26.4;
+  CT(t,fm.x,fm.y,{rows:up?CAT_UP:CAT.rows,eyes:inR(t,26.8,28.0)?'squeeze':undefined});
+  var gh=inR(t,20.4,25.2)?fade(t,20.6,25.0,.4):0, wind=inR(t,23.0,25.2)?Math.sin((t-23)*3.2)*9*fade(t,23.0,25.2,.4):0;
+  bell(BELLX,BELLAY,BELL_L,bellSwing(t)+wind,1,{ghost:gh,tsw:Math.sin(t*2.4)*10});
+  if(inR(t,23.4,25.2)) wt('……',BELLX+14,BELLAY+BELL_L+2,{size:4,c:'#F2ECE0',a:fade(t,23.4,25.2,.3),wt:700});
+  drips(t,DRIPS);
+}
+
+/* 二：送行的茶，没人有心思喝 */
+var TABLE0=92, TABLE1=200, TY=F-17;
+var CUPS=[100,113,126,139,152,165];
+function cupAt(x,i,dim,t){
+  var a=dim?.32:1;
+  R(x,TY-6,7,6,'#EDE6DA',a); R(x,TY-6,7,1.2,'#C9BFAE',a); R(x+1,TY-1,5,1,'#B8AE9E',a);
+  if(!dim){ for(var k=0;k<2;k++){ var ph=t*1.2+i*.9+k*1.7, u=(ph%2)/2; line([x+3.5,TY-7-u*10,x+3.5+Math.sin(ph*2)*1.5,TY-10-u*10],'#F4F0EA',.7,(1-u)*.45); } }
+}
+function teaTable(t,dim6){
+  R(TABLE0,TY,TABLE1-TABLE0,4,'#6A4A34'); R(TABLE0,TY,TABLE1-TABLE0,1.2,'#8A6648');
+  R(TABLE0+6,TY+4,4,13,'#553A28'); R(TABLE1-10,TY+4,4,13,'#553A28');
+  CUPS.forEach(function(x,i){ cupAt(x,i,dim6&&i===5,t); });
+  R(178,TY-2,18,2,'#D9D2C4'); [181,186,191].forEach(function(x){ R(x,TY-6,4,4,'#E2B24E'); R(x,TY-6,4,1,'#F2CF7A'); });
+}
+function sTea(t){
+  camK(t,[[0,150,424,1.85],[12.2,150,424,1.85],[13.6,186,424,1.85],[17.0,206,426,1.8],[20.8,214,428,1.75],[21.8,330,440,1.65],[25.4,322,440,1.6],[28.4,300,438,1.45],[31,296,438,1.42]]);
+  duskBG(t,.06);
+  bankSet(t,.06);
+  /* 小船：一下一下拽着缆绳 */
+  var tug=0; [22.0,23.2,24.4].forEach(function(s){ if(inR(t,s,s+.9)) tug=Math.max(tug,Math.round(Math.sin((t-s)/.9*Math.PI)*4)); });
+  var bx=BOATX+tug, rope=[PIER1-6,F+2,bx+4,WL-14];
+  line([rope[0],rope[1],(rope[0]+rope[2])/2,(rope[1]+rope[3])/2+(tug>2?0:3),rope[2],rope[3]],'#3E3226',1);
+  boatBack(bx,WL,0); boatShadow(bx,WL);
+  var inBoat=t>=27.6, cp=path(t,268,434,walkSegs(25.8,27.4,268,318,434,4,3).concat([[27.5,.5,bx+20,446,8]]));
+  var catX=inBoat?bx+20:cp.x, catY=inBoat?446:cp.y;
+  if(inBoat) CT(t,catX,catY+((Math.floor(t/1.1)%2)?1:0),{});
+  boatFront(bx,WL,{lit:0});
+  CL(t,66,F,{ra:inR(t,5.6,7.0)?-6:0});
+  /* 三颗坐在桌子后面的长凳上 */
+  [0,1,2].forEach(function(i){
+    var hop=(i===1)?jump(t,8.0+0*.3,.3,3)+jump(t,8.4,.3,3)+jump(t,8.8,.3,3)+jump(t,9.2,.3,3)+jump(t,9.6,.3,3)+jump(t,10.0,.3,3):0;
+    FC(t,i,116+i*26,F-26+hop,{rot:inR(t,5.4,8.0)||inR(t,10.4,12.4)?14:undefined});
+  });
+  teaTable(t,inR(t,10.6,12.6));
+  [8.1,8.4,8.7,9.0,9.3,9.6].forEach(function(s,i){ popNum(String(i+1),CUPS[i]+3.5,TY-30,t,s,2.6-i*.15,'#6A34D8',9,'rgba(255,255,255,.95)'); });
+  /* StashYu：没收点心，从尾巴里掏出一把小伞 */
+  var rows=inR(t,12.8,17.3)?FOX_DROOP:seq(t,17.5,FOX_TAPTWO,FOX.rows);
+  FX(t,204,434,{rows:rows});
+  var tip=foxTip(204,434,FOX.rows);
+  if(inR(t,17.9,19.2)){ var f=fly(t,17.9,1.1,tip[0],tip[1],282,462,24,11); umbrellaClosed(f[0],f[1],-20+f[2]*200,1); }
+  if(t>=19.2&&t<25.8) umbrellaClosed(276,466,-4,1);
+  if(t>=25.8&&!inBoat){ var m=catMouth(catX,catY); umbrellaClosed(m[0]-6,m[1]+1,0,1); }
+  if(inBoat) umbrellaClosed(bx+12,WL-26,-78,1);
+  if(!inBoat) CT(t,catX,catY,{eyes:inR(t,19.6,21.4)?'glanceL':undefined,rows:inR(t,19.8,21.6)?cyc(t,19.8,CAT_TWITCH):(t>=25.8?CAT_UP:undefined)});
+  if(inR(t,18.0,18.8)) sfx(t,18.0,.8,'啵',tip[0]+4,tip[1]-6,{size:7,c:'#F5EBD8',rise:5});
+  drips(t,DRIPS);
+}
+
+/* 三：执手相看泪眼，竟无语凝噎 */
+function sHands(t){
+  camK(t,[[0,304,436,1.7],[7.4,304,436,1.7],[8.8,334,436,2.3],[12.2,340,438,2.8],[18.8,340,438,2.8],[19.8,262,426,1.45],[23.2,262,426,1.45],[24.4,266,414,1.8],[29.8,266,414,1.8],[33,262,422,1.5]]);
+  duskBG(t,.14);
+  bankSet(t,.14);
+  var bob=(Math.floor(t/1.1)%2)?1:0;
+  boatBack(BOATX+8,WL,.1); boatShadow(BOATX+8,WL);
+  /* FetchMo 在船上：先把脑袋靠到 Clawd 的钳子上，再跟 StashYu 尾巴碰尾巴（尾巴照 DLC 换成「竖起来」那张） */
+  var cp=path(t,346,446,[[5.2,.7,322,446,0],[7.0,.6,346,446,0],[10.0,.8,334,442,0],[19.4,.6,334,446,0]]);
+  var shineC=t>=14.0&&t<19.4, eyesC=inR(t,5.9,7.0)?'happy':(inR(t,10.2,19.0)?'glanceL':undefined);
+  CT(t,cp.x,cp.y+bob,{eyes:eyesC,shine:shineC&&eyesC==='glanceL',rows:inR(t,10.0,19.4)?CAT_UP:undefined});
+  boatFront(BOATX+8,WL,{lit:0,dark:.1});
+  umbrellaClosed(BOATX+20,WL-26,-78,1);
+  /* Clawd：伸出钳子（右钳整块往上挪一格），然后让到后面 */
+  var cl=path(t,306,F,[[7.6,1.6,176,F,6]]);
+  /* 三颗 */
+  var hei=path(t,254,F-14,[[25.6,.4,268,F-50,0],[26.0,.5,256,F-14,0]]);
+  var lookUp=inR(t,23.4,26.6);
+  FC(t,0,206,F-14,{rot:inR(t,19.0,23.4)?16:undefined});
+  FC(t,1,230,F-14,{rot:inR(t,19.0,23.4)?16:undefined});
+  CL(t,cl.x,F,{ra:inR(t,3.2,7.6)?-10:0,eyes:inR(t,19.0,23.0)?'shut':undefined});
+  var fp=path(t,140,434,walkSegs(7.8,9.6,140,286,434,5,3));
+  var shineF=t>=13.4&&t<19.4, eyesF=inR(t,10.2,19.0)?'glanceR':undefined;
+  FX(t,fp.x,fp.y,{eyes:eyesF,shine:shineF&&eyesF==='glanceR'});
+  FC(t,2,hei.x,hei.y,{rot:lookUp?-62:undefined});
+  /* 两滴水：一滴落在 StashYu 眼睛边上，一滴落在 FetchMo 眼睛边上，再顺着脸往下淌 */
+  if(inR(t,12.6,13.4)){ var p1=stepP(t,12.6,.8,10); tearDrop(317,lerp(330,446,p1*p1),1); }
+  if(t>=13.4&&t<19.4) tearDrop(321,450+stepP(t,13.4,4,8)*7,.95);
+  if(inR(t,13.2,14.0)){ var p2=stepP(t,13.2,.8,10); tearDrop(359,lerp(330,457,p2*p2),1); }
+  if(t>=14.0&&t<19.4) tearDrop(356,460+stepP(t,14.0,4,8)*7,.95);
+  /* 小黑撞了一下铃：铃晃，没有声音 */
+  bell(BELLX,BELLAY,BELL_L,bellSwing(t,[[26.0,18]]),1,{});
+  if(inR(t,26.4,29.4)) wt('……',BELLX+12,BELLAY+BELL_L+4,{size:5,c:'#F2ECE0',a:fade(t,26.4,29.4,.4),wt:700});
+  drips(t,DRIPS);
+}
+
+/* 四：船走了。近处跟着船，再一下拉远：千里烟波 */
+function boatXGo(t){ return BOATX+8+Math.pow(Math.max(0,t-2.6),1.2)*14; }
+function sGo(t){
+  var mix=smooth((t-10.6)/1.6);
+  if(mix<1){
+    A=1;
+    camK(t,[[0,316,440,1.5],[2.6,326,440,1.45],[11.6,470,430,1.0]]);
+    duskBG(t,.2+t*.01);
+    bankSet(t,.2+t*.01);
+    var bx=boatXGo(t);
+    boatBack(bx,WL,.15); boatShadow(bx,WL);
+    CT(t,bx+18,446+((Math.floor(t/1.1)%2)?1:0),{eyes:inR(t,5.0,10.4)?'glanceL':undefined});
+    boatFront(bx,WL,{lit:clamp((t-6)/3),dark:.15});
+    umbrellaClosed(bx+12,WL-26,-78,1);
+    CL(t,176,F);
+    FC(t,1,230,F-14); FC(t,2,254,F-14);
+    FX(t,286,434,{rows:FOX_DROOP});
+    var pink=path(t,206,F-14,[[9.6,.8,322,F-14,10]]);
+    var hop=t>=10.4?jump(t,10.6,.4,6)+jump(t,11.2,.4,6)+jump(t,11.8,.4,6):0;
+    FC(t,0,pink.x,pink.y+hop,{rot:-14,bl:0});
+    drips(t,DRIPS);
+  }
+  if(mix>0){ A=mix; wideRiver(t); A=1; }
+}
+/* 拉远：一条河往远处去，越远越窄；小船往雾里走 */
+function rv(v){ return {x:180+46*Math.sin(v*3.6)*(1-v)-14*v, y:lerp(642,300,Math.pow(v,.8)), hw:lerp(210,4,Math.pow(v,.62))}; }
+function wideRiver(t){
+  flat();
+  var d=smooth((t-11)/12);
+  grad(0,0,W,H,[[0,mixH('#4E5A76','#121829',d)],[.34,mixH('#9493A2','#272D46',d)],[.47,mixH('#D3BFAD','#3B3D56',d)],[1,mixH('#57606F','#161B29',d)]]);
+  glowAt(250,292,120,'#F4D3AA',.3*(1-d));
+  ridge(-20,380,300,58,61,mixH('#8C92A6','#262D45',d),1,5,700);
+  ridge(-20,380,306,30,67,mixH('#727B92','#1F263C',d),1,4,700);
+  /* 两岸 */
+  grad(0,300,W,340,[[0,mixH('#6E7466','#1C2128',d)],[1,mixH('#3E433C','#0F1218',d)]]);
+  /* 河 */
+  worldT(); ctx.globalAlpha=A;
+  ctx.beginPath();
+  var v, p;
+  for(v=0;v<=1.0001;v+=.04){ p=rv(v); if(v===0) ctx.moveTo(p.x-p.hw,p.y); else ctx.lineTo(p.x-p.hw,p.y); }
+  for(v=1;v>=-.0001;v-=.04){ p=rv(v); ctx.lineTo(p.x+p.hw,p.y); }
+  ctx.closePath();
+  var g=ctx.createLinearGradient(0,300,0,640);
+  g.addColorStop(0,mixH('#D9CDBF','#3E435C',d)); g.addColorStop(.3,mixH('#9CA6B4','#262E46',d)); g.addColorStop(1,mixH('#5A6578','#141A2A',d));
+  ctx.fillStyle=g; ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+  for(var i=0;i<16;i++){ var vv=(i/16+t*.006)%1, q=rv(vv); line([q.x-q.hw*.5,q.y,q.x-q.hw*.2,q.y],mixH('#E2E6EC','#5A6488',d),.8,.3*(1-vv)); }
+  /* 小船：越走越远，越来越小，灯一直亮着 */
+  var bv=lerp(.16,.93,smooth((t-11.2)/11.5)), bp=rv(bv), z=lerp(.36,.05,Math.pow(bv,.7));
+  at(bp.x,bp.y,BOATX+52,WL,z,function(){
+    boatShadow(BOATX,WL,.3);
+    CT(t,BOATX+18,446,{sil:mixH('#2A2830','#0E1018',d)});
+    boatFront(BOATX,WL,{lit:1,dark:.3+d*.6});
+  });
+  glowAt(bp.x+z*42,bp.y-z*44,6+z*30,'#FFC46A',.5);
+  /* 雾 */
+  mistBand(-40,400,330,30,.55*(.4+d*.6),mixH('#E8E2DA','#58607E',d));
+  mistPuffs(t,-120,480,360+10*Math.sin(t*.2),46,8,17,mixH('#EEE8E0','#4E5675',d),.45*(.5+.5*smooth((t-12.6)/4)),7);
+  mistPuffs(t,-120,480,430,60,7,23,mixH('#EEE8E0','#4E5675',d),.32*smooth((t-12.6)/5),5);
+  /* 近处的岸：五只站在这儿，看着船走 */
+  var bk=mixH('#3A3F38','#0D1016',d);
+  poly([-10,566,40,560,110,563,170,570,230,584,300,598,370,606,370,700,-10,700],bk);
+  reedsAt(t,250,592,12,93,bk); reedsAt(t,310,600,10,95,bk);
+  at(84,566,180,F,.62,function(){
+    var sil=mixH('#24272A','#07090E',d);
+    CL(t,110,F,{sil:sil});
+    FX(t,142,434,{sil:sil,rows:FOX_DROOP});
+    FC(t,1,218,F-14,{sil:sil}); FC(t,2,244,F-14,{sil:sil});
+    FC(t,0,276,F-14+(Math.floor(t*2.5)%2?-6:0),{sil:sil});
+  });
+}
+
+/* 五：夜里的河，雨，岸上一声一声的铃 */
+var NIGHT_RINGS=[12.0,22.9,25.4,27.8,30.4,33.0,35.6,37.8];
+function sNight(t){
+  var bx=120+t*5, bob=(Math.floor(t/1.2)%2)?1:0;
+  camK(t,[[0,bx+52,452,1.55],[34.6,bx+52,452,1.55],[40,bx+52,372,1.25]]);
+  cam(bx+52,CAM.y,CAM.z);
+  screen(function(){
+    grad(0,0,W,H,[[0,'#0D1322'],[.5,'#18203A'],[1,'#0F1424']]);
+    glowEll(120,90,170,40,'#2A3454',.6); glowEll(290,150,150,34,'#26304C',.5);
+  });
+  layer(.12,function(){ ridge(-600,1400,318,46,71,'#141A2C',1,8,900); });
+  /* 远岸：五只在那儿走，黑得什么也看不见。岸上一排柳树、芦苇的影子；船拐弯的时候，一道岬角从右边移过来 */
+  layer(.55,function(){
+    ridge(-600,2000,338,14,73,'#0B0F1A',1,5,900);
+    var tr=rng(19);
+    for(var k=0;k<26;k++){
+      var tx=-500+k*96+tr()*40, th=26+tr()*22;
+      line([tx,346,tx-2,346-th],'#0A0E18',2.4);
+      ell(tx,346-th-8,14+tr()*8,10+tr()*4,'#0A0E18',1);
+      for(var s2=0;s2<5;s2++) line([tx-12+s2*6,346-th,tx-13+s2*6,346-th+20+tr()*8],'#0A0E18',1);
+    }
+    reedsAt(t,-400,348,90,23,'#0B101A');
+    var hx=900-t*24; if(hx>-500&&hx<1400) poly([hx-220,356,hx-120,334,hx-20,318,hx+40,314,hx+120,326,hx+230,356],'#080B14');
+  });
+  grad(-600,348,2600,400,[[0,'#202A44'],[.3,'#161E33'],[1,'#0C111E']]);
+  ripples(t,bx-260,bx+360,360,620,46,9,'#7F90B8',.5);
+  glints(t,bx-200,bx+300,380,600,20,31,'#41507A',.6);
+  /* 灯在水里的影子 */
+  for(var k=0;k<7;k++) line([bx+BL+(k%2?-2:2),WL+4+k*6,bx+BL+(k%2?2:-2),WL+8+k*6],'#FFC46A',1,.35*(1-k/7));
+  boatBack(bx,WL,.75);
+  boatShadow(bx,WL,.3);
+  var ucx=bx+60, utop=414;
+  umbrellaHandle(ucx,utop,WL-12);
+  var asleep=t>=31.0, rows=(inR(t,13.0,15.4)||inR(t,33.2,34.8))?cyc(t,13,CAT_TWITCH):CAT.rows;
+  var eyes=asleep?'asleep':(inR(t,13.2,20.6)?'glanceL':(inR(t,29.8,31.0)?(blinkOn(t,.5,0)?'blink':'blink'):undefined));
+  CT(t,bx+28,446+bob,{rows:rows,eyes:eyes,outline:'#FFFFFF'});
+  boatFront(bx,WL,{lit:1,dark:.75});
+  umbrellaOpen(ucx,utop+bob,1,{c:'#9C4634'});
+  /* 雨打在伞上 */
+  var r=rng(Math.floor(t*6));
+  for(var i=0;i<3;i++){ var px=ucx-22+r()*44; dot(px,utop+3-Math.abs(px-ucx)*.12-2-r()*3,.8,'#C8D6EE',.7); }
+  if(asleep) zzT(t,bx+86,438,0,'#C9C2B4',8);
+  rain(t,{n:110,a:.4,len:18,sp:640,dx:-.16,c:'#9FB0D0',seed:7});
+  /* 岸上的铃声：从黑里一圈一圈传过来 */
+  screen(function(){
+    NIGHT_RINGS.forEach(function(r0,i){
+      var u=(t-r0)/2.2; if(u<0||u>1) return;
+      var sx=96+(i%3)*14, sy=346;
+      soundRings(sx,sy,u,'#F2E6C8',.9,4,5,70);
+      glowAt(sx,sy,16,'#FFE2A8',.55*(1-u));
+    });
+  });
+}
+
+/* 六：天快亮，柳树底下。中间一段是那一夜（倒回去看） */
+var BANK=236;                    // 岸边，往右是水
+var WX=60;                       // 柳树
+var BELL2X=197, BELL2Y=408;      // 低低的柳枝上挂着铃：铃底刚好在 Clawd 右钳往上挪一点的地方
+var DBX=246;                     // 船
+var DAWN_POS={pink:8, hei:34, zi:60, fox:78, cl:170};
+function dawnSky(t){
+  screen(function(){
+    grad(0,0,W,H,[[0,'#7884A8'],[.32,'#B9AFC0'],[.5,'#EBCDBE'],[.62,'#F6E3CF'],[1,'#D9D2CA']]);
+    var r=rng(3); for(var i=0;i<14;i++){ dot(r()*W,r()*180,.7,'#FFFFFF',.35*(.5+.5*Math.sin(t*2+i))); }
+    crescent(300,150,15,'#FFF6E2',.95);
+  });
+  layer(.2,function(){ ridge(-400,900,348,60,83,'#A8A2B8',1,8,800); mistBand(-400,900,350,40,.6,'#F6EEE6'); });
+  layer(.4,function(){ ridge(-400,900,366,30,89,'#8E8CA2',1,6,800); });
+  grad(-600,370,2400,300,[[0,'#E6D8CE'],[.3,'#B9BCC8'],[1,'#7C8496']]);
+  glints(t,-200,800,380,600,36,44,'#FFF4E6',.5);
+  mistPuffs(t,BANK-40,900,486,24,6,47,'#FFF8F0',.35,5);
+}
+function dawnBank(t){
+  poly([-600,F,BANK-14,F,BANK+2,F+8,BANK+10,F+40,BANK-6,F+130,BANK-40,1300,-600,1300],'#5C5A52');
+  R(-600,F,BANK-10+600,3,'#76766A');
+  var r=rng(91); for(var i=0;i<26;i++){ var gx=-120+r()*350, h=4+r()*7; line([gx,F,gx+r()*2-1,F-h],'#6E7E5C',1); }
+  /* 树根，伸进水里 */
+  [[BANK-30,F+2,BANK+4,F+14,BANK+16,F+24],[BANK-20,F+4,BANK-2,F+22,BANK+6,F+30],[BANK-40,F+2,BANK-24,F+18,BANK-20,F+28],[BANK-10,F,BANK+12,F+8,BANK+22,F+14]].forEach(function(p){ line(p,'#4A3E36',2.4); });
+}
+function sDawn(t){
+  var fb=smooth((t-31.4)/1.0)*(1-smooth((t-45.6)/1.0));
+  if(fb<1){ A=1; dawnMain(t); }
+  if(fb>0){ A=fb; nightWalk(t); A=1; }
+}
+var DAWN_STRANDS={part:0, pc:112, seed:9, n:92, x0:-104, x1:172, low:true};
+function dawnMain(t){
+  camK(t,[[0,190,394,.95],[3,190,396,.96],[8.0,226,424,1.45],[10.4,238,476,3.0],[14.8,238,476,3.0],[15.6,214,446,1.75],[18.2,214,446,1.75],[20.0,140,430,1.18],[31.4,140,430,1.18],
+    [46.2,150,426,1.25],[46.8,172,424,1.75],[49.2,172,424,1.75],[50.0,150,428,1.35],[55,148,428,1.35],[64,146,426,1.3]]);
+  dawnSky(t);
+  dawnBank(t);
+  var part=smooth((t-19.8)/1.8);
+  willow(t,WX,F,{branch:[BELL2X+12,BELL2Y-2],noStrands:true});
+  /* 铃：挂在低低的柳枝上；舌头装回去以后，小黑一撞，当—— */
+  var hasT=t>=48.4, hits=[[18.6,8],[51.2,22]];
+  bell(BELL2X,BELL2Y,14,bellSwing(t,hits),1,{tongue:hasT,tsw:hasT?bellSwing(t-.1,hits)*.6:0,wet:t<46});
+  /* 五只（柳条后面）。风没吹开柳条以前，它们在柳荫里，暗暗的 */
+  var P=DAWN_POS, wet=t<46, cat=catDawn(t);
+  FC(t,0,P.pink,F-14,{rot:t>53?-30:undefined});
+  FC(t,1,P.zi,F-14+jump(t,55.2,.4,6));
+  FX(t,P.fox,434,{rows:FOX_DROOP,eyes:t<46?'blink':(t>53?'happy':undefined)});
+  /* Clawd：右钳整块往上挪一点，碰一下铃（叮） */
+  CL(t,P.cl,F,{ra:inR(t,18.4,19.0)?-42:0,eyes:t>53?'smile':undefined});
+  var hx=path(t,P.hei,F-14,[[49.4,1.1,216,F-14,6],[50.8,.4,212,F-24,0],[51.2,.4,216,F-14,0]]);
+  FC(t,2,hx.x,hx.y,{rot:inR(t,49.6,51.6)?-60:undefined});
+  if(wet){ wetDrops(t,P.pink-12,P.zi+12,F-20,F,4,3); wetDrops(t,P.fox+10,P.fox+60,F-30,F,5,4); wetDrops(t,P.cl-20,P.cl+20,F-30,F,4,5); }
+  var shade=(1-part)*.76;
+  if(shade>0){
+    [[20,446,110,64],[100,446,110,64],[170,446,84,60],[176,440,58,44],[60,400,130,70]].forEach(function(e){ glowEll(e[0],e[1],e[2],e[3],'#30423A',shade*.85); });
+  }
+  DAWN_STRANDS.part=part; willowStrands(t,WX,F,DAWN_STRANDS);
+  /* 船和 FetchMo（在柳条前面） */
+  boatBack(DBX,WL,0); boatShadow(DBX,WL,.2);
+  if(cat.inBoat) CT(t,cat.x,cat.y,cat.o);
+  boatFront(DBX,WL,{lit:clamp(1-t/6)});
+  umbrellaHandle(DBX+60,414,WL-12);
+  umbrellaOpen(DBX+60,414,1,{c:'#B4533A'});
+  if(!cat.inBoat) CT(t,cat.x,cat.y,cat.o);
+  /* 铃舌头：卡在树根里 → 叼在嘴里 → 挂回铃里 */
+  if(t<16.8){
+    looseTongue(BANK-6,F+16,62,1);
+    if(inR(t,8.0,16.8)&&(Math.floor(t*2.4)%2)) star4(BANK-2,F+12,3.6,'#FFFBEA',.95);
+  } else if(t<47.8){
+    var m=catMouth(cat.x,cat.y); looseTongue(m[0]+2,m[1]-3,84,.9);
+  } else if(t<48.4){
+    var m3=catMouth(cat.x,cat.y), f=fly(t,47.8,.6,m3[0]+2,m3[1]-3,BELL2X,BELL2Y+19,6,6); looseTongue(f[0],f[1],84-84*f[2],.9);
+  }
+  if(cat.asleep) zzT(t,cat.x+58,cat.y-6,0,'#8C8494',8);
+  /* 叮（天亮那一下）、当（舌头装回去以后） */
+  var u=(t-18.6)/1.6; if(u>=0&&u<=1) soundRings(BELL2X,BELL2Y+24,u,'#FFFFFF',.95,3,6,30);
+  var u2=(t-51.3)/2.6; if(u2>=0&&u2<=1){ soundRings(BELL2X,BELL2Y+24,u2,'#FFF2C8',1,4,8,90); glowAt(BELL2X,BELL2Y+24,70,'#FFE7B0',.55*(1-u2)); }
+  if(t>=51.4&&t<54.6) sfx(t,51.4,3.2,'当',BELL2X+18,BELL2Y+8,{size:11,c:'#7A4A1E',glow:'rgba(255,255,255,.9)',rise:6});
+  popNum('1000',P.zi,F-36,t,55.2,2.8,'#6A34D8',12,'rgba(255,255,255,.95)');
+}
+function catDawn(t){
+  /* 在船上睡着 → 醒 → 跳上岸，叼住铃舌头 → 回头 → 跳上 Clawd 的壳，把铃舌头挂回去，就坐在上面 */
+  var x=DBX+22, y=446, o={}, inBoat=true, asleep=false, onCl=false;
+  if(t<6.2){ asleep=true; o.eyes='asleep'; }
+  else if(t<15.2){ o.eyes=inR(t,8.0,15.2)?'glanceL':undefined; y+=jump(t,6.8,.3,3); }
+  if(t>=15.2){
+    inBoat=false;
+    var p=path(t,x,446,[[15.2,.7,BANK-4,434,22],[46.8,.7,DAWN_POS.cl-38,398,26]]);
+    x=p.x; y=p.y; onCl=t>=47.3;
+    o.rows=inR(t,16.8,18.4)?CAT_UP:(t>=18.4&&t<19.6?cyc(t,18.4,CAT_TWITCH):(t>48.4?CAT_UP:undefined));
+    o.eyes=inR(t,16.8,18.4)?'happy':(inR(t,18.6,46.6)?'glanceL':(t>52?'happy':undefined));
+  }
+  return {x:x,y:y,o:o,inBoat:inBoat,asleep:asleep,onCl:onCl};
+}
+
+/* 那一夜：五只沿着河岸往右走，铃挂在 StashYu 的尾巴尖上，Clawd 用左钳敲 */
+var TAPS=[33.0,35.0,37.2,39.2,41.0,42.6,43.4,44.2];
+function nightWalk(t){
+  var u=t-31.4, x0=40+u*12;
+  cam(x0+112,420,1.25);
+  screen(function(){ grad(0,0,W,H,[[0,'#0C1120'],[.55,'#18203A'],[1,'#0E1322']]); });
+  layer(.2,function(){ ridge(-800,2400,330,40,97,'#131A2B',1,8,900); });
+  grad(-800,340,4000,128,[[0,'#1E2842'],[1,'#141B30']]);
+  ripples(t,x0-200,x0+420,350,460,30,15,'#7F90B8',.45);
+  /* 远处河上，FetchMo 船上那盏灯（它们一直看着它走） */
+  var lx=x0+214, ly=384+((Math.floor(t/1.2)%2)?1:0);
+  glowAt(lx,ly,26,'#FFC46A',.7); dot(lx,ly,2.4,'#FFD48A');
+  for(var k2=0;k2<5;k2++) line([lx-2,ly+6+k2*5,lx+2,ly+9+k2*5],'#FFC46A',1,.35*(1-k2/5));
+  /* 岸 */
+  R(-800,F,4000,200,'#11151C'); R(-800,F,4000,2,'#262E3A');
+  var r=rng(5); for(var i=0;i<60;i++){ var gx=-400+r()*2400, h=8+r()*20; line([gx,F,gx+(r()-.5)*4,F-h],'#1D2630',1.1); }
+  for(var j=0;j<14;j++){ var px=x0-120+j*46-((u*12)%46); ell(px,F+5,8,1.5,'#3A4560',.55); }
+  /* 五只：小紫、小黑、StashYu、Clawd、小粉 */
+  var droop=t>=40.0, frows=droop?FOX_DROOP:FOX.rows;
+  function hop(ph){ return (Math.floor(t*4+ph)%2)?-2:0; }
+  var ringC='rgba(190,196,230,.55)';
+  FC(t,1,x0,F-14+hop(0),{ring:ringC});
+  FC(t,2,x0+28,F-14+hop(.5),{ring:ringC});
+  var fx=x0+46, fy=434+hop(1);
+  FX(t,fx,fy,{rows:frows,outline:'#FFFFFF',eyes:droop?'blink':undefined});
+  var tip=foxTip(fx,fy,frows);
+  var tap=0; TAPS.forEach(function(s){ if(inR(t,s,s+.22)) tap=1; });
+  var bsw=bellSwing(t,TAPS.map(function(s){ return [s,9]; }));
+  if(droop) bell(tip[0],tip[1]-2,3,bsw*.3,1,{wet:true});
+  else bell(tip[0],tip[1],5,bsw,1,{wet:true});
+  var cx=x0+46+51+26;
+  CL(t,cx,F+hop(1.5),{la:tap?(droop?6:-2):0});
+  FC(t,0,cx+48,F-14+hop(.25),{ring:ringC,bl:0,rot:-14});
+  /* 叮：每敲一下，小紫数一个 */
+  TAPS.forEach(function(s,k){
+    var v=(t-s)/1.4; if(v>=0&&v<=1) soundRings(tip[0],tip[1]+12,v,'#F2E6C8',.85,3,5,34);
+    popNum(String(992+k),x0,F-34,t,s,1.6,'#D9C6FF',k===7?13:10,'rgba(0,0,0,.7)');
+  });
+  rain(t,{n:100,a:.42,len:18,sp:640,dx:-.16,c:'#9FB0D0',seed:13});
+}
+
+/* 终：太阳出来了，沿着长堤往回走。堤两边都是水，柳树一棵一棵往后退 */
+function sEnd(t){
+  var x0=250-t*11;
+  camK(t,[[0,x0+130,420,1.25],[24,x0+130,420,1.25],[29,x0+130,262,1.0],[34,x0+130,252,1.0]]);
+  cam(x0+130,CAM.y,CAM.z);
+  screen(function(){
+    grad(0,0,W,H,[[0,'#8FA2C8'],[.3,'#E8CDB8'],[.5,'#F9DDB0'],[.62,'#F7E6CC'],[1,'#E2D7C6']]);
+    glowAt(300,318,150,'#FFE6B0',.75); dot(300,318,16,'#FFF2D2',.95);
+  });
+  layer(.2,function(){ ridge(-600,2400,350,60,101,'#B8A8B0',1,8,800); mistBand(-600,2400,352,40,.5,'#FFF4E6'); });
+  layer(.5,function(){
+    grad(-1200,368,4000,100,[[0,'#F2D9B8'],[1,'#B9B4B4']]);
+    glints(t,-800,1600,372,460,40,52,'#FFF1D6',.6);
+    for(var k=0;k<6;k++){ var wx=-400+k*260; willow(t,wx,F-18,{leaf:'#8A9A66',leaf2:'#73845A',trunk:'#5E4C3E',seed:20+k,n:22}); }
+  });
+  /* 堤 */
+  R(-1200,F,4000,9,'#8A7C64'); R(-1200,F,4000,2,'#A0927A'); R(-1200,F+9,4000,3,'#6E6250');
+  var r=rng(8); for(var i=0;i<70;i++){ var gx=-1000+r()*3000, h=4+r()*9; line([gx,F,gx+r()*2-1,F-h],'#7C8E5A',1); }
+  /* 堤前面的水，映着天 */
+  grad(-1200,F+12,4000,220,[[0,'#EBD3AE'],[.4,'#C9C2BC'],[1,'#8E94A2']]);
+  glints(t,-800,1600,F+16,F+150,60,57,'#FFF6E2',.65);
+  ripples(t,-800,1600,F+20,F+150,10,59,'#FFFFFF',.35);
+  function hop(ph){ return (Math.floor(t*4+ph)%2)?-2:0; }
+  /* 往左走：FetchMo 带头，小粉、小紫、小黑，StashYu（铃在尾巴尖上），Clawd 最后 */
+  var cat={x:x0,y:434+hop(0)};
+  CT(t,cat.x,cat.y,{rows:CAT_UP,eyes:t>12?'happy':undefined});
+  if(t<9.0){ var m=catMouth(cat.x,cat.y); umbrellaClosed(m[0]-6,m[1]+1,0,1); }
+  FC(t,0,x0+78,F-14+hop(.3)); FC(t,1,x0+104,F-14+hop(.6)); FC(t,2,x0+130,F-14+hop(.9));
+  var fx=x0+150, fy=434+hop(1.2);
+  var rows=t<6.6?FOX_DROOP:(t<11.0?FOX.rows:(t<11.6?seq(t,11.0,FOX_TAPTWO,FOX.rows):cyc(t,11.6,FOX_WAG)));
+  FX(t,fx,fy,{rows:rows,eyes:t>12?'happy':undefined});
+  var tip=foxTip(fx,fy,rows);
+  var steps=[]; for(var s=1.0;s<26;s+=.8) steps.push([s,6]);
+  bell(tip[0],tip[1],4,bellSwing(t,steps),1,{tongue:true,tsw:bellSwing(t-.08,steps)*.7});
+  steps.forEach(function(st){ var v=(t-st[0])/1.0; if(v>=0&&v<=1) soundRings(tip[0],tip[1]+14,v,'#FFFFFF',.5,2,4,16); });
+  if(inR(t,9.0,10.4)){ var m2=catMouth(cat.x,434); var f=fly(t,9.0,1.2,m2[0],m2[1],tip[0],tip[1],30,12); umbrellaClosed(f[0],f[1],f[2]*320,1-f[2]*.3); }
+  CL(t,x0+250,F+hop(1.5),{eyes:t>12?'smile':undefined});
+}
+
+/* ---------- 每一场开头：竖着的词，旁边一方小红印 ---------- */
+var CARD={pav:{ink:'#2B2D35',glow:'rgba(255,255,255,.55)'}, tea:{ink:'#2B2D35',glow:'rgba(255,255,255,.55)'},
+  hands:{ink:'#2B2D35',glow:'rgba(255,255,255,.5)'}, go:{ink:'#2B2D35',glow:'rgba(255,255,255,.5)'},
+  night:{ink:'#ECE6D8',glow:'rgba(0,0,0,.6)'}, dawn:{ink:'#3A3442',glow:'rgba(255,255,255,.6)'}, end:{ink:'#4A3428',glow:'rgba(255,255,255,.6)'}};
+function vcard(txt,a,lt,st,no){
+  var cols=txt.split(/[，。、？！]/).filter(function(s){ return s.length; });
+  var size=cols.length>4?14:16, colW=size*1.36, lh=size*1.1, xR=342, y0=24;
+  ctx.setTransform(S,0,0,S,0,0); ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='500 '+size+'px '+SERIF;
+  ctx.shadowColor=st.glow; ctx.shadowBlur=7*S;
+  cols.forEach(function(col,i){
+    var ca=a*clamp((lt-.3-i*.16)/.45); if(ca<=0) return;
+    ctx.globalAlpha=clamp(ca*A); ctx.fillStyle=st.ink;
+    var cx=xR-size/2-i*colW;
+    chars(col).forEach(function(ch,j){ ctx.fillText(ch,cx,y0+lh*(j+.5)); });
+  });
+  ctx.shadowBlur=0; ctx.shadowColor='rgba(0,0,0,0)';
+  if(no){
+    var n=cols.length, sz=size*.95, sx=xR-size/2-(n-1)*colW-size*1.3, sy=y0+2;
+    var sa=a*clamp((lt-.3-n*.16)/.4);
+    if(sa>0){
+      ctx.globalAlpha=clamp(sa*A*.92); ctx.fillStyle='#B13E2C'; ctx.fillRect(sx-sz/2,sy,sz,sz);
+      ctx.fillStyle='#F6EEE2'; ctx.font='600 '+(sz*.7)+'px '+SERIF; ctx.fillText(no,sx,sy+sz/2+.5);
+    }
+  }
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* 字幕：旁白印在最底下一条深色的；最后一句一个人在天上 */
+var END_C='#4A3428', VEIL='#0E111A';
+function caption(c,a){
+  if(a<=0) return;
+  ctx.setTransform(S,0,0,S,0,0); ctx.globalAlpha=clamp(a); ctx.textAlign='left'; ctx.textBaseline='middle';
+  if(c.k==='end'){
+    ctx.font='500 22px '+SERIF;
+    ctx.shadowColor='rgba(255,250,240,.8)'; ctx.shadowBlur=12*S;
+    ctx.fillStyle=END_C;
+    var ln=c.say.split('\n');
+    ln.forEach(function(s,i){ spaced(s,180,236+(i-(ln.length-1)/2)*40,22*.12); });
+    ctx.shadowBlur=0; ctx.shadowColor='rgba(0,0,0,0)';
+    ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0); return;
+  }
+  ctx.font='500 15.5px '+SANS;
+  var mw=function(x){ return lsWidth(x,0); };
+  var lines=wrap(c.say,298,mw), lh=24, y0=603-(lines.length-1)*lh/2;
+  var w=0; lines.forEach(function(ln){ w=Math.max(w,mw(ln)); });
+  ctx.fillStyle='rgba(26,30,42,.84)';
+  ctx.beginPath(); roundPath(180-w/2-15,y0-lh/2-6,w+30,lines.length*lh+12,11); ctx.fill();
+  lines.forEach(function(ln,i){ ctx.fillStyle='#F3EFE6'; spaced(ln,180,y0+i*lh,0); });
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+var DRAW={intro:sIntro, pav:sPav, tea:sTea, hands:sHands, go:sGo, night:sNight, dawn:sDawn, end:sEnd};
+function sceneAt(t){
+  for(var i=0;i<SCENES.length;i++) if(t<SCENES[i].start+SCENES[i].dur) return SCENES[i];
+  return SCENES[SCENES.length-1];
+}
+function render(t,poster){
+  t=Math.max(0,Math.min(TOTAL-1e-4,t));
+  var sc=sceneAt(t), lt=t-sc.start, idx=SCENES.indexOf(sc), prev=SCENES[idx-1], next=SCENES[idx+1];
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
+  A=1; flat(); CUR=sc;
+  DRAW[sc.id](lt);
+  A=1; flat();
+  if(sc.poem&&!poster){
+    var ca=Math.min(clamp((lt-.3)/.5),clamp((5.4-lt)/.7));
+    if(ca>0) vcard(sc.poem,ca,lt,CARD[sc.id],sc.no);
+  }
+  if(!poster) sc.caps.forEach(function(c){
+    if(c.k||!c.say) return;
+    if(lt>=c.t0&&lt<c.t1) caption(c,Math.min(clamp((lt-c.t0)/.2),clamp((c.t1-lt)/.2)));
+  });
+  if(!poster) sc.caps.forEach(function(c){
+    if(c.k!=='end') return;
+    if(lt>=c.t0&&lt<c.t1) caption(c,Math.min(clamp((lt-c.t0)/.5),clamp((c.t1-lt)/.6)));
+  });
+  /* 场与场之间：淡一下 */
+  var fIn=!prev?clamp(lt/.6):clamp(lt/.4);
+  var fOut=!next?clamp((sc.dur-lt)/1.2):clamp((sc.dur-lt)/.4);
+  var f=Math.min(fIn,fOut);
+  if(f<1) veilAll(VEIL,1-f);
+}
+
+/* ---------- 声音：一份音符表，网页和视频共用 ---------- */
+function buildEvents(){
+  var ev=[];
+  function mf(m){return 440*Math.pow(2,(m-69)/12);}
+  /* 总音量跟店里别的短片一样是 3.2；离线合成量过：整部峰值约 0.45、平均响度跟《魔法药水》差不多 */
+  var LOUD=1.35;
+  function add(t,m,d,v,w,s){ if(v<=0) return; ev.push({t:+t.toFixed(4), m:m, f:mf(m), d:d, v:v*LOUD, w:w||'bell', s:s||1}); }
+  function S_(s0,list){ list.forEach(function(x){ add(s0+x[0],x[1],x[2],x[3],x[4],x[5]); }); }
+  var s0=sceneStart('intro'), s1=sceneStart('pav'), s2=sceneStart('tea'), s3=sceneStart('hands'),
+      s4=sceneStart('go'), s5=sceneStart('night'), s6=sceneStart('dawn'), s7=sceneStart('end');
+  var BT=.72;
+  /* 羽调（A C D E G）的一段，天亮以后换成宫调（C D E G A） */
+  var TA=[[0,76,1],[1,74,.5],[1.5,72,.5],[2,69,2],[4,72,1],[5,74,.5],[5.5,76,.5],[6,79,1],[7,76,1],[8,74,1.5],[9.5,72,.5],[10,69,1],[11,67,1],[12,69,3]];
+  var TB=[[0,72,1],[1,74,1],[2,76,1.5],[3.5,79,.5],[4,81,2],[6,79,.5],[6.5,76,.5],[7,74,1],[8,76,1],[9,74,.5],[9.5,72,.5],[10,69,2],[12,72,1],[13,69,3]];
+  var TC=[[0,79,1],[1,76,.5],[1.5,74,.5],[2,72,2],[4,74,1],[5,76,.5],[5.5,79,.5],[6,81,1],[7,79,1],[8,76,1.5],[9.5,74,.5],[10,72,1],[11,74,1],[12,72,3]];
+  function mel(t0,notes,v,tr,b){ b=b||BT; notes.forEach(function(n){ add(t0+n[0]*b,n[1]+(tr||0),Math.max(.5,n[2]*b*1.3),v,'zheng',n[3]||1); }); }
+  function pad(t,notes,d,v){ notes.forEach(function(m){ add(t,m,d,v,'pad'); }); }
+  function rainBed(t0,t1,v,cut){ for(var t=t0;t<t1;t+=1.8) add(t,cut||95,2.4,v,'rain'); }
+  function ling(t,v,m){ add(t,m||91,1.9,v,'ling'); }
+  function lingFar(t,v,m){ ling(t,v,m); add(t+.42,m||91,1.6,v*.32,'ling'); add(t+.84,m||91,1.4,v*.14,'ling'); }
+  function dang(t,v){ add(t,79,4.6,v,'dang'); }
+  function drip(t,v){ add(t,93+((t*7)%5|0),.08,v||.006,'blip',.72); }
+  function thunk(t,v){ add(t,48,.15,v||.03,'crunch'); add(t,40,.2,(v||.03)*.8,'blip',.6); }
+  function step(t,v){ add(t,62,.05,v||.004,'crunch'); }
+  function chirp(t,v,n){ for(var i=0;i<(n||3);i++){ add(t+i*.42,107,.34,(v||.004)*(1-i*.18),'cica',42-i*4); } }
+  function bird(t,v){ add(t,98,.07,v||.008,'blip',1.3); add(t+.11,100,.06,(v||.008)*.8,'blip',1.25); }
+  function popS(t,v){ add(t,84,.12,v||.024,'blip',1.8); add(t+.03,96,.1,(v||.024)*.5,'blip',1.4); }
+  function splash(t,v){ add(t,70,.4,v||.02,'swish',.5); add(t,55,.12,(v||.02)*.5,'blip',.7); }
+  function breeze(t,v,d){ add(t,74,d||2.4,v||.012,'swish',1.5); }
+
+  /* 序：雨，一只铃，山谷跟着应 */
+  rainBed(s0,s0+17,.016,92);
+  pad(s0+.4,[45,52],8,.010); pad(s0+8.4,[45,52,57],8.6,.010);
+  LEG_RINGS.forEach(function(r){ lingFar(s0+r,.05,84); });
+  add(s0+13.2,57,4.2,.016,'zheng'); add(s0+13.2,64,4.2,.012,'zheng'); add(s0+13.6,69,4.4,.012,'zheng');
+
+  /* 一：雨停了，滴水，蝉，长亭 */
+  for(var d1=.4;d1<34;d1+=.47+((d1*13)%3)*.21) drip(s1+d1,.005);
+  CHIRPS.forEach(function(c){ chirp(s1+c,.0045,3); });
+  pad(s1+.2,[57,64],7,.009); pad(s1+7.2,[60,67],7,.009); pad(s1+14.2,[62,69],7,.009); pad(s1+21.2,[57,64],7,.009); pad(s1+28.2,[55,62],6,.009);
+  mel(s1+8.4,TA.slice(0,4),.016);
+  add(s1+19.0,69,1.6,.012,'zheng',.94);
+  for(var w1=0;w1<4;w1++) step(s1+25.6+w1*.35,.004);
+
+  /* 二：茶、数杯子、小伞、缆绳 */
+  for(var d2=.3;d2<31;d2+=.6+((d2*11)%3)*.2) drip(s2+d2,.004);
+  pad(s2+.2,[57,64],8,.009); pad(s2+8.2,[60,67],8,.009); pad(s2+16.2,[62,69],8,.009); pad(s2+24.2,[57,64],7,.009);
+  [8.1,8.4,8.7,9.0,9.3,9.6].forEach(function(s,i){ add(s2+s,[81,84,86,88,91,93][i],.12,.010,'blip'); });
+  add(s2+10.6,69,1.4,.012,'zheng',.94);
+  add(s2+17.5,98,.06,.012,'blip'); add(s2+17.86,98,.06,.012,'blip');
+  popS(s2+17.9,.02); add(s2+19.2,64,.1,.012,'crunch');
+  [22.0,23.2,24.4].forEach(function(s){ thunk(s2+s+.4,.022); });
+  for(var w2=0;w2<4;w2++) step(s2+25.8+w2*.4,.004);
+  splash(s2+27.9,.012);
+  mel(s2+3.0,TA.slice(0,7),.013);
+
+  /* 三：执手。最后一段什么声音也没有（铃没响） */
+  for(var d3=.3;d3<25;d3+=.7+((d3*11)%3)*.2) drip(s3+d3,.0035);
+  pad(s3+.2,[57,64,69],8,.009); pad(s3+8.2,[60,67,72],8,.009); pad(s3+16.2,[62,69,74],7,.008);
+  mel(s3+3.0,TB.slice(0,6),.014);
+  add(s3+13.4,96,.06,.01,'blip',.7); add(s3+14.0,96,.06,.01,'blip',.7);
+  for(var w3=0;w3<5;w3++) step(s3+7.8+w3*.36,.004);
+  add(s3+25.95,52,.12,.012,'crunch');
+
+  /* 四：船走了，雾起来，天黑下来 */
+  pad(s4+.4,[45,52,57],8,.010); pad(s4+8.4,[48,55,60],8,.010); pad(s4+16.4,[45,52,57],8.6,.011);
+  mel(s4+1.0,TA,.022); mel(s4+1.0+15*BT,TB,.02);
+  breeze(s4+12.6,.010,4); breeze(s4+17.0,.008,4);
+
+  /* 五：夜雨。岸上的铃，一声一声 */
+  rainBed(s5,s5+40,.02,96);
+  pad(s5+.4,[45,52],9,.008); pad(s5+9.4,[43,50],9,.008); pad(s5+18.4,[45,52],9,.008); pad(s5+27.4,[41,48],9,.008); pad(s5+35.4,[45,52],4.6,.008);
+  NIGHT_RINGS.forEach(function(r,i){ lingFar(s5+r,i===0?.045:.036,91); });
+  add(s5+31.0,64,2.4,.008,'zheng',.97); add(s5+31.9,62,2.4,.007,'zheng'); add(s5+32.8,57,3.2,.007,'zheng');
+
+  /* 六：天快亮。鸟，风，叮；那一夜（雨、叮、数数）；当—— */
+  [1.2,2.6,4.8,9.2,12.6,23.8].forEach(function(b){ bird(s6+b,.007); });
+  pad(s6+.2,[57,64,69],8,.009); pad(s6+8.2,[60,67,72],8,.009); pad(s6+16.2,[57,64,69],8,.009); pad(s6+24.2,[62,69],7.4,.009);
+  add(s6+6.4,98,.06,.01,'blip');
+  [8.4,9.6,10.8].forEach(function(s){ add(s6+s,100,.4,.006,'box'); });
+  splash(s6+15.5,.014); add(s6+16.9,88,.5,.016,'box'); add(s6+17.0,93,.6,.014,'box');
+  ling(s6+18.6,.05,91);
+  breeze(s6+19.6,.016,2.6);
+  mel(s6+22.2,TA.slice(0,8),.014);
+  rainBed(s6+31.6,s6+46.2,.016,96);
+  TAPS.forEach(function(s,k){ ling(s6+s,.038,91); add(s6+s+.05,[81,83,84,86,88,89,91,93][k],.08,.006,'blip'); });
+  pad(s6+32,[45,52],7,.008); pad(s6+39,[43,50],7,.008);
+  add(s6+40.0,55,.4,.008,'swish',.6);
+  for(var w6=0;w6<3;w6++) step(s6+47+w6*.25,.004);
+  add(s6+48.4,93,.06,.014,'blip'); add(s6+48.5,88,.4,.012,'box');
+  for(var w7=0;w7<4;w7++) step(s6+49.5+w7*.28,.004);
+  dang(s6+51.3,.046);
+  pad(s6+51.4,[48,55,60,64],7,.012); pad(s6+58.4,[53,60,64,69],5.4,.011);
+  add(s6+55.3,96,.5,.01,'box'); add(s6+55.4,100,.6,.009,'box');
+  mel(s6+52.6,TC,.018);
+
+  /* 终：往回走，铃一步一响；最后那句 */
+  for(var s=1.0;s<26;s+=.8) add(s7+s,96,1.1,.012,'ling');
+  [2.0,5.4,8.8,14.0,19.6].forEach(function(b){ bird(s7+b,.006); });
+  pad(s7+.2,[48,55,60],8,.010); pad(s7+8.2,[53,60,65],8,.010); pad(s7+16.2,[55,62,67],8,.010); pad(s7+24.2,[48,55,60,64],9.8,.011);
+  mel(s7+1.0,TC,.018); mel(s7+1.0+15*BT,TC.map(function(n){ return [n[0],n[1]+(n[1]<76?12:0),n[2]]; }).slice(0,9),.014);
+  add(s7+9.0,84,.1,.012,'blip',1.4); add(s7+10.2,96,.1,.012,'blip'); add(s7+11.02,98,.06,.012,'blip'); add(s7+11.38,98,.06,.012,'blip');
+  ling(s7+26.2,.04,84); add(s7+26.2,60,6,.016,'zheng'); add(s7+26.4,64,6,.012,'zheng'); add(s7+26.6,67,6,.012,'zheng'); add(s7+26.8,72,6.4,.012,'zheng');
+  ev.sort(function(a,b){return a.t-b.t;});
+  return ev;
+}
+var EVENTS=buildEvents();
+/* 一个音怎么发：网页里实时放，导视频时交给离线的那台一样放 */
+function crunchBuf(ac){
+  if(ac.__crunch) return ac.__crunch;
+  var sr=ac.sampleRate, len=Math.floor(sr*.2), buf=ac.createBuffer(1,len,sr), d=buf.getChannelData(0), r=rng(7);
+  for(var i=0;i<len;i++){
+    var u=i/sr, env=Math.exp(-u*60)+.7*(u>=.05?Math.exp(-(u-.05)*70):0)+.5*(u>=.1?Math.exp(-(u-.1)*80):0);
+    d[i]=(r()*2-1)*env;
+  }
+  ac.__crunch=buf; return buf;
+}
+function noiseBuf(ac){
+  if(ac.__noise) return ac.__noise;
+  var sr=ac.sampleRate, len=Math.floor(sr*2.2), buf=ac.createBuffer(1,len,sr), d=buf.getChannelData(0), r=rng(11);
+  for(var i=0;i<len;i++) d[i]=r()*2-1;
+  ac.__noise=buf; return buf;
+}
+/* 铃的泛音：[倍数, 响度, 衰减占多长] */
+var LING=[[1,1,1],[2.76,.32,.55],[5.4,.12,.3],[8.93,.05,.18]];
+var DANG=[[.5,.45,1],[1,1,.85],[1.19,.36,.6],[1.5,.28,.5],[2,.32,.45],[2.66,.16,.3],[3.01,.1,.22]];
+function partials(ac,g,e,when,list){
+  list.forEach(function(p){
+    var o=ac.createOscillator(), pg=ac.createGain(), d=e.d*p[2];
+    o.type='sine'; o.frequency.value=e.f*p[0];
+    pg.gain.setValueAtTime(0,when); pg.gain.linearRampToValueAtTime(e.v*p[1],when+.004);
+    pg.gain.exponentialRampToValueAtTime(.0001,when+d);
+    o.connect(pg); pg.connect(g); o.start(when); o.stop(when+d+.05);
+  });
+}
+function synth(ac,dest,e,when){
+  var g=ac.createGain(); g.connect(dest);
+  if(e.w==='ling'){ partials(ac,g,e,when,LING); return; }
+  if(e.w==='dang'){ partials(ac,g,e,when,DANG); return; }
+  if(e.w==='box'){
+    var o1=ac.createOscillator(), o2=ac.createOscillator(), g2=ac.createGain();
+    o1.type='sine'; o1.frequency.value=e.f; o2.type='sine'; o2.frequency.value=e.f*2.756; g2.gain.value=.18;
+    g.gain.setValueAtTime(0,when); g.gain.linearRampToValueAtTime(e.v,when+.012);
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    o1.connect(g); o2.connect(g2); g2.connect(g);
+    o1.start(when); o2.start(when); o1.stop(when+e.d+.05); o2.stop(when+e.d+.05);
+    return;
+  }
+  if(e.w==='zheng'){
+    /* 筝：一根弦拨一下，亮一下就收；s 不是 1 的，后半截滑过去 */
+    var z1=ac.createOscillator(), z2=ac.createOscillator(), lp=ac.createBiquadFilter(), zg=ac.createGain();
+    z1.type='triangle'; z2.type='sawtooth'; zg.gain.value=.14;
+    z1.frequency.setValueAtTime(e.f*1.008,when); z1.frequency.exponentialRampToValueAtTime(e.f,when+.07);
+    z2.frequency.setValueAtTime(e.f,when);
+    if(e.s!==1){
+      z1.frequency.setValueAtTime(e.f,when+e.d*.35); z1.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d*.75);
+      z2.frequency.setValueAtTime(e.f,when+e.d*.35); z2.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d*.75);
+    }
+    lp.type='lowpass'; lp.Q.value=.7;
+    lp.frequency.setValueAtTime(Math.min(16000,e.f*7),when); lp.frequency.exponentialRampToValueAtTime(e.f*1.6,when+.5);
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.006);
+    g.gain.exponentialRampToValueAtTime(e.v*.35,when+.25); g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    z1.connect(lp); z2.connect(zg); zg.connect(lp); lp.connect(g);
+    z1.start(when); z2.start(when); z1.stop(when+e.d+.05); z2.stop(when+e.d+.05);
+    return;
+  }
+  if(e.w==='rain'){
+    var ns=ac.createBufferSource(), rl=ac.createBiquadFilter(), rh=ac.createBiquadFilter();
+    ns.buffer=noiseBuf(ac); ns.loop=true;
+    rl.type='lowpass'; rl.frequency.value=e.f; rh.type='highpass'; rh.frequency.value=e.f*.16;
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.6);
+    g.gain.setValueAtTime(e.v,when+e.d-.6); g.gain.linearRampToValueAtTime(.0001,when+e.d);
+    ns.connect(rh); rh.connect(rl); rl.connect(g); ns.start(when,(e.t*7.3)%2); ns.stop(when+e.d+.05);
+    return;
+  }
+  if(e.w==='cica'){
+    /* 蝉：一个很高的音，被一秒四十来下的开关切碎 */
+    var co=ac.createOscillator(), lfo=ac.createOscillator(), lg=ac.createGain(), am=ac.createGain();
+    co.type='sine'; co.frequency.value=e.f; lfo.type='square'; lfo.frequency.value=e.s;
+    am.gain.value=.5; lg.gain.value=.5; lfo.connect(lg); lg.connect(am.gain);
+    co.connect(am); am.connect(g);
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.05);
+    g.gain.setValueAtTime(e.v,when+e.d*.6); g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    co.start(when); lfo.start(when); co.stop(when+e.d+.05); lfo.stop(when+e.d+.05);
+    return;
+  }
+  if(e.w==='crunch'){
+    var src=ac.createBufferSource(), bp=ac.createBiquadFilter();
+    src.buffer=crunchBuf(ac); bp.type='bandpass'; bp.frequency.value=e.f; bp.Q.value=1.1;
+    g.gain.value=e.v; src.connect(bp); bp.connect(g); src.start(when); src.stop(when+e.d+.02);
+    return;
+  }
+  if(e.w==='swish'){
+    var sn=ac.createBufferSource(), nf=ac.createBiquadFilter();
+    sn.buffer=noiseBuf(ac); nf.type='bandpass'; nf.Q.value=.9;
+    nf.frequency.setValueAtTime(e.f,when); nf.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d);
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+e.d*.3);
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    sn.connect(nf); nf.connect(g); sn.start(when); sn.stop(when+e.d+.02);
+    return;
+  }
+  if(e.w==='pad'){
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+e.d*.4);
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    [[1,1],[2,.3]].forEach(function(h){
+      var o=ac.createOscillator(), hg=ac.createGain();
+      o.type='sine'; o.frequency.value=e.f*h[0]; hg.gain.value=h[1];
+      o.connect(hg); hg.connect(g); o.start(when); o.stop(when+e.d+.05);
+    });
+    return;
+  }
+  g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.004);
+  g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+  if(e.w==='bell'){
+    [[1,1],[2,.25],[3,.06]].forEach(function(h){
+      var o=ac.createOscillator(), hg=ac.createGain();
+      o.type='sine'; o.frequency.value=e.f*h[0]; hg.gain.value=h[1];
+      o.connect(hg); hg.connect(g); o.start(when); o.stop(when+e.d+.05);
+    });
+  } else {
+    var ob=ac.createOscillator(); ob.type='triangle';
+    ob.frequency.setValueAtTime(e.f,when);
+    if(e.s!==1) ob.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d);
+    ob.connect(g); ob.start(when); ob.stop(when+e.d+.05);
+  }
+}
+
+/* 画面走自己的钟（performance.now），声音跟着画面走。
+   iPhone 锁屏、来电、别的 App 出声的时候，声音那台钟（AudioContext）会停；
+   声音停了画面照走；声音那台钟恢复以后，从画面走到的地方接着响 */
+var AC=null, master=null, pumpId=null, audioT0=0, audioF0=0, nextIdx=0, lastTry=0;
+function audioNow(){ return audioF0+(AC.currentTime-audioT0); }
+function resumeAC(){ try{ var pr=AC.resume(); if(pr&&pr.catch) pr.catch(function(){}); }catch(e){} }
+function pump(){
+  if(!master) return;
+  var horizon=audioNow()+.35;
+  while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<horizon){
+    var e=EVENTS[nextIdx++];
+    if(e.t>=audioF0-.01) synth(AC,master,e,Math.max(AC.currentTime,audioT0+(e.t-audioF0)));
+  }
+}
+function audioStart(t){
+  if(!soundOn) return;
+  try{
+    if(!AC){ var C=window.AudioContext||window.webkitAudioContext; if(!C) return; AC=new C(); }
+    if(AC.state!=='running') resumeAC();
+    audioStop();
+    master=AC.createGain(); master.gain.value=3.2; master.connect(AC.destination);
+    audioF0=t; audioT0=AC.currentTime+.06;
+    nextIdx=0; while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<t) nextIdx++;
+    pump(); pumpId=setInterval(pump,80);
+  }catch(err){ master=null; }
+}
+/* 每一格都看一眼：声音那台钟停着就隔一秒叫它一次；它走了，但跟画面差出去 0.3 秒以上，就从画面这一秒重新接上 */
+function audioFollow(){
+  if(!soundOn||!AC) return;
+  var n=performance.now();
+  if(AC.state!=='running'){ if(n-lastTry>1000){ lastTry=n; resumeAC(); } return; }
+  if(master&&Math.abs(audioNow()-cur)<=.3) return;
+  if(n-lastTry>1000){ lastTry=n; audioStart(cur); }
+}
+/* 放片子的时候别让手机自己锁屏（iPhone 一分钟没碰就锁）；暂停、放完就放开 */
+var wake=null;
+function wakeOn(){
+  try{
+    if(!navigator.wakeLock||wake) return;
+    navigator.wakeLock.request('screen').then(function(l){
+      wake=l; l.addEventListener('release',function(){ if(wake===l) wake=null; });
+      if(!playing) wakeOff();
+    }).catch(function(){});
+  }catch(e){}
+}
+function wakeOff(){ try{ if(wake){ var l=wake; wake=null; l.release(); } }catch(e){} }
+function audioStop(){
+  if(pumpId){clearInterval(pumpId);pumpId=null;}
+  if(master){
+    var m=master; master=null;
+    try{ m.gain.setTargetAtTime(0,AC.currentTime,.03); setTimeout(function(){try{m.disconnect();}catch(e){}},400); }catch(e){}
+  }
+}
+/* ---------- 播放器 ---------- */
+var player=document.getElementById('player'), screenEl=document.getElementById('screen'),
+    big=document.getElementById('big'), pp=document.getElementById('pp'), snd=document.getElementById('snd'),
+    seek=document.getElementById('seek'), timeEl=document.getElementById('time'), chips=document.getElementById('chips');
+var playing=false, cur=0, filmT0=0, perfT0=0, raf=0, soundOn=true, started=false, POSTER=sceneStart('hands')+20.4;
+seek.max=Math.round(TOTAL*10);
+function fmt(s){ s=Math.floor(s); return Math.floor(s/60)+':'+('0'+s%60).slice(-2); }
+SCENES.forEach(function(sc){
+  var b=document.createElement('button'); b.type='button';
+  b.textContent=sc.chipText;
+  b.addEventListener('click',function(){ go(sc.start); });
+  sc.chip=b; chips.appendChild(b);
+  /* 多跳 0.01 秒：落在这一句里面，点完它就亮着 */
+  sc.caps.forEach(function(c){ c.el.addEventListener('click',function(){ go(sc.start+c.t0+.01); }); });
+});
+function clock(){ return filmT0+Math.max(0,performance.now()-perfT0)/1000; }
+var lastOn=null, lastChip=null;
+function ui(){
+  timeEl.textContent=fmt(cur)+' / '+fmt(TOTAL);
+  seek.value=Math.round(cur*10);
+  pp.textContent=playing?'暂停':'播放';
+  var sc=sceneAt(cur), lt=cur-sc.start, on=null;
+  if(started) sc.caps.forEach(function(c){ if(lt>=c.t0&&lt<c.t1) on=c.el; });
+  if(on!==lastOn){ if(lastOn) lastOn.classList.remove('on'); if(on) on.classList.add('on'); lastOn=on; }
+  var chip=started?sc.chip:null;
+  if(chip!==lastChip){ if(lastChip) lastChip.classList.remove('on'); if(chip) chip.classList.add('on'); lastChip=chip; }
+  player.classList.toggle('playing',playing);
+  if(!playing){
+    var end=cur>=TOTAL-.05;
+    big.textContent=end?'↺ 再看一遍':'▶';
+    big.classList.toggle('again',end);
+    big.setAttribute('aria-label',end?'再看一遍':'播放');
+  }
+}
+function tick(){
+  if(!playing) return;
+  cur=clock();
+  if(cur>=TOTAL){ cur=TOTAL; render(cur); pause(); return; }
+  render(cur); audioFollow(); ui();
+  raf=requestAnimationFrame(tick);
+}
+function play(){
+  if(cur>=TOTAL-.05) cur=0;
+  started=true; playing=true;
+  /* 声音提前 0.06 秒排好，画面也等这 0.06 秒，两边对齐 */
+  filmT0=cur; perfT0=performance.now()+60;
+  audioStart(cur); wakeOn();
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(tick);
+  ui();
+}
+function pause(){
+  if(playing) cur=Math.min(TOTAL,clock());
+  playing=false; audioStop(); wakeOff(); cancelAnimationFrame(raf);
+  ui();
+}
+function go(t){
+  started=true;
+  cur=Math.max(0,Math.min(TOTAL,t));
+  if(playing){ audioStop(); filmT0=cur; perfT0=performance.now()+60; audioStart(cur); }
+  render(cur); ui();
+}
+screenEl.addEventListener('click',function(){ playing?pause():play(); });
+pp.addEventListener('click',function(){ playing?pause():play(); });
+snd.addEventListener('click',function(){
+  soundOn=!soundOn;
+  snd.textContent=soundOn?'声音 开':'声音 关'; snd.setAttribute('aria-pressed',soundOn?'true':'false');
+  if(playing){ cur=clock(); filmT0=cur; perfT0=performance.now()+60; if(soundOn) audioStart(cur); else audioStop(); }
+});
+seek.addEventListener('input',function(){ go(seek.value/10); });
+document.addEventListener('visibilitychange',function(){ if(document.hidden&&playing) pause(); });
+
+function fit(){
+  var w=screenEl.clientWidth||360, dpr=Math.min(3,window.devicePixelRatio||1);
+  setup(w*dpr);
+  if(started) render(cur); else render(POSTER,true);
+}
+window.addEventListener('resize',fit);
+fit(); ui();
+
+/* 导视频用的口子：给定宽度和第几秒，画出那一格；声音用同一个 synth 离线再放一遍 */
+window.FILM={W:W,H:H,TOTAL:TOTAL,events:EVENTS,canvas:cv,synth:synth,
+  setup:function(pxW){ setup(pxW); }, render:function(t){ render(t); }};
+})();
+</script>
+</body>
+</html>
