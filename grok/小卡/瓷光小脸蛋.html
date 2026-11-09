@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>瓷光小脸蛋</title>
+<meta name="description" content="白瓷、小粉、小紫挨着同一侧光。眼缝是反斜杠，右缝窄一档。">
+<meta name="theme-color" content="#000000">
+<style>
+  :root { --fg:#f3f3f3; --muted:#9a9a9a; --dim:#6f6f6f; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: #000; color: var(--fg); }
+  body {
+    overflow: hidden;
+    font-family: "PingFang SC","Hiragino Sans GB","WenQuanYi Zen Hei","Noto Sans SC","Microsoft YaHei",sans-serif;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible { outline: 1px solid var(--muted); outline-offset: 3px; }
+  .stage { position: relative; height: 100dvh; width: 100%; overflow: hidden; background: #000; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .chrome {
+    position: absolute; z-index: 2; top: 0; left: 0; right: 0;
+    padding: max(1rem, env(safe-area-inset-top)) 1.25rem 0;
+    pointer-events: none;
+  }
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  h1 { margin: 0; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.04em; }
+  .hint { margin: 0.35rem 0 0; color: var(--dim); font-size: 0.75rem; line-height: 1.4; letter-spacing: 0.04em; }
+  .mats, .shapes { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; }
+  .mats { gap: 0.25rem 1rem; justify-content: flex-end; }
+  .shapes { gap: 0; margin-top: 0.75rem; }
+  .chip {
+    min-height: 2.75rem; padding: 0 0.35rem; border: 0; background: transparent;
+    color: var(--dim); font-size: 0.875rem; letter-spacing: 0.04em;
+  }
+  .shapes .chip { padding: 0 0.6rem; }
+  .chip[aria-pressed="true"] { color: var(--fg); }
+  .chip:active { opacity: 0.7; }
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover { color: var(--muted); }
+    .chip[aria-pressed="true"]:hover { color: var(--fg); }
+  }
+  .fallback {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    padding: 1.5rem; text-align: center; color: var(--muted);
+  }
+  .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+  <canvas id="film" aria-label="侧光里的小脸蛋。按住转动，点一下眨眼，双击回到正面。"></canvas>
+  <p class="fallback" id="err" hidden>这块屏幕画不出这层釉。</p>
+  <div class="chrome">
+    <div class="row">
+      <div>
+        <h1>小脸蛋</h1>
+        <p class="hint">按住转动，点一下眨眼，双击回位</p>
+      </div>
+      <div class="mats" role="group" aria-label="釉色" id="mats"></div>
+    </div>
+    <div class="shapes" role="group" aria-label="脸的形状" id="shapes"></div>
+  </div>
+  <p class="sr" id="status">现在是圆，白瓷。</p>
+</main>
+<script>
+const VERT = "#version 300 es\nlayout(location=0) in vec2 a;\nvoid main() { gl_Position = vec4(a, 0.0, 1.0); }\n";
+const FRAG = "#version 300 es\nprecision highp float;\nuniform vec2 uRes;\nuniform float uYaw;\nuniform float uPitch;\nuniform float uFrom;\nuniform float uTo;\nuniform float uMix;\nuniform float uPink;\nuniform float uViolet;\nuniform float uBlink;\nuniform float uAnalytic;\nuniform float uFit;\nout vec4 fragColor;\n\nvec3 rotY(vec3 p, float a) {\n  float c = cos(a), s = sin(a);\n  return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);\n}\nvec3 rotX(vec3 p, float a) {\n  float c = cos(a), s = sin(a);\n  return vec3(p.x, c * p.y - s * p.z, s * p.y + c * p.z);\n}\nvec3 toObj(vec3 p) { return rotX(rotY(p, -uYaw), -uPitch); }\nvec3 toWorld(vec3 p) { return rotY(rotX(p, uPitch), uYaw); }\n\nvec2 rot2(vec2 p, float a) {\n  float c = cos(a), s = sin(a);\n  return vec2(c * p.x - s * p.y, s * p.x + c * p.y);\n}\n\nfloat sdRoundBox(vec3 p, vec3 b, float r) {\n  vec3 q = abs(p) - b;\n  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;\n}\n\nfloat sdTriPrism(vec3 p, vec2 h) {\n  const float k = 1.7320508;\n  h.x *= 0.5;\n  p.xy /= h.x;\n  p.x = abs(p.x) - 1.0;\n  p.y = p.y + 1.0 / k;\n  if (p.x + k * p.y > 0.0) p.xy = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;\n  p.x -= clamp(p.x, -2.0, 0.0);\n  float d1 = length(p.xy) * sign(-p.y) * h.x;\n  float d2 = abs(p.z) - h.y;\n  return length(max(vec2(d1, d2), 0.0)) + min(max(d1, d2), 0.0);\n}\n\nfloat sdHexPrism(vec3 p, vec2 h) {\n  const vec3 k = vec3(-0.8660254, 0.5, 0.57735);\n  p = abs(p);\n  p.xy -= 2.0 * min(dot(k.xy, p.xy), 0.0) * k.xy;\n  vec2 d = vec2(\n    length(p.xy - vec2(clamp(p.x, -k.z * h.x, k.z * h.x), h.x)) * sign(p.y - h.x),\n    p.z - h.y\n  );\n  return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));\n}\n\nfloat smin(float a, float b, float k) {\n  float h = max(k - abs(a - b), 0.0) / k;\n  return min(a, b) - h * h * h * k * (1.0 / 6.0);\n}\n\nfloat sdCapsule2(vec2 p, vec2 a, vec2 b, float r) {\n  vec2 pa = p - a, ba = b - a;\n  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);\n  return length(pa - ba * h) - r;\n}\n\nfloat mapId(vec3 p, int id) {\n  if (id == 0) return length(p) - 1.0;\n  if (id == 1) return sdRoundBox(p, vec3(0.42), 0.16);\n  if (id == 2) {\n    vec3 q = p;\n    q.y -= clamp(q.y, -0.34, 0.34);\n    return length(q) - 0.48;\n  }\n  if (id == 3) return sdTriPrism(p - vec3(0.0, -0.1, 0.0), vec2(0.86, 0.48)) - 0.08;\n  if (id == 4) {\n    vec2 h = p.xy;\n    const vec3 k = vec3(-0.8660254, 0.5, 0.5773503);\n    h = abs(h);\n    h -= 2.0 * min(dot(k.xy, h), 0.0) * k.xy;\n    h -= vec2(clamp(h.x, -k.z * 0.62, k.z * 0.62), 0.62);\n    float d2 = length(h) * sign(h.y);\n    float dz = abs(p.z) - 0.42;\n    vec2 w = vec2(d2, dz);\n    return length(max(w, 0.0)) + min(max(d2, dz), 0.0) - 0.06;\n  }\n  if (id == 5) {\n    float d = length(p - vec3(0.0, -0.02, 0.0)) - 0.5;\n    d = smin(d, length(p - vec3(-0.36, 0.05, 0.08)) - 0.36, 0.26);\n    d = smin(d, length(p - vec3(0.38, 0.02, 0.06)) - 0.34, 0.26);\n    d = smin(d, length(p - vec3(-0.14, 0.34, 0.05)) - 0.3, 0.24);\n    d = smin(d, length(p - vec3(0.18, 0.32, 0.04)) - 0.28, 0.24);\n    return d;\n  }\n  float bulb = length(p - vec3(0.0, -0.16, 0.0)) - 0.58;\n  float mid = length(p - vec3(0.0, 0.3, 0.0)) - 0.34;\n  float tip = length(p - vec3(0.0, 0.58, 0.0)) - 0.15;\n  return smin(smin(bulb, mid, 0.32), tip, 0.24);\n}\n\nfloat map(vec3 p) {\n  float a = mapId(p, int(uFrom + 0.5));\n  if (uMix <= 0.001 || uMix >= 0.999) {\n    return uMix > 0.5 ? mapId(p, int(uTo + 0.5)) : a;\n  }\n  return mix(a, mapId(p, int(uTo + 0.5)), uMix);\n}\n\nfloat eyeMask(vec2 p) {\n  int sid = int(mix(uFrom, uTo, clamp(uMix, 0.0, 1.0)) + 0.5);\n  vec2 cL = vec2(-0.06, 0.18);\n  vec2 cR = vec2(0.26, 0.38);\n  float len = 0.13;\n  float rad = 0.1;\n  if (sid == 3) {\n    cL = vec2(-0.11, -0.3);\n    cR = vec2(0.13, -0.08);\n    len = 0.09;\n    rad = 0.072;\n  } else if (sid == 1 || sid == 4) {\n    cL = vec2(-0.14, -0.02);\n    cR = vec2(0.16, 0.18);\n  } else if (sid == 6 || sid == 5 || sid == 2) {\n    cL = vec2(-0.1, 0.0);\n    cR = vec2(0.16, 0.2);\n  }\n  float tilt = -0.459;\n  float squash = mix(1.0, 11.0, uBlink);\n  vec2 dl = rot2(p - cL, tilt);\n  vec2 dr = rot2(p - cR, tilt);\n  dl.y *= squash;\n  dr.y *= squash;\n  float left = sdCapsule2(dl, vec2(0.0, -len), vec2(0.0, len), rad);\n  float right = sdCapsule2(dr, vec2(0.0, -len), vec2(0.0, len), rad * 0.78);\n  return min(left, right);\n}\n\nvec3 shade(vec3 nW, vec3 rdW) {\n  vec3 L = normalize(vec3(1.05, 0.06, 0.34));\n  float ndl = dot(nW, L);\n  float t = clamp((ndl + 0.28) / 0.86, 0.0, 1.0);\n  t = t * t * (3.0 - 2.0 * t);\n  t = clamp(t * 1.18, 0.0, 1.0);\n\n  vec3 porcelain = mix(vec3(0.035), vec3(1.0), t);\n  vec3 pinkBase = vec3(1.0, 0.188235, 0.607843);\n  vec3 violetBase = vec3(0.568627, 0.349020, 0.996078);\n  vec3 pink = mix(pinkBase * 0.055, pinkBase, t);\n  vec3 violet = mix(violetBase * 0.055, violetBase, t);\n  float wP = clamp(uPink, 0.0, 1.0);\n  float wV = clamp(uViolet, 0.0, 1.0);\n  float wSum = wP + wV;\n  vec3 tinted = wSum > 0.001 ? (pink * wP + violet * wV) / wSum : porcelain;\n  vec3 col = mix(porcelain, tinted, clamp(wSum, 0.0, 1.0));\n\n  vec3 H = normalize(L - rdW);\n  float sheen = pow(max(dot(nW, H), 0.0), 5.0);\n  col += sheen * 0.04 * (1.0 - 0.35 * clamp(wSum, 0.0, 1.0));\n  return col;\n}\n\nfloat aoAt(vec3 p, vec3 n) {\n  float occ = 0.0;\n  float sca = 1.0;\n  for (int i = 0; i < 5; i++) {\n    float h = 0.02 + 0.11 * float(i);\n    float d = map(p + n * h);\n    occ += (h - d) * sca;\n    sca *= 0.85;\n  }\n  return clamp(1.0 - 1.15 * occ, 0.0, 1.0);\n}\n\nvec3 finish(vec3 pObj, vec3 nObj, vec3 rdW, float cover) {\n  vec3 nShade = normalize(mix(nObj, normalize(pObj), 0.58));\n  vec3 nW = normalize(toWorld(nShade));\n  vec3 col = shade(nW, rdW);\n  float cavity = aoAt(pObj, nObj);\n  col *= mix(1.0, cavity, 0.55);\n  float e = eyeMask(pObj.xy);\n  float fw = max(fwidth(e), 0.0015);\n  float front = smoothstep(0.04, 0.2, dot(nObj, -toObj(rdW)));\n  float eye = (1.0 - smoothstep(-fw, fw, e)) * front;\n  col = mix(col, vec3(0.0), eye);\n  col *= cover;\n  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);\n  col += (dither - 0.5) / 255.0;\n  return clamp(col, 0.0, 1.0);\n}\n\nvoid main() {\n  vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;\n  float dist = mix(2.5, 3.4, uFit);\n  vec3 roW = vec3(0.0, 0.0, dist);\n  vec3 rdW = normalize(vec3(uv.x * 0.9, uv.y * 0.9, -1.0));\n  vec3 center = vec3(0.0, mix(-0.4, -0.04, uFit), 0.0);\n  vec3 roO = toObj(roW - center);\n  vec3 rdO = toObj(rdW);\n\n  if (uAnalytic > 0.5) {\n    float b = dot(roO, rdO);\n    float c = dot(roO, roO) - 1.0;\n    float h = b * b - c;\n    float fw = max(fwidth(h), 0.001);\n    float cover = smoothstep(-fw, fw, h);\n    if (h < -fw) {\n      fragColor = vec4(0.0, 0.0, 0.0, 1.0);\n      return;\n    }\n    float s = sqrt(max(h, 0.0));\n    float t = -b - s;\n    if (t < 0.0) t = -b + s;\n    if (t < 0.0) {\n      fragColor = vec4(0.0, 0.0, 0.0, 1.0);\n      return;\n    }\n    vec3 p = roO + rdO * t;\n    vec3 n = normalize(p);\n    fragColor = vec4(finish(p, n, rdW, cover), 1.0);\n    return;\n  }\n\n  float t = 0.0;\n  float closest = 1e5;\n  bool hit = false;\n  for (int i = 0; i < 72; i++) {\n    float d = map(roO + rdO * t);\n    closest = min(closest, d);\n    if (d < 0.0007) { hit = true; break; }\n    t += d;\n    if (t > 10.0) break;\n  }\n  float px = 0.0022;\n  float cover = hit ? 1.0 : (1.0 - smoothstep(0.0, px, closest));\n  if (cover <= 0.001) {\n    fragColor = vec4(0.0, 0.0, 0.0, 1.0);\n    return;\n  }\n  vec3 p = roO + rdO * max(t, 0.0);\n  if (!hit) {\n    for (int i = 0; i < 6; i++) {\n      float d = map(p);\n      p -= rdO * d;\n    }\n  }\n  vec2 e = vec2(0.0012, 0.0);\n  vec3 n = normalize(vec3(\n    map(p + e.xyy) - map(p - e.xyy),\n    map(p + e.yxy) - map(p - e.yxy),\n    map(p + e.yyx) - map(p - e.yyx)\n  ));\n  fragColor = vec4(finish(p, n, rdW, cover), 1.0);\n}\n";
+const SHAPES = ["圆","方","胶囊","三角","六边","云","水滴"];
+const MATS = ["白瓷","小粉","小紫"];
+const YAW_LIMIT = 1.15, PITCH_LIMIT = 0.62;
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const live = {
+  yaw:0, pitch:0, yawT:0, pitchT:0, yawV:0, pitchV:0,
+  from:0, to:0, mix:1, mixStart:0,
+  pink:0, pinkT:0, violet:0, violetT:0,
+  blink:0, phase:"wait", holdUntil:0, nextBlink:0,
+  fit:0, fitT:0, fitFrom:0, fitStart:0,
+  dragging:false, lastX:0, lastY:0, lastTs:0, moved:0, tapTimer:0,
+  reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
+  mat:0, shape:0
+};
+const status = document.getElementById("status");
+function say() { status.textContent = "现在是" + SHAPES[live.shape] + "，" + MATS[live.mat] + "。"; }
+function chip(label, pressed, on) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip"; b.textContent = label;
+  b.setAttribute("aria-pressed", pressed ? "true" : "false");
+  b.addEventListener("click", on);
+  return b;
+}
+const matBtns = MATS.map((label, i) => {
+  const b = chip(label, i===0, () => chooseMat(i));
+  document.getElementById("mats").appendChild(b);
+  return b;
+});
+const shapeBtns = SHAPES.map((label, i) => {
+  const b = chip(label, i===0, () => chooseShape(i));
+  document.getElementById("shapes").appendChild(b);
+  return b;
+});
+function paintPressed() {
+  matBtns.forEach((b,i) => b.setAttribute("aria-pressed", i===live.mat ? "true" : "false"));
+  shapeBtns.forEach((b,i) => b.setAttribute("aria-pressed", i===live.shape ? "true" : "false"));
+  say();
+}
+function chooseMat(id) {
+  live.mat = id;
+  live.pinkT = id===1 ? 1 : 0;
+  live.violetT = id===2 ? 1 : 0;
+  paintPressed();
+}
+function chooseShape(id) {
+  if (id === live.to && live.mix >= 1) return;
+  live.from = live.mix >= 0.999 ? live.to : live.from;
+  live.to = id;
+  live.shape = id;
+  live.mixStart = performance.now();
+  live.mix = live.reduced ? 1 : 0;
+  if (live.reduced) live.from = id;
+  paintPressed();
+}
+function blinkNow() {
+  if (live.reduced) return;
+  if (live.phase === "wait" || live.phase === "open") live.phase = "close";
+}
+function resetPose() {
+  live.yawT = 0; live.pitchT = 0; live.yawV = 0; live.pitchV = 0;
+  if (live.reduced) { live.yaw = 0; live.pitch = 0; }
+}
+const canvas = document.getElementById("film");
+const gl = canvas.getContext("webgl2", { alpha:false, antialias:false, depth:false, powerPreference:"high-performance" });
+if (!gl) document.getElementById("err").hidden = false;
+else {
+  const compile = (type, src) => {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh) || "shader");
+    return sh;
+  };
+  let program;
+  try {
+    const vs = compile(gl.VERTEX_SHADER, VERT);
+    const fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    program = gl.createProgram();
+    gl.attachShader(program, vs); gl.attachShader(program, fs);
+    gl.bindAttribLocation(program, 0, "a");
+    gl.linkProgram(program);
+    gl.deleteShader(vs); gl.deleteShader(fs);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) || "link");
+  } catch (err) {
+    const box = document.getElementById("err");
+    box.hidden = false; box.textContent = err.message || "shader";
+  }
+  if (program) {
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.useProgram(program);
+    gl.clearColor(0,0,0,1);
+    const loc = {};
+    ["uRes","uYaw","uPitch","uFrom","uTo","uMix","uPink","uViolet","uBlink","uAnalytic","uFit"].forEach(n => loc[n] = gl.getUniformLocation(program, n));
+    const now0 = performance.now();
+    live.nextBlink = now0 + 4800;
+    live.lastTs = now0;
+    let last = now0;
+    const frame = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const breathe = live.reduced || live.dragging ? 0 : Math.sin(now * 0.0004) * 0.03;
+      if (!live.dragging && !live.reduced) {
+        const damp = Math.exp(-dt * 3.2);
+        live.yawV *= damp; live.pitchV *= damp;
+        if (Math.abs(live.yawV) < 0.01) live.yawV = 0;
+        if (Math.abs(live.pitchV) < 0.01) live.pitchV = 0;
+        const nextYaw = clamp(live.yawT + live.yawV * dt, -YAW_LIMIT, YAW_LIMIT);
+        const nextPitch = clamp(live.pitchT + live.pitchV * dt, -PITCH_LIMIT, PITCH_LIMIT);
+        if (nextYaw === -YAW_LIMIT || nextYaw === YAW_LIMIT) live.yawV = 0;
+        if (nextPitch === -PITCH_LIMIT || nextPitch === PITCH_LIMIT) live.pitchV = 0;
+        live.yawT = nextYaw; live.pitchT = nextPitch;
+      }
+      const follow = live.reduced ? 1 : 1 - Math.exp(-dt * 14);
+      live.yaw += (live.yawT - live.yaw) * follow;
+      live.pitch += (live.pitchT - live.pitch) * follow;
+      if (!live.reduced && live.from !== live.to) live.mix = Math.min(1, (now - live.mixStart) / 700);
+      else live.mix = 1;
+      if (live.mix >= 1) live.from = live.to;
+      const ink = live.reduced ? 1 : 1 - Math.exp(-dt * 6);
+      live.pink += (live.pinkT - live.pink) * ink;
+      live.violet += (live.violetT - live.violet) * ink;
+      const fitTarget = live.to === 0 ? 0 : 1;
+      if (fitTarget !== live.fitT) { live.fitFrom = live.fit; live.fitT = fitTarget; live.fitStart = now; }
+      const fitU = live.reduced ? 1 : Math.min(1, (now - live.fitStart) / 650);
+      const fitS = fitU * fitU * (3 - 2 * fitU);
+      live.fit = live.fitFrom + (live.fitT - live.fitFrom) * fitS;
+      if (!live.reduced) {
+        if (live.phase === "wait" && now > live.nextBlink) live.phase = "close";
+        if (live.phase === "close") {
+          live.blink = Math.min(1, live.blink + dt / 0.07);
+          if (live.blink >= 1) { live.phase = "hold"; live.holdUntil = now + 46; }
+        } else if (live.phase === "hold" && now >= live.holdUntil) live.phase = "open";
+        else if (live.phase === "open") {
+          live.blink = Math.max(0, live.blink - dt / 0.12);
+          if (live.blink <= 0) { live.phase = "wait"; live.nextBlink = now + 3200 + Math.random() * 2600; }
+        }
+      }
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let w = Math.round(canvas.clientWidth * dpr);
+      let h = Math.round(canvas.clientHeight * dpr);
+      const cap = 1440 / Math.max(w, h, 1);
+      if (cap < 1) { w = Math.round(w * cap); h = Math.round(h * cap); }
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.uniform2f(loc.uRes, canvas.width, canvas.height);
+      gl.uniform1f(loc.uYaw, live.yaw + breathe);
+      gl.uniform1f(loc.uPitch, live.pitch);
+      gl.uniform1f(loc.uFrom, live.from);
+      gl.uniform1f(loc.uTo, live.to);
+      gl.uniform1f(loc.uMix, live.from === live.to ? 1 : live.mix);
+      gl.uniform1f(loc.uPink, live.pink);
+      gl.uniform1f(loc.uViolet, live.violet);
+      gl.uniform1f(loc.uBlink, live.blink);
+      gl.uniform1f(loc.uFit, live.fit);
+      gl.uniform1f(loc.uAnalytic, live.from === 0 && live.to === 0 ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+}
+canvas.addEventListener("pointerdown", (e) => {
+  live.dragging = true; live.lastX = e.clientX; live.lastY = e.clientY;
+  live.lastTs = performance.now(); live.moved = 0; live.yawV = 0; live.pitchV = 0;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!live.dragging) return;
+  const dx = e.clientX - live.lastX, dy = e.clientY - live.lastY;
+  live.moved += Math.abs(dx) + Math.abs(dy);
+  const now = performance.now();
+  const dt = Math.max(0.008, (now - live.lastTs) / 1000);
+  live.lastTs = now; live.lastX = e.clientX; live.lastY = e.clientY;
+  const prevYaw = live.yawT, prevPitch = live.pitchT;
+  live.yawT = clamp(live.yawT + dx * 0.006, -YAW_LIMIT, YAW_LIMIT);
+  live.pitchT = clamp(live.pitchT - dy * 0.006, -PITCH_LIMIT, PITCH_LIMIT);
+  live.yawV = (live.yawT - prevYaw) / dt;
+  live.pitchV = (live.pitchT - prevPitch) / dt;
+});
+function pointerUp() {
+  if (!live.dragging) return;
+  live.dragging = false;
+  if (live.moved > 8) return;
+  const now = performance.now();
+  if (live.tapTimer) { clearTimeout(live.tapTimer); live.tapTimer = 0; resetPose(); return; }
+  live.tapTimer = setTimeout(() => { live.tapTimer = 0; if (performance.now() - now >= 250) blinkNow(); }, 280);
+}
+canvas.addEventListener("pointerup", pointerUp);
+canvas.addEventListener("pointercancel", pointerUp);
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+document.getElementById("stage").addEventListener("keydown", (e) => {
+  const step = 0.12;
+  if (e.key === "ArrowLeft") { live.yawT = clamp(live.yawT - step, -YAW_LIMIT, YAW_LIMIT); live.yawV = 0; }
+  else if (e.key === "ArrowRight") { live.yawT = clamp(live.yawT + step, -YAW_LIMIT, YAW_LIMIT); live.yawV = 0; }
+  else if (e.key === "ArrowUp") { live.pitchT = clamp(live.pitchT + step, -PITCH_LIMIT, PITCH_LIMIT); live.pitchV = 0; }
+  else if (e.key === "ArrowDown") { live.pitchT = clamp(live.pitchT - step, -PITCH_LIMIT, PITCH_LIMIT); live.pitchV = 0; }
+  else if (e.key === "Home" || e.key === "0") resetPose();
+  else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); blinkNow(); }
+  else if (e.key >= "1" && e.key <= "7") chooseShape(Number(e.key) - 1);
+});
+</script>
+</body>
+</html>
