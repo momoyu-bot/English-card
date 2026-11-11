@@ -3,6 +3,8 @@
 机房手册的一本，目录在 [`tools/README.md`](../README.md)。
 
 - `tools/` 的检查脚本都已带上 `-c core.quotepath=false`。
+- 云端新开的会话里，本地的 `origin/main` 可能还指着旧提交（11-11 拍《三五七言》时遇到）。`tools/check_privacy.py` 默认拿它当基线，
+  会把那之后的老文件一起查，报出老页里的命中。先 `git -c core.quotepath=false fetch origin main` 再跑，就只查这一趟新写的；别照那份报告去改老文件。
 
 ## 开工怎么拉
 
