@@ -28,6 +28,10 @@ EMAIL = re.compile(
     re.IGNORECASE,
 )
 ALLOWED_EMAIL_DOMAINS = {"users.noreply.github.com", "example.com"}
+# 文件名长得像邮箱的不算：生成器的显示名表里有一页叫 root@production-server.html，
+# 不排除的话，谁改生成器谁就被拦（11-11 撞上）。只放过「@ 后面是一个词加页面扩展名」；
+# 扩展名前面还带着点的（那多半是个真域名）照旧算邮箱。
+PAGE_EXTENSIONS = {"html", "htm", "svg"}
 SECRET_RULES = (
     ("GitHub 密钥", re.compile(r"(?:ghp_|gho_|github_pat_)[A-Za-z0-9_]+")),
     ("Google API 密钥", re.compile(r"AIza[A-Za-z0-9_-]+")),
@@ -73,7 +77,10 @@ def find_hits(text, names):
         hits.extend((m.start(), m.end(), "当前用户名")
                     for m in pattern.finditer(text))
     for match in EMAIL.finditer(text):
-        if (match.group("domain").casefold() not in ALLOWED_EMAIL_DOMAINS
+        domain = match.group("domain").casefold()
+        stem, _, ext = domain.rpartition(".")
+        if (domain not in ALLOWED_EMAIL_DOMAINS
+                and not (ext in PAGE_EXTENSIONS and "." not in stem)
                 and match.group(0).casefold() != "noreply@anthropic.com"):
             hits.append((match.start(), match.end(), "邮箱"))
     for category, pattern in SECRET_RULES:

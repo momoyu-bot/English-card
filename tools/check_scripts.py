@@ -5,13 +5,11 @@
 
     python3 tools/check_scripts.py
 
-没输出就是干净的；查出问题时退出码是 1。需要装了 node。
-还没 git add 的新页也查（以前只查已跟踪的，刚做好的新页会被漏掉）。
-普通脚本一次全交给同一个 node 判（以前每段起一个 node，七百多段要等十几秒，Windows 上更久）；
-判法同 `node --check`：按 CommonJS 的包法编译、不执行，只是不再「当成 ES 模块再试一次」，
-那种写法放在普通 <script> 里浏览器本来就报错。type="module" 的段仍逐段 `node --check`。
+没输出就是干净的；查出问题时退出码是 1。需要装了 node。还没 git add 的新页也查。
+普通脚本一次全交给同一个 node 判（每段起一个 node 的话，七百多段要等十几秒，Windows 上更久）；
+判法同 `node --check`：按 CommonJS 的包法编译、不执行，只是不「当成 ES 模块再试一次」，
+那种写法放在普通 <script> 里浏览器本来就报错。type="module" 的段逐段 `node --check`。
 """
-import io
 import json
 import os
 import re
@@ -50,7 +48,7 @@ files = ls('--cached', '--others', '--exclude-standard', '*.html') - ls('--delet
 JS_OK = re.compile(r'^(text/javascript|application/javascript|module)$', re.I)
 plain, modules = [], []
 for f in sorted(files):
-    s = io.open(f, encoding='utf-8', errors='replace').read()
+    s = open(f, encoding='utf-8', errors='replace').read()
     for m in re.finditer(r'<script([^>]*)>([\s\S]*?)</script>', s):
         attrs, code = m.group(1), m.group(2)
         if re.search(r'\bsrc=', attrs) or not code.strip():
