@@ -10,7 +10,7 @@
 
 ## 公开仓库和本地记忆
 
-- 仓库和提交说明都不写：密钥、令牌、密码、登录文件内容、私人邮箱、电脑用户名、带用户名的路径（写成 `%USERPROFILE%`、`~`）、会话编号、云盘或文档链接、截图里的私人信息、宝的个人信息。署名用的 noreply 邮箱不算。
+- 仓库和提交说明都不写：密钥、令牌、密码、登录文件内容、私人邮箱、电脑用户名、带用户名的路径（写成 `%USERPROFILE%`、`~`）、会话编号（提交说明末尾自动带上的会话链接也算）、云盘或文档链接、截图里的私人信息、宝的个人信息。署名用的 noreply 邮箱不算。
 - 提交前必须跑 `tools/check.py`（重复的页、跑不起来的脚本、隐私，一次查完），通过才提交；云端用 Python 3.13 的 `python3`，Windows 用 `py -3.13`，手册里的命令同样换。隐私那项只查部分形式，完整清单仍要自己核对。
 - 小萌物的一切（画法、角色、站位、拍法、参考片、短片心得）本地不记，每次去仓库读；本地与仓库冲突听仓库，宝当场亲口说的最优先。
 
@@ -58,18 +58,10 @@ momoyu（火红狐狸 StashYu、暹罗 FetchMo）只看 `claude/小科普/momoyu
 - 做 GIF 馆、往馆里加展品前先读 `tools/手册/GIF馆.md`。`codex/小卡/小萌物GIF馆-codex.html` 有 8.6 MB，谁都别整份读进对话，要查只用脚本打印摘要。
 - 字体只在 CSS 里写名字；不许往仓库传 `.ttf` `.otf` `.woff` `.woff2`，不许从第三方网址加载字体。只管新页。
 - 没过版权期的书里的文字不进仓库；页面要用书里的话，先读 `tools/手册/书里的文字怎么查.md`。
-- 她让改打捞机翻译版，先读 `tools/手册/打捞机翻译版.md`。
 - 公开仓库别写真东西：摸鱼页的假数据避开真公司名、人名、商品搜索词、能反推业务的词。
 
 ## git
 
 - git 命令一律带 `-c core.quotepath=false`，不然中文文件名被转义，`grep`/`cat` 安静地返回空。
-- 提交邮箱只用两个：Claude Code 和 claude.ai 里的 Claude 用 `noreply@anthropic.com`；别的壳（Grok、反重力、Codex）不管芯是谁，都署她的号，开工先照抄这两行：
-
-```bash
-git -c core.quotepath=false config user.name "momo"
-git -c core.quotepath=false config user.email "318139614+momoyu-bot@users.noreply.github.com"
-```
-
-- 别自己拼邮箱，别写 `momo@users.noreply.github.com`，那是别人的号。非 Claude 推之前用 `git -c core.quotepath=false log -1 --format='%ae'` 自查，必须与上面配置的邮箱完全一致。
+- 提交邮箱只用两个：Claude Code 和 claude.ai 里的 Claude 用 `noreply@anthropic.com`；别的壳（Grok、反重力、Codex）不管芯是谁，都署她的号，命令在 `AGENTS.md`，照抄，别自己拼。
 - main 改写过历史，别 merge 旧 main、别强推。非 Claude 开工、各家推之前先读 `tools/手册/git.md`。
