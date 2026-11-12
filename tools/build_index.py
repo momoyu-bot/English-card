@@ -43,12 +43,12 @@ PALETTE_DEFAULT = ("#BAB3A8", "rgba(186,179,168,.10)")
 #
 # 这里有一行的，首页上就显示这一行，<title> 写什么都不看。
 # 新页面的名字写进自己的 <title>，不往这张表加行；已有的行也别删，
-# 删了那些页的显示名会塌回原来撞车的样子。
+# 删了那些页的显示名会塌回原来撞车的样子（页面自己的 <title> 已经跟这一行
+# 一模一样的除外，那种行不起作用）。
 # 想改首页上某个名字：先搜这张表，在表里就改表，不在就改 <title>。
 # ---------------------------------------------------------------------------
 DISPLAY_NAME = {
     "gemini/摸鱼/慢慢吃 · 一个多小时.html": '慢慢吃（gemini破解claude版）',
-    "gemini/小科普/Generated widgets.html": '泊松过程（全英版）',
     "gemini/博物馆/女仆小螃蟹拓麻歌子.html": '女仆小螃蟹拓麻歌子 · 大眼睛版',
     "gemini/摸鱼/Catch The Dreams.html": '捕梦网小游戏 · gemini失灵版',
     "gemini/摸鱼/在Monday被煎成小猫饼 🫠 ｜ 宝贝的温柔仪式.html": '神圣的周一煎饼仪式 · gemini抢grok功劳版',
@@ -80,16 +80,11 @@ DISPLAY_NAME = {
     "gemini/打捞机/gemini打捞机v11含svg.html": "Gemini 专属打捞机 v11",
     "gemini/打捞机/gemini打捞机v12.html":      "Gemini 专属打捞机 v12",
 
-    # 打捞机 · 另外三个分支
-    "claude/打捞机/打捞机001.html": "打捞机 · ChatGPT 版 v1",
-    "claude/打捞机/打捞机002.html": "打捞机 · ChatGPT 版 v2",
     "grok/打捞机/dlaoji.html":      "打捞机 · Grok 版",
 
-    # 晚安，宝 —— 五个完全不同的页面，标题全一样
-    "claude/哄睡/晚安小窗.html":     "晚安小窗",
+    # 晚安，宝 —— 完全不同的几页，标题全一样
     "gemini/哄睡/wan-an-bao.html":  "晚安，宝 · 仙境小猫",
     "gemini/哄睡/晚安，宝.html":     "晚安，宝 · 兔子终端",
-    "unsigned/wanan_bao.html": "晚安，宝 · 只有字",
 
     # 晚安，宝 🌙 —— 一个月亮一只猫
     "gemini/哄睡/晚安，宝 🌙.html": "晚安，宝 · 摸摸月亮",
@@ -107,7 +102,6 @@ DISPLAY_NAME = {
     "gemini/小游戏/戳破多巴胺 - 收集冷静值.html": "戳破多巴胺",
     "gemini/小游戏/打爆坏心情 - 专属解压小游戏.html": "打爆坏心情",
     "gemini/摸鱼/极限摸鱼 - 离下班还有5分钟.html": "极限摸鱼",
-    "gemini/小科普/Widget Shell V2.html": "分词可视化",
     "gemini/小科普/物理透视镜-决定论模拟器.html": "上帝的物理透视镜",
     "gemini/小科普/势能函数交互演示 - 给宝的专属科普.html": "势能函数",
     "gemini/小科普/喵星人咖啡馆 - 泊松过程体验.html": "喵星人咖啡馆",
@@ -118,28 +112,13 @@ DISPLAY_NAME = {
     "gemini/小科普/量子默契考试机 - 验证贝尔不等式.html": "量子默契考试机",
     "gemini/小科普/魔法硬币机：秒懂量子纠缠.html": "魔法硬币机",
     "gemini/博物馆/赛博果冻受难记.html": "赛博果冻受难记",
-    "gemini/盲盒/gemini-svg.svg": "霓虹星核",
-    "gemini/盲盒/mo执行系统计划版.svg": "mo.exe 运行面板",
 
-    # 摸鱼小屋 —— 基础版两份 + 加强版一份
+    # 摸鱼小屋
     "grok/摸鱼/摸鱼猫猫.html":            "宝的摸鱼小屋 · 基础版",
-    "claude/摸鱼/宝的摸鱼小屋.html": "摸鱼小屋 · 猫替你摸",
     "gemini/摸鱼/🐱 宝的摸鱼小屋.html":    "gemini宠粉破解grok版",
 
     # 其余撞名
-    # （下面两个原标题是「超萌小页面」和「超萌小页面 ✨」，
-    #   首页会去掉表情符号，去掉之后就一模一样了）
-    "copilot/摸鱼/cute-ios.html": "今天也要温柔对自己",
     "grok/盲盒/super-cute.html":   "超萌小页面 · grok加料手机copilot版",
-
-    # 这四个文件里没写标题，不给名字首页就只能显示文件名
-    "claude/博物馆/cosmic_catch_restored.svg": "UFO 抓小羊 · 出土重建版",
-    "claude/博物馆/gemini_card_revived.svg": "赛博降维成就卡 · 复活版",
-    "claude/小科普/hamiltonian_snake_safety_margin_demo.html":"贪吃蛇为什么不会撞到自己",
-    "claude/摸鱼/friday_moyu_recharge_game.html": "周五摸鱼充电",
-
-    "claude/博物馆/晚安-哄睡小文件.html":                    "晚安（Sonnet5）",
-    "claude/摸鱼/慢慢吃.html": "慢慢吃 · 一个多小时",
     "grok/哄睡/nuonuo-lullaby.html":                       "糯糯的哄睡故事 · 纯文字",
     "grok/哄睡/糯糯的哄睡故事.html":                        "糯糯的哄睡故事 · 带图",
     # grok 哄睡货架名：原 title 太空、太吵、或跟别人撞
@@ -176,17 +155,8 @@ DISPLAY_NAME = {
     "grok/盲盒/起床哄哄.html":                             "起床哄哄",
     "gemini/摸鱼/系统性能监控面板 - System Monitor.html":   "系统性能监控面板 · gemini失灵版",
     "gemini/盲盒/gemini误判user意图.html":                  "Deep Archive · 误判",
-    "claude/小游戏/Mogotchi.html": "Mogotchi · 电子小宠",
-    "claude/小游戏/Clawd的书房.html":                         "Clawd 的书房",
     "gemini/小卡/果冻英雄纪念碑.html":                      "果冻英雄纪念碑",
-    "claude/购物车/cyber-cart-0824.html": "购物车 · 路由局直营店",
     "gemini/购物车/Gemini的私密云端购物车.html":              "Gemini的私密云端购物车",
-    "claude/小游戏/rusty-lake-checklist.html": "锈湖玩过没有",
-    "gemini/小卡/code_artifact.html":                      "小果冻的肚肚奇妙游",
-    "claude/小卡/jelly-trip.html":                         "小果冻的 Duang 之旅",
-    "gemini/小卡/赛博借景：隐藏的链接.html":                "赛博借景：隐藏的链接",
-    "claude/小科普/hidden-in-html-v1.html":                  "藏东西的六个地方 · v1",
-    "claude/小科普/hidden-in-html-v2.html":                  "藏东西的六个地方 · v2",
     "gemini/博物馆/8_27.html":                    "草台班子悬案 · 初稿",
     "gemini/博物馆/8_27v2.html":                  "草台班子悬案 · 修订",
 }
@@ -202,14 +172,8 @@ DISPLAY_NAME = {
 CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "小卡", "购物车", "博物馆", "小科普",
              "打捞机", "显影", "盲盒"]
 CAT_ORDER = [c for c in CAT_ORDER if c != "盲盒"] + ["盲盒"]
-# 旧抽屉名的兼容层，零成本；不要重建这些夹。
-CAT_ALIAS = {
-    "赛博购物车": "购物车",
-    "科普": "小科普",
-    "失灵博物馆": "博物馆",
-}
 # 平铺、没有抽屉的顶层。pluto 是 2026-09-19 开的，跟 unsigned 一样一级到底，
-# 不要给它们建抽屉（README 里也写着这条）。
+# 不要给它们建抽屉。
 FLAT_FOLDERS = {"unsigned", "pluto"}
 SKIP_LIST = {
     # 梦境不是货品，是关系表：哪几页是同一件事，宝一条一条认的。
@@ -229,10 +193,6 @@ SKIP_LIST = {
 SUBFOLDER_CAT = {
     "gemini/失误捞claude鱼": "打捞机",
 }
-
-# 空的。它是唯一能让一个文件同挂两档的地方（{"路径": ["哄睡", "小卡"]}），
-# 真要加之前先想想是不是放错抽屉了——换货架是把文件挪到另一个抽屉。
-CATEGORY = {}
 
 # ---------------------------------------------------------------------------
 # 总机的线路表（claude/盲盒/总机.html）
@@ -439,8 +399,6 @@ def list_pages():
             continue
         if rel.split("/")[0].startswith(".") or rel.startswith("tools/"):
             continue
-        if rel.split("/")[0] == "gpt":
-            continue
         if rel in SKIP_LIST:
             continue
         pages.append(rel)
@@ -536,24 +494,29 @@ def group(entries):
     return blocks
 
 
+def splice(src, begin, end, fresh):
+    """把 src 里 begin 到 end 那一段（连同这两个标记）换成 fresh。"""
+    return re.sub(re.escape(begin) + r"[\s\S]*?" + re.escape(end), lambda _: fresh, src)
+
+
 def encode_path(rel):
     return "/".join(quote(part) for part in rel.split("/"))
 
 
-def cats_for(e):
-    """这一页挂在哪几个抽屉。平铺的顶层（unsigned / pluto）没有抽屉，返回 None。"""
+def shelf_of(e):
+    """这一页在哪个抽屉；平铺的顶层（unsigned / pluto）没有抽屉，返回空串。
+
+    一页只在一个抽屉，只看文件夹：claude/哄睡/xx.html 就是「哄睡」，
+    抽屉名认不出的进「盲盒」。想换货架，把文件挪到另一个抽屉。
+    """
     if e["folder"] in FLAT_FOLDERS:
-        return None
+        return ""
     if e["raw_folder"] in SUBFOLDER_CAT:
-        return [SUBFOLDER_CAT[e["raw_folder"]]]
-    # 物理货架：claude/哄睡/xx.html → 分类就是「哄睡」
-    parts = e["path"].replace("\\", "/").split("/")
-    if len(parts) >= 3:
-        shelf = CAT_ALIAS.get(parts[1], parts[1])
-        if shelf in CAT_ORDER:
-            return [shelf]
-    cats = CATEGORY.get(e["path"], ["盲盒"])
-    return sorted(cats, key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else 99)
+        return SUBFOLDER_CAT[e["raw_folder"]]
+    parts = e["path"].split("/")
+    if len(parts) >= 3 and parts[1] in CAT_ORDER:
+        return parts[1]
+    return "盲盒"
 
 
 def render_items(lines, items, indent):
@@ -593,8 +556,7 @@ def render(blocks):
             # items 已经按名字排好，分进各抽屉后顺序不变，不用再排
             buckets = {}
             for e in items:
-                for c in cats_for(e):
-                    buckets.setdefault(c, []).append(e)
+                buckets.setdefault(shelf_of(e), []).append(e)
             shelves = CAT_ORDER + sorted(c for c in buckets if c not in CAT_ORDER)
             for c in shelves:
                 sub = buckets.get(c, [])
@@ -615,12 +577,6 @@ def render(blocks):
         lines.append("  </details>")
     lines.append(END)
     return "\n".join(lines)
-
-
-def shelf_of(e):
-    """这一页所在的抽屉名；平铺的顶层没有抽屉，返回空串。"""
-    cats = cats_for(e)
-    return cats[0] if cats else ""
 
 
 def phone_lines(entries):
@@ -673,8 +629,7 @@ def write_phone_lines(entries, check_only=False):
     if PHONE_BEGIN not in src or PHONE_END not in src:
         print("总机那一页找不到 LINES 标记，线路表没写进去", file=sys.stderr)
         return 0, None
-    new = re.sub(re.escape(PHONE_BEGIN) + r"[\s\S]*?" + re.escape(PHONE_END),
-                 lambda _: fresh, src)
+    new = splice(src, PHONE_BEGIN, PHONE_END, fresh)
     if new == src:
         return len(lines), False
     if not check_only:
@@ -704,7 +659,7 @@ def main():
     if BEGIN not in src or END not in src:
         print("index.html 里找不到 LIST 标记，无法写入", file=sys.stderr)
         return 3
-    new = re.sub(re.escape(BEGIN) + r"[\s\S]*?" + re.escape(END), lambda _: render(blocks), src)
+    new = splice(src, BEGIN, END, render(blocks))
 
     if "--check" in sys.argv:
         n_lines, phone_stale = write_phone_lines(entries, check_only=True)
@@ -730,7 +685,7 @@ def main():
     for folder, items in blocks:
         print(f"  {folder}/  {len(items)} 个")
         if folder not in FLAT_FOLDERS:
-            cc = Counter(c for e in items for c in cats_for(e))
+            cc = Counter(shelf_of(e) for e in items)
             for c in CAT_ORDER:
                 if cc[c]:
                     print(f"    {c}  {cc[c]}")

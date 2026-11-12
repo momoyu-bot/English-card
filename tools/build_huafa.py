@@ -17,7 +17,6 @@
 可合订本是要递到仓库外面去的（她放进 Drive 给 Gemini、给不进仓库的 Grok chat 看），外面的人读不到 CLAUDE.md。
 那一晚 Grok、Gemini 各拍了一部，都没拍成全员，见 claude/博物馆/谁在场，谁在演.html。
 """
-import io
 import os
 import re
 import sys
@@ -182,7 +181,7 @@ def grab(src, var, keys):
 
 def grab_notes():
     """抄 CLAUDE.md 那一节开头几段：标题下一行起，到「画全员时」那一行（或下一个「## 」）之前。"""
-    lines = io.open(os.path.join(ROOT, NOTES), encoding='utf-8').read().splitlines()
+    lines = open(os.path.join(ROOT, NOTES), encoding='utf-8').read().splitlines()
     for k, line in enumerate(lines):
         if line.strip() == NOTES_HEAD:
             break
@@ -213,7 +212,7 @@ def build():
     for title, page, pieces in SOURCES:
         parts.append('\n==== %s ====\n原页：%s\n' % (title, page))
         try:
-            src = io.open(os.path.join(ROOT, page), encoding='utf-8').read()
+            src = open(os.path.join(ROOT, page), encoding='utf-8').read()
             texts = []
             for var, keys, label in pieces:
                 t = grab(src, var, keys).strip('\n')
@@ -236,7 +235,7 @@ def main():
         print('::warning::小萌物画法：%s 没抽出来（%s），合订本里这一段换成了一句指路的话' % (title, why))
     path = os.path.join(ROOT, OUT)
     try:
-        old = io.open(path, encoding='utf-8').read()
+        old = open(path, encoding='utf-8').read()
     except FileNotFoundError:
         old = None
     if '--check' in sys.argv[1:]:
@@ -248,7 +247,7 @@ def main():
     if old == text:
         print('合订本没变化。')
         return
-    io.open(path, 'w', encoding='utf-8', newline='\n').write(text)
+    open(path, 'w', encoding='utf-8', newline='\n').write(text)
     print('写好了：%s（%d 字节）' % (OUT, len(text.encode('utf-8'))))
 
 
