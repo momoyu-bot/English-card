@@ -46,7 +46,7 @@
 片子底下要有字幕本：整部的字幕一行行列出来，点哪句跳到哪句。博物馆抽屉里的那几部是翻车的，拿来对照，不照着拍。
 
 画全员时先读 `tools/小萌物画法.txt`：三页宪法里「开新对话时整段贴过去」那段的合订本，自动抽的，不够再翻整页。
-单独点名看各自那页：Clawd 看 `claude/小科普/Clawd造型宪法（Code版）.html` 或 `claude/博物馆/Clawd造型宪法（Chat版）.html`；
+单独点名看各自那页：Clawd 看 `claude/小科普/Clawd造型宪法（Code版）.html`；
 小脸蛋照 `claude/小科普/小脸蛋造型宪法（实测版） (1).html` 画（店里的短片一直用这组色号；`grok/小科普/小脸蛋造型宪法（Chat版） (6).html` 让画的色号跟它对调）；
 momoyu（火红狐狸 StashYu、暹罗 FetchMo）只看 `claude/小科普/momoyu造型宪法.html`，博物馆里那份 Code 版是展品。
 别往这一节加细节、样板、清单。
