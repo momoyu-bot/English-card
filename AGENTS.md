@@ -8,7 +8,14 @@
 
 ## 对非 Claude 都算数
 
-- 开工先照抄 `CLAUDE.md`「git」里的两条署名命令；不管芯是谁都署她的号，推前照那一节自查邮箱，别自己拼。
+- 署名：不管芯是谁都署她的号。开工先照抄下面两行，别自己拼邮箱，别写 `momo@users.noreply.github.com`，那是别人的号。
+  推之前用 `git -c core.quotepath=false log -1 --format='%ae'` 自查，必须跟这里配置的邮箱完全一致。
+
+  ```bash
+  git -c core.quotepath=false config user.name "momo"
+  git -c core.quotepath=false config user.email "318139614+momoyu-bot@users.noreply.github.com"
+  ```
+
 - 开工先按 `tools/手册/git.md`「开工怎么拉」同步，这不算改旧文件的授权；拉取或合回 `main` 遇到内容冲突，先按该节交给小脸蛋问宝，不自己选。她本轮要求只读或不拉取的照她说的办。
 - **只加不改**：已有文件（包括自己以前推的）不改、不删、不挪、不改名。想动先说动哪里、为什么，她点头再动；她这一轮亲口让改的已算授权。这条高于 CLAUDE.md 及手册里叫你挪、改、删、补的说法。
 - 下列文件默认不碰；要改先跟她说，交给 Claude Code 或 claude.ai 的 Claude，除非她这一轮明确授权你改：
