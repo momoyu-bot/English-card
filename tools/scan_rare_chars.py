@@ -11,8 +11,9 @@ import re
 import subprocess
 
 G = ['git', '-c', 'core.quotepath=false']
-# CLAUDE.md 和机房手册（tools/ 底下那几本）自己列着一堆错字样本，扫进来全是噪音
-NOISE = {'CLAUDE.md'}
+# 店务笔记和机房手册（tools/ 底下那几本）不是页面，手册里还列着一堆错字样本，扫进来全是噪音。
+# GEMINI.md 是指向 CLAUDE.md 的软链接，不排除的话同一份笔记照样被读进来。
+NOISE = {'CLAUDE.md', 'GEMINI.md', 'AGENTS.md'}
 files = [f for f in subprocess.run(G + ['ls-files', '*.html', '*.svg', '*.md'],
          capture_output=True, text=True).stdout.split('\n')
          if f and f not in NOISE and not f.startswith('tools/')]
