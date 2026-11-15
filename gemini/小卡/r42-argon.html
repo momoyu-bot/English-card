@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>燕归来 · 小萌物短片</title>
+<meta name="description" content="旧亭台的海棠花落了一地，六只把春花收进尾巴铺满小园香径，在夕阳下迎回似曾相识的春燕。">
+<meta name="theme-color" content="#F4EFE6">
+<!--
+  小萌物短片之《浣溪沙》，片名《燕归来》。
+  整部片子是一张 360×640 的 9:16 竖屏 canvas，render(t) 给定第几秒就画出那一格。
+  字幕不硬编码在绘制脚本里：底下「字幕本」那几行就是数据源，data-t 是它在这一场里出现和消失的秒数。
+  data-k="end" 是最后一句收束；其余不写 data-k 的都是旁白。六只都没有嘴，话筒一直在旁白手里。
+  data-poem 是这一场开头右上角竖排浮现的原词，按原词顺序拆成六场，连起来一字不差是整首词。
+  只交网页，不导 MP4；底下保留 window.FILM 导视频用的口子。
+
+  词：北宋晏殊《浣溪沙》（一曲新词酒一杯）。晏殊 991—1055，距今近千年，早已过版权期。
+    原文按《全宋词》及开源数据集 chinese-poetry（https://github.com/chinese-poetry/chinese-poetry/blob/master/%E5%AE%8B%E8%AF%8D/ci.song.0.json）
+    逐字核对，一字未改；有的本子将第三句句末问号作句号，已在页面原词注中说明。
+  片头所讲词牌《浣溪沙》（又作《浣溪纱》）取自春秋西施于若耶溪畔浣纱的民间传说与唐代教坊曲名来历，为大意转述，未引古文原句。
+
+  故事是这一部编的：
+    暮春午后，绕过小园的清溪边有一座旧亭台，石桌上摆着六只盛满海棠花露的白瓷小杯。
+    六只没有嘴唱不出「一曲新词」，Clawd 便把橘色扁壳展宽成一张方琴台，小粉、小紫、小黑化作三颗圆音珠在弦上蹦跳弹出新曲。
+    天气和旧亭台都跟去年春天一样，亭柱上留着去年送别小春燕的刻痕，FetchMo 跃上横梁扫净旧燕巢，StashYu 掏出软草垫巢。
+    眼看夕阳西下，六只怕天黑后归燕看不清路：Clawd 把扁壳竖向抻高成望日塔、伸长双钳托住落日，三颗小脸蛋压成圆铜镜把余晖折回亭台。
+    谁知晚风忽起，海棠花哗啦啦落满院子。六只急忙变形接花：Clawd 摊成大方竹匾，三颗小脸蛋拉长成溪纱兜网，StashYu 把落花全收进尾巴胖成大花球。
+    暮色里，翅膀边还沾着去年火红狐毛的春燕真的归来了！小粉跳上空枝头鼓成五瓣红海棠，小紫和小黑化作花苞相迎；
+    StashYu 在溪边石子路上抖开胖尾巴，把收好的落花铺成真正的「小园香径」，六只与春燕相伴散步，再也没有人「独徘徊」。
+
+  六只底模照各自的造型宪法绘制，变形处皆认得出是它们：
+    Clawd  → claude/小科普/Clawd造型宪法（Code版）.html（#d47f59，踩角四腿，无嘴；展宽五弦方琴台、抻高托日望远塔、大展宽接花方竹匾）
+    小脸蛋 → claude/小科普/小脸蛋造型宪法（实测版） (1).html（sRGB #FF309B / #9159FE / #000000，evenodd 挖空反斜杠双缝 rotate(-26.2°)，
+             右缝窄三分之一；琴弦跳音丸、三层留光圆铜镜、溪纱兜花软网、枝头五瓣红海棠）
+    StashYu / FetchMo → claude/小科普/momoyu造型宪法.html（20×13 像素格与尾巴 DLC；掏草垫巢、收满落花胖三圈大花球、抖尾铺香径、拉长跃梁扫巢、竖尾迎燕）
+  像素块经世界与屏幕倍率换算后对首尾分别取整到设备真像素，不漏华夫饼缝。
+  配乐与古琴泛音、清溪流水、春燕啼鸣均由 WebAudio 实时合成。
+-->
+<style>
+  :root{
+    --paper:#F4EFE6; --paper-2:#FCF9F4; --ink:#2B252C; --ink-2:#5E5460; --ink-3:#968B98;
+    --line:#E3D9CD; --accent:#C44768; --seal:#B53A2A; --stream:#3B7A72;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.7;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:480px;margin:0 auto;
+    padding:calc(28px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));
+  }
+
+  header{text-align:center;margin-bottom:12px}
+  .tag{font-size:12px;letter-spacing:.18em;color:var(--ink-3)}
+  h1{
+    margin:4px 0 6px;font-weight:500;font-size:30px;line-height:1.25;letter-spacing:.22em;text-indent:.22em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    color:var(--ink);
+  }
+  .lede{margin:0;color:var(--ink-2);font-size:14px;line-height:1.62}
+
+  /* 播放器：跟着屏幕高度与宽度走，手机竖屏与电脑一屏都完整装下画面和控制条 */
+  .player{display:none}
+  .js .player{display:block}
+  .player{width:100%;max-width:min(100%, calc((100vh - 235px) * 9 / 16));margin:0 auto 24px}
+  @supports (height:100svh){
+    .player{max-width:min(100%, calc((100svh - 235px) * 9 / 16))}
+  }
+  .screen{
+    position:relative;border-radius:14px;overflow:hidden;background:#1A1826;
+    box-shadow:0 0 0 1px var(--line), 0 12px 32px -18px rgba(52,32,44,.52);
+    aspect-ratio:9/16;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  .screen canvas{display:block;width:100%;height:100%}
+  .big{
+    position:absolute;left:50%;top:89%;transform:translate(-50%,-50%);
+    width:64px;height:64px;border-radius:50%;border:0;padding:0;cursor:pointer;
+    background:rgba(38,30,42,.84);color:#FBF5EC;font:inherit;font-size:22px;line-height:64px;text-align:center;
+    box-shadow:0 0 0 1px rgba(255,255,255,.38);-webkit-tap-highlight-color:transparent;
+  }
+  .big.again{width:auto;padding:0 20px;border-radius:99px;height:46px;line-height:46px;font-size:15px;letter-spacing:.08em}
+  .playing .big{display:none}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin:10px 2px 2px;font-size:12.5px;color:var(--ink-3)}
+  .ctrl button{
+    appearance:none;-webkit-appearance:none;
+    font:inherit;font-size:12.5px;color:var(--ink);background:var(--paper-2);cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:4px 13px;-webkit-tap-highlight-color:transparent;
+  }
+  .ctrl button:active{background:#EAE1D6}
+  .ctrl .time{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .ctrl .sp{flex:1}
+  input[type=range]{width:100%;margin:6px 0 4px;accent-color:#C44768;height:26px;cursor:pointer}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chips button{
+    appearance:none;-webkit-appearance:none;
+    font:inherit;font-size:12.5px;color:var(--ink-2);background:transparent;cursor:pointer;
+    border:1px solid var(--line);border-radius:99px;padding:3px 11px;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .chips button.on{color:var(--accent);border-color:#E4B6C4;background:var(--paper-2)}
+
+  /* 字幕本：点哪句跳到哪句 */
+  .script{margin:8px 0 0;padding:20px 18px 8px;border-radius:16px;background:var(--paper-2);box-shadow:0 0 0 1px var(--line)}
+  .script h2,.poem h2{margin:0 0 12px;font-size:13px;font-weight:500;letter-spacing:.16em;color:var(--ink-3);text-align:center}
+  .sc{margin:0 0 16px}
+  .sc h3{
+    margin:0 0 4px;font-size:13px;font-weight:400;color:var(--ink-2);line-height:1.6;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  }
+  .sc h3 .no{color:var(--seal);font-size:14px;margin-right:8px}
+  .sc p{margin:0;padding:3px 0 3px 10px;border-left:2px solid transparent;color:var(--ink);font-size:14.5px}
+  .js .sc p{cursor:pointer}
+  .sc p.on{border-left-color:var(--accent);color:var(--accent)}
+
+  /* 原词 */
+  .poem{margin:18px 0 0;padding:20px 20px 14px;border-radius:16px;background:var(--paper-2);box-shadow:0 0 0 1px var(--line)}
+  .poem .pt{text-align:center;font-size:19px;letter-spacing:.2em;text-indent:.2em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif}
+  .poem .pa{text-align:center;font-size:12.5px;color:var(--ink-3);margin:2px 0 10px;letter-spacing:.1em}
+  .poem p{margin:0 0 10px;font-size:15.5px;line-height:2;text-indent:2em;
+    font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif}
+  .poem .src{font-size:12px;color:var(--ink-3);line-height:1.8;margin-top:4px}
+  .poem .src a{color:var(--ink-2)}
+
+  footer{margin:26px 0 0;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.9}
+  footer a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<script>document.documentElement.className='js';</script>
+<div class="wrap">
+  <header>
+    <div class="tag">小萌物短片 · 浣溪沙</div>
+    <h1>燕归来</h1>
+    <p class="lede">旧亭台外的海棠花，被晚风吹落了一地。<br>要是花都落光了，去年的小春燕还认得出家吗？<br>六只把漫天落花收进尾巴，铺成一条不孤单的香径。</p>
+  </header>
+
+  <div class="player" id="player">
+    <div class="screen" id="screen">
+      <canvas id="film" width="360" height="640" role="img" aria-label="燕归来（浣溪沙）：溪边旧亭台的海棠花落了一地，六只小萌物变形弹响新曲、托住夕阳余晖、把漫天落花收进尾巴铺满小园香径，迎回似曾相识的春燕的小短片"></canvas>
+      <button class="big" id="big" type="button" aria-label="播放">▶</button>
+    </div>
+    <div class="ctrl">
+      <button type="button" id="pp">播放</button>
+      <span class="time" id="time">0:00 / 0:00</span>
+      <span class="sp"></span>
+      <button type="button" id="snd" aria-pressed="true">声音 开</button>
+    </div>
+    <input type="range" id="seek" min="0" max="1900" step="1" value="0" aria-label="进度">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section class="script" id="script">
+    <h2>字 幕 本</h2>
+    <div class="sc" data-scene="intro" data-dur="14" data-chip="序">
+      <h3><span class="no">序</span>浣溪沙</h3>
+      <p data-t="1.0-3.8">浣溪沙，是一个词牌的名字，有时也写作「浣溪纱」。</p>
+      <p data-t="4.2-7.2">相传在很久以前，有人在清澈的溪水边浣洗轻纱，</p>
+      <p data-t="7.6-10.4">溪水漂净了薄纱，也流过了水底细白如雪的溪沙。</p>
+      <p data-t="10.8-13.4">而在小萌物的旧亭台外，也有一条绕过小园的清溪。</p>
+    </div>
+    <div class="sc" data-scene="jiu" data-dur="24" data-chip="一" data-no="一" data-poem="一曲新词酒一杯，">
+      <h3><span class="no">一</span>一曲新词酒一杯，</h3>
+      <p data-t="3.0-5.6">暮春的午后，溪边的旧亭台上摆着六只白瓷小杯。</p>
+      <p data-t="6.0-8.6">杯里盛的不是酒，是今早刚从海棠花上接的春露。</p>
+      <p data-t="9.0-11.8">六只都没有嘴，唱不出一曲新词，拿什么配这一杯花露呢？</p>
+      <p data-t="12.2-15.2">Clawd 坐到石桌前，把橘色扁壳往两边展宽，变成一张方琴台。</p>
+      <p data-t="15.6-18.8">小粉、小紫、小黑排成三颗圆音珠，在琴弦上蹦跳滚过——</p>
+      <p data-t="19.2-23.0">叮叮咚咚，弹出一支新曲子；FetchMo 拿尾巴尖碰了碰杯，算是干杯啦。</p>
+    </div>
+    <div class="sc" data-scene="ting" data-dur="24" data-chip="二" data-no="二" data-poem="去年天气旧亭台。">
+      <h3><span class="no">二</span>去年天气旧亭台。</h3>
+      <p data-t="3.0-5.6">微风吹过亭角，今天暖洋洋的云和风，跟去年春天一模一样。</p>
+      <p data-t="6.0-8.8">小紫滚到亭柱边，数着木柱上的刻痕：一、二、三。</p>
+      <p data-t="9.2-12.0">那是去年春天，它们在这儿送别一只小春燕时留下的记号。</p>
+      <p data-t="12.4-15.4">亭梁上还留着去年的旧燕巢，只是空荡荡的，落了一层薄灰。</p>
+      <p data-t="15.8-19.0">FetchMo 拉长身子跃上横梁，拿尾巴把旧燕巢扫得干干净净；</p>
+      <p data-t="19.4-23.0">StashYu 从大尾巴里掏出干爽的软草垫在巢边，等老朋友回家。</p>
+    </div>
+    <div class="sc" data-scene="xi" data-dur="24" data-chip="三" data-no="三" data-poem="夕阳西下几时回？">
+      <h3><span class="no">三</span>夕阳西下几时回？</h3>
+      <p data-t="3.0-5.6">不知不觉，太阳往西边的山头落下去，把溪水染成了橘红色。</p>
+      <p data-t="6.0-8.6">太阳落山了，什么时候才回来？燕子飞走了，什么时候才回来？</p>
+      <p data-t="9.0-12.0">六只怕天黑得太快，远道而来的小燕子会看不清路——</p>
+      <p data-t="12.4-15.4">Clawd 站到亭子西边，把扁壳高高往上抻长，变成一座望日高塔，</p>
+      <p data-t="15.8-18.8">两只橘钳子往外伸得老长，像要把西沉的夕阳托在半空；</p>
+      <p data-t="19.2-23.0">三颗小脸蛋叠上塔顶压成三面圆铜镜，把落日余晖一束束折回亭台里。</p>
+    </div>
+    <div class="sc" data-scene="hua" data-dur="26" data-chip="四" data-no="四" data-poem="无可奈何花落去，">
+      <h3><span class="no">四</span>无可奈何花落去，</h3>
+      <p data-t="3.0-5.6">暮风忽然吹起，亭外海棠树上的春花，哗啦啦往下落。</p>
+      <p data-t="6.0-8.8">要是满树的花都落光了，小燕子回来时，还认得出这座小园吗？</p>
+      <p data-t="9.2-12.2">Clawd 赶紧把扁壳往两边大摊开，变成一只宽宽的橘色方竹匾去接；</p>
+      <p data-t="12.6-15.6">小粉、小紫、小黑把身子拉长压扁，像三匹溪边轻纱在半空兜住花瓣；</p>
+      <p data-t="16.0-19.2">FetchMo 在花雨里高高跃起，StashYu 把接住的花瓣全收进大尾巴里——</p>
+      <p data-t="19.6-22.4">火红的尾巴一圈一圈胖成了大花球，可枝头还是空了，</p>
+      <p data-t="22.8-25.2">春花要落，怎么留也留不住，真叫人无可奈何。</p>
+    </div>
+    <div class="sc" data-scene="yan" data-dur="28" data-chip="五" data-no="五" data-poem="似曾相识燕归来。">
+      <h3><span class="no">五</span>似曾相识燕归来。</h3>
+      <p data-t="3.0-5.6">就在六只对着空枝子发呆的时候，暮色里掠过一道剪刀似的黑影！</p>
+      <p data-t="6.0-8.8">是一只风尘仆仆的小春燕，绕着光秃秃的海棠树转了两圈。</p>
+      <p data-t="9.2-12.2">它停在旧亭栏杆上，歪着脑袋打量六只，六只也屏住呼吸看它——</p>
+      <p data-t="12.6-15.6">看！燕子翅膀边，还沾着去年 StashYu 送它的一小撮火红绒毛！</p>
+      <p data-t="16.0-18.8">是似曾相识的老朋友，它真的顺着夕阳余晖找回来了！</p>
+      <p data-t="19.2-22.4">小粉一下子跳上空枝头，憋足了劲，把自己鼓成一朵五瓣红海棠；</p>
+      <p data-t="22.8-26.8">小紫和小黑也滚上枝头变成花苞，替老朋友开出一树不会落的花！</p>
+    </div>
+    <div class="sc" data-scene="jing" data-dur="26" data-chip="六" data-no="六" data-poem="小园香径独徘徊。">
+      <h3><span class="no">六</span>小园香径独徘徊。</h3>
+      <p data-t="3.0-5.8">原词里说，词人一个人在落满花的小园香径上「独徘徊」。</p>
+      <p data-t="6.2-9.0">可是在小萌物的小园里，谁也不会孤零零地一个人走。</p>
+      <p data-t="9.4-12.4">StashYu 跑到溪边的石子小径上，把胖成大花球的尾巴轻轻一抖——</p>
+      <p data-t="12.8-15.8">刚才收起来的漫天海棠花瓣，夹着清溪的水光，全洒了出来！</p>
+      <p data-t="16.2-19.2">一片接一片，把光秃秃的石子路铺成了一条名副其实的「香径」。</p>
+      <p data-t="19.6-22.4">小黑、小粉、小紫在花瓣路上滚着开路，Clawd 迈着四条小短腿跟在后头，</p>
+      <p data-t="22.8-25.2">春燕停在 Clawd 壳顶上，大家一起在香径上慢悠悠地散步。</p>
+    </div>
+    <div class="sc" data-scene="end" data-dur="24" data-chip="终" data-no="终">
+      <h3><span class="no">终</span>燕归来</h3>
+      <p data-t="2.4-5.2">夜色落进小园，一弯新月升上旧亭台，清溪里流着花瓣和月光。</p>
+      <p data-t="5.6-8.4">春燕睡在垫满软草的旧巢里，六只围坐在香径边的亭台上。</p>
+      <p data-t="8.8-11.6">StashYu 把最后一片海棠花瓣收进尾巴，白尖点两下：收好了。</p>
+      <p data-t="12.0-14.8">词里叹息：夕阳西下几时回，无可奈何花落去。</p>
+      <p data-t="15.2-18.0">可在这座小园里，落下的花铺成了香径，远行的燕子也回了家。</p>
+      <p data-t="18.4-23.2" data-k="end">花落自有香满径，<br>燕子年年认得家。</p>
+    </div>
+  </section>
+
+  <section class="poem" id="poem">
+    <h2>原 词</h2>
+    <div class="pt">浣溪沙</div>
+    <div class="pa">〔宋〕晏殊</div>
+    <p>一曲新词酒一杯，去年天气旧亭台。夕阳西下几时回？</p>
+    <p>无可奈何花落去，似曾相识燕归来。小园香径独徘徊。</p>
+    <div class="src">
+      文字照《全宋词》与开源数据集
+      <a href="https://github.com/chinese-poetry/chinese-poetry/blob/master/%E5%AE%8B%E8%AF%8D/ci.song.0.json">chinese-poetry《全宋词》</a>逐字核过，一字未改；有的旧本将「几时回？」句末标作句号。<br>
+      晏殊生于 991 年，1055 年去世，这首词收在《珠玉词》里，距今已近一千年。
+    </div>
+  </section>
+
+  <footer>
+    片头说词牌《浣溪沙》取自溪边浣洗轻纱的传说，<br>
+    是唐代教坊曲名相传的来历；<br>
+    每一场开头竖着的那一句，是原词按顺序拆开的六句；<br>
+    花露小杯、留住夕阳的圆铜镜、收进尾巴的海棠花和香径，是这一部编的。<br>
+    曲子和画面都是一格一格写出来的 · 2026.11
+  </footer>
+</div>
+<script>
+(function(){
+'use strict';
+var W=360, H=640, TAU=Math.PI*2, PI=Math.PI;
+var cv=document.getElementById('film'), ctx=cv.getContext('2d');
+var S=1;
+var SANS='-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei","WenQuanYi Zen Hei",sans-serif';
+var SERIF='"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun","Noto Sans CJK SC","WenQuanYi Zen Hei",serif';
+
+/* ---------- 场次与字幕：直接从下面的字幕本读取 ---------- */
+var SCENES=[], TOTAL=0, CUR=null;
+Array.prototype.forEach.call(document.querySelectorAll('.sc'),function(el){
+  var d=el.dataset;
+  var sc={id:d.scene, dur:+d.dur, poem:d.poem||'', no:d.no||'', chipText:d.chip||'', start:TOTAL, caps:[], el:el};
+  Array.prototype.forEach.call(el.querySelectorAll('p[data-t]'),function(p){
+    var a=p.dataset.t.split('-'), tmp=document.createElement('div');
+    tmp.innerHTML=p.innerHTML.replace(/<br\s*\/?>/gi,'\n');
+    sc.caps.push({t0:+a[0], t1:+a[1], text:p.textContent.trim(), say:tmp.textContent.replace(/^\s+|\s+$/g,''),
+      el:p, k:p.dataset.k||''});
+  });
+  TOTAL+=sc.dur; SCENES.push(sc);
+});
+function sceneStart(id){ for(var i=0;i<SCENES.length;i++) if(SCENES[i].id===id) return SCENES[i].start; return 0; }
+
+/* ---------- 镜头与画笔 ---------- */
+function setup(pxW){
+  pxW=Math.max(180,Math.round(pxW));
+  cv.width=pxW; cv.height=Math.round(pxW*H/W); S=cv.width/W;
+}
+var CAM={x:180,y:320,z:1};
+function cam(x,y,z){ CAM.x=x; CAM.y=y; CAM.z=z; }
+function flat(){ cam(180,320,1); }
+function X(x){ return ((x-CAM.x)*CAM.z+180)*S; }
+function Y(y){ return ((y-CAM.y)*CAM.z+320)*S; }
+function worldT(){ var z=CAM.z*S; ctx.setTransform(z,0,0,z,(180-CAM.x*CAM.z)*S,(320-CAM.y*CAM.z)*S); }
+function layer(p,fn){ var c=[CAM.x,CAM.y,CAM.z]; cam(lerp(180,c[0],p),lerp(320,c[1],p),1+(c[2]-1)*p); fn(); cam(c[0],c[1],c[2]); }
+var A=1;
+
+function clamp(v){return v<0?0:v>1?1:v;}
+function lerp(a,b,p){return a+(b-a)*p;}
+function smooth(p){p=clamp(p);return p*p*(3-2*p);}
+function inR(t,a,b){return t>=a&&t<b;}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+/* 像素矩形：首尾分别取整到真像素，绝不漏华夫饼细缝 */
+function R(x,y,w,h,c,a){
+  var al=(a===undefined?1:a)*A; if(al<=0) return;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha=al>1?1:al; ctx.fillStyle=c;
+  var x0=Math.round(X(x)), y0=Math.round(Y(y)), x1=Math.round(X(x+w)), y1=Math.round(Y(y+h));
+  if(x1>x0&&y1>y0) ctx.fillRect(x0,y0,x1-x0,y1-y0);
+  ctx.globalAlpha=1;
+}
+function veilAll(c,a){
+  if(a<=0) return;
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.fillRect(0,0,cv.width,cv.height); ctx.globalAlpha=1;
+}
+function roundPathOn(c,x,y,w,h,r){
+  r=Math.max(0,Math.min(r,w/2,h/2));
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+function roundPath(x,y,w,h,r){ roundPathOn(ctx,x,y,w,h,r); }
+function rrect(x,y,w,h,r,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0||w<=0||h<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.beginPath(); roundPathOn(ctx,x,y,w,h,r); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function dot(x,y,r,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function ell(x,y,rx,ry,c,a,rot){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a;
+  ctx.beginPath(); ctx.ellipse(x,y,Math.max(.01,rx),Math.max(.01,ry),rot||0,0,TAU);
+  ctx.fillStyle=c; ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function ring(x,y,r,c,lw,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.stroke();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function arcAt(x,y,r,a0,a1,c,lw,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1; ctx.lineCap='round';
+  ctx.beginPath(); ctx.arc(x,y,r,a0,a1); ctx.stroke(); ctx.lineCap='butt';
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function line(pts,c,lw,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.stroke(); ctx.lineCap='butt';
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function sag(x0,y0,x1,y1,d,c,lw,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.strokeStyle=c; ctx.lineWidth=lw||1; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.quadraticCurveTo((x0+x1)/2,(y0+y1)/2+d,x1,y1); ctx.stroke(); ctx.lineCap='butt';
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function poly(pts,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); ctx.globalAlpha=a>1?1:a; ctx.fillStyle=c;
+  ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); for(var i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function rgbOf(h){ var n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
+function hexA(h,a){ var c=rgbOf(h); return 'rgba('+c[0]+','+c[1]+','+c[2]+','+clamp(a)+')'; }
+function mixH(a,b,p){
+  var x=rgbOf(a), y=rgbOf(b); p=clamp(p);
+  return '#'+[0,1,2].map(function(i){ return ('0'+Math.round(lerp(x[i],y[i],p)).toString(16)).slice(-2); }).join('');
+}
+function glowAt(x,y,r,c,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  worldT(); var g=ctx.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,hexA(c,a)); g.addColorStop(.45,hexA(c,a*.35)); g.addColorStop(1,hexA(c,0));
+  ctx.fillStyle=g; ctx.fillRect(x-r,y-r,2*r,2*r);
+  ctx.setTransform(1,0,0,1,0,0);
+}
+function grad(x,y,w,h,stops,a){
+  a=(a===undefined?1:a)*A; if(a<=0) return;
+  worldT(); var g=ctx.createLinearGradient(0,y,0,y+h);
+  stops.forEach(function(s){ g.addColorStop(s[0],s[1]); });
+  ctx.globalAlpha=a>1?1:a; ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function star4(x,y,r,c,a){
+  var p=[], k=r*.3;
+  [[0,-r],[k,-k],[r,0],[k,k],[0,r],[-k,k],[-r,0],[-k,-k]].forEach(function(q){ p.push(x+q[0],y+q[1]); });
+  poly(p,c,a);
+}
+function ck(t,keys){
+  if(t<=keys[0][0]) return keys[0].slice(1);
+  for(var i=1;i<keys.length;i++){
+    if(t<keys[i][0]){
+      var a=keys[i-1], b=keys[i], p=smooth((t-a[0])/(b[0]-a[0]));
+      return [lerp(a[1],b[1],p), lerp(a[2],b[2],p), a[3]*Math.pow(b[3]/a[3],p)];
+    }
+  }
+  return keys[keys.length-1].slice(1);
+}
+function camK(t,keys){ var k=ck(t,keys); cam(k[0],k[1],k[2]); }
+function kv(t,keys){
+  if(t<=keys[0][0]) return keys[0][1];
+  for(var i=1;i<keys.length;i++){
+    if(t<keys[i][0]){ var a=keys[i-1], b=keys[i]; return lerp(a[1],b[1],smooth((t-a[0])/(b[0]-a[0]))); }
+  }
+  return keys[keys.length-1][1];
+}
+function q15(t){ return Math.floor(t*15)/15; }
+function stepP(t,t0,d,n){ return Math.floor(clamp((t-t0)/d)*(n||8))/(n||8); }
+function jump(t,t0,d,h){
+  if(!inR(t,t0,t0+d)) return 0;
+  var p=Math.min(1,Math.floor((t-t0)*15)/15/d);
+  return -h*4*p*(1-p);
+}
+function cyc(t,t0,list){
+  var tot=0, i; for(i=0;i<list.length;i++) tot+=list[i][1];
+  var u=((t-t0)%tot+tot)%tot;
+  for(i=0;i<list.length;i++){ if(u<list[i][1]) return list[i][0]; u-=list[i][1]; }
+  return list[0][0];
+}
+function blinkOn(t,per,off){ return ((t+off)%per)<.14; }
+function fade(t,t0,t1,f){ f=f||.25; return Math.min(clamp((t-t0)/f),clamp((t1-t)/f)); }
+
+/* ---------- 文字与提示 ---------- */
+var SEG=(typeof Intl!=='undefined'&&Intl.Segmenter)?new Intl.Segmenter('zh',{granularity:'grapheme'}):null;
+function chars(s){
+  if(SEG) return Array.from(SEG.segment(s),function(x){ return x.segment; });
+  return s.match(/[\s\S]/g)||[];
+}
+function wt(s,x,y,o){
+  var a=(o.a===undefined?1:o.a)*A; if(a<=0||!s) return;
+  var size=o.size*CAM.z*S;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.font=(o.wt||400)+' '+size+'px '+(o.fam||SANS);
+  ctx.fillStyle=o.c; ctx.globalAlpha=a>1?1:a;
+  ctx.textBaseline='alphabetic'; ctx.textAlign=o.al||'left';
+  if(o.glow){ ctx.shadowColor=o.glow; ctx.shadowBlur=4*S; }
+  ctx.fillText(s,X(x),Y(y));
+  ctx.shadowBlur=0; ctx.shadowColor='rgba(0,0,0,0)';
+  ctx.globalAlpha=1;
+}
+function lsWidth(s,ls){ var w=0, a=chars(s); a.forEach(function(ch){ w+=ctx.measureText(ch).width; }); return w+ls*Math.max(0,a.length-1); }
+function spaced(s,cx,y,ls){
+  if(!ls){
+    var old=ctx.textAlign; ctx.textAlign='center'; ctx.fillText(s,cx,y); ctx.textAlign=old; return;
+  }
+  var a=chars(s), x=cx-lsWidth(s,ls)/2;
+  a.forEach(function(ch){ ctx.fillText(ch,x,y); x+=ctx.measureText(ch).width+ls; });
+}
+var PUNCT='，。、！？；：…—」』）,:.!?';
+var BREAK='，。？！…—：；,:';
+function wrap(s,max,mw){
+  mw=mw||function(x){ return ctx.measureText(x).width; };
+  if(mw(s)<=max) return [s];
+  var a=chars(s), best=-1, mid=a.length/2, i;
+  for(i=1;i<a.length-1;i++){
+    if(BREAK.indexOf(a[i])>=0 && PUNCT.indexOf(a[i+1])<0){
+      if(best<0||Math.abs(i+1-mid)<Math.abs(best-mid)) best=i+1;
+    }
+  }
+  if(best>0){
+    var l=a.slice(0,best).join(''), r=a.slice(best).join('');
+    if(mw(l)<=max+24&&mw(r)<=max+24) return [l,r];
+  }
+  var out=[], cur='';
+  a.forEach(function(k){
+    var t=cur+k;
+    if(cur&&mw(t)>max&&PUNCT.indexOf(k)<0){ out.push(cur); cur=k; } else cur=t;
+  });
+  if(cur) out.push(cur);
+  return out;
+}
+function popNum(s,x,y,t,t0,d,c,size,glow){
+  if(!inR(t,t0,t0+d)) return;
+  var u=t-t0, k=u<.1?1.25:1, a=Math.min(1,(t0+d-t)/.35);
+  wt(s,x,y-stepP(t,t0,d,8)*7,{size:(size||11)*k,wt:700,c:c,al:'center',a:a,fam:SERIF,glow:glow});
+}
+function zzT(t,x,y,ph,c,size){
+  var u=((t+(ph||0))%2.4)/2.4, s=Math.floor(u*6), sz=size||9, a=u<.8?1:(1-u)*5;
+  ['z','z','Z'].forEach(function(g,i){
+    if(s<i) return;
+    wt(g,x+i*sz*.62,y-i*sz*.55-s*1.2,{size:sz*(i===2?1.15:.9),wt:700,c:c||'#E8E0D5',a:a*(.55+.15*i),fam:SANS});
+  });
+}
+
+/* ---------- 六只小萌物（严格遵循三页造型宪法） ---------- */
+var MC=3, FR=14, CK=.3;
+/* 1. Clawd：Code 版宪法（#d47f59，无嘴，踩角站姿，两道竖黑条眼）。
+   变形扩展：o.wide 横向展宽倍数（当方琴台、接花方竹匾），o.tall 纵向抻高倍数（望日高塔），
+   o.llong / o.rlong 左右钳伸长，o.la / o.ra 左右钳上下位移。 */
+var CL_C='#d47f59', CL_INK='#120d1d';
+var CL_EYES={
+  bar:[[70,78,8,21],[158,78,8,21]],
+  smile:[[62,88,8,8],[70,80,8,11],[78,88,8,8],[150,88,8,8],[158,80,8,11],[166,88,8,8]],
+  shut:[[62,86,24,8],[150,86,24,8]],
+  left:[[62,78,8,21],[150,78,8,21]],
+  right:[[78,78,8,21],[166,78,8,21]],
+  up:[[70,70,8,21],[158,70,8,21]]
+};
+function clawd(x,y,k,o){
+  o=o||{}; var la=o.la||0, ra=o.ra||0, C=o.sil||CL_C, E=CL_INK;
+  var tall=o.tall||1, wide=o.wide||1;
+  var sw=147*wide, sx0=117.5-sw/2;
+  var sh=98*tall, top=148-sh, dy=top-50;
+  var rl=o.rlong||0, ll=o.llong||0;
+  function r(a,b,w,h,c){ R(x+a*k,y+b*k,w*k,h*k,c); }
+  if(o.outline){
+    var p=5;
+    r(sx0-p,top-p,sw+2*p,sh+2*p,o.outline);
+  }
+  /* 壳与左右平伸短矩形钳 */
+  r(sx0,top,sw,sh,C);
+  r(sx0-24-ll,99+dy+la,24+ll,21,C);
+  r(sx0+sw,99+dy+ra,25+rl,21,C);
+  /* 四条踩角竖直短腿（左右各两条，最外侧与壳左右边齐平） */
+  var l0=sx0, l1=sx0+24, l3=sx0+sw-15, l2=l3-24;
+  var legH=o.legH||21;
+  r(l0,148,15,legH,C); r(l1,148,15,legH,C); r(l2,148,15,legH,C); r(l3,148,15,legH,C);
+  if(o.sil) return;
+  /* 眼睛：每只眼睛正好在内侧那条腿的上方 */
+  var exL=l1+2-70, exR=l2+6-158;
+  (CL_EYES[o.eyes||'bar']).forEach(function(e){
+    var dx = (e[0]<115) ? exL : exR;
+    r(e[0]+dx,e[1]+dy,e[2],e[3],E);
+  });
+  if(o.shine&&(o.eyes||'bar')==='bar'){
+    r(70+exL,80+dy,4,5,'#FFFFFF'); r(158+exR,80+dy,4,5,'#FFFFFF');
+  }
+}
+function clawdAt(cx,foot,o,k){ k=k||CK; clawd(cx-117.5*k,foot-169*k,k,o); }
+function clawdTop(foot,tall,k){ return foot-(21+98*(tall||1))*(k||CK); }
+function CL(t,cx,foot,o,k){
+  o=o||{};
+  if(!o.eyes&&!o.sil) o.eyes=blinkOn(t,5.1,2.6)?'shut':'bar';
+  clawdAt(cx,foot,o,k);
+}
+
+/* 2. 小脸蛋：实测版宪法（正圆，sRGB #FF309B / #9159FE / #000000，
+   右上方两道反斜杠圆头胶囊缝 rotate(-26.2°)，右缝比左缝窄约三分之一，evenodd 挖空透出背景）。
+   变形扩展：o.petal 鼓成五瓣海棠花（0~1），o.sx / o.sy 压扁拉长（琴上音珠、留光铜镜、溪纱软网）。 */
+var FACE=['#FF309B','#9159FE','#000000'];
+function slit(cx,cy,w,h,deg){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(deg*PI/180);
+  roundPathOn(ctx,-w/2,-h/2,w,h,Math.min(w,h)/2);
+  ctx.restore();
+}
+var PET0=-50*PI/180;
+function face(cx,cy,r,col,o){
+  o=o||{}; if(A<=0) return;
+  var h=.418*(1-.82*clamp(o.bl||0)), pet=clamp(o.petal||0);
+  worldT(); ctx.translate(cx,cy); ctx.scale(o.sx||1,o.sy||1); ctx.rotate((o.rot||0)*PI/180);
+  ctx.globalAlpha=A>1?1:A;
+  if(o.ring){
+    ctx.beginPath(); ctx.arc(0,0,r+1.8,0,TAU); ctx.arc(0,0,r+.2,0,TAU);
+    ctx.fillStyle=o.ring; ctx.fill('evenodd');
+  }
+  ctx.beginPath();
+  if(pet>0){
+    var a=.22*pet;
+    for(var i=0;i<=120;i++){
+      var th=i/120*TAU, f=Math.pow(Math.abs(Math.cos(2.5*(th-PET0))),.6), rr=r*(1-a+2*a*f);
+      if(i) ctx.lineTo(rr*Math.cos(th),rr*Math.sin(th)); else ctx.moveTo(rr*Math.cos(th),rr*Math.sin(th));
+    }
+    ctx.closePath();
+  } else ctx.arc(0,0,r,0,TAU);
+  if(!o.sil){
+    slit(.194*r,-.416*r,.194*r,h*r,-26.2);
+    slit(.626*r,-.497*r,.129*r,h*r,-26.5);
+  }
+  ctx.fillStyle=o.sil||col; ctx.fill('evenodd');
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function idleRot(t,i){ return -8+(((Math.floor(t/.9)+i)%2)?3:0); }
+function FC(t,i,cx,cy,o){
+  o=o||{};
+  face(cx,cy,o.r||FR,FACE[i],{
+    rot:o.rot===undefined?idleRot(t,i):o.rot,
+    bl:o.bl!==undefined?o.bl:(blinkOn(t,4.3+i*.6,1.1+i*1.3)?1:0),
+    petal:o.petal||0, sx:o.sx||1, sy:o.sy||1, ring:o.ring, sil:o.sil
+  });
+}
+
+/* 3. StashYu 与 FetchMo：momoyu 造型宪法 20×13 像素格与尾巴 DLC，逐格照抄 */
+var FOX={
+  rows:[
+    ".D..........D.......",
+    ".DM........MD.......",
+    ".MCM......MCM...CC..",
+    ".MMMMMMMMMMMM..CCCC.",
+    ".MMEEMMMMEEMM..MMMM.",
+    ".MMEEMMMMEEMM..MMMMM",
+    "CCCCCCDDCCCCCC.MMMMM",
+    "..CCCCCCCCCC..MMMMM.",
+    "....MMCCMM...MMMMM..",
+    "....MMCCMM..MMMMM...",
+    "....MMMMMM.MMMMM....",
+    "....DDMMDDMMMM......",
+    "...................."
+  ],
+  pal:{M:'#E2552B',C:'#FFF3E3',D:'#3B2520',P:'#F8B6C8'}, line:'#3B2520', eye:'#3B2520',
+  eyes:[[3,4],[9,4]], blush:[[2,6],[11,6]], blushC:'#F59A8C', shine:[1,0]
+};
+var CAT={
+  rows:[
+    "....................",
+    "........X........X..",
+    ".......XXX......XXX.",
+    "........MMMMMMMMMM..",
+    ".......MMMMMMMMMMMM.",
+    ".......MEEMMMMMMEEM.",
+    ".....X.MEEMXXXXMEEM.",
+    "....X..MMMMMXXMMMMM.",
+    "....X...MMMMMMMMMM..",
+    "....X...MMMMMMMMMM..",
+    ".....X...MMMMMMMM...",
+    "......XXXXXM..MXX...",
+    "...................."
+  ],
+  pal:{M:'#F3E7D6',X:'#4E382E'}, line:'#4E382E', eye:'#79C0F0',
+  eyes:[[8,5],[16,5]], blush:[[8,7],[17,7]], blushC:'#F2B8B0', shine:[0,0]
+};
+var FOX_TAP=[
+  ".D..........D.......",".DM........MD.......",".MCM......MCM.CC....",".MMMMMMMMMMMM.CCCC..",
+  ".MMEEMMMMEEMM..MMMM.",".MMEEMMMMEEMM..MMMMM","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.",
+  "....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."
+];
+var FOX_IN=[
+  ".D..........D.......",".DM........MD.......",".MCM......MCM..CC...",".MMMMMMMMMMMM.CCCC..",
+  ".MMEEMMMMEEMM.MMMM..",".MMEEMMMMEEMM.MMMMM.","CCCCCCDDCCCCCC.MMMMM","..CCCCCCCCCC..MMMMM.",
+  "....MMCCMM...MMMMM..","....MMCCMM..MMMMM...","....MMMMMM.MMMMM....","....DDMMDDMMMM......","...................."
+];
+var FOX_OUT=[
+  ".D..........D........",".DM........MD........",".MCM......MCM....CC..",".MMMMMMMMMMMM...CCCC.",
+  ".MMEEMMMMEEMM...MMMM.",".MMEEMMMMEEMM...MMMMM","CCCCCCDDCCCCCC.MMMMM.","..CCCCCCCCCC..MMMMM..",
+  "....MMCCMM...MMMMM...","....MMCCMM..MMMMM....","....MMMMMM.MMMMM.....","....DDMMDDMMMM.......","....................."
+];
+var FOX_DROOP=[
+  ".D..........D........",".DM........MD........",".MCM......MCM........",".MMMMMMMMMMMM........",
+  ".MMEEMMMMEEMM........",".MMEEMMMMEEMM........","CCCCCCDDCCCCCC.......","..CCCCCCCCCC.........",
+  "....MMCCMM...MM......","....MMCCMM..MMMMM....","....MMMMMM.MMMMMMMCC.","....DDMMDDMMMMMMMCCCC","....................."
+];
+var CAT_STR=[
+  "....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",
+  ".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.",
+  "....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."
+];
+var CAT_OUT=[
+  "....................","........X........X..",".......XXX......XXX.","........MMMMMMMMMM..",
+  ".......MMMMMMMMMMMM.",".......MEEMMMMMMEEM.","...X...MEEMXXXXMEEM.","....X..MMMMMXXMMMMM.",
+  "....X...MMMMMMMMMM..","....X...MMMMMMMMMM..",".....X...MMMMMMMM...","......XXXXXM..MXX...","...................."
+];
+var CAT_UP=[
+  "....................","........X........X..",".....X.XXX......XXX.","....X...MMMMMMMMMM..",
+  "....X..MMMMMMMMMMMM.","....X..MEEMMMMMMEEM.","....X..MEEMXXXXMEEM.",".....X.MMMMMXXMMMMM.",
+  "......X.MMMMMMMMMM..",".......XMMMMMMMMMM..","........XMMMMMMMM...",".........XXM..MXX...","...................."
+];
+var FOX_WAG=[[FOX.rows,.22],[FOX_IN,.22],[FOX.rows,.22],[FOX_OUT,.22]];
+var FOX_TAPTWO=[[FOX.rows,.9],[FOX_TAP,.18],[FOX.rows,.18],[FOX_TAP,.18]];
+var CAT_TWITCH=[[CAT.rows,.8],[CAT_STR,.14],[CAT_OUT,.14],[CAT_STR,.14]];
+
+var N4=[[0,0],[1,0],[0,1],[1,1]];
+function eyeCells(e,i){
+  switch(e){
+    case 'blink':  return {c:[[0,1],[1,1]], k:'L'};
+    case 'happy':  return {c:[[-1,1],[0,0],[1,0],[2,1]], k:'L'};
+    case 'asleep': return {c:[[-1,0],[0,1],[1,1],[2,0]], k:'L'};
+    case 'squeeze':return {c:i?[[1,-1],[0,0],[1,1]]:[[0,-1],[1,0],[0,1]], k:'L'};
+    case 'blank':  return {c:i?[[0,1]]:[[1,1]], k:'E'};
+    case 'glanceL':return {c:N4.map(function(p){return [p[0]-1,p[1]];}), k:'E'};
+    case 'glanceR':return {c:N4.map(function(p){return [p[0]+1,p[1]];}), k:'E'};
+    default:       return {c:N4, k:'E'};
+  }
+}
+function foxTailCell(r,c){ return (r<=6&&c>=15)||(r===7&&c>=14)||(r>=8&&c>=10); }
+function foxGrow(r,c){ return r>=-1&&r<=11&&((r<=6&&c>=14)||(r===7&&c>=13)||(r>=8&&c>=11)); }
+function fatten(g,n){
+  for(var k=0;k<n;k++){
+    var add=[];
+    Object.keys(g).forEach(function(rs){
+      var r=+rs;
+      Object.keys(g[r]).forEach(function(cs){
+        var c=+cs, v=g[r][c]; if(!foxTailCell(r,c)||(v!=='M'&&v!=='C'&&v!=='P')) return;
+        [[1,0],[-1,0],[0,1],[0,-1]].forEach(function(d){
+          var rr=r+d[0], cc=c+d[1];
+          if((g[rr]&&g[rr][cc])||!foxGrow(rr,cc)) return;
+          add.push([rr,cc,v==='C'?'C':(((rr*7+cc*3+k)%5)===0?'P':'M')]);
+        });
+      });
+    });
+    add.forEach(function(q){ var row=g[q[0]]||(g[q[0]]={}); if(!row[q[1]]||q[2]==='C') row[q[1]]=q[2]; });
+  }
+}
+function momo(ch,x,y,cell,o){
+  o=o||{};
+  var rows=o.rows||ch.rows, g={}, r, c, k, chh=o.ch||cell;
+  function put(r,c,v){ (g[r]||(g[r]={}))[c]=v; }
+  for(r=0;r<rows.length;r++) for(c=0;c<rows[r].length;c++){ k=rows[r][c]; if(k!=='.') put(r,c,k); }
+  if(o.fat&&ch===FOX) fatten(g,o.fat);
+  if(!o.sil){
+    ch.eyes.forEach(function(p,i){
+      N4.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],'M'); });
+      var e=eyeCells(o.eyes||'normal',i);
+      e.c.forEach(function(q){ put(p[1]+q[1],p[0]+q[0],e.k); });
+      if(o.shine&&e.k==='E'){
+        var sx=p[0]+ch.shine[0]+(o.eyes==='glanceR'?1:0)-(o.eyes==='glanceL'?1:0);
+        put(p[1]+ch.shine[1],sx,'W');
+      }
+    });
+    if(o.blush) ch.blush.forEach(function(p){ put(p[1],p[0],'B'); });
+  }
+  function col(v){
+    if(!v) return null;
+    if(o.sil) return o.sil;
+    return v==='E'?ch.eye : v==='L'?ch.line : v==='B'?ch.blushC : v==='W'?'#FFFFFF' : ch.pal[v];
+  }
+  var yb=y+13*cell-13*chh;
+  if(o.outline){
+    for(r=-3;r<=13;r++){
+      var orow=g[r]; if(!orow) continue;
+      c=-10;
+      while(c<=32){
+        if(!orow[c]){c++;continue;}
+        var e2=c; while(e2+1<=32&&orow[e2+1]) e2++;
+        R(x+(c-1)*cell,yb+(r-1)*chh,(e2-c+3)*cell,3*chh,o.outline);
+        c=e2+1;
+      }
+    }
+  }
+  for(r=-3;r<=13;r++){
+    var row=g[r]; if(!row) continue;
+    c=-10;
+    while(c<=32){
+      var cc=col(row[c]); if(!cc){c++;continue;}
+      var c2=c; while(c2+1<=32&&col(row[c2+1])===cc) c2++;
+      R(x+c*cell,yb+r*chh,(c2-c+1)*cell,chh,cc);
+      c=c2+1;
+    }
+  }
+}
+function FX(t,x,foot,o,cell){
+  cell=cell||MC; o=o||{};
+  if(!o.eyes&&!o.sil) o.eyes=blinkOn(t,4.7,1.4)?'blink':'normal';
+  momo(FOX,x,foot-12*cell,cell,o);
+}
+function CT(t,x,foot,o,cell){
+  cell=cell||MC; o=o||{};
+  if(!o.eyes&&!o.sil) o.eyes=blinkOn(t,5.3,3.1)?'blink':'normal';
+  momo(CAT,x,foot-12*cell,cell,o);
+}
+/* ---------- 自然景物、旧亭台、海棠花、清溪与春燕 ---------- */
+function petalAt(x,y,r,rot,c1,c2,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  ell(x,y,r,r*.62,c1||'#F47B96',a,rot||0);
+  ell(x+Math.cos(rot||0)*r*.22,y+Math.sin(rot||0)*r*.22,r*.55,r*.35,c2||'#FDE2E8',a*.85,rot||0);
+}
+function blossomAt(x,y,r,rot,a){
+  a=(a===undefined?1:a)*A; if(a<=0||r<=0) return;
+  for(var i=0;i<5;i++){
+    var th=(rot||0)+i*TAU/5;
+    var px=x+Math.cos(th)*r*.58, py=y+Math.sin(th)*r*.58;
+    ell(px,py,r*.52,r*.38,i%2===0?'#EE6B88':'#F694AA',a,th);
+  }
+  dot(x,y,r*.24,'#FAD678',a);
+}
+function cupAt(x,y,s,dew,glow){
+  s=s||1;
+  if(glow) glowAt(x,y-3*s,12*s,'#FAD896',glow);
+  ell(x,y+1*s,7.5*s,2.5*s,'rgba(30,24,34,.22)',1);
+  poly([x-6.5*s,y-6*s, x+6.5*s,y-6*s, x+5*s,y, x-5*s,y],'#F7F4EE',1);
+  rrect(x-3.5*s,y-.5*s,7*s,2*s,1*s,'#DFD8CE',1);
+  ell(x,y-6*s,6.5*s,2.2*s,'#E8E2D8',1);
+  if(dew){
+    ell(x,y-5.8*s,5.4*s,1.6*s,'#F598B0',.85);
+    dot(x-1.8*s,y-6.1*s,1.1*s,'#FFFFFF',.9);
+  }
+}
+function nestAt(x,y,dust,straw){
+  /* 梁上旧燕巢：半圆藤泥编织纹理 */
+  ell(x,y,22,10,'#6E503B',1);
+  ell(x,y-3,20,7,'#4B3526',1);
+  for(var i=-2;i<=2;i++){
+    arcAt(x+i*4,y+1,12,PI*.12,PI*.88,'#8A674E',1.4,.85);
+  }
+  if(dust>0){
+    ell(x-6,y+2,14,4,'#B8B2AA',dust*.55);
+    dot(x+8,y+3,2.5,'#C5B0B8',dust*.5);
+  }
+  if(straw>0){
+    var sc='#F2C56B';
+    line([x-18,y-2, x-10,y-5, x-2,y-3],sc,1.6,straw);
+    line([x-6,y-4, x+5,y-6, x+14,y-2],sc,1.6,straw);
+    line([x+4,y-5, x+16,y-4, x+20,y-1],'#E6AE52',1.5,straw);
+  }
+}
+/* 剪尾春燕：hasMark 为 true 时，左翅边带有一小撮 StashYu 的火红绒毛 (#E2552B) */
+function swallowAt(x,y,rot,wing,sc,hasMark){
+  sc=sc||1; wing=wing||0;
+  worldT(); ctx.save();
+  ctx.translate(x,y); ctx.rotate(rot||0); ctx.scale(sc,sc);
+  ctx.globalAlpha=A>1?1:A;
+  /* 剪刀尾羽 */
+  ctx.fillStyle='#1D2230';
+  ctx.beginPath();
+  ctx.moveTo(-6,2); ctx.lineTo(-24,-6-wing*2); ctx.lineTo(-14,1);
+  ctx.lineTo(-24,8+wing*2); ctx.lineTo(-6,4); ctx.closePath(); ctx.fill();
+  /* 两侧长翼 */
+  var wy=-11*wing;
+  ctx.beginPath();
+  ctx.moveTo(-2,0); ctx.quadraticCurveTo(-8,-16+wy,-2,-24+wy*1.3);
+  ctx.quadraticCurveTo(6,-12+wy*.6,5,1); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0,3); ctx.quadraticCurveTo(-6,16-wy,2,23-wy*1.3);
+  ctx.quadraticCurveTo(8,12-wy*.6,6,3); ctx.closePath(); ctx.fill();
+  /* 雪白胸腹 */
+  ctx.fillStyle='#F5F2EB';
+  ctx.beginPath(); ctx.ellipse(2,3.2,8.5,4.2,-.1,0,TAU); ctx.fill();
+  /* 玄黑头背 */
+  ctx.fillStyle='#1D2230';
+  ctx.beginPath(); ctx.ellipse(3,0,10,4.5,-.08,0,TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(11,-.5,4.6,0,TAU); ctx.fill();
+  /* 栗红额喉 */
+  ctx.fillStyle='#C84A38';
+  ctx.beginPath(); ctx.arc(13,1.2,2.6,0,TAU); ctx.fill();
+  /* 嫩黄小尖喙与亮眼睛 */
+  ctx.fillStyle='#E8B84B';
+  ctx.beginPath(); ctx.moveTo(15,-1.5); ctx.lineTo(19.5,-.3); ctx.lineTo(15,1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#FFFFFF';
+  ctx.beginPath(); ctx.arc(12,-1.4,1.1,0,TAU); ctx.fill();
+  /* 翅膀边沾着的去年 StashYu 火红狐毛 */
+  if(hasMark){
+    ctx.fillStyle='#E2552B';
+    ctx.beginPath(); ctx.ellipse(-1,-11+wy*.5,3.4,1.7,-.35,0,TAU); ctx.fill();
+    ctx.fillStyle='#FFF3E3';
+    ctx.beginPath(); ctx.arc(-2.6,-12+wy*.5,1.1,0,TAU); ctx.fill();
+  }
+  ctx.restore(); ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* 庭院远山、天色、海棠树、旧亭台与清溪石径背景 */
+var TREE_FLOWERS=[
+  [42,208,11],[68,186,12],[96,174,10],[124,182,11],[54,234,10],
+  [84,214,12],[112,204,10],[140,196,9],[26,228,9],[72,246,10],
+  [104,232,9],[132,218,8],[58,166,9],[88,156,10]
+];
+function drawGarden(t,mode,o){
+  o=o||{};
+  var bloom = o.bloom===undefined ? 1 : o.bloom;
+  var sunsetP = o.sunsetP||0;
+  /* 1. 天空渐变（向四周扩宽至 -80..440，推拉摇移绝不露底边） */
+  if(mode==='day'){
+    grad(-80,-80,520,500,[[0,'#CFE4E0'],[.55,'#EAECE2'],[1,'#F7F1E3']],1);
+    /* 春日暖云 */
+    var cx1=60+((t*4)%380)-40, cx2=220+((t*3)%380)-40;
+    ell(cx1,88,46,13,'#FFFFFF',.68); ell(cx1+22,84,32,11,'#FFFFFF',.62);
+    ell(cx2,118,52,14,'#FFFFFF',.64); ell(cx2-24,122,34,10,'#FFFFFF',.58);
+  } else if(mode==='sunset'){
+    var sy = lerp(188,286,sunsetP);
+    grad(-80,-80,520,500,[
+      [0,mixH('#3C3254','#251F3D',sunsetP)],
+      [.38,mixH('#B85652','#8F3F52',sunsetP)],
+      [.72,mixH('#EE9654','#D96B48',sunsetP)],
+      [1,'#FAD586']
+    ],1);
+    glowAt(78,sy,88,'#FAD678',.65);
+    glowAt(78,sy,46,'#FFF3C4',.85);
+    dot(78,sy,24,'#FFF8DE',.96);
+  } else if(mode==='dusk'){
+    grad(-80,-80,520,500,[[0,'#24243E'],[.45,'#5B4362'],[.78,'#BA6864'],[1,'#E8A47C']],1);
+    glowAt(72,295,75,'#E88A68',.45);
+  } else {
+    grad(-80,-80,520,500,[[0,'#101628'],[.52,'#1D2944'],[1,'#2E3E5C']],1);
+    /* 夜空繁星与新月 */
+    var sr=rng(77);
+    for(var s=0;s<28;s++){
+      var sx=sr()*340+10, sy2=sr()*210+14;
+      var sa=.35+.65*Math.abs(Math.sin(t*1.8+s));
+      dot(sx,sy2,s%4===0?1.5:1,'#FAF3DC',sa);
+    }
+    glowAt(74,92,42,'#FBE9B6',.45);
+    dot(74,92,15,'#FFF8DC',.95);
+    dot(80,88,13,'#141C32',1);
+  }
+
+  /* 2. 远山层峦 */
+  var m1 = mode==='day'?'#9BBAB4':mode==='sunset'?'#6E4558':mode==='dusk'?'#483650':'#1B263E';
+  var m2 = mode==='day'?'#7CA099':mode==='sunset'?'#523146':mode==='dusk'?'#36283E':'#141D30';
+  poly([-80,330, -80,262, 58,232, 128,256, 205,218, 284,248, 440,226, 440,330],m1,1);
+  poly([-80,350, -80,288, 84,264, 165,286, 254,252, 326,274, 440,262, 440,350],m2,1);
+
+  /* 3. 小园草坡与香径石子路底色 */
+  var g1 = mode==='day'?'#C8D8B8':mode==='sunset'?'#B8946E':mode==='dusk'?'#746468':'#233142';
+  var g2 = mode==='day'?'#9EB88E':mode==='sunset'?'#8E6E52':mode==='dusk'?'#544850':'#1A2534';
+  R(-80,330,520,380,g1,1);
+  poly([-80,420, 440,390, 440,700, -80,700],g2,1);
+
+  /* 小园弯曲石子小径（香径） */
+  var pathC = mode==='day'?'#DFD7C8':mode==='sunset'?'#C8A88A':mode==='dusk'?'#8C7A7C':'#344154';
+  poly([135,418, 235,418, 295,525, 165,535],pathC,.92);
+  var pr=rng(42);
+  for(var pi=0;pi<18;pi++){
+    var px=155+pr()*105, py=428+pr()*88;
+    ell(px,py,5+pr()*4,2.5+pr()*2,mode==='night'?'#46566E':'#C4B9A8',.65);
+  }
+
+  /* 4. 绕园清溪（浣溪沙之溪：水底白沙与鹅卵石） */
+  var wTop=518;
+  var wCol1 = mode==='day'?'#66B2A8':mode==='sunset'?'#C87A62':mode==='dusk'?'#54627A':'#1E364E';
+  var wCol2 = mode==='day'?'#489288':mode==='sunset'?'#96524E':mode==='dusk'?'#3A465C':'#142638';
+  poly([-80,wTop, 440,wTop-14, 440,700, -80,700],wCol1,1);
+  poly([-80,wTop+32, 440,wTop+20, 440,700, -80,700],wCol2,.85);
+  /* 溪底细白沙粒与波纹 */
+  var sandC = mode==='night'?'#5A748C':'#EFECE2';
+  for(var si=0;si<24;si++){
+    var sx2 = ((si*29 + Math.floor(t*8))%350)+5;
+    var sy3 = wTop+10+(si%5)*16;
+    dot(sx2,sy3,1.3+(si%2)*.6,sandC,.45);
+  }
+  for(var wi=0;wi<7;wi++){
+    var wx = ((wi*58 + t*22)%380)-20;
+    var wy2 = wTop+12+(wi%4)*18;
+    line([wx,wy2, wx+28,wy2-1],mode==='sunset'?'#FAD896':'#DCF2EE',1.3,.45);
+  }
+  /* 溪岸圆润鹅卵石 */
+  var cobC = mode==='night'?'#384658':'#B8B2A6';
+  [[18,518,12,5],[45,521,9,4],[82,516,14,5],[128,514,10,4],[272,508,13,5],[312,506,11,4],[344,504,12,5]].forEach(function(st){
+    ell(st[0],st[1],st[2],st[3],cobC,1);
+  });
+
+  /* 5. 亭畔老海棠树 */
+  var sw = (o.sway||0)*Math.sin(t*4.2);
+  var trunkC = mode==='night'?'#261E24':'#5A3E32';
+  poly([34,426, 52,426, 48,265, 38,265],trunkC,1);
+  line([44,310, 78+sw,228, 128+sw*1.3,192],trunkC,7,1);
+  line([42,285, 24+sw,222, 62+sw,172],trunkC,5.5,1);
+  line([68+sw,242, 108+sw*1.2,222, 142+sw*1.4,205],trunkC,4.5,1);
+  /* 嫩绿叶片与海棠花簇 */
+  var leafC = mode==='night'?'#24423A':mode==='sunset'?'#586E42':'#6A9E5B';
+  TREE_FLOWERS.forEach(function(f,idx){
+    var fx=f[0]+sw*(1+(idx%3)*.2), fy=f[1]+Math.cos(t*2+idx)*1.2, fr=f[2];
+    ell(fx-5,fy+3,fr*.6,fr*.32,leafC,.85,-.4);
+    ell(fx+6,fy-2,fr*.55,fr*.3,leafC,.85,.5);
+    if(bloom>0){
+      var fb = clamp(bloom*1.3 - (idx/TREE_FLOWERS.length)*.45);
+      if(fb>0) blossomAt(fx,fy,fr*fb,idx*.7,fb);
+    }
+  });
+  /* 额外盛开的枝头大花（第五场后小脸蛋变花的位置留空或呼应） */
+  if(o.extraFlowers){
+    o.extraFlowers(sw);
+  }
+
+  /* 6. 旧亭台（飞檐翘角、横梁燕巢、量高刻痕木柱、石案） */
+  if(!o.hidePavilion){
+    var px0=118, py0=422, pw=216;
+    var baseC = mode==='night'?'#2D3748':'#C8C0B4';
+    var baseC2 = mode==='night'?'#202836':'#A89F92';
+    /* 亭基石阶 */
+    rrect(px0-10,py0,pw+20,16,3,baseC,1);
+    rrect(px0-16,py0+12,pw+32,14,3,baseC2,1);
+    /* 左右朱红旧木柱 */
+    var colC = mode==='night'?'#4E282E':'#8E3B36';
+    R(px0+12,216,12,206,colC,1);
+    R(px0+pw-24,216,12,206,colC,1);
+    /* 右木柱上的三道去年量高刻痕 */
+    var markX = px0+pw-24;
+    var markGlow = o.highlightMarks ? .95 : .55;
+    var markC = o.highlightMarks ? '#FAD882' : '#E5C89B';
+    [358,342,326].forEach(function(my){
+      R(markX+1,my,10,2.2,markC,markGlow);
+    });
+    /* 亭子后栏杆 */
+    R(px0+24,386,pw-48,5,colC,.85);
+    for(var bi=0;bi<6;bi++){
+      R(px0+36+bi*28,386,3,36,colC,.75);
+    }
+    /* 亭内石桌 */
+    if(!o.hideTable){
+      var tx=px0+pw/2-8;
+      R(tx-14,388,28,34,baseC2,1);
+      rrect(tx-38,380,76,10,3,baseC,1);
+    }
+    /* 横梁与飞檐黛瓦顶 */
+    var roofC = mode==='night'?'#1A2230':'#363B46';
+    var eaveC = mode==='night'?'#263042':'#4D5360';
+    R(px0+4,210,pw-8,10,colC,1);
+    poly([px0-28,214, px0+pw/2,152, px0+pw+28,214],roofC,1);
+    /* 飞檐翘角弧线 */
+    sag(px0-32,208, px0+pw/2,152, 16,eaveC,6,1);
+    sag(px0+pw/2,152, px0+pw+32,208, 16,eaveC,6,1);
+    /* 梁上旧燕巢 */
+    nestAt(px0+pw/2+18, 214, o.nestDust||0, o.nestStraw||0);
+  }
+}
+
+/* ---------- 序：浣溪沙（清溪白沙浣桃纱） ---------- */
+function sIntro(t){
+  camK(t,[[0,180,340,1.08],[10,180,320,1.0],[14,180,320,1.0]]);
+  /* 晨雾碧溪背景 */
+  grad(0,0,360,640,[[0,'#DCECE8'],[.38,'#B4DCD4'],[.72,'#62B2A6'],[1,'#3E887E']],1);
+  /* 远岸青柳与桃花影 */
+  poly([0,235, 95,212, 215,228, 360,206, 360,270, 0,270],'#9ECAC0',.8);
+  for(var wi=0;wi<8;wi++){
+    var wx=28+wi*44, sw=Math.sin(t*1.8+wi)*6;
+    sag(wx,110, wx+sw,225, 12,'#6B9E78',2,.55);
+  }
+  /* 水底细白如雪的溪沙与鹅卵石 */
+  var r=rng(108);
+  for(var i=0;i<55;i++){
+    var sx=r()*340+10, sy=260+r()*320;
+    var sa=.35+.45*Math.sin(t*2+i);
+    dot(sx,sy,1.2+(i%3)*.7,'#F7F4EA',sa);
+  }
+  [[42,272,16,7],[88,266,12,5],[286,258,18,7],[328,268,13,5],[56,520,18,7],[308,510,15,6]].forEach(function(c){
+    ell(c[0],c[1],c[2],c[3],'#C5C2B8',.85);
+  });
+
+  /* 溪水中浣洗的桃花薄纱（随波柔曼起伏） */
+  var gAlpha=fade(t,1.2,13.6,1.0);
+  if(gAlpha>0){
+    for(var band=0;band<3;band++){
+      var pts=[], ptsB=[];
+      for(var k=0;k<=12;k++){
+        var gx=24+k*26;
+        var gy=345+band*24+Math.sin(t*2.4+k*.55+band)*14;
+        pts.push(gx,gy);
+        ptsB.unshift(gx,gy+22);
+      }
+      poly(pts.concat(ptsB),band===1?'#F9C8D6':'#F4A2B8',gAlpha*(band===1?.52:.38));
+    }
+    /* 纱上漂着的花瓣与水珠微光 */
+    for(var p=0;p<8;p++){
+      var px=((p*48+t*26)%320)+20;
+      var py=355+Math.sin(t*2.2+p)*22+(p%3)*14;
+      petalAt(px,py,5.5,t+p,'#EE6B88','#FDE2E8',gAlpha*.9);
+      star4(px+8,py-6,3,'#FFFFFF',gAlpha*(.4+.5*Math.sin(t*3+p)));
+    }
+  }
+
+  /* 10.2s 起六只在溪岸边探头看溪水与薄纱 */
+  var showM = clamp((t-9.6)/1.2);
+  if(showM>0){
+    var by = (1-showM)*25;
+    CL(t,76,268+by,{eyes:'bar',ra:Math.sin(t*4)*4},.24);
+    FC(t,0,136,258+by,{r:12});
+    FC(t,1,164,261+by,{r:11.5});
+    FC(t,2,192,258+by,{r:12,ring:'rgba(255,255,255,.45)'});
+    FX(t,222,268+by,{rows:cyc(t,0,FOX_WAG)},2.4);
+    CT(t,282,268+by,{rows:cyc(t,0,CAT_TWITCH)},2.4);
+  }
+
+  /* 片名题签浮现 */
+  var ta=fade(t,.8,10.2,.8);
+  if(ta>0){
+    rrect(116,132,128,68,10,'rgba(252,249,242,.88)',ta);
+    wt('浣 溪 沙',180,164,{size:22,wt:600,c:'#2B252C',al:'center',a:ta,fam:SERIF});
+    wt('小萌物 · 燕归来',180,186,{size:11.5,wt:400,c:'#7A6E7C',al:'center',a:ta,fam:SANS});
+  }
+}
+
+/* ---------- 一：一曲新词酒一杯（花露满杯，Clawd 展宽方琴台、小脸蛋跳音珠） ---------- */
+function sJiu(t){
+  camK(t,[[0,180,335,1.0],[9,210,365,1.14],[15,205,365,1.14],[24,185,335,1.02]]);
+  drawGarden(t,'day',{bloom:1,nestDust:.8,hideTable:t>=12.0});
+
+  var tx=218, ty=380;
+  if(t<12.0){
+    /* 前半场：石桌上摆着六只盛满海棠花露的白瓷小杯 */
+    for(var c=0;c<6;c++){
+      cupAt(186+c*12.5, 379, .85, true, .35+.25*Math.sin(t*3+c));
+    }
+    /* 海棠树上飘下几滴晶莹春露落进杯中 */
+    if(t<8.8){
+      for(var d=0;d<3;d++){
+        var u=((t*.7+d*.33)%1);
+        var dx=lerp(118+d*18, 198+d*16, u);
+        var dy=lerp(215+d*12, 372, u*u);
+        dot(dx,dy,2.4,'#FFF5FA',1-u*.3);
+      }
+    }
+    CL(t,166,422,{eyes:t>9.0?'up':'bar',la:t>9.0?-5:0,ra:t>9.0?-5:0},.26);
+    FC(t,0,204,410,{r:12.5});
+    FC(t,1,232,410,{r:12.5});
+    FC(t,2,260,410,{r:12.5});
+    FX(t,84,432,{rows:FOX.rows},2.5);
+    CT(t,282,424,{rows:CAT.rows},2.5);
+  } else {
+    /* 12.0s 起：Clawd 坐到亭中，把橘色扁壳往两边展宽成一张方琴台！ */
+    var wp = smooth((t-12.0)/1.4);
+    var wide = lerp(1, 1.85, wp);
+    var beat = Math.sin(t*8);
+    CL(t,216,422,{
+      wide:wide, tall:lerp(1,.72,wp),
+      la:beat>0?-4:0, ra:beat<0?-4:0,
+      eyes:t>15.5?'smile':'bar'
+    },.29);
+
+    /* 琴台背上的五根晶莹琴弦 */
+    var qTop = clawdTop(422,lerp(1,.72,wp),.29);
+    if(wp>.4){
+      for(var s=0;s<5;s++){
+        var sy = qTop + 4 + s*3.6;
+        var vib = (t>15.4 && Math.abs((Math.floor(t*5)%5)-s)===0) ? Math.sin(t*38)*1.6 : 0;
+        sag(178,sy, 254,sy, vib,'#FFF6E5',1.1,wp*.85);
+      }
+    }
+
+    /* 小粉、小紫、小黑排成三颗圆音珠，在琴台上交替蹦跳弹奏新曲 */
+    var notes=['宫','商','角','徵','羽'];
+    for(var i=0;i<3;i++){
+      var bx = 192 + i*24;
+      var ph = (t-15.2)*3.2 - i*.85;
+      var jp = (t>15.2) ? Math.max(0,Math.sin(ph)) : 0;
+      var by2 = qTop - 10 - jp*22;
+      var sx = jp<.15 && t>15.2 ? 1.18 : (jp>.7 ? .9 : 1);
+      var sy2 = jp<.15 && t>15.2 ? .82 : (jp>.7 ? 1.12 : 1);
+      FC(t,i,bx,by2,{r:11.5,sx:sx,sy:sy2,ring:i===2?'rgba(255,255,255,.4)':null});
+      if(t>15.4 && jp>.82){
+        var nIdx = (Math.floor(t*2)+i)%5;
+        wt('♪',bx+(i-1)*4,by2-16,{size:11,wt:700,c:FACE[i],al:'center',a:.9,glow:'#FFFFFF'});
+        ring(bx,qTop+6,8,'#FFF3C4',1.2,.65);
+      }
+    }
+
+    /* 六只花露杯摆在琴台前的小石阶上；StashYu 与 FetchMo 碰杯 */
+    for(var c2=0;c2<6;c2++){
+      cupAt(176+c2*15, 432, .82, true, .4);
+    }
+    FX(t,112,434,{rows:cyc(t,0,FOX_WAG),eyes:'happy',blush:true},2.5);
+    var clink = inR(t,19.2,22.8);
+    CT(t,268,434,{rows:clink?CAT_UP:CAT.rows,eyes:clink?'happy':'normal',blush:clink},2.5);
+    if(clink){
+      var rip = ((t-19.2)*1.6)%1;
+      ring(251,426,4+rip*14,'#FFF8DC',1.4,1-rip);
+      wt('叮~',252,412-rip*8,{size:10.5,wt:600,c:'#C44768',al:'center',a:1-rip,fam:SERIF,glow:'#FFFFFF'});
+    }
+  }
+}
+
+/* ---------- 二：去年天气旧亭台（小紫数亭柱刻痕，FetchMo 跃梁扫巢，StashYu 掏软草） ---------- */
+function sTing(t){
+  camK(t,[
+    [0,195,320,1.02],[6,215,335,1.12],[12,215,335,1.12],
+    [15,200,285,1.10],[24,195,315,1.02]
+  ]);
+  var dust = clamp(1 - (t-16.5)/2.2);
+  var straw = clamp((t-19.8)/1.8);
+  drawGarden(t,'day',{
+    bloom:1,
+    highlightMarks:inR(t,5.8,12.4),
+    nestDust:dust,
+    nestStraw:straw
+  });
+
+  /* 小紫在右亭柱旁一边蹦一边数去年的刻痕：一、二、三 */
+  var vx = 290, vy = 410 + jump(t,6.2,.6,12) + jump(t,7.2,.6,16) + jump(t,8.2,.6,20);
+  FC(t,1,vx,vy,{r:12.5});
+  popNum('一',312,358,t,6.2,1.6,'#9159FE',12,'#FFFFFF');
+  popNum('二',312,342,t,7.2,1.6,'#9159FE',12,'#FFFFFF');
+  popNum('三',312,326,t,8.2,2.0,'#9159FE',12,'#FFFFFF');
+
+  /* 小粉和小黑在栏杆边仰头看亭梁上的旧燕巢 */
+  FC(t,0,178,410,{r:12.5,rot:-16});
+  FC(t,2,204,410,{r:12.5,rot:-16});
+
+  /* Clawd 在亭中稳稳站着，19s 后让 StashYu 踩在壳顶递软草 */
+  var clX = t<18.5 ? 150 : lerp(150,224,smooth((t-18.5)/1.0));
+  var clTall = t>19.0 ? lerp(1,1.35,smooth((t-19.0)/.8)) : 1;
+  CL(t,clX,422,{tall:clTall,eyes:'up',la:-6,ra:-6},.27);
+
+  /* FetchMo：15.8s 拉长身子跃上横梁（y=214），拿深棕尾巴扫去旧巢灰尘 */
+  var catX=248, catFoot=422, catCh=2.5, catRows=CAT.rows, catEyes='normal';
+  if(inR(t,15.6,16.5)){
+    var jp = smooth((t-15.6)/.9);
+    catX = lerp(248,218,jp);
+    catFoot = lerp(422,214,jp) - Math.sin(jp*PI)*32;
+    catCh = 2.5*1.28; /* 跃起拉长 */
+  } else if(t>=16.5){
+    catX = 218 + Math.sin(t*6)*3;
+    catFoot = 214;
+    catRows = cyc(t,0,[[CAT_STR,.16],[CAT_OUT,.16],[CAT_UP,.16]]);
+    catEyes = 'happy';
+    /* 扫落的灰尘小颗粒 */
+    if(t<19.0){
+      for(var di=0;di<6;di++){
+        var du=((t*1.8+di*.2)%1);
+        dot(238+(di-2.5)*7, 216+du*28, 1.6*(1-du), '#B8B0A4', .7*(1-du));
+      }
+    }
+  }
+  CT(t,catX,catFoot,{rows:catRows,eyes:catEyes,ch:catCh},2.5);
+
+  /* StashYu：19.2s 跳上 Clawd 壳顶，从大尾巴里掏出金黄软草递向燕巢 */
+  var foxX=102, foxFoot=430, foxRows=FOX.rows;
+  if(t>=19.0){
+    var fp = smooth((t-19.0)/.9);
+    foxX = lerp(102, clX-28, fp);
+    foxFoot = lerp(430, clawdTop(422,clTall,.27), fp);
+    foxRows = t>21.2 ? cyc(t,21.2,FOX_TAPTWO) : cyc(t,0,FOX_WAG);
+    /* 软草从尾巴飞向燕巢 */
+    if(inR(t,19.6,21.5)){
+      var sp = smooth((t-19.6)/1.6);
+      var sx = lerp(foxX+42, 244, sp);
+      var sy = lerp(foxFoot-18, 212, sp) - Math.sin(sp*PI)*24;
+      line([sx-6,sy, sx+6,sy-3],'#F2C56B',2.2,1);
+      line([sx-4,sy+3, sx+7,sy+1],'#E6AE52',2.0,1);
+    }
+  }
+  FX(t,foxX,foxFoot,{rows:foxRows,eyes:t>19.4?'happy':'normal'},2.5);
+}
+
+/* ---------- 三：夕阳西下几时回？（Clawd 抻高成望日高塔，三颗小脸蛋化圆铜镜折回余晖） ---------- */
+function sXi(t){
+  camK(t,[[0,175,315,1.0],[10,165,295,1.04],[24,175,310,1.0]]);
+  var sunP = clamp(t/23);
+  drawGarden(t,'sunset',{bloom:1,sunsetP:sunP,nestStraw:1});
+
+  var sunX = 78, sunY = lerp(188,286,sunP);
+
+  /* Clawd 在亭台西侧把扁壳高高往上抻长（最高 2.45 倍），双钳往外伸长托向夕阳 */
+  var stretch = smooth((t-11.8)/2.4);
+  var clTall = lerp(1, 2.45, stretch);
+  var clLlong = lerp(0, 42, stretch);
+  var clRlong = lerp(0, 28, stretch);
+  var clX = 148, clFoot = 426;
+  CL(t,clX,clFoot,{
+    tall:clTall,
+    llong:clLlong, rlong:clRlong,
+    la:lerp(0,-22,stretch), ra:lerp(0,-16,stretch),
+    eyes:stretch>.5?'up':'bar', shine:true
+  },.28);
+
+  var towerTop = clawdTop(clFoot,clTall,.28);
+
+  /* 小粉、小紫、小黑：18.5s 起叠上 Clawd 塔顶，压成三面留光圆铜镜，把落日余晖折回亭台 */
+  var mirP = smooth((t-18.0)/1.8);
+  for(var i=0;i<3;i++){
+    var gx0 = 196 + i*26, gy0 = 412;
+    var gx1 = clX, gy1 = towerTop - 13 - i*25;
+    var fx = lerp(gx0,gx1,mirP);
+    var fy = lerp(gy0,gy1,mirP) - Math.sin(mirP*PI)*(22+i*10);
+    /* 镜面发光外环与夕阳反射光束 */
+    if(mirP>.75){
+      var ma = (mirP-.75)*4;
+      glowAt(fx,fy,20,'#FAD882',ma*.55);
+      /* 从夕阳射到圆镜、再从圆镜折向亭梁燕巢与海棠树的暖金光束 */
+      line([sunX,sunY, fx,fy],'#FFE89E',2.2,ma*.45);
+      var targetX = [244, 102, 222][i], targetY = [214, 198, 376][i];
+      poly([fx,fy-6, targetX,targetY-16, targetX,targetY+16, fx,fy+6],'#FAD882',ma*.22);
+      glowAt(targetX,targetY,24,'#FFE494',ma*.45);
+    }
+    FC(t,i,fx,fy,{
+      r:12,
+      sx:lerp(1,1.18,mirP), sy:lerp(1,.88,mirP),
+      ring:mirP>.3?'#FAD882':(i===2?'rgba(255,255,255,.4)':null)
+    });
+  }
+
+  /* StashYu 和 FetchMo 站在亭栏边望着西山落日 */
+  FX(t,232,424,{rows:FOX.rows,shine:true},2.5);
+  CT(t,286,424,{rows:CAT_UP,shine:true},2.5);
+}
+
+/* ---------- 四：无可奈何花落去（漫天海棠落花，Clawd 大方竹匾、小脸蛋溪纱网、StashYu 胖花球尾） ---------- */
+function sHua(t){
+  camK(t,[[0,175,320,1.0],[14,185,335,1.05],[26,180,320,1.0]]);
+  var bloom = clamp(1 - (t-2.2)/19.5);
+  var sway = inR(t,2.0,21.5) ? 1.3 : .25;
+  drawGarden(t,'dusk',{bloom:bloom,sway:sway,nestStraw:1,hideTable:true});
+
+  /* 1. Clawd 把扁壳向左右大摊开（wide=2.15），变成一只宽宽的橘色方竹匾左右奔跑接落花 */
+  var trayP = smooth((t-8.8)/1.4);
+  var clX = 168 + (inR(t,9.0,21.5) ? Math.sin(t*2.8)*36 : 0);
+  var clWide = lerp(1, 2.15, trayP);
+  var clTall = lerp(1, .58, trayP);
+  CL(t,clX,434,{
+    wide:clWide, tall:clTall,
+    la:trayP*-8, ra:trayP*-8,
+    eyes:t>22.2?'shut':'up'
+  },.28);
+  /* 竹匾上接住的一层粉白海棠花瓣 */
+  if(trayP>.4){
+    var bTop = clawdTop(434,clTall,.28);
+    var pCount = Math.min(12, Math.floor((t-9.0)*1.1));
+    for(var pi=0;pi<pCount;pi++){
+      petalAt(clX-28+(pi%6)*11, bTop-2-Math.floor(pi/6)*3.5, 4.8, pi*.5, '#EE6B88', '#FDE2E8', .95);
+    }
+  }
+
+  /* 2. 小粉、小紫、小黑：12.2s 起拉长压扁成三匹溪边轻纱（sx=1.68, sy=0.56），在半空兜住花瓣 */
+  var netP = smooth((t-12.2)/1.2) * (1 - smooth((t-22.2)/1.2));
+  for(var i=0;i<3;i++){
+    var nx = 76 + i*48 + Math.sin(t*2.4+i)*12;
+    var ny = lerp(418, 312 + (i%2)*22 + Math.cos(t*3+i)*8, netP);
+    FC(t,i,nx,ny,{
+      r:12.5,
+      sx:lerp(1,1.68,netP), sy:lerp(1,.56,netP),
+      ring:i===2?'rgba(255,255,255,.5)':null
+    });
+    if(netP>.5){
+      petalAt(nx-6,ny-7,4.2,t+i,'#F47B96','#FFF0F4',netP);
+      petalAt(nx+7,ny-6,4.0,-t+i,'#EE6B88','#FDE2E8',netP);
+    }
+  }
+
+  /* 3. FetchMo 在花雨中跃起接花（15.8s~21.0s） */
+  var catJump = inR(t,15.8,21.0) ? Math.abs(Math.sin((t-15.8)*3.2)) : 0;
+  var catFoot = 434 - catJump*42;
+  var catCh = 2.5 * (catJump>.3 ? 1.24 : 1);
+  CT(t,228,catFoot,{rows:catJump>.2?CAT_UP:cyc(t,0,CAT_TWITCH),ch:catCh,outline:'rgba(255,248,240,.65)'},2.5);
+
+  /* 4. StashYu 把满院落花收进大尾巴，尾巴一圈一圈胖成大花球（fat: 0 -> 1 -> 2 -> 3） */
+  var fatLv = t<16.2 ? 0 : t<18.0 ? 1 : t<19.8 ? 2 : 3;
+  FX(t,278,438,{
+    rows:inR(t,16.0,21.8)?cyc(t,0,FOX_WAG):FOX.rows,
+    fat:fatLv,
+    eyes:t>22.4?'blink':'happy',
+    outline:'rgba(255,248,240,.65)'
+  },2.6);
+
+  /* 5. 漫天飘落并飞向竹匾、轻纱与 StashYu 大尾巴的海棠花雨 */
+  var fr=rng(309);
+  for(var f=0;f<36;f++){
+    var tStart = 2.2 + (f%12)*1.35;
+    var age = (t - tStart);
+    if(age<0 || age>4.8) continue;
+    var u = age/4.8;
+    var x0 = 32 + fr()*125, y0 = 165 + fr()*75;
+    var toFox = (t>16.0 && f%2===0);
+    var fx = toFox ? lerp(x0, 322, smooth(u)) : x0 + u*145 + Math.sin(t*3+f)*14;
+    var fy = toFox ? lerp(y0, 412, smooth(u)) - Math.sin(u*PI)*28 : lerp(y0, 445+(f%5)*16, u);
+    petalAt(fx,fy,4.6+(f%3),t*2.5+f,f%2?'#EE6B88':'#F694AA','#FDE2E8',1-u*.15);
+  }
+}
+/* ---------- 五：似曾相识燕归来（春燕带火红狐毛归来，小粉在空枝头鼓成五瓣红海棠） ---------- */
+function sYan(t){
+  camK(t,[
+    [0,175,320,1.0],[9,180,350,1.14],[16,180,350,1.14],
+    [20,165,295,1.06],[28,175,315,1.0]
+  ]);
+  drawGarden(t,'dusk',{bloom:0,nestStraw:1});
+
+  /* 1. 小粉、小紫、小黑：19.0s 起跳上光秃秃的海棠枝头，小粉鼓成五瓣红海棠，小紫小黑化作花苞 */
+  var branchP = smooth((t-19.0)/1.6);
+  var bloomP = smooth((t-20.2)/1.4);
+  var fPos = [
+    [122,414, 96,192],  /* 小粉 -> 主枝头正中盛开五瓣海棠 */
+    [146,414, 64,212],  /* 小紫 -> 左枝头紫花苞 */
+    [170,414, 128,204]  /* 小黑 -> 右枝头墨玉花苞 */
+  ];
+  for(var i=0;i<3;i++){
+    var fp = fPos[i];
+    var fx = lerp(fp[0], fp[2], branchP);
+    var fy = lerp(fp[1], fp[3], branchP) - Math.sin(branchP*PI)*34;
+    if(bloomP>0){
+      glowAt(fx,fy,24,i===0?'#FF7AA8':i===1?'#B88FFE':'#FAD882',bloomP*.55);
+    }
+    FC(t,i,fx,fy,{
+      r:lerp(12, i===0?16.5:13.5, bloomP),
+      petal:i===0 ? bloomP : bloomP*.65,
+      ring:i===2?'#FAD882':(bloomP>.3?'#FFF0F5':null)
+    });
+  }
+
+  /* 2. Clawd、StashYu、FetchMo 在亭台边惊喜地迎接老朋友 */
+  var happy = t>15.5;
+  CL(t,182,424,{
+    la:happy?-12:0, ra:happy?-12:0,
+    eyes:happy?'smile':'up', shine:true
+  },.26);
+  CT(t,214,424,{
+    rows:happy?CAT_UP:cyc(t,0,CAT_TWITCH),
+    eyes:happy?'happy':'normal', blush:happy,
+    outline:'rgba(255,248,240,.65)'
+  },2.4);
+  FX(t,254,430,{
+    rows:happy?cyc(t,0,FOX_WAG):FOX.rows,
+    fat:3,
+    eyes:happy?'happy':'normal', blush:happy,
+    outline:'rgba(255,248,240,.65)'
+  },2.4);
+
+  /* 3. 似曾相识的剪尾春燕：3.2s 飞入盘旋，9.0s~19.5s 停在旧亭栏杆上亮出翅膀边的火红狐毛，23s 后绕花欢飞入巢 */
+  if(t>=3.0){
+    var sx=148, sy=382, srot=0, swing=0, ssc=1.05;
+    if(t<9.0){
+      var u=(t-3.0)/6.0;
+      var ang=u*TAU*1.5;
+      sx = 155 + Math.cos(ang)*(95*(1-u*.5));
+      sy = 235 + Math.sin(ang)*(55*(1-u*.4)) + u*147;
+      srot = Math.sin(ang)*.35;
+      swing = Math.sin(t*18);
+    } else if(t<21.5){
+      /* 停在亭栏杆上（x=148, y=382），歪头打量六只 */
+      sx = 148; sy = 381;
+      srot = Math.sin(t*2.4)*.12;
+      swing = 0; ssc = 1.18;
+      /* 12.6s~18.8s 特写高亮翅膀边那撮 StashYu 的火红绒毛！ */
+      if(inR(t,12.4,19.0)){
+        var ga = .5+.5*Math.sin(t*6);
+        glowAt(sx-2,sy-12,16,'#E2552B',ga*.75);
+        ring(sx-2,sy-12,8+ga*4,'#FFF3E3',1.3,ga*.9);
+        wt('!',sx+18,sy-16,{size:13,wt:700,c:'#FFE494',al:'center',a:.95,fam:SERIF,glow:'#E2552B'});
+      }
+    } else {
+      /* 绕着枝头三朵小脸蛋变出的海棠花欢快飞舞，飞向梁上温暖的旧燕巢 */
+      var u2 = clamp((t-21.5)/5.5);
+      sx = lerp(148, 244, smooth(u2)) + Math.sin(u2*TAU*2)*48*(1-u2);
+      sy = lerp(381, 210, smooth(u2)) - Math.sin(u2*PI)*55;
+      srot = -.25 + Math.cos(u2*TAU*2)*.3;
+      swing = Math.sin(t*18);
+    }
+    swallowAt(sx,sy,srot,swing,ssc,true);
+  }
+}
+
+/* ---------- 六：小园香径独徘徊（StashYu 抖尾洒花铺成香径，六只与春燕结伴散步） ---------- */
+function sJing(t){
+  camK(t,[[0,185,350,1.02],[12,195,380,1.08],[26,180,340,1.0]]);
+  drawGarden(t,'night',{bloom:0,nestStraw:1,hideTable:true});
+
+  /* 1. StashYu 抖开胖尾巴（9.4s~16.5s），把收好的海棠花瓣铺满整条石子路（小园香径）与清溪 */
+  var carpetP = clamp((t-10.5)/6.0);
+  if(carpetP>0){
+    /* 香径上的粉金色柔和花香光晕 */
+    glowAt(212,475,85,'#F47B96',carpetP*.32);
+    var cr=rng(512);
+    var nPetals = Math.floor(carpetP*68);
+    for(var p=0;p<nPetals;p++){
+      var u = p/68;
+      var px = lerp(152,272,cr()) + (u-.5)*35;
+      var py = lerp(422,528,u);
+      petalAt(px,py,4.2+(p%3)*.8,cr()*TAU,p%2?'#EE6B88':'#F694AA','#FDE2E8',.92);
+    }
+    /* 漂进清溪里的海棠花瓣（呼应浣溪沙） */
+    for(var wp=0;wp<14;wp++){
+      var wpx = ((wp*28 + t*18)%340)+10;
+      var wpy = 528 + (wp%4)*14 + Math.sin(t*2+wp)*2;
+      petalAt(wpx,wpy,4.5,t+wp,'#F47B96','#FFF0F5',carpetP*.88);
+    }
+  }
+
+  /* 9.4s~16.5s 从 StashYu 大尾巴里喷洒而出的漫天海棠花雨与微光 */
+  if(inR(t,9.4,17.2)){
+    var sr=rng(888);
+    for(var k=0;k<28;k++){
+      var ku = ((t*1.1 + k*.13)%1);
+      var kx = lerp(248, 145+sr()*140, ku);
+      var ky = lerp(425, 435+sr()*95, ku) - Math.sin(ku*PI)*(45+sr()*35);
+      petalAt(kx,ky,5,t*3+k,'#EE6B88','#FDE2E8',1-ku*.2);
+      if(k%3===0) star4(kx,ky-4,2.8,'#FFF6D6',1-ku);
+    }
+  }
+
+  /* 2. 六只与春燕在铺满花瓣的香径上结伴散步（谁也不独徘徊，错落排开互不遮挡） */
+  var walkP = clamp((t-17.0)/8.0);
+  var bob = function(ph){ return Math.abs(Math.sin(q15(t)*5+ph))*5; };
+
+  /* StashYu（尾巴从 fat 3 一圈圈瘦回 0）在香径左侧，FetchMo 在香径右侧 */
+  var fatNow = t<11.0 ? 3 : t<13.0 ? 2 : t<15.0 ? 1 : 0;
+  var foxX = lerp(92, 106, walkP), foxY = 456 - bob(2.2);
+  var catX = lerp(266, 254, walkP), catY = 456 - bob(3.0);
+  FX(t,foxX,foxY,{
+    rows:cyc(t,0,FOX_WAG),
+    fat:fatNow,
+    eyes:'happy', blush:true,
+    outline:'rgba(255,248,240,.75)'
+  },2.5);
+  CT(t,catX,catY,{
+    rows:CAT_UP,
+    eyes:'happy', blush:true,
+    outline:'rgba(255,248,240,.75)'
+  },2.5);
+
+  /* Clawd 迈着四条小短腿踩在香径正中，春燕停在它壳顶上 */
+  var clX = lerp(192, 202, walkP);
+  var clY = 452 - bob(1.5);
+  CL(t,clX,clY,{
+    la:Math.sin(q15(t)*6)*5, ra:-Math.sin(q15(t)*6)*5,
+    eyes:'smile', shine:true, outline:'rgba(255,248,240,.55)'
+  },.27);
+  var cTop = clawdTop(clY,1,.27);
+  swallowAt(clX+4, cTop-5, Math.sin(t*3)*.08, 0, .95, true);
+
+  /* 小粉、小紫、小黑在香径前方滚着花瓣开路 */
+  var f0x = lerp(156, 168, walkP) + Math.sin(t*2)*4;
+  var f1x = lerp(188, 200, walkP) + Math.cos(t*2)*4;
+  var f2x = lerp(220, 232, walkP) + Math.sin(t*2+1)*4;
+  FC(t,0,f0x,492-bob(1),{r:12.5,rot:t*40});
+  FC(t,1,f1x,498-bob(2),{r:12.5,rot:t*42});
+  FC(t,2,f2x,492-bob(0),{r:12.5,rot:t*45,ring:'#FAD882'});
+}
+
+/* ---------- 终：燕归来（花落自有香满径，燕子年年认得家） ---------- */
+function sEnd(t){
+  camK(t,[[0,185,330,1.04],[16,180,315,1.0],[24,180,315,1.0]]);
+  drawGarden(t,'night',{bloom:.35,nestStraw:1});
+
+  /* 1. 香径与清溪里铺满温柔发光的海棠花瓣 */
+  var cr=rng(901);
+  for(var p=0;p<48;p++){
+    var u=p/48;
+    var px=lerp(150,275,cr())+(u-.5)*30;
+    var py=lerp(424,524,u);
+    petalAt(px,py,4.2,cr()*TAU,p%2?'#EE6B88':'#F694AA','#FDE2E8',.88);
+  }
+  for(var wp=0;wp<16;wp++){
+    var wpx=((wp*24+t*14)%340)+10;
+    var wpy=526+(wp%4)*15+Math.sin(t*1.8+wp)*2;
+    petalAt(wpx,wpy,4.6,t*.8+wp,'#F47B96','#FFF0F5',.85);
+  }
+
+  /* 2. 梁上旧巢里，归来的小春燕安稳睡着（冒出 z z Z） */
+  swallowAt(244, 208, -.05, 0, .92, true);
+  zzT(t, 258, 196, .4, '#FFF3D6', 8);
+
+  /* 3. 石桌上摆着六只花露小杯，六只依偎在旧亭台下 */
+  for(var c=0;c<6;c++){
+    cupAt(186+c*12.5, 379, .82, true, .25);
+  }
+  CL(t,178,426,{eyes:'smile',outline:'rgba(255,248,240,.55)'},.27);
+  FC(t,0,218,416,{r:12,bl:t>14?1:0,rot:-6});
+  FC(t,1,242,418,{r:11.5,bl:t>14?1:0,rot:4});
+  FC(t,2,266,416,{r:12,bl:t>14?1:0,rot:-4,ring:'#FAD882'});
+
+  /* StashYu 在 8.8s~11.6s 把最后一片花瓣收进尾巴，白尖点两下（FOX_TAPTWO），随后垂下尾巴歇息 */
+  var foxRows = inR(t,8.8,12.0) ? cyc(t,8.8,FOX_TAPTWO) : (t>=12.0 ? FOX_DROOP : FOX.rows);
+  var foxEyes = t>=14.0 ? 'asleep' : 'happy';
+  FX(t,86,434,{rows:foxRows,eyes:foxEyes,blush:true,outline:'rgba(255,248,240,.75)'},2.5);
+  if(inR(t,8.2,9.8)){
+    var lp = clamp((t-8.2)/1.4);
+    petalAt(lerp(156,128,lp), lerp(448,418,lp)-Math.sin(lp*PI)*16, 5, t*3, '#EE6B88','#FDE2E8', 1-lp*.5);
+  }
+  CT(t,282,432,{rows:t>=14.0?CAT.rows:CAT_UP,eyes:t>=14.0?'asleep':'happy',blush:true,outline:'rgba(255,248,240,.75)'},2.5);
+
+  /* 4. 满园花香化作粉金微光缓缓升向夜空 */
+  for(var g=0;g<16;g++){
+    var gu=((t*.18+g*.13)%1);
+    var gx=70+(g*19)%230+Math.sin(t+g)*12;
+    var gy=lerp(505,145,gu);
+    var ga=(1-gu)*(.45+.55*Math.sin(t*2.4+g));
+    glowAt(gx,gy,7,'#FAD48B',ga*.45);
+    star4(gx,gy,2.5,'#FFF8DE',ga*.9);
+  }
+}
+
+/* ---------- 右上角竖排词卡与朱文小印 ---------- */
+function vcol(txt,cx,y0,size,k,a,ink,glow){
+  if(a<=0) return;
+  var lh=size*1.14;
+  ctx.setTransform(S,0,0,S,0,0); ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='500 '+size+'px '+SERIF;
+  ctx.shadowColor=glow||'rgba(20,16,28,.75)'; ctx.shadowBlur=7*S; ctx.fillStyle=ink||'#FAF6EC';
+  chars(txt).forEach(function(ch,j){
+    var ca=a*clamp(k-j); if(ca<=0) return;
+    ctx.globalAlpha=clamp(ca*A); ctx.fillText(ch,cx,y0+lh*(j+.5));
+  });
+  ctx.shadowBlur=0; ctx.shadowColor='rgba(0,0,0,0)';
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function seal(no,cx,y0,sz,a){
+  if(a<=0||!no) return;
+  ctx.setTransform(S,0,0,S,0,0); ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.globalAlpha=clamp(a*A*.92); ctx.fillStyle='#B53A2A'; ctx.fillRect(cx-sz/2,y0,sz,sz);
+  ctx.fillStyle='#FAF3E8'; ctx.font='600 '+(sz*.7)+'px '+SERIF; ctx.fillText(no,cx,y0+sz/2+.5);
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+function vcard(sc,lt){
+  var txt=sc.poem.replace(/[，。、？！]/g,'');
+  var u=lt-.4; if(u<0) return;
+  var a=Math.min(1,clamp((sc.dur-.4-lt)/.5)), step=.25;
+  var lightBg=(sc.id==='jiu'||sc.id==='ting');
+  var ink=lightBg?'#2B252C':'#FAF4EB';
+  var glow=lightBg?'rgba(255,255,255,.92)':'rgba(18,14,28,.85)';
+  vcol(txt,332,24,15.5,u/step+.4,a,ink,glow);
+  seal(sc.no,332-15.5*1.36,26,15,a*clamp((u-chars(txt).length*step)/.4));
+}
+
+/* ---------- 字幕：旁白印在最底下深色圆角条，收束句印在画面上方 ---------- */
+var VEIL='#161320';
+function caption(c,a){
+  if(a<=0) return;
+  ctx.setTransform(S,0,0,S,0,0); ctx.globalAlpha=clamp(a); ctx.textAlign='left'; ctx.textBaseline='middle';
+  if(c.k==='end'){
+    var ln=c.say.split('\n'), EY=152;
+    ctx.save(); ctx.translate(180*S,EY*S); ctx.scale(1,.42);
+    var eg=ctx.createRadialGradient(0,0,0,0,0,175*S);
+    eg.addColorStop(0,'rgba(20,24,44,.84)'); eg.addColorStop(.58,'rgba(20,24,44,.44)'); eg.addColorStop(1,'rgba(20,24,44,0)');
+    ctx.fillStyle=eg; ctx.fillRect(-180*S,-180*S,360*S,360*S); ctx.restore();
+    ctx.setTransform(S,0,0,S,0,0);
+    ctx.font='600 21.5px '+SERIF;
+    ctx.shadowColor='rgba(10,12,26,.92)'; ctx.shadowBlur=10*S;
+    ctx.fillStyle='#FAF3E4';
+    ln.forEach(function(s,i){ spaced(s,180,EY+(i-(ln.length-1)/2)*40,21.5*.12); });
+    ctx.shadowBlur=0; ctx.shadowColor='rgba(0,0,0,0)';
+    ln.forEach(function(s,i){ spaced(s,180,EY+(i-(ln.length-1)/2)*40,21.5*.12); });
+    ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0); return;
+  }
+  ctx.font='500 15px '+SANS;
+  var mw=function(x){ return lsWidth(x,0); };
+  var lines=wrap(c.say,298,mw), lh=23.5, y0=602-(lines.length-1)*lh/2;
+  var w=0; lines.forEach(function(ln){ w=Math.max(w,mw(ln)); });
+  ctx.fillStyle='rgba(28,22,34,.84)';
+  ctx.beginPath(); roundPath(180-w/2-15,y0-lh/2-6,w+30,lines.length*lh+12,11); ctx.fill();
+  lines.forEach(function(ln,i){ ctx.fillStyle='#F8F4EC'; spaced(ln,180,y0+i*lh,0); });
+  ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0);
+}
+
+var DRAW={
+  intro:sIntro, jiu:sJiu, ting:sTing, xi:sXi,
+  hua:sHua, yan:sYan, jing:sJing, end:sEnd
+};
+function sceneAt(t){
+  for(var i=0;i<SCENES.length;i++) if(t<SCENES[i].start+SCENES[i].dur) return SCENES[i];
+  return SCENES[SCENES.length-1];
+}
+function render(t,poster){
+  t=Math.max(0,Math.min(TOTAL-1e-4,t));
+  var sc=sceneAt(t), lt=t-sc.start, idx=SCENES.indexOf(sc), prev=SCENES[idx-1], next=SCENES[idx+1];
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#161320'; ctx.fillRect(0,0,cv.width,cv.height);
+  A=1; flat(); CUR=sc;
+  DRAW[sc.id](lt);
+  A=1; flat();
+  if(sc.poem&&!poster) vcard(sc,lt);
+  if(!poster) sc.caps.forEach(function(c){
+    if(c.k||!c.say) return;
+    if(lt>=c.t0&&lt<c.t1) caption(c,Math.min(clamp((lt-c.t0)/.2),clamp((c.t1-lt)/.2)));
+  });
+  if(!poster) sc.caps.forEach(function(c){
+    if(c.k!=='end') return;
+    if(lt>=c.t0&&lt<c.t1) caption(c,Math.min(clamp((lt-c.t0)/.6),clamp((c.t1-lt)/.6)));
+  });
+  var fIn=!prev?clamp(lt/.6):clamp(lt/.38);
+  var fOut=!next?clamp((sc.dur-lt)/1.2):clamp((sc.dur-lt)/.38);
+  var f=Math.min(fIn,fOut);
+  if(f<1) veilAll(VEIL,1-f);
+}
+/* ---------- 声音合成：古琴/古筝、竹笛、瓷杯叮咚、清溪流水与春燕啼鸣 ---------- */
+function m2f(m){ return 440*Math.pow(2,(m-69)/12); }
+function buildEvents(){
+  var ev=[];
+  function add(t,m,d,v,w,s){ if(t>=0&&t<TOTAL) ev.push({t:t,f:m2f(m),d:d,v:v,w:w||'zheng',s:s||1}); }
+  function pad(t,ms,d,v){ ms.forEach(function(m){ add(t,m,d,v||.009,'pad'); }); }
+  function chime(t,m,v){ add(t,m,.42,v||.015,'bell'); add(t+.07,m+12,.28,(v||.015)*.55,'bell'); }
+  function swallowCall(t,v){
+    add(t,91,.07,v||.011,'sine',1.18);
+    add(t+.08,93,.07,v||.011,'sine',1.15);
+    add(t+.16,88,.14,(v||.011)*.9,'sine',.92);
+  }
+
+  /* G 宫五声音阶：G4(67), A4(69), B4(71), D5(74), E5(76), G5(79), A5(81), B5(83), D6(86) */
+  var P=[67,69,71,74,76,79,81,83,86];
+  var CH_G=[55,62,67,71], CH_E=[52,59,64,71], CH_C=[48,55,60,67], CH_D=[50,57,62,69];
+
+  var s0=sceneStart('intro'), s1=sceneStart('jiu'), s2=sceneStart('ting'), s3=sceneStart('xi'),
+      s4=sceneStart('hua'), s5=sceneStart('yan'), s6=sceneStart('jing'), s7=sceneStart('end');
+  var i;
+
+  /* 序：清溪流水声与浣纱古筝泛音 */
+  pad(s0+.3,CH_G,6.8,.008); pad(s0+7.2,CH_C,6.5,.008);
+  add(s0+.5,78,5.5,.006,'swish',1.05); add(s0+6.5,76,6.5,.006,'swish',.98);
+  [67,71,74,76,79,83,79,76,74,71].forEach(function(m,j){
+    add(s0+1.0+j*1.15,m,1.4,.013,'zheng');
+  });
+  chime(s0+10.2,83,.014);
+
+  /* 一：一曲新词酒一杯 —— 春露滴杯、Clawd 展宽方琴台、三颗小脸蛋跳音珠弹新曲、碰杯叮声 */
+  pad(s1+.3,CH_G,11.5,.008); pad(s1+12.0,CH_C,11.5,.009);
+  for(i=0;i<3;i++) chime(s1+2.2+i*2.1,79+i*2,.012);
+  [71,74,76,79,76,74,71,69].forEach(function(m,j){
+    add(s1+1.2+j*1.2,m,1.1,.012,'di');
+  });
+  /* 15.2s 起三颗小脸蛋在 Clawd 琴台上蹦跳弹出的五声新曲 */
+  var NEW_SONG=[74,76,79,83,81,79,76,74, 71,74,76,79,76,74,71,67];
+  NEW_SONG.forEach(function(m,j){
+    var tt=s1+15.2+j*.46;
+    add(tt,m,.55,.015,'zheng');
+    if(j%3===0) add(tt,m+12,.35,.009,'bell');
+  });
+  /* 19.2s FetchMo 尾巴尖碰杯：清脆叮声 */
+  chime(s1+19.3,86,.022); chime(s1+20.8,88,.018);
+
+  /* 二：去年天气旧亭台 —— 怀旧竹笛、小紫数刻痕（一、二、三）、FetchMo 跃梁扫巢、StashYu 垫草 */
+  pad(s2+.3,CH_E,11.5,.008); pad(s2+12.0,CH_G,11.5,.008);
+  [76,74,71,69,67,69,71,74].forEach(function(m,j){
+    add(s2+1.0+j*1.3,m,1.2,.012,'di');
+  });
+  chime(s2+6.2,79,.018); chime(s2+7.2,81,.018); chime(s2+8.2,83,.02);
+  /* 15.8s FetchMo 跃上横梁扫巢 */
+  add(s2+15.8,67,.35,.015,'triangle',1.45);
+  for(i=0;i<5;i++) add(s2+16.6+i*.4,78,.18,.008,'swish',1.2);
+  [71,74,76,79,83].forEach(function(m,j){ add(s2+19.4+j*.6,m,1.1,.013,'zheng'); });
+  chime(s2+21.4,83,.014);
+
+  /* 三：夕阳西下几时回？ —— 悠远暮色竹笛、Clawd 抻高望日塔、三面圆铜镜折射金光泛音 */
+  pad(s3+.3,CH_D,11.5,.009); pad(s3+12.0,CH_G,11.5,.01);
+  [79,76,74,71,69,71,74,69,67].forEach(function(m,j){
+    add(s3+1.2+j*1.2,m,1.4,.013,'di');
+  });
+  /* 12.0s Clawd 抻高望日塔 */
+  for(i=0;i<6;i++) add(s3+12.0+i*.32,62+i*2,.24,.013,'triangle',1.15);
+  /* 18.5s 三颗小脸蛋化圆铜镜折射落日余晖 */
+  [74,79,83,86,83,79,86].forEach(function(m,j){
+    add(s3+18.4+j*.65,m,1.5,.014,'bell');
+    add(s3+18.4+j*.65,m-12,1.6,.012,'zheng');
+  });
+
+  /* 四：无可奈何花落去 —— 暮风吹落海棠花、竹匾与轻纱接花、StashYu 收花胖尾巴 */
+  add(s4+2.0,72,18.0,.01,'swish',.92);
+  pad(s4+.3,CH_E,12.5,.009); pad(s4+13.0,CH_C,12.5,.009);
+  var FALL_MEL=[83,81,79,76,74,71, 79,76,74,71,69,67, 76,74,71,69,67,64];
+  FALL_MEL.forEach(function(m,j){
+    add(s4+2.4+j*1.05,m,1.2,.013,'zheng');
+  });
+  /* 16.2s StashYu 尾巴一圈圈收花变胖 */
+  [67,71,74,79].forEach(function(m,j){
+    add(s4+16.2+j*1.4,m,.3,.016,'triangle',1.25);
+  });
+  add(s4+22.6,71,2.2,.012,'di',.94);
+
+  /* 五：似曾相识燕归来 —— 春燕啼鸣归来、认出火红狐毛惊喜泛音、小脸蛋枝头绽放海棠花 */
+  pad(s5+.3,CH_E,9.0,.008); pad(s5+9.5,CH_G,9.5,.009); pad(s5+19.0,CH_C,8.8,.011);
+  swallowCall(s5+3.4,.013); swallowCall(s5+6.2,.013); swallowCall(s5+9.2,.014);
+  [67,69,71,74,76,79].forEach(function(m,j){
+    add(s5+3.6+j*1.3,m,1.2,.012,'zheng');
+  });
+  /* 12.6s 看见翅膀边的火红狐毛！ */
+  chime(s5+12.8,83,.02); chime(s5+13.4,86,.022);
+  swallowCall(s5+16.2,.015);
+  /* 19.2s 小粉、小紫、小黑跳上空枝头鼓成五瓣红海棠与花苞 */
+  var BLOOM_MEL=[67,71,74,76,79,81,83,86, 83,81,79,83,86];
+  BLOOM_MEL.forEach(function(m,j){
+    var tt=s5+19.2+j*.58;
+    add(tt,m,1.3,.015,'zheng');
+    if(j%2===0) add(tt+.08,m+12,.9,.01,'bell');
+  });
+  swallowCall(s5+23.5,.014);
+
+  /* 六：小园香径独徘徊 —— StashYu 抖尾洒花雨风铃声、六只与春燕在香径结伴散步 */
+  pad(s6+.3,CH_G,12.5,.009); pad(s6+13.0,CH_C,12.5,.009);
+  /* 9.4s~16.0s 抖开胖尾巴洒下漫天海棠花雨 */
+  for(i=0;i<18;i++){
+    add(s6+9.5+i*.35,76+((i*3)%10),.45,.011,'bell');
+  }
+  var WALK_MEL=[74,76,79,76,74,71,74, 76,79,81,79,76,74,79, 83,81,79,76,74,71,67];
+  WALK_MEL.forEach(function(m,j){
+    var tt=s6+1.5+j*1.1;
+    add(tt,m,.95,.014,'zheng');
+    if(j>=12 && j%2===0) add(tt,m,.8,.011,'di');
+  });
+
+  /* 终：燕归来 —— 春夜新月摇篮曲，StashYu 白尖点两下收好，收束在温暖和弦 */
+  pad(s7+.3,CH_G,12.0,.009); pad(s7+12.2,CH_G,11.5,.01);
+  [79,76,74,71,69,67, 71,74,76,74,71,67].forEach(function(m,j){
+    var tt=s7+1.2+j*1.7;
+    add(tt,m,1.9,.012,'zheng');
+    add(tt+.35,m+12,1.4,.007,'bell');
+  });
+  /* 9.0s 白尖点两下：收好了 */
+  chime(s7+9.2,83,.016); chime(s7+9.6,86,.016);
+  add(s7+18.4,67,4.2,.014,'di');
+  add(s7+18.4,55,4.5,.015,'zheng');
+
+  ev.sort(function(a,b){return a.t-b.t;});
+  return ev;
+}
+
+var EVENTS=buildEvents();
+function noiseBuf(ac){
+  if(ac.__noise) return ac.__noise;
+  var sr=ac.sampleRate, len=Math.floor(sr*2.2), buf=ac.createBuffer(1,len,sr), d=buf.getChannelData(0), r=rng(23);
+  for(var i=0;i<len;i++) d[i]=r()*2-1;
+  ac.__noise=buf; return buf;
+}
+function synth(ac,dest,e,when){
+  var g=ac.createGain(); g.connect(dest);
+  if(e.w==='di'){
+    var o=ac.createOscillator(), o2=ac.createOscillator(), g2=ac.createGain(), vib=ac.createOscillator(), vg=ac.createGain();
+    o.type='sine'; o.frequency.value=e.f; o2.type='triangle'; o2.frequency.value=e.f*2; g2.gain.value=.12;
+    vib.frequency.value=5.2; vg.gain.setValueAtTime(0,when); vg.gain.linearRampToValueAtTime(e.f*.006,when+Math.min(.5,e.d*.6));
+    vib.connect(vg); vg.connect(o.frequency); vg.connect(o2.frequency);
+    if(e.s!==1){ o.frequency.setValueAtTime(e.f,when); o.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d*.8); }
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.05);
+    g.gain.setValueAtTime(e.v*.85,when+Math.max(.06,e.d-.18)); g.gain.exponentialRampToValueAtTime(.0001,when+e.d+.12);
+    o.connect(g); o2.connect(g2); g2.connect(g);
+    [o,o2,vib].forEach(function(x){ x.start(when); x.stop(when+e.d+.2); });
+    return;
+  }
+  if(e.w==='zheng'){
+    var z1=ac.createOscillator(), z2=ac.createOscillator(), lp=ac.createBiquadFilter(), zg=ac.createGain();
+    z1.type='triangle'; z2.type='sawtooth'; zg.gain.value=.14;
+    z1.frequency.setValueAtTime(e.f*1.006,when); z1.frequency.exponentialRampToValueAtTime(e.f,when+.06);
+    z2.frequency.setValueAtTime(e.f,when);
+    lp.type='lowpass'; lp.Q.value=.7;
+    lp.frequency.setValueAtTime(Math.min(14000,e.f*6),when); lp.frequency.exponentialRampToValueAtTime(e.f*1.5,when+.48);
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.006);
+    g.gain.exponentialRampToValueAtTime(e.v*.35,when+.24); g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    z1.connect(lp); z2.connect(zg); zg.connect(lp); lp.connect(g);
+    z1.start(when); z2.start(when); z1.stop(when+e.d+.05); z2.stop(when+e.d+.05);
+    return;
+  }
+  if(e.w==='swish'){
+    var sn=ac.createBufferSource(), nf=ac.createBiquadFilter();
+    sn.buffer=noiseBuf(ac); sn.loop=true; nf.type='bandpass'; nf.Q.value=1.1;
+    nf.frequency.setValueAtTime(e.f,when); nf.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d);
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+Math.min(.4,e.d*.25));
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    sn.connect(nf); nf.connect(g); sn.start(when,(e.t*2.7)%1.5); sn.stop(when+e.d+.04);
+    return;
+  }
+  if(e.w==='pad'){
+    g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+e.d*.35);
+    g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+    [[1,1],[2,.28]].forEach(function(h){
+      var o=ac.createOscillator(), hg=ac.createGain();
+      o.type='sine'; o.frequency.value=e.f*h[0]; hg.gain.value=h[1];
+      o.connect(hg); hg.connect(g); o.start(when); o.stop(when+e.d+.05);
+    });
+    return;
+  }
+  g.gain.setValueAtTime(.0001,when); g.gain.linearRampToValueAtTime(e.v,when+.004);
+  g.gain.exponentialRampToValueAtTime(.0001,when+e.d);
+  if(e.w==='bell'){
+    [[1,1],[2.76,.22],[5.4,.06]].forEach(function(h){
+      var o=ac.createOscillator(), hg=ac.createGain();
+      o.type='sine'; o.frequency.value=e.f*h[0]; hg.gain.value=h[1];
+      o.connect(hg); hg.connect(g); o.start(when); o.stop(when+e.d+.05);
+    });
+  } else {
+    var ob=ac.createOscillator(); ob.type=e.w==='sine'?'sine':'triangle';
+    ob.frequency.setValueAtTime(e.f,when);
+    if(e.s!==1) ob.frequency.exponentialRampToValueAtTime(e.f*e.s,when+e.d);
+    ob.connect(g); ob.start(when); ob.stop(when+e.d+.05);
+  }
+}
+
+/* ---------- 音频时钟跟随与防锁屏 ---------- */
+var AC=null, master=null, pumpId=null, audioT0=0, audioF0=0, nextIdx=0, lastTry=0;
+function audioNow(){ return audioF0+(AC.currentTime-audioT0); }
+function resumeAC(){ try{ var pr=AC.resume(); if(pr&&pr.catch) pr.catch(function(){}); }catch(e){} }
+function pump(){
+  if(!master) return;
+  var horizon=audioNow()+.35;
+  while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<horizon){
+    var e=EVENTS[nextIdx++];
+    if(e.t>=audioF0-.01) synth(AC,master,e,Math.max(AC.currentTime,audioT0+(e.t-audioF0)));
+  }
+}
+function audioStart(t){
+  if(!soundOn) return;
+  try{
+    if(!AC){ var C=window.AudioContext||window.webkitAudioContext; if(!C) return; AC=new C(); }
+    if(AC.state!=='running') resumeAC();
+    audioStop();
+    master=AC.createGain(); master.gain.value=3.0; master.connect(AC.destination);
+    audioF0=t; audioT0=AC.currentTime+.06;
+    nextIdx=0; while(nextIdx<EVENTS.length&&EVENTS[nextIdx].t<t) nextIdx++;
+    pump(); pumpId=setInterval(pump,80);
+  }catch(err){ master=null; }
+}
+function audioFollow(){
+  if(!soundOn||!AC) return;
+  var n=performance.now();
+  if(AC.state!=='running'){ if(n-lastTry>1000){ lastTry=n; resumeAC(); } return; }
+  if(master&&Math.abs(audioNow()-cur)<=.3) return;
+  if(n-lastTry>1000){ lastTry=n; audioStart(cur); }
+}
+var wake=null;
+function wakeOn(){
+  try{
+    if(!navigator.wakeLock||wake) return;
+    navigator.wakeLock.request('screen').then(function(l){
+      wake=l; l.addEventListener('release',function(){ if(wake===l) wake=null; });
+      if(!playing) wakeOff();
+    }).catch(function(){});
+  }catch(e){}
+}
+function wakeOff(){ try{ if(wake){ var l=wake; wake=null; l.release(); } }catch(e){} }
+function audioStop(){
+  if(pumpId){clearInterval(pumpId);pumpId=null;}
+  if(master){
+    var m=master; master=null;
+    try{ m.gain.setTargetAtTime(0,AC.currentTime,.03); setTimeout(function(){try{m.disconnect();}catch(e){}},400); }catch(e){}
+  }
+}
+
+/* ---------- 播放器控制 ---------- */
+var player=document.getElementById('player'), screenEl=document.getElementById('screen'),
+    big=document.getElementById('big'), pp=document.getElementById('pp'), snd=document.getElementById('snd'),
+    seek=document.getElementById('seek'), timeEl=document.getElementById('time'), chips=document.getElementById('chips');
+var playing=false, cur=0, filmT0=0, perfT0=0, raf=0, soundOn=true, started=false;
+var POSTER=sceneStart('yan')+22.5;
+seek.max=Math.round(TOTAL*10);
+function fmt(s){ s=Math.floor(s); return Math.floor(s/60)+':'+('0'+s%60).slice(-2); }
+SCENES.forEach(function(sc){
+  var b=document.createElement('button'); b.type='button';
+  b.textContent=sc.chipText;
+  b.addEventListener('click',function(){ go(sc.start); });
+  sc.chip=b; chips.appendChild(b);
+  sc.caps.forEach(function(c){ c.el.addEventListener('click',function(){ go(sc.start+c.t0+.01); }); });
+});
+function clock(){ return filmT0+Math.max(0,performance.now()-perfT0)/1000; }
+var lastOn=null, lastChip=null;
+function ui(){
+  timeEl.textContent=fmt(cur)+' / '+fmt(TOTAL);
+  seek.value=Math.round(cur*10);
+  pp.textContent=playing?'暂停':'播放';
+  var sc=sceneAt(cur), lt=cur-sc.start, on=null;
+  if(started) sc.caps.forEach(function(c){ if(lt>=c.t0&&lt<c.t1) on=c.el; });
+  if(on!==lastOn){ if(lastOn) lastOn.classList.remove('on'); if(on) on.classList.add('on'); lastOn=on; }
+  var chip=started?sc.chip:null;
+  if(chip!==lastChip){ if(lastChip) lastChip.classList.remove('on'); if(chip) chip.classList.add('on'); lastChip=chip; }
+  player.classList.toggle('playing',playing);
+  if(!playing){
+    var end=cur>=TOTAL-.05;
+    big.textContent=end?'↺ 再看一遍':'▶';
+    big.classList.toggle('again',end);
+    big.setAttribute('aria-label',end?'再看一遍':'播放');
+  }
+}
+function tick(){
+  if(!playing) return;
+  cur=clock();
+  if(cur>=TOTAL){ cur=TOTAL; render(cur); pause(); return; }
+  render(cur); audioFollow(); ui();
+  raf=requestAnimationFrame(tick);
+}
+function play(){
+  if(cur>=TOTAL-.05) cur=0;
+  started=true; playing=true;
+  filmT0=cur; perfT0=performance.now()+60;
+  audioStart(cur); wakeOn();
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(tick);
+  ui();
+}
+function pause(){
+  if(playing) cur=Math.min(TOTAL,clock());
+  playing=false; audioStop(); wakeOff(); cancelAnimationFrame(raf);
+  ui();
+}
+function go(t){
+  started=true;
+  cur=Math.max(0,Math.min(TOTAL,t));
+  if(playing){ audioStop(); filmT0=cur; perfT0=performance.now()+60; audioStart(cur); }
+  render(cur); ui();
+}
+screenEl.addEventListener('click',function(){ playing?pause():play(); });
+pp.addEventListener('click',function(){ playing?pause():play(); });
+snd.addEventListener('click',function(){
+  soundOn=!soundOn;
+  snd.textContent=soundOn?'声音 开':'声音 关'; snd.setAttribute('aria-pressed',soundOn?'true':'false');
+  if(playing){ cur=clock(); filmT0=cur; perfT0=performance.now()+60; if(soundOn) audioStart(cur); else audioStop(); }
+});
+seek.addEventListener('input',function(){ go(seek.value/10); });
+document.addEventListener('visibilitychange',function(){ if(document.hidden&&playing) pause(); });
+
+function fit(){
+  var w=screenEl.clientWidth||360, dpr=Math.min(3,window.devicePixelRatio||1);
+  setup(w*dpr);
+  if(started) render(cur); else render(POSTER,true);
+}
+window.addEventListener('resize',fit);
+fit(); ui();
+
+/* 导视频用的口子：给定宽度和第几秒，画出那一格；声音用同一个 synth 离线再放一遍 */
+window.FILM={W:W,H:H,TOTAL:TOTAL,events:EVENTS,canvas:cv,synth:synth,
+  setup:function(pxW){ setup(pxW); }, render:function(t){ render(t); }};
+})();
+</script>
+</body>
+</html>
