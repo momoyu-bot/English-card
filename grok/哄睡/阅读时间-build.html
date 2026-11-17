@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>阅读时间</title>
+  <meta name="description" content="灯亮着，书打开，时间自己走。" />
+  <style>
+    :root {
+      --night: #16130f;
+      --ink: #241e18;
+      --paper: #f4ecdc;
+      --lamp: #e6a14a;
+      --font: "Iowan Old Style", Palatino, "Palatino Linotype", "Songti SC", "STSong", "PMingLiU", serif;
+    }
+    * { box-sizing: border-box; }
+    html { color-scheme: dark; background: var(--night); }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: var(--font);
+      background: var(--night);
+      color: var(--paper);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2 { text-wrap: balance; font-weight: 500; }
+    p { text-wrap: pretty; }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: default; }
+    ::selection { background: var(--lamp); color: var(--ink); }
+    .room { position: relative; isolation: isolate; min-height: 100dvh; }
+    .glow {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 72% 52% at 50% 12%, color-mix(in srgb, var(--lamp) 62%, transparent), transparent 70%);
+      opacity: 0;
+      transition: opacity 700ms ease;
+    }
+    .room[data-lamp="low"] .glow { opacity: 0.42; }
+    .room[data-lamp="full"] .glow { opacity: 1; }
+    .room[data-lamp="dim"] .glow { opacity: 0.22; }
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 32rem;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 2.5rem 1.25rem;
+      gap: 1.75rem;
+    }
+    .kicker { margin: 0; color: var(--lamp); font-style: italic; letter-spacing: 0.14em; font-size: 0.95rem; }
+    h1 { margin: 0; font-size: 2.15rem; line-height: 1.25; }
+    .lead, .quiet { margin: 0; line-height: 1.7; }
+    .lead { font-size: 1.15rem; }
+    .quiet { opacity: 0.78; }
+    .sheet {
+      position: relative;
+      background: var(--paper);
+      color: var(--ink);
+      padding: 2rem 1.4rem 1.6rem 1.7rem;
+      box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 10%, transparent), 0 28px 70px color-mix(in srgb, black 42%, transparent);
+    }
+    .sheet::before {
+      content: "";
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 7px;
+      background: var(--lamp);
+    }
+    .stack { display: flex; flex-direction: column; gap: 1.4rem; }
+    .field { display: flex; flex-direction: column; gap: 0.4rem; }
+    .hint { font-size: 0.9rem; opacity: 0.65; }
+    input[type="text"], textarea {
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+      background: transparent;
+      outline: none;
+      border-radius: 0;
+    }
+    input[type="text"] { height: 3rem; font-size: 1.45rem; }
+    textarea { resize: none; min-height: 5.5rem; line-height: 1.7; padding: 0.4rem 0; }
+    input:focus, textarea:focus { border-bottom-color: var(--lamp); }
+    .choice {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      min-height: 3rem;
+      padding: 0 0.75rem;
+      border: 0;
+      background: transparent;
+      text-align: left;
+    }
+    .choice[aria-pressed="true"] {
+      background: color-mix(in srgb, var(--lamp) 22%, transparent);
+      box-shadow: inset 3px 0 0 var(--lamp);
+    }
+    .choice span:last-child { font-size: 0.9rem; opacity: 0.65; }
+    .row { display: flex; flex-direction: column; gap: 0.35rem; }
+    .btn {
+      min-height: 3rem;
+      padding: 0 1.4rem;
+      border: 0;
+      background: transparent;
+    }
+    .btn:active:not(:disabled) { scale: 0.96; }
+    .ink { background: var(--ink); color: var(--paper); }
+    .amber { background: var(--lamp); color: var(--ink); }
+    .line { border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent); background: transparent; }
+    .switch { display: flex; align-items: center; justify-content: space-between; min-height: 3rem; width: 100%; border: 0; background: transparent; padding: 0; }
+    .clock { margin: 0; font-size: 3.4rem; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+    .log { border-top: 1px solid color-mix(in srgb, var(--paper) 16%, transparent); padding-top: 1.2rem; display: flex; flex-direction: column; gap: 0.2rem; }
+    .night { border-bottom: 1px solid color-mix(in srgb, var(--paper) 12%, transparent); padding: 0.7rem 0; }
+    .night p { margin: 0.15rem 0; }
+    .margin { border-left: 2px solid var(--lamp); padding: 0.2rem 0 0.2rem 0.75rem; line-height: 1.7; overflow-wrap: anywhere; }
+    .ghost { min-height: 2.75rem; border: 0; background: transparent; padding: 0; opacity: 0.7; }
+    h2 { margin: 0 0 0.4rem; font-size: 1.15rem; }
+    .title { font-size: 1.35rem; margin: 0; overflow-wrap: anywhere; }
+    @media (min-width: 640px) {
+      .row { flex-direction: row; align-items: center; }
+      .amber.short, .ink.short { width: auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .glow, .btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="room" id="room" data-lamp="off">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="wrap" id="app"></div>
+  </main>
+  <script>
+    const KEY = "reading-time-shop";
+    const LENGTHS = [
+      { min: 15, label: "一刻", hint: "15 分钟" },
+      { min: 30, label: "半小时", hint: "30 分钟" },
+      { min: 60, label: "一小时", hint: "60 分钟" },
+      { min: null, label: "不设闹钟", hint: "坐到自己停" }
+    ];
+    const app = document.getElementById("app");
+    const room = document.getElementById("room");
+    let openLog = false;
+    let pendingId = null;
+    let timer = 0;
+    let audio = null;
+
+    function fresh() {
+      return {
+        phase: "arrive",
+        book: "",
+        plannedMin: 30,
+        startedAt: null,
+        accumulatedMs: 0,
+        runStartedAt: null,
+        margins: [],
+        closingNote: "",
+        chimed: false,
+        autoHeld: false,
+        lastBook: "",
+        nights: [],
+        chime: true
+      };
+    }
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (!raw) return fresh();
+        const data = JSON.parse(raw);
+        return Object.assign(fresh(), data, { runStartedAt: null, autoHeld: false });
+      } catch (err) {
+        return fresh();
+      }
+    }
+
+    let state = load();
+
+    function elapsed(now) {
+      const extra = state.runStartedAt ? Math.max(0, now - state.runStartedAt) : 0;
+      return state.accumulatedMs + extra;
+    }
+
+    function save() {
+      const now = Date.now();
+      const live = state.phase === "reading" || state.phase === "paused" || state.phase === "after";
+      const phase = state.phase === "reading" ? "paused" : state.phase === "prepare" ? "arrive" : state.phase;
+      const snap = {
+        phase: phase,
+        book: live ? state.book : "",
+        plannedMin: state.plannedMin,
+        startedAt: live ? state.startedAt : null,
+        accumulatedMs: live ? elapsed(now) : 0,
+        runStartedAt: null,
+        margins: live ? state.margins : [],
+        closingNote: live ? state.closingNote : "",
+        chimed: live ? state.chimed : false,
+        autoHeld: false,
+        lastBook: state.lastBook,
+        nights: state.nights.slice(0, 80),
+        chime: state.chime
+      };
+      localStorage.setItem(KEY, JSON.stringify(snap));
+    }
+
+    function shanghaiDay(ms) {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(ms);
+    }
+
+    function shiftDay(day, delta) {
+      const parts = day.split("-").map(Number);
+      return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + delta)).toISOString().slice(0, 10);
+    }
+
+    function streak(now) {
+      const days = new Set(state.nights.map(function (night) { return shanghaiDay(night.endedAt); }));
+      const today = shanghaiDay(now);
+      let cursor = days.has(today) ? today : days.has(shiftDay(today, -1)) ? shiftDay(today, -1) : "";
+      if (!cursor) return 0;
+      let count = 0;
+      while (days.has(cursor)) {
+        count += 1;
+        cursor = shiftDay(cursor, -1);
+      }
+      return count;
+    }
+
+    function formatSit(ms) {
+      const minutes = Math.round(ms / 60000);
+      if (minutes < 1) return "不到一分钟";
+      if (minutes < 60) return minutes + " 分钟";
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+      return rest === 0 ? hours + " 小时" : hours + " 小时 " + rest + " 分钟";
+    }
+
+    function formatClock(ms) {
+      const total = Math.max(0, Math.floor(ms / 1000));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const seconds = total % 60;
+      const pad = function (n) { return String(n).padStart(2, "0"); };
+      return hours > 0 ? hours + ":" + pad(minutes) + ":" + pad(seconds) : pad(minutes) + ":" + pad(seconds);
+    }
+
+    function formatNight(ms) {
+      return new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        month: "long",
+        day: "numeric"
+      }).format(ms);
+    }
+
+    function clockView(ms) {
+      if (state.plannedMin == null) {
+        return { label: "已经坐了", clock: formatClock(ms), caption: "", done: false };
+      }
+      const planned = state.plannedMin * 60000;
+      if (ms < planned) {
+        const remain = planned - ms;
+        return { label: "还剩", clock: formatClock(remain < 1000 ? 1000 : remain), caption: "", done: false };
+      }
+      const over = ms - planned;
+      if (over < 1000) return { label: "到点了", clock: "00:00", caption: "可以停。想留就留。", done: true };
+      return { label: "到点了", clock: "+" + formatClock(over), caption: "可以停。想留就留。", done: true };
+    }
+
+    function bookTitle(book) {
+      const name = (book || "").trim();
+      return name ? "《" + name + "》" : "这本还没有名字";
+    }
+
+    function arm() {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      if (!audio) audio = new Ctx();
+      if (audio.state === "suspended") audio.resume();
+      return audio;
+    }
+
+    function tone(ctx, freq, at, dur, peak) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(peak, at + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + dur + 0.05);
+    }
+
+    function playDu() {
+      const ctx = arm();
+      if (!ctx) return;
+      tone(ctx, 196, ctx.currentTime, 0.42, 0.045);
+    }
+
+    function playChime() {
+      const ctx = arm();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      tone(ctx, 196, t, 0.55, 0.04);
+      tone(ctx, 294, t + 0.26, 0.9, 0.032);
+    }
+
+    function h(tag, attrs) {
+      const node = document.createElement(tag);
+      const props = attrs || {};
+      Object.keys(props).forEach(function (key) {
+        const value = props[key];
+        if (key === "class") node.className = value;
+        else if (key === "text") node.textContent = value;
+        else if (key.slice(0, 2) === "on" && typeof value === "function") node.addEventListener(key.slice(2), value);
+        else if (value != null && value !== false) node.setAttribute(key, value);
+      });
+      for (let i = 2; i < arguments.length; i += 1) {
+        const kid = arguments[i];
+        if (kid == null || kid === false) continue;
+        node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+      }
+      return node;
+    }
+
+    function lampOf() {
+      if (state.phase === "reading") return "full";
+      if (state.phase === "paused") return "dim";
+      if (state.phase === "arrive") return "off";
+      return "low";
+    }
+
+    function stopTimer() {
+      if (timer) window.clearInterval(timer);
+      timer = 0;
+    }
+
+    function tick() {
+      const view = clockView(elapsed(Date.now()));
+      const clock = document.querySelector("[data-clock]");
+      const label = document.querySelector("[data-label]");
+      const caption = document.querySelector("[data-caption]");
+      const stop = document.querySelector("[data-stop]");
+      if (clock) clock.textContent = view.clock;
+      if (label) label.textContent = view.label;
+      if (caption) {
+        caption.hidden = !view.caption;
+        caption.textContent = view.caption;
+      }
+      if (stop) {
+        stop.classList.toggle("amber", view.done);
+        stop.classList.toggle("ghost", !view.done);
+      }
+      if (view.done && state.phase === "reading" && !state.chimed && state.chime) {
+        state.chimed = true;
+        save();
+        playChime();
+      }
+    }
+
+    function startTimer() {
+      stopTimer();
+      if (state.phase !== "reading") return;
+      tick();
+      timer = window.setInterval(tick, 250);
+    }
+
+    function go(patch) {
+      Object.assign(state, patch);
+      save();
+      render();
+    }
+
+    function render() {
+      stopTimer();
+      room.dataset.lamp = lampOf();
+      app.replaceChildren();
+      if (state.phase === "arrive") renderArrive();
+      else if (state.phase === "prepare") renderPrepare();
+      else if (state.phase === "reading" || state.phase === "paused") renderSession();
+      else renderAfter();
+      startTimer();
+    }
+
+    function renderArrive() {
+      const head = h("header", { class: "stack" },
+        h("p", { class: "kicker", text: "reading time" }),
+        h("h1", { text: "灯还没点。" }),
+        h("p", { class: "lead", text: "书在原来的地方。点上灯，这一阵才算开始。" })
+      );
+      if (state.lastBook) head.append(h("p", { class: "quiet", text: "上次是" + bookTitle(state.lastBook) }));
+      const nights = streak(Date.now());
+      if (nights >= 2) head.append(h("p", { class: "quiet", text: "连续 " + nights + " 个晚上坐下来了。" }));
+      const button = h("button", {
+        class: "btn amber short",
+        type: "button",
+        text: "点灯",
+        onclick: function () {
+          playDu();
+          go({
+            phase: "prepare",
+            book: state.lastBook,
+            startedAt: null,
+            accumulatedMs: 0,
+            runStartedAt: null,
+            margins: [],
+            closingNote: "",
+            chimed: false,
+            autoHeld: false
+          });
+        }
+      });
+      app.append(head, button);
+      if (!state.nights.length) return;
+      const shown = openLog ? state.nights : state.nights.slice(0, 6);
+      const list = h("div", { class: "log" }, h("h2", { text: "坐下来的晚上" }));
+      shown.forEach(function (night) { list.append(nightRow(night)); });
+      if (state.nights.length > 6) {
+        list.append(h("button", {
+          class: "ghost",
+          type: "button",
+          text: openLog ? "收起" : "更早的晚上",
+          onclick: function () { openLog = !openLog; render(); }
+        }));
+      }
+      app.append(list);
+    }
+
+    function nightRow(night) {
+      const row = h("div", { class: "night" },
+        h("p", { class: "title", text: bookTitle(night.book) }),
+        h("p", { class: "quiet", text: formatNight(night.endedAt) + " · 坐了 " + formatSit(night.satMs || 0) + (night.plannedMin == null ? " · 没有闹钟" : "") })
+      );
+      if (night.note) row.append(h("p", { text: night.note }));
+      (night.margins || []).forEach(function (line) {
+        row.append(h("p", { class: "margin", text: line }));
+      });
+      if (pendingId === night.id) {
+        row.append(h("div", { class: "row" },
+          h("button", { class: "ghost", type: "button", text: "确定抹掉", onclick: function () {
+            state.nights = state.nights.filter(function (item) { return item.id !== night.id; });
+            pendingId = null;
+            save();
+            render();
+          }}),
+          h("button", { class: "ghost", type: "button", text: "留下", onclick: function () {
+            pendingId = null;
+            render();
+          }})
+        ));
+      } else {
+        row.append(h("button", { class: "ghost", type: "button", text: "抹掉这条", onclick: function () {
+          pendingId = night.id;
+          render();
+        }}));
+      }
+      return row;
+    }
+
+    function renderPrepare() {
+      const input = h("input", { type: "text", maxlength: "80", placeholder: "今晚读的那本", value: state.book });
+      input.addEventListener("input", function () { state.book = input.value; save(); });
+      const choices = h("div");
+      LENGTHS.forEach(function (choice) {
+        const on = state.plannedMin === choice.min;
+        choices.append(h("button", {
+          class: "choice",
+          type: "button",
+          "aria-pressed": on ? "true" : "false",
+          onclick: function () { state.plannedMin = choice.min; save(); render(); }
+        }, h("span", { text: choice.label }), h("span", { text: choice.hint })));
+      });
+      const sheet = h("section", { class: "sheet stack" },
+        h("p", { class: "kicker", text: "reading time" }),
+        h("h1", { text: "今晚读哪一本" }),
+        h("p", { class: "quiet", text: "可以空着。空着也算读。" }),
+        h("label", { class: "field" }, h("span", { class: "hint", text: "书名" }), input),
+        choices,
+        h("button", {
+          class: "switch",
+          type: "button",
+          role: "switch",
+          "aria-checked": state.chime ? "true" : "false",
+          onclick: function () { state.chime = !state.chime; save(); render(); }
+        }, h("span", { text: "到点轻轻嘟一声" }), h("span", { text: state.chime ? "开" : "关" })),
+        h("div", { class: "row" },
+          h("button", { class: "btn ink short", type: "button", text: "打开书", onclick: function () {
+            arm();
+            const now = Date.now();
+            go({
+              phase: "reading",
+              startedAt: now,
+              runStartedAt: now,
+              accumulatedMs: 0,
+              margins: [],
+              closingNote: "",
+              chimed: false,
+              autoHeld: false
+            });
+          }}),
+          h("button", { class: "btn ghost", type: "button", text: "先不读", onclick: function () {
+            go({ phase: "arrive", book: "" });
+          }})
+        )
+      );
+      app.append(sheet);
+    }
+
+    function renderSession() {
+      const view = clockView(elapsed(Date.now()));
+      const paused = state.phase === "paused";
+      const line = h("input", { type: "text", maxlength: "140", placeholder: "一句就够" });
+      const noteBtn = h("button", { class: "ghost", type: "submit", text: "记下这句", disabled: "disabled" });
+      line.addEventListener("input", function () {
+        if (line.value.trim()) noteBtn.removeAttribute("disabled");
+        else noteBtn.setAttribute("disabled", "disabled");
+      });
+      const form = h("form", { class: "stack", onsubmit: function (event) {
+        event.preventDefault();
+        const text = line.value.trim();
+        if (!text) return;
+        state.margins = state.margins.concat(text).slice(-12);
+        save();
+        render();
+      }},
+        h("label", { class: "field" }, h("span", { class: "hint", text: "页边，不想打断就别写" }), line),
+        noteBtn
+      );
+      state.margins.forEach(function (item) { form.append(h("p", { class: "margin", text: item })); });
+      const stop = h("button", {
+        class: view.done ? "btn amber" : "btn ghost",
+        type: "button",
+        "data-stop": "1",
+        text: "停在这里",
+        onclick: function () {
+          go({
+            phase: "after",
+            accumulatedMs: elapsed(Date.now()),
+            runStartedAt: null,
+            autoHeld: false
+          });
+        }
+      });
+      const sheet = h("section", { class: "sheet stack" },
+        h("p", { class: "quiet", text: paused ? "灯调暗了，书还摊着。" : "灯亮着。" }),
+        h("h1", { class: "title", text: bookTitle(state.book) }),
+        h("div", {},
+          h("p", { class: "hint", "data-label": "1", text: view.label }),
+          h("p", { class: "clock", role: "timer", "data-clock": "1", text: view.clock }),
+          h("p", { class: "lead", "data-caption": "1", text: view.caption, hidden: view.caption ? null : "" })
+        ),
+        h("div", { class: "row" },
+          paused
+            ? h("button", { class: "btn ink short", type: "button", text: "继续", onclick: function () {
+                arm();
+                go({ phase: "reading", runStartedAt: Date.now(), autoHeld: false });
+              }})
+            : h("button", { class: "btn line", type: "button", text: "暂停", onclick: function () {
+                go({
+                  phase: "paused",
+                  accumulatedMs: elapsed(Date.now()),
+                  runStartedAt: null,
+                  autoHeld: false
+                });
+              }}),
+          stop
+        ),
+        form
+      );
+      app.append(sheet);
+    }
+
+    function renderAfter() {
+      const note = h("textarea", { maxlength: "280", rows: "3", placeholder: "没有也可以" });
+      note.value = state.closingNote;
+      note.addEventListener("input", function () { state.closingNote = note.value; save(); });
+      const sheet = h("section", { class: "sheet stack" },
+        h("h1", { text: "今晚停在这里。" }),
+        h("p", { class: "quiet", text: "坐了 " + formatSit(state.accumulatedMs) + " · " + bookTitle(state.book) })
+      );
+      state.margins.forEach(function (item) { sheet.append(h("p", { class: "margin", text: item })); });
+      sheet.append(
+        h("label", { class: "field" }, h("span", { class: "hint", text: "有一句想留下吗" }), note),
+        h("div", { class: "row" },
+          h("button", { class: "btn ink short", type: "button", text: "熄灯", onclick: function () {
+            const book = state.book.trim();
+            const night = {
+              id: String(Date.now()) + "-" + Math.random().toString(16).slice(2),
+              book: book,
+              startedAt: state.startedAt || Date.now(),
+              endedAt: Date.now(),
+              satMs: state.accumulatedMs,
+              plannedMin: state.plannedMin,
+              note: state.closingNote.trim(),
+              margins: state.margins
+            };
+            state.nights = [night].concat(state.nights).slice(0, 80);
+            state.lastBook = book || state.lastBook;
+            go({
+              phase: "arrive",
+              book: "",
+              startedAt: null,
+              accumulatedMs: 0,
+              runStartedAt: null,
+              margins: [],
+              closingNote: "",
+              chimed: false,
+              autoHeld: false
+            });
+          }}),
+          h("button", { class: "btn ghost", type: "button", text: "再坐一会儿", onclick: function () {
+            arm();
+            go({ phase: "reading", runStartedAt: Date.now(), autoHeld: false });
+          }})
+        )
+      );
+      app.append(sheet);
+    }
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden" && state.phase === "reading") {
+        state.phase = "paused";
+        state.accumulatedMs = elapsed(Date.now());
+        state.runStartedAt = null;
+        state.autoHeld = true;
+        save();
+        render();
+      } else if (document.visibilityState === "visible" && state.autoHeld && state.phase === "paused") {
+        state.phase = "reading";
+        state.runStartedAt = Date.now();
+        state.autoHeld = false;
+        save();
+        render();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
