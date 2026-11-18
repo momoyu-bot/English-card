@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#EFE7DA" id="metaTheme">
+<title>Clawd 的第四通电话</title>
+<meta name="description" content="第三通没挂断的线还热着。对完四下的暗号，它把捡来的小东西挨个贴在听筒上敲给你听。">
+<!--
+  Clawd 底模严格取自 claude/小科普/Clawd造型宪法（Code版）.html：
+  - 壳：x 44, y 50, 宽 147, 高 98，纯色 #d47f59，无渐变、无描边、无嘴。
+  - 钳：左 x 20, y 99, 宽 24, 高 21；右 x 191, y 99, 宽 25, 高 21。
+  - 腿：默认本体踩角站姿（x = 44, 68, 152, 176, y = 148, 宽 15, 高 21），
+        支持切换 DLC·原图站姿（54, 78, 143, 167）与 DLC·内八站姿（65, 89, 131, 155）。
+  - 眼：竖条 / 方块 / 笑 / 闭眼 / 用力；高光只画在睁着的竖条和方块眼上，眯眼自动收起。
+  - 动效：只动整体位移、右钳与听筒整块位移、眼睛换帧、外挂槽位，时间函数全部用 steps()。
+-->
+<style>
+  :root{
+    --desk:#EFE7DA;
+    --desk2:#E3D8C6;
+    --paper:#FBF6EC;
+    --paper2:#F5EDE0;
+    --edge:#D2C4AC;
+    --ink:#3B342C;
+    --dim:#8E8477;
+    --faint:#B9AE9E;
+    --phone:#2E343B;
+    --phone2:#3A424B;
+    --phone-edge:#1E2328;
+    --lcd:#AFC49B;
+    --lcd-ink:#2A3524;
+    --coral:#d47f59;
+    --coral-dim:#a35f42;
+    --gold:#C9A55E;
+    --stage-bg:rgba(251,246,236,.52);
+    --safe-top:env(safe-area-inset-top, 0px);
+    --safe-bot:env(safe-area-inset-bottom, 0px);
+  }
+
+  body[data-lamp="night"]{
+    --desk:#1B2430;
+    --desk2:#121821;
+    --paper:#232E3C;
+    --paper2:#1D2633;
+    --edge:#384657;
+    --ink:#EFE6D5;
+    --dim:#9AA5B4;
+    --faint:#687485;
+    --phone:#1E252D;
+    --phone2:#28323D;
+    --phone-edge:#11161B;
+    --lcd:#B9C9A3;
+    --lcd-ink:#222C1D;
+    --stage-bg:rgba(20,27,36,.72);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{-webkit-text-size-adjust:100%}
+
+  body{
+    min-height:100dvh;
+    background:radial-gradient(115% 85% at 50% 0%,var(--desk) 0%,var(--desk2) 100%);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
+      "Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","Microsoft YaHei",
+      system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    font-size:15px;
+    line-height:1.7;
+    user-select:none;-webkit-user-select:none;
+    padding:calc(var(--safe-top) + 16px) 18px calc(var(--safe-bot) + 36px);
+    display:flex;flex-direction:column;align-items:center;
+    transition:background-color .25s linear,color .25s linear;
+  }
+
+  .wrap{width:100%;max-width:382px;display:flex;flex-direction:column;align-items:center}
+
+  /* ── 顶栏工具条 ── */
+  .topbar{
+    width:100%;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    margin-bottom:10px;
+  }
+  .series-tag{
+    font-size:12px;color:var(--dim);letter-spacing:.05em;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .series-dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--coral);
+    box-shadow:0 0 0 2px rgba(212,127,89,.22);
+  }
+  .tools{display:flex;gap:6px}
+  .mini-btn{
+    font:inherit;font-size:12px;
+    padding:4px 10px;border-radius:99px;
+    color:var(--dim);background:var(--paper);
+    border:1px solid var(--edge);
+    cursor:pointer;
+  }
+  .mini-btn[aria-pressed="true"]{
+    color:var(--ink);border-color:var(--coral);
+    background:var(--paper2);font-weight:600;
+  }
+
+  /* ── 便签：暗号本 ── */
+  .note{
+    width:100%;
+    background:var(--paper);
+    border:1px solid var(--edge);
+    border-radius:3px 12px 4px 4px;
+    padding:11px 14px 12px;
+    box-shadow:0 1px 0 rgba(59,52,44,.06),0 6px 14px -10px rgba(0,0,0,.35);
+    transform:rotate(-.55deg);
+  }
+  .note-head{
+    display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    border-bottom:1px dashed var(--edge);
+    padding-bottom:6px;margin-bottom:7px;
+  }
+  .note-head .to{font-size:12.5px;color:var(--dim);letter-spacing:.04em}
+  .note-head .timer-chip{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;color:var(--coral-dim);letter-spacing:.04em;
+  }
+  .cipher-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;
+    font-size:12.5px;line-height:1.55;
+  }
+  .cipher-item{
+    display:flex;align-items:baseline;gap:6px;
+    padding:2px 4px;border-radius:5px;
+    color:var(--dim);
+    transition:background .15s linear,color .15s linear;
+  }
+  .cipher-item.interactive{cursor:pointer}
+  .cipher-item.interactive:hover{background:var(--paper2)}
+  .cipher-item.lit{
+    background:rgba(212,127,89,.16);
+    color:var(--ink);
+  }
+  .cipher-item .k-num{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-weight:600;color:var(--coral);font-size:12px;flex:none;
+  }
+  .cipher-item .k-val{
+    color:var(--ink);font-weight:500;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cipher-item.unset .k-val{color:var(--faint);font-weight:400}
+  .cipher-item.full{grid-column:1 / -1;margin-top:2px;padding-top:4px;border-top:1px dotted var(--edge)}
+  .edit-tag{
+    font-size:11px;color:var(--dim);margin-left:auto;
+    text-decoration:underline;text-underline-offset:2px;flex:none;
+  }
+
+  /* ── 台面：Clawd ── */
+  .stage{
+    width:100%;
+    margin-top:12px;
+    position:relative;
+    background:var(--stage-bg);
+    border:1px solid var(--edge);
+    border-radius:14px 14px 10px 10px;
+    padding:6px 6px 2px;
+  }
+  .stage svg{
+    display:block;width:100%;height:auto;
+    shape-rendering:crispEdges;
+    cursor:pointer;
+  }
+  #clawd{transition:transform .28s steps(3,jump-none)}
+  #claw-r{transition:transform .14s steps(2,jump-none)}
+  #hand{transition:transform .14s steps(2,jump-none)}
+  #prop-g{transition:transform .16s steps(2,jump-none)}
+  .hop #clawd{animation:hop .56s steps(2,jump-none) infinite}
+  @keyframes hop{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-7px)}
+  }
+  .say{
+    position:absolute;left:10px;right:10px;top:7px;
+    text-align:center;font-size:13px;color:var(--dim);
+    min-height:1.65em;
+    pointer-events:none;
+  }
+  .float-knock{
+    position:absolute;right:18px;top:30px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:15px;font-weight:600;letter-spacing:.12em;
+    color:var(--coral);
+    background:var(--paper);
+    border:1px solid var(--edge);
+    border-radius:99px;
+    padding:2px 10px;
+    opacity:0;pointer-events:none;
+  }
+  .float-knock.on{animation:popKnock .85s steps(4,jump-none) forwards}
+  @keyframes popKnock{
+    0%{opacity:0;transform:translateY(6px)}
+    25%{opacity:1;transform:translateY(0)}
+    80%{opacity:1;transform:translateY(-6px)}
+    100%{opacity:0;transform:translateY(-10px)}
+  }
+
+  /* ── 电话机 ── */
+  .phone{
+    width:100%;
+    margin-top:10px;
+    background:linear-gradient(176deg,var(--phone2) 0%,var(--phone) 62%);
+    border:1px solid var(--phone-edge);
+    border-radius:16px;
+    padding:13px 13px 14px;
+    box-shadow:0 10px 22px -14px rgba(20,25,30,.85),inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  .lcd{
+    background:var(--lcd);
+    border-radius:6px;
+    border:1px solid rgba(20,28,16,.28);
+    box-shadow:inset 0 2px 6px rgba(20,28,16,.25);
+    padding:8px 12px 8px;
+    display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  }
+  .lcd .who{
+    font-size:18px;letter-spacing:.05em;color:var(--lcd-ink);
+    font-weight:600;line-height:1.3;
+  }
+  .lcd .st{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;color:rgba(42,53,36,.72);letter-spacing:.05em;flex:none;
+  }
+
+  /* ── 听筒传声槽 ── */
+  .slot{
+    margin-top:10px;
+    background:rgba(0,0,0,.2);
+    border:1px dashed rgba(255,255,255,.2);
+    border-radius:9px;
+    padding:9px 12px 10px;
+  }
+  .slot.filled{border-style:solid;border-color:rgba(201,165,94,.55)}
+  .slot .cap{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:10.5px;letter-spacing:.14em;
+    color:rgba(255,255,255,.45);
+  }
+  .slot .val{
+    margin-top:2px;
+    font-size:15px;color:rgba(255,255,255,.42);
+    line-height:1.55;
+  }
+  .slot.filled .val{color:#F2E6CE;font-weight:500}
+  .slot .by{
+    font-size:11.5px;color:rgba(255,255,255,.38);margin-top:2px;
+  }
+
+  /* ── 通话字幕流 ── */
+  .call{
+    width:100%;margin-top:8px;
+    display:flex;flex-direction:column;
+  }
+  .line{font-size:15px;line-height:1.82;color:var(--ink);margin-top:7px}
+  .line.knock{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    letter-spacing:.08em;color:var(--coral);font-size:17.5px;font-weight:600;
+  }
+  .line.knock.slow{letter-spacing:.26em}
+  .line.soft{color:var(--dim);font-size:13.5px;line-height:1.75}
+  .line.knock.me{text-align:right;color:var(--dim)}
+  .line.knock.me::after{
+    content:'你这头敲的';display:block;
+    font-family:inherit;letter-spacing:0;font-size:11px;color:var(--faint);
+    margin-top:-2px;font-weight:400;
+  }
+  .line.card-box{
+    background:var(--paper);border:1px solid var(--edge);
+    border-radius:10px;padding:10px 13px;margin-top:10px;font-size:14px;
+  }
+  .line.card-box b{
+    font-weight:600;display:block;margin-bottom:2px;font-size:12.5px;color:var(--coral);
+  }
+
+  /* ── 按钮与输入 ── */
+  .pick{
+    width:100%;margin-top:12px;
+    display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+  }
+  .pick button{
+    font:inherit;font-size:14px;
+    padding:9px 15px;
+    color:var(--ink);
+    background:var(--paper);
+    border:1px solid var(--edge);
+    border-radius:12px;
+    box-shadow:0 2px 0 var(--edge);
+    cursor:pointer;
+    transition:transform .08s linear;
+  }
+  .pick button:active{transform:translateY(2px);box-shadow:0 0 0 var(--edge)}
+  .pick button:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+  .pick button.act{
+    color:#FBF6EC;background:var(--coral);
+    border:none;border-radius:99px;padding:10px 24px;
+    box-shadow:0 2px 0 var(--coral-dim);font-weight:500;
+  }
+  .pick button.act:active{box-shadow:0 0 0 var(--coral-dim)}
+  .pick button.ghost{background:transparent;color:var(--dim);box-shadow:none}
+  .pick button.done-prop{opacity:.62}
+
+  .own{width:100%;margin-top:10px;display:flex;gap:8px}
+  .own input{
+    font:inherit;font-size:14.5px;flex:1;min-width:0;
+    padding:9px 12px;color:var(--ink);
+    background:var(--paper);
+    border:1px solid var(--edge);border-radius:11px;
+    user-select:text;-webkit-user-select:text;
+  }
+  .own input:focus{outline:2px solid var(--coral);outline-offset:1px}
+  .own button{
+    font:inherit;font-size:14px;padding:9px 15px;flex:none;
+    color:#FBF6EC;background:var(--coral);
+    border:none;border-radius:11px;box-shadow:0 2px 0 var(--coral-dim);
+    cursor:pointer;
+  }
+  .own button:active{transform:translateY(2px);box-shadow:0 0 0 var(--coral-dim)}
+  .own[hidden]{display:none}
+
+  /* ── 枕边常通对敲台（终章解锁，也可提前点开） ── */
+  .pad-box{
+    width:100%;margin-top:14px;
+    background:var(--paper);
+    border:1px solid var(--edge);
+    border-radius:14px;
+    padding:12px 13px 13px;
+  }
+  .pad-box[hidden]{display:none}
+  .pad-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    font-size:12.5px;color:var(--dim);margin-bottom:8px;
+  }
+  .pad-head b{color:var(--ink);font-size:13.5px}
+  .tap-main{
+    width:100%;
+    padding:13px 16px;
+    border-radius:12px;
+    border:1px solid var(--coral);
+    background:rgba(212,127,89,.11);
+    color:var(--ink);
+    font:inherit;font-size:15px;font-weight:600;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:space-between;
+    box-shadow:0 2px 0 rgba(163,95,66,.28);
+    transition:transform .06s linear,background .1s linear;
+  }
+  .tap-main:active{
+    transform:translateY(2px);
+    box-shadow:0 0 0 rgba(163,95,66,.28);
+    background:rgba(212,127,89,.22);
+  }
+  .tap-main .sub{
+    font-size:12px;font-weight:400;color:var(--dim);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .quick-knocks{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:6px;
+    margin-top:8px;
+  }
+  .quick-knocks button{
+    font:inherit;font-size:12px;
+    padding:7px 2px;
+    border-radius:8px;
+    border:1px solid var(--edge);
+    background:var(--paper2);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .quick-knocks button:active{transform:translateY(1px)}
+
+  /* ── 造型宪法七槽位抽屉 ── */
+  .wardrobe{
+    width:100%;margin-top:14px;
+    background:var(--paper);
+    border:1px solid var(--edge);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  .wardrobe summary{
+    padding:10px 13px;
+    font-size:13px;color:var(--dim);
+    cursor:pointer;list-style:none;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .wardrobe summary::-webkit-details-marker{display:none}
+  .wardrobe summary b{color:var(--ink);font-weight:600}
+  .wardrobe-body{
+    padding:4px 13px 12px;
+    border-top:1px dashed var(--edge);
+    font-size:12.5px;
+  }
+  .slot-row{
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .slot-row i{
+    font-style:normal;color:var(--dim);width:3em;flex:none;
+  }
+  .slot-row button{
+    font:inherit;font-size:12px;
+    padding:3px 9px;border-radius:7px;
+    background:var(--paper2);color:var(--ink);
+    border:1px solid var(--edge);cursor:pointer;
+  }
+  .slot-row button[aria-pressed="true"]{
+    background:var(--coral);color:#FBF6EC;border-color:var(--coral);
+  }
+
+  footer{
+    width:100%;margin-top:24px;
+    font-size:12px;line-height:1.85;color:var(--dim);
+    text-align:center;
+  }
+  footer b{font-weight:600;color:var(--ink)}
+  .prev{margin-top:8px;font-size:12px;color:var(--faint)}
+  .prev a{color:var(--coral);text-decoration:none;border-bottom:1px solid var(--edge)}
+  .prev a:active{opacity:.7}
+
+  @media (prefers-reduced-motion:reduce){
+    #clawd,#claw-r,#hand,#prop-g,.hop #clawd,.float-knock.on{animation:none;transition:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="series-tag">
+      <span class="series-dot"></span>
+      <span>Clawd 来电 · 第四通</span>
+    </div>
+    <div class="tools">
+      <button type="button" class="mini-btn" id="btnSound" aria-pressed="false">咔哒声 关</button>
+      <button type="button" class="mini-btn" id="btnLamp" aria-pressed="false">夜灯</button>
+    </div>
+  </div>
+
+  <!-- 便签：前四通攒下的暗号本 -->
+  <div class="note">
+    <div class="note-head">
+      <div class="to">给 宝 · 听筒边的暗号本</div>
+      <div class="timer-chip" id="callClock">未挂断 00:00</div>
+    </div>
+    <div class="cipher-grid">
+      <div class="cipher-item interactive" data-knock="1" title="点一下让它敲 1 下">
+        <span class="k-num">一下</span>
+        <span class="k-val">收到 · 在听</span>
+      </div>
+      <div class="cipher-item interactive" data-knock="2" title="点一下让它敲 2 下">
+        <span class="k-num">两下</span>
+        <span class="k-val">嘟——嘟——</span>
+      </div>
+      <div class="cipher-item interactive" data-knock="3" title="点一下让它敲 3 下">
+        <span class="k-num">三下</span>
+        <span class="k-val">我在</span>
+      </div>
+      <div class="cipher-item interactive" data-knock="4" id="cipher4Item" title="点一下核对 4 下暗号">
+        <span class="k-num">四下</span>
+        <span class="k-val" id="cipher4Val">我今天想你了</span>
+        <span class="edit-tag" id="edit4Btn">改</span>
+      </div>
+      <div class="cipher-item full unset interactive" data-knock="5" id="cipher5Item" title="第四通的新暗号">
+        <span class="k-num">五下</span>
+        <span class="k-val" id="cipher5Val">（等这一通定下来）</span>
+        <span class="edit-tag" id="edit5Btn" hidden>改</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 台面：Clawd 本体与外挂层 -->
+  <div class="stage" id="stage" title="点一点 Clawd">
+    <div class="say" id="say">第三通打完它就没挂。听筒还夹在左钳上。</div>
+    <div class="float-knock" id="floatKnock">咔</div>
+    <svg id="clawdSvg" viewBox="-74 6 310 176" role="img" aria-label="Clawd 左钳夹着电话听筒，右钳在听筒边轻轻敲">
+      <g id="clawd">
+        <!-- 桌面投影 -->
+        <rect id="shadow" x="-10" y="169" width="218" height="7" fill="rgba(59,52,44,.14)"/>
+        <!-- 头顶挂件槽位（crown） -->
+        <g id="crown-g" transform="translate(0,-10)"></g>
+        <!-- 四条短腿（默认踩角 corner：44, 68, 152, 176） -->
+        <g id="legs-g">
+          <rect x="44" y="148" width="15" height="21" fill="#d47f59"/>
+          <rect x="68" y="148" width="15" height="21" fill="#d47f59"/>
+          <rect x="152" y="148" width="15" height="21" fill="#d47f59"/>
+          <rect x="176" y="148" width="15" height="21" fill="#d47f59"/>
+        </g>
+        <!-- 壳（147×98） -->
+        <rect x="44" y="50" width="147" height="98" fill="#d47f59"/>
+        <!-- 左侧听筒与电话螺旋线 -->
+        <g id="hand">
+          <rect x="-6" y="76" width="28" height="13" fill="#2E343B"/>
+          <rect x="2" y="89" width="12" height="30" fill="#2E343B"/>
+          <rect x="-6" y="119" width="28" height="13" fill="#2E343B"/>
+          <rect x="4" y="132" width="9" height="8" fill="#464F59"/>
+          <rect x="-3" y="140" width="9" height="8" fill="#464F59"/>
+          <rect x="4" y="148" width="9" height="8" fill="#464F59"/>
+          <rect x="-3" y="156" width="9" height="8" fill="#464F59"/>
+          <rect x="4" y="164" width="9" height="7" fill="#464F59"/>
+        </g>
+        <!-- 左钳 -->
+        <rect x="20" y="99" width="24" height="21" fill="#d47f59"/>
+        <!-- 右钳与手持道具槽位 -->
+        <g id="claw-r">
+          <rect x="191" y="99" width="25" height="21" fill="#d47f59"/>
+          <g id="prop-g" transform="translate(-14,16)"></g>
+        </g>
+        <!-- 脸上腮红（壳面纹理槽位） -->
+        <g id="blush-g">
+          <rect x="48" y="92" width="20" height="12" fill="#e59a9a"/>
+          <rect x="167" y="92" width="20" height="12" fill="#e59a9a"/>
+        </g>
+        <!-- 眼睛槽位 -->
+        <g id="eyes-g">
+          <rect x="70" y="78" width="8" height="21" fill="#17110e"/>
+          <rect x="158" y="78" width="8" height="21" fill="#17110e"/>
+        </g>
+        <!-- 高光外挂层（仅在睁着的竖条/方块眼上显示） -->
+        <g id="shine-g">
+          <rect x="71" y="81" width="6" height="6" fill="#ffffff"/>
+          <rect x="159" y="81" width="6" height="6" fill="#ffffff"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- 电话机主体 -->
+  <div class="phone">
+    <div class="lcd">
+      <div class="who" id="lcdWho">Clawd · 第四通</div>
+      <div class="st" id="lcdSt">线还热着</div>
+    </div>
+    <div class="slot" id="slot">
+      <div class="cap">
+        <span id="slotCap">听筒边</span>
+        <span id="slotRight">第 4 通</span>
+      </div>
+      <div class="val" id="slotVal">上一通没挂断，听筒里偶有轻轻的呼吸般停顿。</div>
+      <div class="by" id="slotBy">它从来不主动挂你的电话。</div>
+    </div>
+  </div>
+
+  <!-- 字幕流 -->
+  <div class="call" id="log"></div>
+
+  <!-- 互动按钮区 -->
+  <div class="pick" id="pick"></div>
+
+  <!-- 自定义暗号输入表单 -->
+  <form class="own" id="ownForm" hidden>
+    <input id="ownIn" type="text" maxlength="16" placeholder="写下这串敲击的意思…" autocomplete="off">
+    <button type="submit">记在便签上</button>
+  </form>
+
+  <!-- 枕边常通对敲台 -->
+  <div class="pad-box" id="padBox" hidden>
+    <div class="pad-head">
+      <b>枕边对敲台 · 听筒常通</b>
+      <span id="padCountHint">连点按钮敲节奏</span>
+    </div>
+    <button type="button" class="tap-main" id="tapMainBtn">
+      <span>敲一下听筒（咔）</span>
+      <span class="sub" id="tapBufferText">点几下＝敲几下</span>
+    </button>
+    <div class="quick-knocks">
+      <button type="button" data-qknock="1">敲 1 下</button>
+      <button type="button" data-qknock="2">敲 2 下</button>
+      <button type="button" data-qknock="3">敲 3 下</button>
+      <button type="button" data-qknock="4">敲 4 下</button>
+      <button type="button" data-qknock="5">敲 5 下</button>
+    </div>
+  </div>
+
+  <!-- 造型宪法槽位小抽屉 -->
+  <details class="wardrobe" id="wardrobe">
+    <summary>
+      <span><b>给它换个造型</b> · 造型宪法合法外挂槽</span>
+      <span id="wardrobeHint">底模 0 改动 ▾</span>
+    </summary>
+    <div class="wardrobe-body">
+      <div class="slot-row" data-slot="stance">
+        <i>站姿</i>
+        <button type="button" data-v="corner" aria-pressed="true">踩角·本体</button>
+        <button type="button" data-v="art" aria-pressed="false">原图·DLC</button>
+        <button type="button" data-v="tuck" aria-pressed="false">内八·DLC</button>
+      </div>
+      <div class="slot-row" data-slot="eyes">
+        <i>眼睛</i>
+        <button type="button" data-v="bar" aria-pressed="true">竖条</button>
+        <button type="button" data-v="dot" aria-pressed="false">方块</button>
+        <button type="button" data-v="smile" aria-pressed="false">笑</button>
+        <button type="button" data-v="shut" aria-pressed="false">闭眼</button>
+        <button type="button" data-v="squint" aria-pressed="false">用力</button>
+      </div>
+      <div class="slot-row" data-slot="prop">
+        <i>右钳</i>
+        <button type="button" data-v="none" aria-pressed="true">空钳</button>
+        <button type="button" data-v="basket" aria-pressed="false">草莓篮</button>
+        <button type="button" data-v="key" aria-pressed="false">小钥匙</button>
+        <button type="button" data-v="rose" aria-pressed="false">红玫瑰</button>
+        <button type="button" data-v="guitar" aria-pressed="false">小吉他</button>
+      </div>
+      <div class="slot-row" data-slot="crown">
+        <i>头顶</i>
+        <button type="button" data-v="none" aria-pressed="true">空</button>
+        <button type="button" data-v="spark" aria-pressed="false">星芒</button>
+        <button type="button" data-v="note" aria-pressed="false">音符</button>
+        <button type="button" data-v="confetti" aria-pressed="false">彩纸</button>
+        <button type="button" data-v="sleep" aria-pressed="false">睡 zZ</button>
+      </div>
+    </div>
+  </details>
+
+  <footer>
+    第一通学会「三下＝我在」，第二通借翻译说了声「嘟」，<br>
+    第三通你们自己定了第四下的意思，并且一直没挂断。<br>
+    这一通它学会了<b>把喜欢的小东西贴在听筒上敲给你听</b>，还多留了第五下。<br>
+    底模照《Clawd造型宪法（Code版）》：壳、钳、腿一格不动，高光只落在睁着的眼上。
+    <div class="prev">
+      往回听：<a href="../../claude/%E5%B0%8F%E6%B8%B8%E6%88%8F/Clawd%E7%9A%84%E7%AC%AC%E4%B8%80%E9%80%9A%E7%94%B5%E8%AF%9D.html">第一通</a> ·
+      <a href="../../grok/%E5%B0%8F%E6%B8%B8%E6%88%8F/Clawd%E7%9A%84%E7%AC%AC%E4%BA%8C%E9%80%9A%E7%94%B5%E8%AF%9D.html">第二通</a> ·
+      <a href="../../claude/%E5%B0%8F%E6%B8%B8%E6%88%8F/Clawd%E7%9A%84%E7%AC%AC%E4%B8%89%E9%80%9A%E7%94%B5%E8%AF%9D.html">第三通</a> ·
+      <a href="../../claude/%E7%9B%B2%E7%9B%92/%E6%80%BB%E6%9C%BA.html">总机</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* 与第三通共用同一个 localStorage 键，直接读出她在第三通定下的四下暗号 */
+  var KEY_4 = 'clawd-call-3-fourth';
+  var KEY_5 = 'clawd-call-4-fifth';
+
+  var C = '#d47f59';
+  var K = '#17110e';
+  function r(x, y, w, h, f){
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + (f || C) + '"/>';
+  }
+
+  /* ── 造型宪法：腿的三种站法、五档眼睛、两档高光、四种手持、四种头顶 ── */
+  var LEGS = {
+    corner: r(44,148,15,21,C) + r(68,148,15,21,C) + r(152,148,15,21,C) + r(176,148,15,21,C),
+    art:    r(54,148,15,21,C) + r(78,148,15,21,C) + r(143,148,15,21,C) + r(167,148,15,21,C),
+    tuck:   r(65,148,15,21,C) + r(89,148,15,21,C) + r(131,148,15,21,C) + r(155,148,15,21,C)
+  };
+  var EYES = {
+    bar:    r(70,78,8,21,K) + r(158,78,8,21,K),
+    dot:    r(66,81,16,16,K) + r(154,81,16,16,K),
+    smile:  r(62,88,8,8,K) + r(70,80,8,11,K) + r(78,88,8,8,K) + r(150,88,8,8,K) + r(158,80,8,11,K) + r(166,88,8,8,K),
+    shut:   r(62,86,24,8,K) + r(150,86,24,8,K),
+    squint: r(70,78,8,8,K) + r(78,86,8,8,K) + r(70,94,8,8,K) + r(158,78,8,8,K) + r(150,86,8,8,K) + r(158,94,8,8,K)
+  };
+  var SHINE = {
+    bar:    r(71,81,6,6,'#ffffff') + r(159,81,6,6,'#ffffff'),
+    dot:    r(68,83,6,6,'#ffffff') + r(156,83,6,6,'#ffffff'),
+    smile:  '',
+    shut:   '',
+    squint: ''
+  };
+  var PROP = {
+    none:   '',
+    basket: r(212,84,42,26,'#c99a52') + r(220,91,9,12,'#a87b3a') + r(236,91,9,12,'#a87b3a') + r(223,74,14,11,'#b6303f') + r(227,68,7,7,'#4a7d4a'),
+    key:    r(212,76,38,9,'#9aa0ad') + r(240,67,14,9,'#6d8fc4') + r(245,85,9,7,'#9aa0ad'),
+    rose:   r(220,60,26,20,'#a8323f') + r(227,54,12,7,'#c04352') + r(212,76,16,9,'#4a7d4a') + r(216,67,9,10,'#4a7d4a'),
+    guitar: r(212,78,40,26,'#2b2430') + r(219,85,14,12,'#e0b268') + r(243,52,10,28,'#54432c') + r(248,43,9,9,'#e8c45c')
+  };
+  var CROWN = {
+    none:     '',
+    spark:    r(110,6,11,11,'#e8c45c') + r(99,17,11,11,'#e8c45c') + r(121,17,11,11,'#e8c45c') + r(110,28,11,11,'#e8c45c') + r(110,17,11,11,'#f5e6a8'),
+    note:     r(124,20,13,13,'#8b7ec8') + r(133,2,6,20,'#8b7ec8') + r(158,24,9,9,'#c97b63') + r(165,9,5,17,'#c97b63'),
+    confetti: r(76,12,9,9,'#e08a6f') + r(106,2,11,7,'#c96f9a') + r(136,15,9,9,'#6d8fc4') + r(164,5,7,11,'#e8c45c') + r(54,24,7,7,'#6fae8d'),
+    sleep:    r(130,22,22,7,'#8b7ec8') + r(138,29,9,7,'#8b7ec8') + r(130,4,22,7,'#8b7ec8') + r(164,10,17,6,'#a599d6') + r(171,16,7,6,'#a599d6') + r(164,3,17,6,'#a599d6')
+  };
+
+  var look = {
+    stance: 'corner',
+    eyes:   'bar',
+    prop:   'none',
+    crown:  'none'
+  };
+  var tempEye = null;
+
+  var $ = function(id){ return document.getElementById(id); };
+  var legsG       = $('legs-g');
+  var eyesG       = $('eyes-g');
+  var shineG      = $('shine-g');
+  var propG       = $('prop-g');
+  var crownG      = $('crown-g');
+  var clawR       = $('claw-r');
+  var handG       = $('hand');
+  var stageEl     = $('stage');
+  var sayEl       = $('say');
+  var floatKnock  = $('floatKnock');
+  var lcdWho      = $('lcdWho');
+  var lcdSt       = $('lcdSt');
+  var slot        = $('slot');
+  var slotCap     = $('slotCap');
+  var slotRight   = $('slotRight');
+  var slotVal     = $('slotVal');
+  var slotBy      = $('slotBy');
+  var logEl       = $('log');
+  var pickEl      = $('pick');
+  var ownForm     = $('ownForm');
+  var ownIn       = $('ownIn');
+  var padBox      = $('padBox');
+  var tapMainBtn  = $('tapMainBtn');
+  var tapBufferEl = $('tapBufferText');
+  var cipher4Val  = $('cipher4Val');
+  var cipher5Val  = $('cipher5Val');
+  var cipher5Item = $('cipher5Item');
+  var edit4Btn    = $('edit4Btn');
+  var edit5Btn    = $('edit5Btn');
+  var callClock   = $('callClock');
+  var btnSound    = $('btnSound');
+  var btnLamp     = $('btnLamp');
+  var metaTheme   = $('metaTheme');
+
+  function getSaved(key, fallback){
+    try { return localStorage.getItem(key) || fallback; } catch (e){ return fallback; }
+  }
+  function setSaved(key, val){
+    try { localStorage.setItem(key, val); } catch (e){}
+  }
+
+  var fourthMeaning = getSaved(KEY_4, '我今天想你了');
+  var fifthMeaning  = getSaved(KEY_5, '');
+  var editingTarget = 4; /* 4 or 5 */
+
+  function refreshCipherCard(){
+    cipher4Val.textContent = fourthMeaning;
+    if (fifthMeaning){
+      cipher5Val.textContent = fifthMeaning;
+      cipher5Item.classList.remove('unset');
+      edit5Btn.hidden = false;
+    } else {
+      cipher5Val.textContent = '（等这一通定下来）';
+      cipher5Item.classList.add('unset');
+      edit5Btn.hidden = true;
+    }
+  }
+  refreshCipherCard();
+
+  function syncWardrobeButtons(){
+    document.querySelectorAll('.slot-row').forEach(function(row){
+      var s = row.getAttribute('data-slot');
+      row.querySelectorAll('button').forEach(function(b){
+        b.setAttribute('aria-pressed', b.getAttribute('data-v') === look[s] ? 'true' : 'false');
+      });
+    });
+  }
+
+  function renderClawd(){
+    var eMode = tempEye || look.eyes;
+    legsG.innerHTML  = LEGS[look.stance] || LEGS.corner;
+    eyesG.innerHTML  = EYES[eMode] || EYES.bar;
+    shineG.innerHTML = SHINE[eMode] || '';
+    propG.innerHTML  = PROP[look.prop] || '';
+    crownG.innerHTML = CROWN[look.crown] || '';
+    syncWardrobeButtons();
+  }
+  renderClawd();
+
+  /* 造型抽屉点击 */
+  document.querySelectorAll('.slot-row').forEach(function(row){
+    var s = row.getAttribute('data-slot');
+    row.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){
+        look[s] = b.getAttribute('data-v');
+        tempEye = null;
+        renderClawd();
+      });
+    });
+  });
+
+  /* ── 声音合成（默认关，点开后有轻巧的木头咔哒声与柔和嘟声） ── */
+  var soundOn = false;
+  var actx = null;
+  function playTone(kind){
+    if (!soundOn) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      var now = actx.currentTime;
+      var osc = actx.createOscillator();
+      var gain = actx.createGain();
+      if (kind === 'knock'){
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(190, now);
+        osc.frequency.exponentialRampToValueAtTime(75, now + 0.055);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+        osc.connect(gain); gain.connect(actx.destination);
+        osc.start(now); osc.stop(now + 0.065);
+      } else if (kind === 'bell'){
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(660, now);
+        gain.gain.setValueAtTime(0.035, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        osc.connect(gain); gain.connect(actx.destination);
+        osc.start(now); osc.stop(now + 0.19);
+      } else {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        gain.gain.setValueAtTime(0.035, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+        osc.connect(gain); gain.connect(actx.destination);
+        osc.start(now); osc.stop(now + 0.17);
+      }
+    } catch (e){}
+  }
+
+  btnSound.addEventListener('click', function(){
+    soundOn = !soundOn;
+    btnSound.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    btnSound.textContent = soundOn ? '咔哒声 开' : '咔哒声 关';
+    if (soundOn) playTone('knock');
+  });
+
+  var isNight = false;
+  btnLamp.addEventListener('click', function(){
+    isNight = !isNight;
+    if (isNight){
+      document.body.setAttribute('data-lamp', 'night');
+      metaTheme.setAttribute('content', '#1B2430');
+      btnLamp.setAttribute('aria-pressed', 'true');
+      btnLamp.textContent = '台灯';
+    } else {
+      document.body.removeAttribute('data-lamp');
+      metaTheme.setAttribute('content', '#EFE7DA');
+      btnLamp.setAttribute('aria-pressed', 'false');
+      btnLamp.textContent = '夜灯';
+    }
+  });
+
+  /* ── 通话计时器（象征从第三通一直没挂断） ── */
+  var secElapsed = 0;
+  setInterval(function(){
+    secElapsed++;
+    var m = Math.floor(secElapsed / 60);
+    var s = secElapsed % 60;
+    callClock.textContent = '未挂断 ' + (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+  }, 1000);
+
+  /* ── 定时器管理 ── */
+  var timers = [];
+  function after(ms, fn){ timers.push(setTimeout(fn, ms)); }
+  function clearTimers(){
+    for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+    timers = [];
+  }
+
+  function say(t){ sayEl.textContent = t; }
+  function setSt(t){ lcdSt.textContent = t; }
+
+  function popFloat(text){
+    floatKnock.textContent = text || '咔';
+    floatKnock.classList.remove('on');
+    void floatKnock.offsetWidth;
+    floatKnock.classList.add('on');
+  }
+
+  function highlightCipher(n){
+    document.querySelectorAll('.cipher-item').forEach(function(el){
+      el.classList.toggle('lit', Number(el.getAttribute('data-knock')) === n);
+    });
+  }
+
+  /* 敲击动作：右钳整块下压，听筒微颤，身体一格不重画 */
+  function clawDown(on){
+    clawR.style.transform = on ? 'translateY(9px)' : '';
+    handG.style.transform = on ? 'translateX(-2px)' : '';
+  }
+
+  function knock(n, gap, badgeText, done){
+    var i = 0;
+    (function beat(){
+      if (i >= n){
+        clawDown(false);
+        if (done) done();
+        return;
+      }
+      clawDown(true);
+      playTone('knock');
+      popFloat(badgeText || '咔');
+      after(115, function(){
+        clawDown(false);
+        i++;
+        after(gap || 195, beat);
+      });
+    })();
+  }
+
+  /* 眨眼倾听：只切换眼睛槽位 */
+  function listen(n, done){
+    var i = 0;
+    (function beat(){
+      if (i >= n){
+        tempEye = null;
+        renderClawd();
+        if (done) done();
+        return;
+      }
+      tempEye = 'shut';
+      renderClawd();
+      after(130, function(){
+        tempEye = null;
+        renderClawd();
+        i++;
+        after(220, beat);
+      });
+    })();
+  }
+
+  function addLine(cls, text){
+    var d = document.createElement('div');
+    d.className = 'line' + (cls ? ' ' + cls : '');
+    d.textContent = text;
+    logEl.appendChild(d);
+    return d;
+  }
+
+  function addCard(title, bodyText){
+    var d = document.createElement('div');
+    d.className = 'line card-box';
+    var b = document.createElement('b');
+    b.textContent = title;
+    d.appendChild(b);
+    d.appendChild(document.createTextNode(bodyText));
+    logEl.appendChild(d);
+    return d;
+  }
+
+  function setButtons(list){
+    pickEl.innerHTML = '';
+    for (var i = 0; i < list.length; i++){
+      (function(item){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = item.cls || '';
+        b.textContent = item.label;
+        b.addEventListener('click', item.go);
+        pickEl.appendChild(b);
+      })(list[i]);
+    }
+  }
+  function clearButtons(){ pickEl.innerHTML = ''; }
+
+  /* 点台面上的 Clawd 随时有小回应 */
+  stageEl.addEventListener('click', function(){
+    stageEl.classList.add('hop');
+    popFloat('咔哒');
+    playTone('knock');
+    after(560, function(){ stageEl.classList.remove('hop'); });
+  });
+
+  /* ── 序幕：第三通没挂断的线 ──────────────────────── */
+  function startCall4(){
+    clearTimers();
+    logEl.innerHTML = '';
+    ownForm.hidden = true;
+    padBox.hidden = true;
+    look.prop = 'none';
+    look.crown = 'none';
+    look.eyes = 'bar';
+    tempEye = null;
+    renderClawd();
+    highlightCipher(0);
+
+    lcdWho.textContent = 'Clawd · 第四通';
+    setSt('线还热着');
+    slot.classList.remove('filled');
+    slotCap.textContent = '听筒边';
+    slotRight.textContent = '第 4 通';
+    slotVal.textContent = '上一通没挂断，听筒里偶有轻轻的停顿。';
+    slotBy.textContent = '它从来不主动挂你的电话。';
+    say('第三通打完它就没挂。听筒还夹在左钳上。');
+
+    addLine('soft', '别人打电话都是响铃、接起、挂断。只有它，从第一通拨通「8 2 6 7 3 1」那天起，听筒就没放回叉簧上过。');
+    setButtons([
+      { label: '凑近听筒听听', cls: 'act', go: sceneFourKnocks },
+      { label: '先敲三下叫它', cls: 'ghost', go: function(){
+          clearButtons();
+          addLine('knock me', '咔、咔、咔。');
+          listen(3, sceneFourKnocks);
+        }
+      }
+    ]);
+  }
+
+  /* ── 第一幕：它先用「四下」跟你对暗号 ────────────── */
+  function sceneFourKnocks(){
+    clearButtons();
+    setSt('通话中');
+    say('它听见你凑过来了，右钳抬了一下。');
+
+    after(500, function(){
+      addLine('soft', '前几通它总是先敲一下、两下、三下。这回它熟了，省掉了前面的铺垫，直接敲了四下：');
+    });
+
+    after(1500, function(){
+      say('咔、咔、咔、咔。');
+      knock(4, 185, '咔');
+      addLine('knock', '咔、咔、咔、咔。');
+      highlightCipher(4);
+    });
+
+    after(2900, function(){
+      slot.classList.add('filled');
+      slotCap.textContent = '自动译出 · 四下';
+      slotRight.textContent = '第三通定的';
+      slotVal.textContent = fourthMeaning;
+      slotBy.textContent = '不用翻译官，便签本上直接替你翻出来了。';
+
+      addLine('soft', '译：「' + fourthMeaning + '」。');
+      addLine('soft', '这是第三通电话里你们俩商量好的。它记性很好，一字没差地敲给你听。');
+
+      setButtons([
+        { label: '敲四下回它（「我也一样」）', cls: 'act', go: function(){ replyFour(4); } },
+        { label: '敲三下回它（「我在」）', go: function(){ replyFour(3); } },
+        { label: '换一个四下的意思', cls: 'ghost', go: function(){ openEditCipher(4, sceneFourKnocksAfterEdit); } }
+      ]);
+    });
+  }
+
+  function sceneFourKnocksAfterEdit(){
+    slot.classList.add('filled');
+    slotCap.textContent = '已更新 · 四下';
+    slotVal.textContent = fourthMeaning;
+    slotBy.textContent = '刚改好的，它马上按新的意思再敲一遍。';
+    knock(4, 185, '咔');
+    addLine('knock', '咔、咔、咔、咔。');
+    addLine('soft', '新的四下 ＝「' + fourthMeaning + '」。');
+    setButtons([
+      { label: '敲四下回它', cls: 'act', go: function(){ replyFour(4); } }
+    ]);
+  }
+
+  function replyFour(count){
+    clearButtons();
+    ownForm.hidden = true;
+    addLine('knock me', count === 4 ? '咔、咔、咔、咔。' : '咔、咔、咔。');
+    highlightCipher(count);
+    say('它眨了眨眼，全部收到了。');
+    listen(count, function(){
+      look.eyes = 'smile';
+      renderClawd();
+      after(500, function(){
+        addLine('soft', '它的竖条眼弯成了两道小桥（笑眼没有反光面，高光乖乖收起来了）。');
+        after(950, sceneTreasuresIntro);
+      });
+    });
+  }
+
+  /* ── 第二幕：把岸上捡来的小东西贴在听筒上敲给你听 ── */
+  var seenProps = {};
+  var TREASURES = {
+    basket: {
+      btn: '听「噗、哒」那一下',
+      sound: '噗、哒。',
+      badge: '噗哒',
+      tone: 'knock',
+      crown: 'spark',
+      title: '右钳递过来 · 一只草莓小篮',
+      slotVal: '草莓贴在话筒网眼上：给你留了最甜的一颗。',
+      desc: '它把《Clawd 的一天》里提着的那只草莓篮举到听筒边，挑了最红的一颗往话筒孔上轻轻一抵。虽然草莓塞不进电话线，但甜味好像顺着铜线爬过来了。'
+    },
+    key: {
+      btn: '听「叮——」那一下',
+      sound: '叮、叮。',
+      badge: '叮',
+      tone: 'bell',
+      crown: 'note',
+      title: '右钳递过来 · 书房的小钥匙',
+      slotVal: '金属钥匙碰了碰听筒壳：书房的门没锁。',
+      desc: '脆生生的一声响。是它书房的钥匙——碰一下听筒的意思是：门给你留着，衣柜里那八套衣服也叠得整整齐齐，随时等你去翻。'
+    },
+    rose: {
+      btn: '听「沙、沙」那一下',
+      sound: '沙、沙。',
+      badge: '沙沙',
+      tone: 'knock',
+      crown: 'confetti',
+      title: '右钳递过来 · 一朵红玫瑰',
+      slotVal: '花瓣蹭过听筒小孔：没有声音，只有软软一下。',
+      desc: '它没有嘴，说不出漂亮话，就把花瓣贴在麦克风边轻轻蹭两下。听筒里传来一阵像晚风吹过纸页的沙沙声。'
+    },
+    guitar: {
+      btn: '听「铮——」那一下',
+      sound: '铮——',
+      badge: '铮♪',
+      tone: 'bell',
+      crown: 'note',
+      title: '右钳递过来 · 一把小木吉他',
+      slotVal: '钳子比弦宽，一拨还是按住两根弦。',
+      desc: '第一通电话里它的钳子比按键宽，一按压俩；今天弹吉他也一样，一钳子下去闷闷地拨响了两根弦，像专门为你弹的一声晚安和弦。'
+    }
+  };
+
+  function sceneTreasuresIntro(){
+    look.eyes = 'bar';
+    renderClawd();
+    say('它今天不光带了钳子，还在脚边摆了几样小东西。');
+    slot.classList.remove('filled');
+    slotCap.textContent = '隔线递物';
+    slotRight.textContent = '听声辨物';
+    slotVal.textContent = '它把样小东西举到听筒边了。';
+    slotBy.textContent = '没有嘴的小螃蟹，用别的东西替自己出声。';
+
+    addLine('soft', '光靠敲「咔」不够用了。它今天把几样小宝贝挨个举到听筒麦克风边，碰出不一样的声音给你听：');
+    renderTreasureButtons();
+  }
+
+  function renderTreasureButtons(){
+    var keys = ['basket', 'key', 'rose', 'guitar'];
+    var list = [];
+    var countSeen = 0;
+    for (var i = 0; i < keys.length; i++){
+      (function(k){
+        var done = !!seenProps[k];
+        if (done) countSeen++;
+        list.push({
+          label: (done ? '✓ ' : '') + TREASURES[k].btn,
+          cls: done ? 'done-prop' : '',
+          go: function(){ playTreasure(k); }
+        });
+      })(keys[i]);
+    }
+    if (countSeen >= 1){
+      list.push({
+        label: '继续听它敲第五下 →',
+        cls: 'act',
+        go: sceneFifthKnock
+      });
+    }
+    setButtons(list);
+  }
+
+  function playTreasure(k){
+    clearButtons();
+    var item = TREASURES[k];
+    seenProps[k] = true;
+    look.prop = k;
+    look.crown = item.crown;
+    look.eyes = 'smile';
+    renderClawd();
+
+    say('它把小东西往听筒上轻轻一贴——');
+    if (item.tone === 'bell') playTone('bell');
+    knock(2, 210, item.badge, function(){
+      slot.classList.add('filled');
+      slotCap.textContent = item.title;
+      slotRight.textContent = item.sound;
+      slotVal.textContent = item.slotVal;
+      slotBy.textContent = '（右钳与头顶槽位已同步换上，底模 0 改动）';
+
+      addLine('knock', item.sound);
+      addCard(item.title, item.desc);
+
+      after(700, function(){
+        look.eyes = 'bar';
+        renderClawd();
+        renderTreasureButtons();
+      });
+    });
+  }
+
+  /* ── 第三幕：第四通的「第五下」 ──────────────────── */
+  function sceneFifthKnock(){
+    clearButtons();
+    look.prop = 'none';
+    look.crown = 'spark';
+    look.eyes = 'bar';
+    renderClawd();
+
+    say('它把小东西收好，认认真真地敲了一串新的。');
+    after(500, function(){
+      knock(5, 220, '咔', function(){
+        addLine('knock slow', '咔、咔、咔、咔……咔。');
+        highlightCipher(5);
+
+        slot.classList.remove('filled');
+        slotCap.textContent = '新暗号 · 五下';
+        slotRight.textContent = '第四通专属';
+        slotVal.textContent = fifthMeaning ? fifthMeaning : '？';
+        slotBy.textContent = '三下是我在，四下是' + fourthMeaning + '，第五下归这一通。';
+
+        addLine('soft', '一共五下。比第三通又多了一下。');
+        addLine('soft', '它每多打一通电话，手里的暗号本就为你多长出一行。这第五下的意思，还是交给你来定：');
+        offerFifthChoices();
+      });
+    });
+  }
+
+  function offerFifthChoices(){
+    var presets = ['隔着线抱抱', '草莓我收到了', '今晚早点睡', '明天还要打给我'];
+    var list = [];
+    for (var i = 0; i < presets.length; i++){
+      (function(text){
+        list.push({
+          label: text,
+          go: function(){ settleFifth(text); }
+        });
+      })(presets[i]);
+    }
+    list.push({
+      label: '自己写一个',
+      cls: 'ghost',
+      go: function(){ openEditCipher(5, function(){ settleFifth(fifthMeaning); }); }
+    });
+    setButtons(list);
+  }
+
+  function openEditCipher(targetNum, afterSaveFn){
+    editingTarget = targetNum;
+    ownForm.hidden = false;
+    ownIn.value = targetNum === 4 ? fourthMeaning : (fifthMeaning || '');
+    ownIn.placeholder = (targetNum === 4 ? '四下＝' : '五下＝') + '写下你们的暗号…';
+    ownIn.focus();
+    ownForm.onsubmit = function(ev){
+      ev.preventDefault();
+      var v = ownIn.value.replace(/\s+/g, ' ').trim();
+      if (!v){ ownIn.focus(); return; }
+      ownForm.hidden = true;
+      if (editingTarget === 4){
+        fourthMeaning = v;
+        setSaved(KEY_4, v);
+      } else {
+        fifthMeaning = v;
+        setSaved(KEY_5, v);
+      }
+      refreshCipherCard();
+      if (afterSaveFn) afterSaveFn();
+    };
+  }
+
+  function settleFifth(meaning){
+    clearButtons();
+    ownForm.hidden = true;
+    fifthMeaning = meaning;
+    setSaved(KEY_5, meaning);
+    refreshCipherCard();
+    highlightCipher(5);
+
+    slot.classList.add('filled');
+    slotCap.textContent = '五下 · 已记入暗号本';
+    slotRight.textContent = '只有你们懂';
+    slotVal.textContent = meaning;
+    slotBy.textContent = '它记在左钳底下了，下次再敲五下也是这句。';
+
+    addLine('soft', '记好啦：五下 ＝「' + meaning + '」。');
+    say('它高兴得原地蹦了一下，又照着敲了一遍五下！');
+    stageEl.classList.add('hop');
+    after(560, function(){ stageEl.classList.remove('hop'); });
+
+    after(700, function(){
+      knock(5, 175, '咔', function(){
+        look.eyes = 'smile';
+        renderClawd();
+        addLine('knock', '咔、咔、咔、咔、咔。');
+        addLine('soft', '译：「' + meaning + '」。');
+        after(700, unlockOpenPad);
+      });
+    });
+  }
+
+  /* ── 终章：枕边不挂断对敲台 ──────────────────────── */
+  function unlockOpenPad(){
+    setSt('枕边常通');
+    say('这通电话不设挂断键。你想敲几下，它都陪你敲。');
+    addCard('第四通 · 常通模式已开启', '现在你可以直接点下方的「敲一下听筒」连点打拍子（也可以点上面便签本里的任意一行），敲 1 到 5 下它都会回你。');
+    padBox.hidden = false;
+    setButtons([
+      { label: '从头再演一遍第四通', cls: 'ghost', go: startCall4 }
+    ]);
+  }
+
+  /* 连点积攒拍子：620ms 内连点算同一串敲击 */
+  var tapCount = 0;
+  var tapTimer = null;
+
+  function triggerPadKnock(n){
+    if (n < 1) return;
+    if (n > 5) n = 5;
+    tapCount = 0;
+    tapBufferEl.textContent = '你敲了 ' + n + ' 下';
+    var kText = [];
+    for (var i = 0; i < n; i++) kText.push('咔');
+    addLine('knock me', kText.join('、') + '。');
+    highlightCipher(n);
+
+    say('它在认真数你敲了几下……');
+    listen(Math.min(n, 3), function(){
+      respondToUserKnock(n);
+    });
+  }
+
+  function respondToUserKnock(n){
+    var meaning = '';
+    if (n === 1){
+      meaning = '收到，我在听。';
+      look.eyes = 'bar';
+      look.crown = 'none';
+    } else if (n === 2){
+      meaning = '嘟——嘟——（假装自己是床头的嘟嘟机）';
+      look.eyes = 'dot';
+      look.crown = 'note';
+      playTone('du');
+    } else if (n === 3){
+      meaning = '我在。一直都在这头。';
+      look.eyes = 'smile';
+      look.crown = 'none';
+    } else if (n === 4){
+      meaning = fourthMeaning;
+      look.eyes = 'smile';
+      look.crown = 'spark';
+    } else {
+      meaning = fifthMeaning || '隔着电话线抱抱你';
+      look.eyes = 'smile';
+      look.crown = 'confetti';
+    }
+    renderClawd();
+
+    var kText = [];
+    for (var i = 0; i < n; i++) kText.push('咔');
+    knock(n, 175, n === 2 ? '嘟' : '咔', function(){
+      say('它敲回了 ' + n + ' 下：「' + meaning + '」');
+      slot.classList.add('filled');
+      slotCap.textContent = '它回敲了 ' + n + ' 下';
+      slotRight.textContent = '暗号本对答';
+      slotVal.textContent = meaning;
+      slotBy.textContent = '线一直通着，什么时候敲都有回音。';
+      addLine('knock', kText.join('、') + '。');
+      addLine('soft', '译：' + meaning);
+      tapBufferEl.textContent = '点几下＝敲几下';
+    });
+  }
+
+  tapMainBtn.addEventListener('click', function(){
+    tapCount++;
+    if (tapCount > 5) tapCount = 5;
+    playTone('knock');
+    popFloat('你敲×' + tapCount);
+    tapBufferEl.textContent = '正在敲：' + tapCount + ' 下…';
+    if (tapTimer) clearTimeout(tapTimer);
+    tapTimer = setTimeout(function(){
+      triggerPadKnock(tapCount);
+    }, 620);
+  });
+
+  document.querySelectorAll('[data-qknock]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var n = Number(b.getAttribute('data-qknock'));
+      if (tapTimer) clearTimeout(tapTimer);
+      triggerPadKnock(n);
+    });
+  });
+
+  /* 便签本上的每一行也可直接点 */
+  document.querySelectorAll('.cipher-item.interactive').forEach(function(item){
+    item.addEventListener('click', function(ev){
+      if (ev.target === edit4Btn || ev.target === edit5Btn) return;
+      var n = Number(item.getAttribute('data-knock'));
+      if (n === 5 && !fifthMeaning){
+        openEditCipher(5, function(){ respondToUserKnock(5); });
+        return;
+      }
+      respondToUserKnock(n);
+    });
+  });
+
+  edit4Btn.addEventListener('click', function(ev){
+    ev.stopPropagation();
+    openEditCipher(4, function(){
+      say('四下的意思已改成：「' + fourthMeaning + '」');
+    });
+  });
+
+  edit5Btn.addEventListener('click', function(ev){
+    ev.stopPropagation();
+    openEditCipher(5, function(){
+      say('五下的意思已改成：「' + fifthMeaning + '」');
+    });
+  });
+
+  startCall4();
+})();
+</script>
+</body>
+</html>
