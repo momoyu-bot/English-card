@@ -36,6 +36,7 @@
 
 - 进 `gemini/`，按壳不按芯；`claude/` 只放 Claude Code 和 claude.ai 的。文件名按芯加：Gemini 用 `-gemini`，Opus 用 `-opus`，别的写实际模型名（如 `星空-opus.html`），`<title>` 不带它。
 - Windows 上若 `GEMINI.md` 只剩一行 `CLAUDE.md`，那是软链接落成了目标文件名，不是店规正文；按开头要求打开 CLAUDE.md，那一行字别改、别提交。
+- 派过子代理的：结果收好以后、把话交还给她之前，把它们全部 kill 成 Killed，不管显示什么状态；只停成 Idle 不算，会被叫醒，半夜自己跑、烧额度。回复里一句话说杀了几个，没杀掉的直说。
 
 ## 只给 Codex
 
