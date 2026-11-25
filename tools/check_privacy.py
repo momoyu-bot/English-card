@@ -134,6 +134,7 @@ def read_worktree(root, path):
 
 
 def versions(root, all_files):
+    # tools/check_media.py 也用它定「这一趟改了哪些」：改范围或参数，那边一起变。
     if all_files:
         for path in sorted(git_paths(root, "ls-files", "--cached", "-z")):
             yield path, "工作区", read_worktree(root, path)
