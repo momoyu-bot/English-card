@@ -67,8 +67,11 @@ QUOTES = b'"\'`'
 DATA_URL = re.compile(
     rb'(?<![\w-])data:([a-z0-9.+-]+/[a-z0-9.+-]+)?'
     rb'((?:;[a-z0-9._+-]+(?:=[^;,\s"\'`()<>]*)?)*?);base64,', re.I)
-# 一段乱码里的零件：Base64 字符（= 补齐就到头了）、JSON 转义的 \/、行尾续行、\n 之类的转义、空白。
-TOK = re.compile(rb'[A-Za-z0-9+/]+=*|\\/|\\\r\n|\\[\r\n]|\\[nrt]|[ \t\f\v]+|[\r\n]+')
+# 一段乱码里的零件：Base64 字符（= 补齐就到头了）、JSON 转义的 \/、行尾续行、\n 之类的转义、
+# 按编码写的一个字（\u0041、\x41，见 scan）、空白。
+TOK = re.compile(rb'[A-Za-z0-9+/]+=*|\\/|\\\r\n|\\[\r\n]|\\[nrtf]|\\u[0-9A-Fa-f]{4}|\\x[0-9A-Fa-f]{2}'
+                 rb'|[ \t\f\v]+|[\r\n]+')
+B64_CHARS = frozenset(b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=')
 LONG_CHUNK = re.compile(rb'[A-Za-z0-9+/]{%d,}=*' % SHORT_LIMIT)
 # 数组里每块可能很短（一行一块），所以另认「'…块','…块'」这种接缝
 JOIN_POINT = re.compile(rb'[A-Za-z0-9+/]{16}(["\'`])\s*[,+]\s*\1[A-Za-z0-9+/]{16}')
@@ -175,7 +178,8 @@ def scan(s, i, mode, join=None):
     """从 i 起吃掉一段 Base64，返回 (最后一个 Base64 字符之后的位置, 拼好的 Base64)。
 
     mode：'tight' 中间不许夹任何东西（没引号包着的 url(…)、srcset）；
-          'quoted' 引号里的字符串：可夹换行、\\n 之类的转义；夹空格只在已吃的字数是 4 的倍数时才跨过去；
+          'quoted' 引号里的字符串：可夹换行、\\n 之类的转义、\\u0041 这类按编码写的字（还原了再算）；
+                   夹空格只在已吃的字数是 4 的倍数时才跨过去；
           'box' 盒子：可夹任何空白，不认转义。
     join：数组里 'A','B' / 'A'+'B' 这种拼接的正则（只有数组才给）。遇到 = 补齐就停。
     """
@@ -192,6 +196,19 @@ def scan(s, i, mode, join=None):
             break
         t = m.group()
         c = t[0]
+        if t[:2] in (b'\\u', b'\\x'):
+            # 按编码写的一个字：JSON.parse 和 JS 字符串都会把 \u0041 还原成 A，页面拿到的是完整的 Base64。
+            # 老 GIF 馆的 pond、ribbon 各有一处 \u0041（正好在会拼出 AIza 的地方，大概是躲隐私检查里
+            # 「Google API 密钥」那条），以前认不得、扫到这儿就停，两张动图被截短了，截短的还能解、还像 GIF。
+            # 盒子、没引号的地方没有转义一说，见到就停。还原出来是空白的跟 \n 一样当空隙，别的字也停。
+            code = int(t[2:], 16)
+            if mode != 'quoted' or not (code in B64_CHARS or code in b' \t\n\f\r'):
+                break
+            if code not in B64_CHARS:
+                in_gap = gap_free = True
+                j = m.end()
+                continue
+            t, c = bytes([code]), code                       # 还原成那个字，下面照一块 Base64 算
         if t == b'\\/' or c not in b'\\ \t\f\v\r\n':        # 一块 Base64
             if in_gap:
                 if mode == 'tight':
@@ -352,6 +369,7 @@ def name_cands(s, vs, pe, ctx):
 
 
 def find_payloads(s):
+    # tools/check_media.py（提交前的把关）也直接用它认乱码：改认法，两边一起变。
     rs = code_ranges(s)
     starts = [r[0] for r in rs]
     nl = [m.start() for m in re.finditer(rb'\n', s)]
