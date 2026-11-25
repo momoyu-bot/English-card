@@ -23,8 +23,8 @@ BEGIN = "<!-- LIST:BEGIN 由 tools/build_index.py 自动生成，不要手改 --
 END = "<!-- LIST:END -->"
 
 # 分组顺序。没列到的目录排在后面，按名字排。
-# unsigned 垫底：2026-09-19 她当场说的，那一格已经不会再上传任何文件了。
-ORDER = ["claude", "gemini", "grok", "copilot", "codex", "pluto", "unsigned"]
+# 2026-11-25：unsigned 并进了 gpt（codex 改名而来），不再单列。
+ORDER = ["claude", "gemini", "grok", "copilot", "gpt", "pluto"]
 
 # 每个目录一种低饱和度的色，只用在悬停背景和小圆点上。
 PALETTE = {
@@ -32,8 +32,7 @@ PALETTE = {
     "gemini":                 ("#9CB8B3", "rgba(156,184,179,.12)"),
     "grok":                   ("#ABA2B6", "rgba(171,162,182,.12)"),
     "copilot":                ("#A1B0BE", "rgba(161,176,190,.12)"),
-    "codex":                  ("#A9C0A4", "rgba(169,192,164,.12)"),
-    "unsigned":               ("#B5A79C", "rgba(181,167,156,.12)"),
+    "gpt":                    ("#A9C0A4", "rgba(169,192,164,.12)"),
     "pluto":                  ("#8F92A8", "rgba(143,146,168,.12)"),
 }
 PALETTE_DEFAULT = ("#BAB3A8", "rgba(186,179,168,.10)")
@@ -172,9 +171,9 @@ DISPLAY_NAME = {
 CAT_ORDER = ["哄睡", "摸鱼", "小游戏", "小卡", "购物车", "博物馆", "小科普",
              "打捞机", "显影", "盲盒"]
 CAT_ORDER = [c for c in CAT_ORDER if c != "盲盒"] + ["盲盒"]
-# 平铺、没有抽屉的顶层。pluto 是 2026-09-19 开的，跟 unsigned 一样一级到底，
-# 不要给它们建抽屉。
-FLAT_FOLDERS = {"unsigned", "pluto"}
+# 平铺、没有抽屉的顶层。pluto 是 2026-09-19 开的，一级到底，
+# 不要给它建抽屉。
+FLAT_FOLDERS = {"pluto"}
 SKIP_LIST = {
     # 梦境不是货品，是关系表：哪几页是同一件事，宝一条一条认的。
     # 它跟 梦境.md 一起放在仓库根上（页面开着就去 fetch 那份 .md，
@@ -224,7 +223,7 @@ PHONE_EXTRA = set()
 # 关键词命中了、但不是电话的
 PHONE_SKIP = {
     "claude/盲盒/总机.html",          # 板子自己
-    "unsigned/粉嘟嘟哄哄.html",       # 「粉嘟嘟」是形容词
+    "gpt/盲盒/粉嘟嘟哄哄.html",       # 「粉嘟嘟」是形容词
     # 附注里的「接线板」命中了关键词，但那一页拆的是板子本身
     # （八个孔读作插孔、两个孔读作一张脸），不是一台能打的电话。
     # 同博物馆那一格的道理：孔位留给真能接通的。
@@ -504,7 +503,7 @@ def encode_path(rel):
 
 
 def shelf_of(e):
-    """这一页在哪个抽屉；平铺的顶层（unsigned / pluto）没有抽屉，返回空串。
+    """这一页在哪个抽屉；平铺的顶层（pluto）没有抽屉，返回空串。
 
     一页只在一个抽屉，只看文件夹：claude/哄睡/xx.html 就是「哄睡」，
     抽屉名认不出的进「盲盒」。想换货架，把文件挪到另一个抽屉。
