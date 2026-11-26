@@ -11,11 +11,15 @@
 
 这个脚本由 .github/workflows/build-index.yml 在每次 push 后自动跑，
 不需要任何人记得手动执行。
+
+顺带还写两页：总机的线路表（write_phone_lines），
+和小萌物片单（write_film_list，先后从 git 历史里认）。
 """
 
 import os, re, sys, html, json, subprocess
 from collections import Counter
-from urllib.parse import quote
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote, unquote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(ROOT, "index.html")
@@ -292,6 +296,55 @@ PHONE_EN = {
         "Call, and this end talks slowly. You just go mm. Go quiet, and the line stays open."),
 }
 
+# ---------------------------------------------------------------------------
+# 小萌物短片的片单（claude/盲盒/小萌物片单.html）
+#
+# 那一页按进店的先后列出店里所有的小萌物短片：哪家拍的、叫什么，点一下就去看。
+# 隔一阵没看、想回头补哪一部，不用去记各家起的名字。片单在这里生成，写进那一页的
+# FILMS:BEGIN/END 之间：新片推上来，Actions 重跑，片单自己多一行。
+#
+# 认法：<title> 写成「名字 · 小萌物短片」（名字和附注手册定的写法，版本记号可以
+# 跟在后面，如「请再进来 · 小萌物短片（build版）」）。「小萌物短片」得是名字后面
+# 单独的一段：「小萌物短片过秤」那种把五个字当一个词用的不算，片单自己的标题
+# 「小萌物短片 · 片单」它排在第一段，也不算。认错了往 FILM_SKIP 加一行，
+# 漏了往 FILM_EXTRA 加一行。博物馆里翻车的那几部照样列，片单上标一个「博物馆」。
+#
+# 先后看 git 历史：一部片第一次进店的那个提交（film_history 里写了怎么认）。
+# 读不到完整历史（浅克隆、git 出错）就沿用片单里已经写着的日子，不报错、不变红。
+# ---------------------------------------------------------------------------
+FILM_PAGE = os.path.join(ROOT, "claude", "盲盒", "小萌物片单.html")
+FILM_BEGIN = "<!-- FILMS:BEGIN 由 tools/build_index.py 自动生成，不要手改 -->"
+FILM_END = "<!-- FILMS:END -->"
+
+# 标题按 · 切开以后，名字后面单独的那一段；后面可以带一个括号里的版本记号
+FILM_SPLIT = re.compile(r"\s*[·・•|｜]\s*")
+FILM_SEG = re.compile(r"^小萌物短片\s*(?:[（(【\[〔].*)?$")
+
+# 标题认出来了、但不是片子的
+FILM_SKIP = {
+    "claude/盲盒/小萌物片单.html",      # 片单自己
+}
+# 标题认不出、但确实是小萌物短片的（优先级最高）
+FILM_EXTRA = set()
+
+# 文件名尾巴上的作者记号：AGENTS.md 说的 -build、-codex，反重力按芯加的 -gemini、-opus
+# 和别的模型名。只认这张表里的词，从尾巴往前一个个剥，照文件名原样显示，不替它解释；
+# 跟所在小机同名的（gemini/ 里的 -gemini）、标题括号里已经写了的（（build版））不重复写。
+# 新的记号往这里加一个词。
+FILM_MARKS = re.compile(
+    r"[-_ ]?(build|codex|opus|gemini|argon|carbon|studio|stiudo|playground|canvas|gpt\d*)$",
+    re.I)
+# 各家壳子默认带的那个记号也不写：grok 的片子大多带 -build，gpt 的几乎都带 -codex（AGENTS.md 定的），
+# 每行都写一遍等于没写。剩下的 argon、opus、carbon 这些才是「这部具体是谁拍的」。
+FILM_HOUSE_MARK = {"grok": "build", "gpt": "codex"}
+
+# 日子按 UTC+8 切：店里大半提交是这个时区的，同一晚推的几部才不会被劈到两天。
+FILM_TZ = timezone(timedelta(hours=8))
+WEEK_ZH = "一二三四五六日"
+WEEK_EN = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+MONTH_EN = ("January", "February", "March", "April", "May", "June", "July",
+            "August", "September", "October", "November", "December")
+
 # 用更安全的范围，避免 Python 3.14 的 bad character range 错误
 EMOJI = re.compile(
     "[\U0001F000-\U0001FAFF"
@@ -461,11 +514,15 @@ def build_entries():
     entries = []
     for rel in list_pages():
         head = page_head(os.path.join(ROOT, rel))
+        name = DISPLAY_NAME.get(rel) or page_title(head) or prettify(os.path.basename(rel))
         entries.append({
             "path": rel,
             "folder": display_folder(rel),
             "raw_folder": os.path.dirname(rel) or ".",
-            "name": DISPLAY_NAME.get(rel) or page_title(head) or prettify(os.path.basename(rel)),
+            "name": name,
+            # 撞名加后缀之前的样子：dedupe_names 只改 name。片单要的是片子自己的名字，
+            # 不要首页为了分开同名片加的「（grok 版）」。
+            "title": name,
             "blurb": svg_blurb(head) if rel.lower().endswith(".svg") else page_blurb(head),
         })
     return entries
@@ -636,6 +693,287 @@ def write_phone_lines(entries, check_only=False):
     return len(lines), True
 
 
+def film_parts(title):
+    """「名字 · 副标题 · 小萌物短片（版本）」拆成 (名字, 副标题, 版本)；不是片子返回 None。
+
+    名字是第一段；「小萌物短片」那一段前面的都算副标题（「守株待兔 · 兔已到，请轻声」）；
+    它自己括号里的、它后面还有的，算版本记号（「（build版）」「（游戏特别篇）」）。
+    """
+    segs = [s for s in FILM_SPLIT.split(title) if s]
+    for k in range(1, len(segs)):
+        if FILM_SEG.match(segs[k]):
+            ver = " · ".join([segs[k][len("小萌物短片"):].strip()] + segs[k + 1:])
+            return segs[0], " · ".join(segs[1:k]), ver.strip(" ·")
+    return None
+
+
+def film_marks(rel, ver):
+    """文件名尾巴上的作者记号，照文件名原样、按原来的先后（尾声argon-opus-carbon → argon、opus、carbon）。"""
+    stem = os.path.splitext(os.path.basename(rel))[0]
+    marks = []
+    m = FILM_MARKS.search(stem)
+    while m:
+        marks.insert(0, m.group(1))
+        stem = stem[:m.start()]
+        m = FILM_MARKS.search(stem)
+    top, low = rel.split("/")[0].lower(), ver.lower()
+    skip = {top, FILM_HOUSE_MARK.get(top, top)}
+    return [w for w in marks if w.lower() not in skip and w.lower() not in low]
+
+
+def film_history():
+    """现存的每个文件，它那一部最早哪一刻进的店（Unix 秒，提交时间）。读不到完整历史返回 None。
+
+    一次 git log 从最早读到最新，每一支文件记一个「哪天进的店」：
+      · 改名、挪抽屉：git 在同一个提交里配成改名的（-M90%，内容至少九成一样），沿用原来那天。
+        11-25 codex/ 整个改名成 gpt/ 就靠这个，不顺着认，那四十来部全成了 11-25。
+        门槛不用默认的五成：好几部片共用一套骨架，彼此五六成像，配错了新片会冒领老片的日子。
+      · 网页上先往博物馆传一份、隔一分钟再删掉小卡里那份（挪进博物馆常这么做），是两个提交，
+        git 配不上。所以按内容认：删掉的那份跟先前新传的那份一字不差、中间也没再改过，
+        就当是同一部挪了个地方；先删、后原样传回来的也一样。
+      · 同一个文件名删了又传一份不一样的，算新片：店里有不少 gemini-code-…、r41-… 这种通用名。
+    只看提交时间，跟今天几号无关，同一份历史跑几遍都一样。合并提交本身不算，分支上的提交各算各的。
+    """
+    try:
+        shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=ROOT,
+                                 capture_output=True, text=True, check=True).stdout.strip()
+        if shallow == "true":
+            return None
+        raw = subprocess.run(
+            ["git", "-c", "core.quotepath=false", "log", "-z", "--raw", "--no-abbrev", "--root",
+             "--no-color", "--no-show-signature", "--topo-order", "--reverse", "-M90%",
+             "--format=%x01%ct"],
+            cwd=ROOT, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+    commits, toks, i = [], raw.decode("utf-8", "surrogateescape").split("\0"), 0
+    try:
+        while i < len(toks):
+            tok = toks[i].lstrip("\n")
+            i += 1
+            if tok.startswith("\x01"):
+                commits.append((int(tok[1:]), []))
+            elif tok.startswith(":") and commits:
+                f = tok[1:].split(" ")          # 原权限 新权限 原内容 新内容 状态
+                st = f[4][:1]
+                k = 2 if st in ("R", "C") else 1
+                paths = toks[i:i + k]
+                if not st or len(paths) < k:
+                    raise ValueError(tok)
+                commits[-1][1].append((st, f[2], f[3], paths))
+                i += k
+    except (ValueError, IndexError):
+        return None                             # 读到的不是预想的样子：当作读不到历史
+
+    live, alive = {}, set()     # 文件名 → 这一支的编号；还在店里的那些支
+    born, blob = {}, {}         # 编号 → 进店那一刻 / 现在的内容
+    holders, tomb = {}, {}      # 内容 → 现在是这份内容的那些支 / 删掉时是这份内容的最早进店时间
+    copies = {}                 # 编号 → [(照它原样新传的那一支, 当时的内容)]
+
+    def start(path, ct, content):
+        lid = len(born) + 1
+        live[path] = lid
+        alive.add(lid)
+        born[lid], blob[lid] = min(ct, tomb.get(content, ct)), content
+        for src in holders.get(content, ()):
+            copies.setdefault(src, []).append((lid, content))
+        holders.setdefault(content, set()).add(lid)
+        return lid
+
+    def retarget(lid, old, new):
+        holders.get(old, set()).discard(lid)
+        holders.setdefault(new, set()).add(lid)
+        blob[lid] = new
+        copies.pop(lid, None)   # 它改过了，之前照它传的那几份就是各自的新片，不算挪
+
+    for ct, changes in commits:
+        # 同一个提交里 git 没配成改名的，先把删掉的记下，新加的才认得出来
+        changes.sort(key=lambda c: c[0] != "D")
+        for st, old, new, paths in changes:
+            if st in "AC":
+                start(paths[-1], ct, new)
+            elif st == "R":
+                # 从哪来的在历史里没见过（合并提交里冒出来的那种），就当这一刻进的店
+                lid = live.pop(paths[0], None) or start(paths[0], ct, old)
+                live.pop(paths[0], None)
+                live[paths[1]] = lid
+                if old != new:
+                    retarget(lid, old, new)
+            elif st in "MT":
+                lid = live.get(paths[0]) or start(paths[0], ct, old)
+                if old != new:
+                    retarget(lid, old, new)
+            elif st == "D":
+                lid = live.pop(paths[0], None)
+                if lid is None:
+                    continue
+                alive.discard(lid)
+                holders.get(old, set()).discard(lid)
+                tomb[old] = min(tomb.get(old, born[lid]), born[lid])
+                for twin, content in copies.pop(lid, ()):
+                    if content == old and twin in alive:
+                        born[twin] = min(born[twin], born[lid])
+    return {path: born[lid] for path, lid in live.items()}
+
+
+FILM_ROW = re.compile(r'<li\b[^>]*\bdata-t="(\d+)"[^>]*>\s*<a\b[^>]*\bhref="(?:\.\./)*([^"]+)"')
+
+
+def film_ledger(src):
+    """片单里已经写着的日子（文件名 → Unix 秒）。读不到完整历史的时候拿它垫底，日子不乱跳。"""
+    i = src.find(FILM_BEGIN)
+    j = src.find(FILM_END, i + 1) if i >= 0 else -1
+    if j < 0:
+        return {}
+    return {unquote(html.unescape(href)): int(t) for t, href in FILM_ROW.findall(src[i:j])}
+
+
+def film_rows(entries, src):
+    """挑出店里所有的小萌物短片，配上进店的那一刻，新的在前；同一刻进的按文件名排。"""
+    picked = []
+    for e in entries:
+        parts = film_parts(e["title"])
+        if e["path"] in FILM_EXTRA:
+            parts = parts or (e["title"], "", "")
+        elif e["path"] in FILM_SKIP or parts is None:
+            continue
+        picked.append((e, parts))
+
+    hist = film_history() if picked else None
+    ledger = film_ledger(src)
+    rows = []
+    for e, (name, sub, ver) in picked:
+        rel = e["path"]
+        t = (hist or {}).get(rel) or ledger.get(rel)
+        if not t:
+            # 还没提交的新片，历史里没有它：先拿文件的修改时间顶着，提交上去 Actions 会重算成提交那一刻。
+            try:
+                t = int(os.path.getmtime(os.path.join(ROOT, rel)))
+            except OSError:
+                t = 0
+        shelf = shelf_of(e)
+        rows.append({
+            "path": rel, "t": t, "name": name, "sub": sub, "ver": ver,
+            "maker": e["folder"], "marks": film_marks(rel, ver),
+            "shelf": "" if shelf == "小卡" else shelf,   # 片子大多在小卡，只标不在小卡的
+        })
+    rows.sort(key=lambda r: (-r["t"], r["path"]))
+    return rows
+
+
+def _rgba(color, alpha):
+    h = color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+def render_films(rows):
+    """片单那一段：每家的颜色、一句总数、各家几部，再按月、按天一行一部。
+
+    整段是纯 HTML，关了 JS 也是全的；那一页的脚本只在上面加筛选、倒序、记看过。
+    每行的 data-t 是进店那一刻（Unix 秒），读不到历史时 film_ledger 从这儿读回去，别删。
+    """
+    esc = lambda s: html.escape(str(s), quote=True)
+    tag = lambda m: "mk-" + re.sub(r"[^a-z0-9_-]", "_", m.lower())
+    day_of = lambda t: datetime.fromtimestamp(t, FILM_TZ)
+    up = "../" * len(os.path.relpath(os.path.dirname(FILM_PAGE), ROOT).split(os.sep))
+    makers = sorted({r["maker"] for r in rows},
+                    key=lambda m: (ORDER.index(m), "") if m in ORDER else (len(ORDER), m))
+
+    out = [FILM_BEGIN]
+    # 每家一个颜色，跟首页门牌同一张 PALETTE：白天垫在名字底下，夜里直接拿来写字
+    out.append("<style>" + "".join(
+        f".{tag(m)}{{--dot:{PALETTE.get(m, PALETTE_DEFAULT)[0]};"
+        f"--pill:{_rgba(PALETTE.get(m, PALETTE_DEFAULT)[0], .34)};"
+        f"--pill-dim:{_rgba(PALETTE.get(m, PALETTE_DEFAULT)[0], .16)}}}" for m in makers) + "</style>")
+
+    if rows:
+        first, last = day_of(rows[-1]["t"]), day_of(rows[0]["t"])
+        yr = first.year != last.year
+        zh_d = lambda d: (f"{d.year} 年 " if yr else "") + f"{d.month} 月 {d.day} 日"
+        en_d = lambda d: f"{MONTH_EN[d.month - 1][:3]} {d.day}" + (f", {d.year}" if yr else "")
+        zh = f"一共 {len(rows)} 部。头一部 {zh_d(first)}进店，最新一部是 {zh_d(last)}。"
+        en = (f"{len(rows)} films. The first one came in on {en_d(first)}. "
+              f"The newest one came in on {en_d(last)}.")
+    else:
+        zh, en = "还没有片子。", "No films yet."
+    out.append(f'<p class="tally" data-en="{esc(en)}">{esc(zh)}</p>')
+
+    count = Counter(r["maker"] for r in rows)
+    out.append('<p class="makers" id="makers">' + "".join(
+        f'<span class="mk {tag(m)}"><b>{esc(m)}</b><span class="c">{count[m]}</span></span>'
+        for m in makers) + "</p>")
+
+    per_day = Counter(day_of(r["t"]).strftime("%Y-%m-%d") for r in rows)
+    out.append('<div class="reel" id="reel">')
+    mon = day = None
+    for r in rows:
+        d = day_of(r["t"])
+        if d.strftime("%Y-%m-%d") != day:
+            if day:
+                out.append("</ol></section>")
+            if d.strftime("%Y-%m") != mon:
+                if mon:
+                    out.append("</section>")
+                mon = d.strftime("%Y-%m")
+                out.append(f'<section class="mon" data-mon="{mon}">')
+                out.append(f'<h2 class="mh"><span class="mz" data-en="{MONTH_EN[d.month - 1]}">'
+                           f'{d.month} 月</span><span class="my">{d.year}</span></h2>')
+            day = d.strftime("%Y-%m-%d")
+            n = per_day[day]
+            out.append(f'<section class="day" data-day="{day}">')
+            out.append(f'<h3 class="dh"><time datetime="{day}">{d.month:02d}-{d.day:02d}</time>'
+                       f'<span class="wd" data-en="{WEEK_EN[d.weekday()]}">周{WEEK_ZH[d.weekday()]}</span>'
+                       f'<span class="dn" data-en="{n} film{"" if n == 1 else "s"}">{n} 部</span></h3>')
+            out.append('<ol class="rows">')
+
+        title = f'<span class="t">{esc(r["name"])}'
+        if r["sub"]:
+            title += f'<span class="sub"> · {esc(r["sub"])}</span>'
+        if r["ver"]:
+            ver = r["ver"] if r["ver"][:1] in "（([【〔" else " · " + r["ver"]
+            title += f'<span class="ver">{esc(ver)}</span>'
+        title += "</span>"
+        by = f'<b>{esc(r["maker"])}</b>'
+        if r["marks"]:
+            by += f'<span class="mark">{esc(" · ".join(r["marks"]))}</span>'
+        if r["shelf"]:
+            by += (f'<span class="at" data-en="{esc(SHELF_EN.get(r["shelf"], r["shelf"]))}">'
+                   f'{esc(r["shelf"])}</span>')
+        cls = f'f {tag(r["maker"])}' + (" mu" if r["shelf"] == "博物馆" else "")
+        out.append(f'<li class="{cls}" data-t="{r["t"]}"><a href="{up}{encode_path(r["path"])}">'
+                   f'{title}<span class="by">{by}</span></a></li>')
+    if day:
+        out.append("</ol></section></section>")
+    out.append("</div>")
+    out.append(FILM_END)
+    return "\n".join(out)
+
+
+def write_film_list(entries, check_only=False):
+    """把片单写进那一页。那个文件不在就当没这回事，不报错。"""
+    if not os.path.exists(FILM_PAGE):
+        return 0, None
+    src = open(FILM_PAGE, encoding="utf-8").read()
+    if FILM_BEGIN not in src or FILM_END not in src:
+        print("小萌物片单那一页找不到 FILMS 标记，片单没写进去", file=sys.stderr)
+        return 0, None
+    # 片单是顺带的：它这一段哪儿出了岔子，只留一条警告、沿用上一版，不许连累首页清单，
+    # 也不为它发失败邮件（同工作流里抽小萌物画法那一步）。
+    try:
+        rows = film_rows(entries, src)
+        fresh = render_films(rows)
+    except Exception as exc:
+        print(f"::warning::小萌物片单这次没生成成（{type(exc).__name__}: {exc}），沿用上一版", file=sys.stderr)
+        return 0, None
+    new = splice(src, FILM_BEGIN, FILM_END, fresh)
+    if new == src:
+        return len(rows), False
+    if not check_only:
+        open(FILM_PAGE, "w", encoding="utf-8").write(new)
+    return len(rows), True
+
+
 def main():
     entries = build_entries()
     clashes = dedupe_names(entries)
@@ -662,18 +1000,25 @@ def main():
 
     if "--check" in sys.argv:
         n_lines, phone_stale = write_phone_lines(entries, check_only=True)
+        n_films, films_stale = write_film_list(entries, check_only=True)
         if new != src:
             print("index.html 需要重新生成（跑 python3 tools/build_index.py）", file=sys.stderr)
             return 1
         if phone_stale:
             print("总机的线路表需要重新生成（跑 python3 tools/build_index.py）", file=sys.stderr)
             return 1
-        print(f"index.html 是最新的（{len(entries)} 个页面，总机 {n_lines} 条线路）")
+        if films_stale:
+            print("小萌物片单需要重新生成（跑 python3 tools/build_index.py）", file=sys.stderr)
+            return 1
+        print(f"index.html 是最新的（{len(entries)} 个页面，总机 {n_lines} 条线路，片单 {n_films} 部）")
         return 0
 
     n_lines, phone_changed = write_phone_lines(entries)
     if phone_changed:
         print(f"总机线路表已更新：{n_lines} 条")
+    n_films, films_changed = write_film_list(entries)
+    if films_changed:
+        print(f"小萌物片单已更新：{n_films} 部")
 
     if new == src:
         print(f"index.html 无需改动（{len(entries)} 个页面）")
